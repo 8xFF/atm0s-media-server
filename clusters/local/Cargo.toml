@@ -1,0 +1,11 @@
+[package]
+name = "cluster-local"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cluster = { workspace = true }
+async-trait = { workspace = true }
+async-std = { workspace = true }

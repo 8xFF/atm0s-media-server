@@ -1,0 +1,24 @@
+[workspace]
+members = [
+    "packages/cluster",
+    "packages/endpoint",
+    "packages/transport",
+    "packages/utils",
+    "clusters/local",
+    "servers/webrtc",
+]
+
+[workspace.dependencies]
+cluster = { path = "packages/cluster" }
+endpoint = { path = "packages/endpoint" }
+transport = { path = "packages/transport" }
+cluster-local = { path = "clusters/local" }
+utils = { path = "packages/utils" }
+futures = "0.3"
+async-trait = "0.1"
+async-std = { version = "1.12", features = ["unstable", "attributes"] }
+async-notify = "0.2"
+parking_lot = "0.12"
+log = { version = "*" }
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
