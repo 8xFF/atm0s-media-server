@@ -14,35 +14,25 @@ pub struct MediaEndpointInteral {
 
 impl MediaEndpointInteral {
     pub fn new() -> Self {
-        Self {
-            output_actions: VecDeque::new(),
-        }
+        Self { output_actions: VecDeque::new() }
     }
+
+    pub fn on_tick(&mut self, now_ms: u64) {}
 
     pub fn on_transport(&mut self, event: MediaIncomingEvent) {
         match event {
-            MediaIncomingEvent::Connected => {
-
-            },
-            MediaIncomingEvent::Reconnecting => {
-
-            },
-            MediaIncomingEvent::Reconnected => {
-                
-            },
-            MediaIncomingEvent::Disconnected => todo!(),
-            MediaIncomingEvent::Continue => todo!(),
-            MediaIncomingEvent::Media(_, _) => todo!(),
-            MediaIncomingEvent::Data(data) => {
-
-            },
+            MediaIncomingEvent::Connected => {}
+            MediaIncomingEvent::Reconnecting => {}
+            MediaIncomingEvent::Reconnected => {}
+            MediaIncomingEvent::Disconnected => {}
+            MediaIncomingEvent::Continue => {}
+            MediaIncomingEvent::Media(_, _) => {}
+            MediaIncomingEvent::Data(data) => {}
             MediaIncomingEvent::Stats { rtt, loss, jitter, bitrate } => todo!(),
         }
     }
 
-    pub fn on_cluster(&mut self, event: ClusterRoomIncomingEvent) {
-
-    }
+    pub fn on_cluster(&mut self, event: ClusterRoomIncomingEvent) {}
 
     pub fn pop_action(&mut self) -> Option<MediaInternalAction> {
         self.output_actions.pop_front()

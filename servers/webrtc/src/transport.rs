@@ -8,40 +8,49 @@ use async_std::prelude::FutureExt;
 use str0m::{change::SdpOffer, channel::ChannelId, net::Receive, Candidate, Event, Input, Output, Rtc, RtcError};
 use transport::{MediaIncomingEvent, MediaOutgoingEvent, MediaTransport, MediaTransportError, RtpPacket};
 
-use self::life_cycle::WebrtcLifeCycle;
+use self::{life_cycle::TransportLifeCycle, mid_history::MidHistory};
 
-mod life_cycle;
+pub(crate) mod life_cycle;
+mod mid_history;
 mod utils;
 
 pub enum WebrtcTransportEvent {
     RemoteIce(String),
 }
 
-pub struct WebrtcTransport {
+pub struct WebrtcTransport<L>
+where
+    L: TransportLifeCycle,
+{
     sync_socket: UdpSocket,
     async_socket: async_std::net::UdpSocket,
     rtc: Rtc,
-    life_cycle: WebrtcLifeCycle,
+    life_cycle: L,
+    mid_history: MidHistory,
     channel_id: Option<ChannelId>,
     buf: Vec<u8>,
 }
 
-impl WebrtcTransport {
-    pub async fn new() -> Result<Self, std::io::Error> {
-        let addr: SocketAddr = "0.0.0.0:0".parse().expect("Should parse ip address");
+impl<L> WebrtcTransport<L>
+where
+    L: TransportLifeCycle,
+{
+    pub async fn new(life_cycle: L) -> Result<Self, std::io::Error> {
+        let addr: SocketAddr = "192.168.66.113:0".parse().expect("Should parse ip address");
         let socket = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::DGRAM, None).expect("Should create socket");
         socket.bind(&addr.into())?;
 
         let async_socket = unsafe { async_std::net::UdpSocket::from_raw_fd(socket.as_raw_fd()) };
         let sync_socket: UdpSocket = socket.into();
 
-        let rtc = Rtc::builder().set_rtp_mode(true).build();
+        let rtc = Rtc::builder().set_ice_lite(true).set_rtp_mode(true).build();
 
         Ok(Self {
             sync_socket,
             async_socket,
             rtc,
-            life_cycle: WebrtcLifeCycle::new(),
+            life_cycle,
+            mid_history: Default::default(),
             channel_id: None,
             buf: vec![0; 2000],
         })
@@ -49,10 +58,7 @@ impl WebrtcTransport {
 
     pub fn on_remote_sdp(&mut self, sdp: &str) -> Result<String, RtcError> {
         //TODO get ip address
-        let addr = format!("127.0.0.1:{}", self.sync_socket.local_addr().expect("Should has local port").port())
-            .as_str()
-            .parse()
-            .expect("Should parse local addr");
+        let addr = self.sync_socket.local_addr().expect("Should has local port");
         let candidate = Candidate::host(addr).expect("Should create candidate");
         self.rtc.add_local_candidate(candidate);
 
@@ -62,7 +68,10 @@ impl WebrtcTransport {
 }
 
 #[async_trait::async_trait]
-impl MediaTransport<WebrtcTransportEvent> for WebrtcTransport {
+impl<L> MediaTransport<WebrtcTransportEvent> for WebrtcTransport<L>
+where
+    L: TransportLifeCycle,
+{
     fn on_event(&mut self, event: MediaOutgoingEvent) -> Result<(), MediaTransportError> {
         Ok(())
     }
@@ -77,7 +86,7 @@ impl MediaTransport<WebrtcTransportEvent> for WebrtcTransport {
                 Output::Timeout(t) => t,
                 Output::Transmit(t) => {
                     if let Err(_e) = self.async_socket.send_to(&t.contents, t.destination).await {
-                        todo!("handle this");
+                        log::error!("Error sending data: {}", _e);
                     }
                     return Ok(MediaIncomingEvent::Continue);
                 }
@@ -104,9 +113,13 @@ impl MediaTransport<WebrtcTransportEvent> for WebrtcTransport {
                         return Ok(self.life_cycle.on_ice_state(state));
                     }
                     Event::RtpPacket(rtp) => {
-                        if let Some(mid) = rtp.header.ext_vals.mid {
-                            let track_id = utils::mid_to_track(&mid);
+                        let track_id = rtp.header.ext_vals.mid.map(|mid| utils::mid_to_track(&mid));
+                        let ssrc: &u32 = &rtp.header.ssrc;
+                        if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
+                            log::info!("on rtp {} => {}", rtp.header.ssrc, track_id);
                             return Ok(MediaIncomingEvent::Media(track_id, RtpPacket {}));
+                        } else {
+                            log::warn!("on rtp without mid {}", rtp.header.ssrc);
                         }
                         return Ok(MediaIncomingEvent::Continue);
                     }

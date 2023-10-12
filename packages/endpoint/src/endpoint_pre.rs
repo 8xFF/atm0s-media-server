@@ -1,6 +1,6 @@
+use cluster::ClusterRoom;
 use transport::MediaTransport;
 use utils::ServerError;
-use cluster::ClusterRoom;
 
 use crate::MediaEndpoint;
 

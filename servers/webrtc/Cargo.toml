@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 endpoint = { workspace = true }
 transport = { workspace = true }
+cluster = { workspace = true }
 cluster-local = { workspace = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }
@@ -16,3 +17,8 @@ str0m = { version = "0.3.0" }
 socket2 = "0.5.4"
 parking_lot = { workspace = true }
 futures = { workspace = true }
+log = { workpsace = true }
+poem = "*"
+poem-openapi = { version = "*", features = ["swagger-ui"] }
+env_logger = { workspace = true }
+async-compat = "*"

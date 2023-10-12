@@ -53,12 +53,12 @@ where
                     if let Err(e) = self.transport.on_event(e) {
                         todo!("handle error")
                     }
-                },
+                }
                 MediaInternalAction::Cluster(e) => {
                     if let Err(e) = self.cluster.on_event(e) {
                         todo!("handle error")
                     }
-                },
+                }
             }
         }
 
