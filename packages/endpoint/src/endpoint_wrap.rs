@@ -3,7 +3,7 @@ use futures::{select, FutureExt};
 use transport::{MediaTransport, MediaTransportError};
 
 use crate::{
-    endpoint::internal::MediaInternalAction,
+    endpoint_wrap::internal::MediaInternalAction,
     rpc::{EndpointRpcIn, EndpointRpcOut},
 };
 
