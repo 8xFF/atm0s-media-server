@@ -1,8 +1,11 @@
-use cluster::ClusterRoom;
+use cluster::ClusterEndpoint;
 use futures::{select, FutureExt};
 use transport::{MediaTransport, MediaTransportError};
 
-use crate::endpoint::internal::MediaInternalAction;
+use crate::{
+    endpoint::internal::MediaInternalAction,
+    rpc::{EndpointRpcIn, EndpointRpcOut},
+};
 
 use self::internal::MediaEndpointInteral;
 
@@ -17,13 +20,13 @@ pub struct MediaEndpoint<T, E, C> {
 
 impl<T, E, C> MediaEndpoint<T, E, C>
 where
-    T: MediaTransport<E>,
-    C: ClusterRoom,
+    T: MediaTransport<E, EndpointRpcIn, EndpointRpcOut>,
+    C: ClusterEndpoint,
 {
-    pub fn new(transport: T, cluster: C) -> Self {
+    pub fn new(transport: T, cluster: C, room: &str, peer: &str) -> Self {
         Self {
             _tmp_e: std::marker::PhantomData,
-            internal: MediaEndpointInteral::new(),
+            internal: MediaEndpointInteral::new(room, peer),
             transport,
             cluster,
         }
@@ -49,6 +52,9 @@ where
 
         while let Some(out) = self.internal.pop_action() {
             match out {
+                MediaInternalAction::Internal(e) => {
+                    todo!()
+                }
                 MediaInternalAction::Endpoint(e) => {
                     if let Err(e) = self.transport.on_event(e) {
                         todo!("handle error")

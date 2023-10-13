@@ -7,5 +7,7 @@ edition = "2021"
 
 [dependencies]
 cluster = { workspace = true }
+transport = { workspace = true }
 async-trait = { workspace = true }
 async-std = { workspace = true }
+parking_lot = { workspace = true }

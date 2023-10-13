@@ -1,13 +1,9 @@
-pub struct ServerError {
-    pub code: String,
-    pub message: String,
-}
+mod error;
+mod hash;
+mod media;
+mod req_res;
 
-impl ServerError {
-    pub fn build<T1: ToString, T2: ToString>(code: T1, message: T2) -> Self {
-        Self {
-            code: code.to_string(),
-            message: message.to_string(),
-        }
-    }
-}
+pub use error::*;
+pub use hash::*;
+pub use media::*;
+pub use req_res::*;

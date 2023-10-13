@@ -379,6 +379,7 @@ name = "cluster"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "serde",
  "transport",
 ]
 
@@ -389,6 +390,8 @@ dependencies = [
  "async-std",
  "async-trait",
  "cluster",
+ "parking_lot",
+ "transport",
 ]
 
 [[package]]
@@ -575,7 +578,7 @@ dependencies = [
  "cluster",
  "futures",
  "log",
- "serde_json",
+ "serde",
  "transport",
  "utils",
 ]
@@ -1797,8 +1800,6 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 [[package]]
 name = "str0m"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "959ba881f3e4a040ab65886ca6bcaaead8f06ce18ab4b1599b799c501d5335cc"
 dependencies = [
  "combine",
  "crc",
@@ -2031,6 +2032,7 @@ name = "transport"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "serde",
  "utils",
 ]
 
@@ -2080,6 +2082,10 @@ checksum = "f28467d3e1d3c6586d8f25fa243f544f5800fec42d97032474e17222c2b75cfa"
 [[package]]
 name = "utils"
 version = "0.1.0"
+dependencies = [
+ "poem-openapi",
+ "serde",
+]
 
 [[package]]
 name = "value-bag"
@@ -2212,6 +2218,8 @@ dependencies = [
  "parking_lot",
  "poem",
  "poem-openapi",
+ "serde",
+ "serde_json",
  "socket2 0.5.4",
  "str0m",
  "transport",

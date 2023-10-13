@@ -1,7 +1,6 @@
 use str0m::IceConnectionState;
-use transport::MediaIncomingEvent;
 
-use super::TransportLifeCycle;
+use super::{TransportLifeCycle, TransportLifeCycleEvent};
 
 #[derive(Debug)]
 pub enum State {
@@ -24,33 +23,42 @@ impl WhipTransportLifeCycle {
 }
 
 impl TransportLifeCycle for WhipTransportLifeCycle {
-    fn on_webrtc_connected(&mut self) -> MediaIncomingEvent {
-        self.state = State::Connected;
-        log::info!("[WhipTransportLifeCycle] on webrtc connected => switched to {:?}", self.state);
-        MediaIncomingEvent::Connected
+    fn on_tick(&mut self, now_ms: u64) -> Option<TransportLifeCycleEvent> {
+        None
     }
 
-    fn on_ice_state(&mut self, ice: IceConnectionState) -> MediaIncomingEvent {
+    fn on_webrtc_connected(&mut self) -> Option<TransportLifeCycleEvent> {
+        self.state = State::Connected;
+        log::info!("[WhipTransportLifeCycle] on webrtc connected => switched to {:?}", self.state);
+        Some(TransportLifeCycleEvent::Connected)
+    }
+
+    fn on_ice_state(&mut self, ice: IceConnectionState) -> Option<TransportLifeCycleEvent> {
         let res = match (&self.state, ice) {
             (State::Connected, IceConnectionState::Disconnected) => {
                 self.state = State::Reconnecting;
-                MediaIncomingEvent::Reconnecting
+                Some(TransportLifeCycleEvent::Reconnecting)
             }
             (State::Reconnecting, IceConnectionState::Completed) => {
                 self.state = State::Connected;
-                MediaIncomingEvent::Reconnected
+                Some(TransportLifeCycleEvent::Reconnected)
             }
             (State::Reconnecting, IceConnectionState::Connected) => {
                 self.state = State::Connected;
-                MediaIncomingEvent::Reconnected
+                Some(TransportLifeCycleEvent::Reconnected)
             }
-            _ => MediaIncomingEvent::Continue,
+            _ => None,
         };
-        log::info!("[WhipTransportLifeCycle] on ice state {:?} => switched to {:?}", ice, self.state);
+
+        if res.is_some() {
+            log::info!("[WhipTransportLifeCycle] on ice state {:?} => switched to {:?}", ice, self.state);
+        }
         res
     }
 
-    fn on_data_channel(&mut self, connected: bool) -> MediaIncomingEvent {
+    fn on_data_channel(&mut self, connected: bool) -> Option<TransportLifeCycleEvent> {
         panic!("should not happend")
     }
 }
+
+//TODO test this

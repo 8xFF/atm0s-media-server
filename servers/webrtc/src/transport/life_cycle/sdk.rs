@@ -1,7 +1,7 @@
 use str0m::IceConnectionState;
 use transport::MediaIncomingEvent;
 
-use super::TransportLifeCycle;
+use super::{TransportLifeCycle, TransportLifeCycleEvent};
 
 #[derive(Debug)]
 pub enum State {
@@ -24,45 +24,56 @@ impl SdkTransportLifeCycle {
 }
 
 impl TransportLifeCycle for SdkTransportLifeCycle {
-    fn on_webrtc_connected(&mut self) -> MediaIncomingEvent {
-        self.state = State::Connected { datachannel: false };
-        log::info!("[SdkTransportLifeCycle] on webrtc connected => switched to {:?}", self.state);
-        MediaIncomingEvent::Continue
+    fn on_tick(&mut self, now_ms: u64) -> Option<TransportLifeCycleEvent> {
+        None
     }
 
-    fn on_ice_state(&mut self, ice: IceConnectionState) -> MediaIncomingEvent {
+    fn on_webrtc_connected(&mut self) -> Option<TransportLifeCycleEvent> {
+        self.state = State::Connected { datachannel: false };
+        log::info!("[SdkTransportLifeCycle] on webrtc connected => switched to {:?}", self.state);
+        None
+    }
+
+    fn on_ice_state(&mut self, ice: IceConnectionState) -> Option<TransportLifeCycleEvent> {
         let res = match (&self.state, ice) {
             (State::Connected { datachannel: dc }, IceConnectionState::Disconnected) => {
                 self.state = State::Reconnecting { datachannel: *dc };
-                MediaIncomingEvent::Reconnecting
+                Some(TransportLifeCycleEvent::Reconnecting)
             }
             (State::Reconnecting { datachannel: dc }, IceConnectionState::Completed) => {
                 self.state = State::Connected { datachannel: *dc };
-                MediaIncomingEvent::Reconnected
+                Some(TransportLifeCycleEvent::Reconnected)
             }
             (State::Reconnecting { datachannel: dc }, IceConnectionState::Connected) => {
                 self.state = State::Connected { datachannel: *dc };
-                MediaIncomingEvent::Reconnected
+                Some(TransportLifeCycleEvent::Reconnected)
             }
-            _ => MediaIncomingEvent::Continue,
+            _ => None,
         };
-        log::info!("[SdkTransportLifeCycle] on ice state {:?} => switched to {:?}", ice, self.state);
+
+        if res.is_some() {
+            log::info!("[SdkTransportLifeCycle] on ice state {:?} => switched to {:?}", ice, self.state);
+        }
         res
     }
 
-    fn on_data_channel(&mut self, connected: bool) -> MediaIncomingEvent {
+    fn on_data_channel(&mut self, connected: bool) -> Option<TransportLifeCycleEvent> {
         let res = match (connected, &self.state) {
             (true, State::Connected { datachannel: false }) => {
                 self.state = State::Connected { datachannel: true };
-                MediaIncomingEvent::Connected
+                Some(TransportLifeCycleEvent::Connected)
             }
             (false, _) => {
                 self.state = State::Closed;
-                MediaIncomingEvent::Disconnected
+                Some(TransportLifeCycleEvent::Closed)
             }
-            _ => MediaIncomingEvent::Continue,
+            _ => None,
         };
-        log::info!("[SdkTransportLifeCycle] on datachannel connected {} => switched to {:?}", connected, self.state);
+        if res.is_some() {
+            log::info!("[SdkTransportLifeCycle] on datachannel connected {} => switched to {:?}", connected, self.state);
+        }
         res
     }
 }
+
+//TODO test this

@@ -13,7 +13,7 @@ cluster-local = { workspace = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }
 utils = { workspace = true }
-str0m = { version = "0.3.0" }
+str0m = { path = "/Users/giangminh/Workspace/bluesea/research/str0m" }
 socket2 = "0.5.4"
 parking_lot = { workspace = true }
 futures = { workspace = true }
@@ -22,3 +22,5 @@ poem = "*"
 poem-openapi = { version = "*", features = ["swagger-ui"] }
 env_logger = { workspace = true }
 async-compat = "*"
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,5 +1,7 @@
 use async_std::channel::{bounded, Receiver, Sender};
-use utils::ServerError;
+use poem_openapi::Object;
+use serde::{Deserialize, Serialize};
+use utils::{MixMinusAudioMode, PayloadType, RemoteBitrateControlMode, ServerError};
 
 pub(crate) mod http;
 
@@ -17,6 +19,42 @@ impl<T> RpcResponse<T> {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Object)]
+pub struct WebrtcConnectRequestReceivers {
+    pub audio: u8,
+    pub video: u8,
+}
+
+#[derive(Serialize, Deserialize, Debug, Object)]
+pub struct WebrtcConnectRequestSender {
+    pub kind: String,
+    pub name: String,
+    pub uuid: String,
+    pub label: String,
+    pub screen: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Object)]
+pub struct WebrtcConnectRequest {
+    pub version: Option<String>,
+    pub room: String,
+    pub peer: String,
+    pub token: String,
+    pub mix_minus_audio: Option<MixMinusAudioMode>,
+    pub join_now: Option<bool>,
+    pub codecs: Option<Vec<PayloadType>>,
+    pub receivers: WebrtcConnectRequestReceivers,
+    pub sdp: String,
+    pub compressed_sdp: Option<Vec<u8>>,
+    pub senders: Vec<WebrtcConnectRequestSender>,
+    pub remote_bitrate_control_mode: Option<RemoteBitrateControlMode>,
+}
+
+pub struct WebrtcConnectResponse {
+    pub sdp: String,
+    pub conn_id: String,
+}
+
 pub struct WhipConnectResponse {
     pub location: String,
     pub sdp: String,
@@ -24,6 +62,6 @@ pub struct WhipConnectResponse {
 
 pub enum RpcEvent {
     WhipConnect(String, String, RpcResponse<WhipConnectResponse>),
-    Connect(String, RpcResponse<String>),
-    RemoteIce(u64, String, RpcResponse<()>),
+    WebrtcConnect(WebrtcConnectRequest, RpcResponse<WebrtcConnectResponse>),
+    WebrtcRemoteIce(String, String, RpcResponse<()>),
 }

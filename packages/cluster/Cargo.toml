@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 transport = { workspace = true }
 async-trait = { workspace = true }
+serde = { workspace = true }

@@ -5,13 +5,26 @@ use std::{
 };
 
 use async_std::prelude::FutureExt;
-use str0m::{change::SdpOffer, channel::ChannelId, net::Receive, Candidate, Event, Input, Output, Rtc, RtcError};
-use transport::{MediaIncomingEvent, MediaOutgoingEvent, MediaTransport, MediaTransportError, RtpPacket};
+use endpoint::{EndpointRpcIn, EndpointRpcOut};
+use str0m::{change::SdpOffer, channel::ChannelId, media::Direction, net::Receive, rtp::ExtensionValues, Candidate, Event, Input, Output, Rtc, RtcError};
+use transport::{MediaIncomingEvent, MediaOutgoingEvent, MediaPacket, MediaPacketExtensions, MediaSampleRate, MediaTransport, MediaTransportError, TrackMeta};
 
-use self::{life_cycle::TransportLifeCycle, mid_history::MidHistory};
+use crate::rpc::WebrtcConnectRequestSender;
+
+use self::{
+    life_cycle::{life_cycle_event_to_event, TransportLifeCycle},
+    local_track_id_generator::LocalTrackIdGenerator,
+    mid_history::MidHistory,
+    msid_alias::MsidAlias,
+    rpc::{rpc_from_string, rpc_to_string},
+    utils::{to_transport_kind, track_to_mid},
+};
 
 pub(crate) mod life_cycle;
+mod local_track_id_generator;
 mod mid_history;
+mod msid_alias;
+mod rpc;
 mod utils;
 
 pub enum WebrtcTransportEvent {
@@ -26,7 +39,9 @@ where
     async_socket: async_std::net::UdpSocket,
     rtc: Rtc,
     life_cycle: L,
+    msid_alias: MsidAlias,
     mid_history: MidHistory,
+    local_track_id_gen: LocalTrackIdGenerator,
     channel_id: Option<ChannelId>,
     buf: Vec<u8>,
 }
@@ -50,10 +65,16 @@ where
             async_socket,
             rtc,
             life_cycle,
+            msid_alias: Default::default(),
             mid_history: Default::default(),
+            local_track_id_gen: Default::default(),
             channel_id: None,
             buf: vec![0; 2000],
         })
+    }
+
+    pub fn map_remote_stream(&mut self, sender: WebrtcConnectRequestSender) {
+        self.msid_alias.add_alias(&sender.uuid, &sender.label, &sender.kind, &sender.name);
     }
 
     pub fn on_remote_sdp(&mut self, sdp: &str) -> Result<String, RtcError> {
@@ -68,11 +89,41 @@ where
 }
 
 #[async_trait::async_trait]
-impl<L> MediaTransport<WebrtcTransportEvent> for WebrtcTransport<L>
+impl<L> MediaTransport<WebrtcTransportEvent, EndpointRpcIn, EndpointRpcOut> for WebrtcTransport<L>
 where
     L: TransportLifeCycle,
 {
-    fn on_event(&mut self, event: MediaOutgoingEvent) -> Result<(), MediaTransportError> {
+    fn on_event(&mut self, event: MediaOutgoingEvent<EndpointRpcOut>) -> Result<(), MediaTransportError> {
+        match event {
+            MediaOutgoingEvent::Media(track_id, pkt) => {
+                let mid = track_to_mid(track_id);
+                if let Some(stream) = self.rtc.direct_api().stream_tx_by_mid(mid, None) {
+                    stream.write_rtp(
+                        pkt.pt.into(),
+                        (pkt.seq_no as u64).into(),
+                        pkt.time,
+                        Instant::now(),
+                        pkt.marker,
+                        ExtensionValues { ..Default::default() },
+                        true,
+                        pkt.payload,
+                    );
+                }
+            }
+            MediaOutgoingEvent::RequestPli(track_id) => {}
+            MediaOutgoingEvent::RequestSli(track_id) => {}
+            MediaOutgoingEvent::RequestLimitBitrate(bitrate) => {}
+            MediaOutgoingEvent::Rpc(rpc) => {
+                let msg = rpc_to_string(rpc);
+                if let Some(channel_id) = self.channel_id {
+                    if let Some(mut channel) = self.rtc.channel(channel_id) {
+                        if let Err(e) = channel.write(false, msg.as_bytes()) {
+                            log::error!("[WebrtcTransport] error sending data: {}", e);
+                        }
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -80,7 +131,7 @@ where
         Ok(())
     }
 
-    async fn recv(&mut self) -> Result<MediaIncomingEvent, MediaTransportError> {
+    async fn recv(&mut self) -> Result<MediaIncomingEvent<EndpointRpcIn>, MediaTransportError> {
         let timeout = match self.rtc.poll_output() {
             Ok(o) => match o {
                 Output::Timeout(t) => t,
@@ -92,35 +143,100 @@ where
                 }
                 Output::Event(e) => match e {
                     Event::Connected => {
-                        return Ok(self.life_cycle.on_webrtc_connected());
+                        return life_cycle_event_to_event(self.life_cycle.on_webrtc_connected());
                     }
                     Event::ChannelOpen(chanel_id, name) => {
                         self.channel_id = Some(chanel_id);
-                        return Ok(self.life_cycle.on_data_channel(true));
+                        return life_cycle_event_to_event(self.life_cycle.on_data_channel(true));
                     }
                     Event::ChannelData(data) => {
                         if !data.binary {
                             if let Ok(data) = String::from_utf8(data.data) {
-                                return Ok(MediaIncomingEvent::Data(data));
+                                if let Ok(rpc) = rpc_from_string(&data) {
+                                    return Ok(MediaIncomingEvent::Rpc(rpc));
+                                }
                             }
                         }
                         return Ok(MediaIncomingEvent::Continue);
                     }
                     Event::ChannelClose(_chanel_id) => {
-                        return Ok(self.life_cycle.on_data_channel(false));
+                        return life_cycle_event_to_event(self.life_cycle.on_data_channel(false));
                     }
                     Event::IceConnectionStateChange(state) => {
-                        return Ok(self.life_cycle.on_ice_state(state));
+                        return life_cycle_event_to_event(self.life_cycle.on_ice_state(state));
                     }
                     Event::RtpPacket(rtp) => {
                         let track_id = rtp.header.ext_vals.mid.map(|mid| utils::mid_to_track(&mid));
                         let ssrc: &u32 = &rtp.header.ssrc;
                         if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
-                            log::info!("on rtp {} => {}", rtp.header.ssrc, track_id);
-                            return Ok(MediaIncomingEvent::Media(track_id, RtpPacket {}));
+                            // log::info!("on rtp {} => {}", rtp.header.ssrc, track_id);
+                            return Ok(MediaIncomingEvent::RemoteTrackMedia(
+                                track_id,
+                                MediaPacket {
+                                    pt: *(&rtp.header.payload_type as &u8),
+                                    seq_no: rtp.header.sequence_number,
+                                    time: rtp.header.timestamp,
+                                    marker: rtp.header.marker,
+                                    ext_vals: MediaPacketExtensions {
+                                        abs_send_time: rtp.header.ext_vals.abs_send_time.map(|t| (t.numer(), t.denom())),
+                                        transport_cc: rtp.header.ext_vals.transport_cc,
+                                    },
+                                    nackable: true,
+                                    payload: rtp.payload,
+                                },
+                            ));
                         } else {
                             log::warn!("on rtp without mid {}", rtp.header.ssrc);
                         }
+                        return Ok(MediaIncomingEvent::Continue);
+                    }
+                    Event::MediaAdded(added) => {
+                        if let Some(media) = self.rtc.media(added.mid) {
+                            match added.direction {
+                                Direction::RecvOnly => {
+                                    //remote stream
+                                    let track_id = utils::mid_to_track(&added.mid);
+                                    let msid = media.msid();
+                                    if let Some(info) = self.msid_alias.get_alias(&msid.stream_id, &msid.track_id) {
+                                        log::info!("media added {:?} {:?}", added, info);
+                                        return Ok(MediaIncomingEvent::RemoteTrackAdded(
+                                            info.name,
+                                            track_id,
+                                            TrackMeta {
+                                                kind: to_transport_kind(added.kind),
+                                                sample_rate: MediaSampleRate::HzCustom(0), //TODO
+                                                label: Some(info.label),
+                                            },
+                                        ));
+                                    }
+                                }
+                                Direction::SendOnly => {
+                                    //local stream
+                                    let track_id = utils::mid_to_track(&added.mid);
+                                    let track_name = self.local_track_id_gen.generate(added.kind, added.mid);
+                                    return Ok(MediaIncomingEvent::LocalTrackAdded(
+                                        track_name,
+                                        track_id,
+                                        TrackMeta {
+                                            kind: to_transport_kind(added.kind),
+                                            sample_rate: MediaSampleRate::HzCustom(0), //TODO
+                                            label: None,
+                                        },
+                                    ));
+                                }
+                                _ => {
+                                    panic!("not supported")
+                                }
+                            }
+                        }
+                        return Ok(MediaIncomingEvent::Continue);
+                    }
+                    Event::MediaChanged(media) => {
+                        //TODO
+                        return Ok(MediaIncomingEvent::Continue);
+                    }
+                    Event::StreamPaused(paused) => {
+                        //TODO
                         return Ok(MediaIncomingEvent::Continue);
                     }
                     _ => {
