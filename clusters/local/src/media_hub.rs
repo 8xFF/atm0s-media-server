@@ -40,3 +40,35 @@ impl LocalMediaHub {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use cluster::generate_cluster_track_uuid;
+    use transport::{MediaPacket, MediaPacketExtensions};
+
+    #[test]
+    fn test_local_media_hub() {
+        let mut media_hub = LocalMediaHub::default();
+        let track_uuid = generate_cluster_track_uuid("room", "peer", "track");
+        let (tx, rx) = async_std::channel::bounded(100);
+        media_hub.subscribe(track_uuid, 1, tx);
+        let pkt = MediaPacket {
+            pt: 111,
+            seq_no: 1,
+            time: 1000,
+            marker: true,
+            ext_vals: MediaPacketExtensions {
+                abs_send_time: None,
+                transport_cc: None,
+            },
+            nackable: true,
+            payload: vec![1, 2, 3],
+        };
+        media_hub.relay(track_uuid, pkt.clone());
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackMedia(track_uuid, pkt.clone())));
+        media_hub.unsubscribe(track_uuid, 1);
+        media_hub.relay(track_uuid, pkt.clone());
+        assert!(rx.try_recv().is_err());
+    }
+}

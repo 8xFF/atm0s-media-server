@@ -3,111 +3,10 @@ use std::collections::HashMap;
 use async_std::channel::Sender;
 use cluster::{ClusterEndpointIncomingEvent, ClusterTrackMeta};
 
-struct PeerHub {
-    peer_id: String,
-    tracks: HashMap<String, ClusterTrackMeta>,
-    consumers: HashMap<u32, Sender<ClusterEndpointIncomingEvent>>,
-}
+use self::room::RoomHub;
 
-impl PeerHub {
-    pub fn new(peer_id: &str) -> Self {
-        Self {
-            peer_id: peer_id.into(),
-            tracks: HashMap::new(),
-            consumers: HashMap::new(),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.consumers.is_empty() && self.tracks.is_empty()
-    }
-
-    pub fn add_track(&mut self, track_name: &str, track_meta: ClusterTrackMeta) {
-        self.tracks.insert(track_name.into(), track_meta.clone());
-        let event = ClusterEndpointIncomingEvent::PeerTrackAdded(self.peer_id.clone(), track_name.into(), track_meta);
-        self.fire_event(event);
-    }
-
-    pub fn remove_track(&mut self, track_name: &str) {
-        self.tracks.remove(track_name);
-        let event = ClusterEndpointIncomingEvent::PeerTrackRemoved(self.peer_id.clone(), track_name.into());
-        self.fire_event(event);
-    }
-
-    pub fn subscribe(&mut self, consumer_id: u32, tx: Sender<ClusterEndpointIncomingEvent>) {
-        self.fire_to(&tx);
-        self.consumers.insert(consumer_id, tx);
-    }
-
-    pub fn unsubscribe(&mut self, consumer_id: u32) {
-        self.consumers.remove(&consumer_id);
-    }
-
-    fn fire_event(&self, event: ClusterEndpointIncomingEvent) {
-        for (_, tx) in self.consumers.iter() {
-            if let Err(e) = tx.try_send(event.clone()) {
-                todo!("handle this")
-            }
-        }
-    }
-
-    fn fire_to(&self, tx: &Sender<ClusterEndpointIncomingEvent>) {
-        for (track_name, track_meta) in self.tracks.iter() {
-            let event = ClusterEndpointIncomingEvent::PeerTrackAdded(self.peer_id.clone(), track_name.clone(), track_meta.clone());
-            if let Err(e) = tx.try_send(event) {
-                todo!("handle this")
-            }
-        }
-    }
-}
-
-#[derive(Default)]
-struct RoomHub {
-    consumers: HashMap<u32, Sender<ClusterEndpointIncomingEvent>>,
-    peers: HashMap<String, PeerHub>,
-}
-
-impl RoomHub {
-    pub fn is_empty(&self) -> bool {
-        self.consumers.is_empty() && self.peers.is_empty()
-    }
-
-    pub fn add_track(&mut self, peer_id: &str, track_name: &str, track_meta: ClusterTrackMeta) {
-        let peer_hub = self.peers.entry(peer_id.into()).or_insert_with(|| PeerHub::new(peer_id));
-        peer_hub.add_track(track_name, track_meta);
-    }
-
-    pub fn remove_track(&mut self, peer_id: &str, track_name: &str) {
-        if let Some(peer_hub) = self.peers.get_mut(peer_id) {
-            peer_hub.remove_track(track_name);
-            if peer_hub.is_empty() {
-                self.peers.remove(peer_id);
-            }
-        }
-    }
-
-    pub fn subscribe(&mut self, consumer_id: u32, tx: Sender<ClusterEndpointIncomingEvent>) {
-        self.consumers.insert(consumer_id, tx);
-    }
-
-    pub fn unsubscribe(&mut self, consumer_id: u32) {
-        self.consumers.remove(&consumer_id);
-    }
-
-    pub fn subscribe_peer(&mut self, peer: &str, consumer_id: u32, tx: Sender<ClusterEndpointIncomingEvent>) {
-        let peer_hub = self.peers.entry(peer.into()).or_insert_with(|| PeerHub::new(peer));
-        peer_hub.subscribe(consumer_id, tx);
-    }
-
-    pub fn unsubscribe_peer(&mut self, peer: &str, consumer_id: u32) {
-        if let Some(peer_hub) = self.peers.get_mut(peer) {
-            peer_hub.unsubscribe(consumer_id);
-            if peer_hub.is_empty() {
-                self.peers.remove(peer);
-            }
-        }
-    }
-}
+mod peer;
+mod room;
 
 #[derive(Default)]
 pub struct LocalEventHub {
@@ -159,5 +58,116 @@ impl LocalEventHub {
                 self.rooms.remove(room);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cluster::{ClusterEndpointIncomingEvent, ClusterTrackMeta, ClusterTrackStatus};
+    use transport::MediaKind;
+
+    #[test]
+    fn local_hub_sub_pre() {
+        let mut local_hub = super::LocalEventHub::default();
+
+        let (tx, rx) = async_std::channel::bounded(10);
+        local_hub.subscribe_room("room1", 100, tx);
+
+        let meta = ClusterTrackMeta {
+            kind: MediaKind::Audio,
+            active: true,
+            label: None,
+            layers: vec![],
+            status: ClusterTrackStatus::Connected,
+            scaling: "Single".to_string(),
+        };
+        local_hub.add_track("room1", "peer1", "track1", meta.clone());
+
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackAdded("peer1".to_string(), "track1".to_string(), meta.clone())));
+
+        local_hub.remove_track("room1", "peer1", "track1");
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackRemoved("peer1".to_string(), "track1".to_string())));
+
+        local_hub.unsubscribe_room("room1", 100);
+
+        local_hub.add_track("room1", "peer1", "track2", meta.clone());
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn local_hub_sub_after() {
+        let mut local_hub = super::LocalEventHub::default();
+
+        let (tx, rx) = async_std::channel::bounded(10);
+
+        let meta = ClusterTrackMeta {
+            kind: MediaKind::Audio,
+            active: true,
+            label: None,
+            layers: vec![],
+            status: ClusterTrackStatus::Connected,
+            scaling: "Single".to_string(),
+        };
+        local_hub.add_track("room1", "peer1", "track1", meta.clone());
+        local_hub.subscribe_room("room1", 100, tx);
+
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackAdded("peer1".to_string(), "track1".to_string(), meta)));
+        local_hub.remove_track("room1", "peer1", "track1");
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackRemoved("peer1".to_string(), "track1".to_string())));
+    }
+
+    #[test]
+    fn local_hub_sub_peer_pre() {
+        let mut local_hub = super::LocalEventHub::default();
+
+        let (tx, rx) = async_std::channel::bounded(10);
+        local_hub.subscribe_peer("room1", "peer1", 100, tx);
+
+        let meta = ClusterTrackMeta {
+            kind: MediaKind::Audio,
+            active: true,
+            label: None,
+            layers: vec![],
+            status: ClusterTrackStatus::Connected,
+            scaling: "Single".to_string(),
+        };
+        local_hub.add_track("room1", "peer1", "track1", meta.clone());
+        local_hub.add_track("room1", "peer2", "track1", meta.clone());
+
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackAdded("peer1".to_string(), "track1".to_string(), meta.clone())));
+        assert!(rx.try_recv().is_err());
+
+        local_hub.remove_track("room1", "peer1", "track1");
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackRemoved("peer1".to_string(), "track1".to_string())));
+
+        local_hub.unsubscribe_peer("room1", "peer1", 100);
+
+        local_hub.add_track("room1", "peer1", "track2", meta.clone());
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn local_hub_sub_peer_after() {
+        let mut local_hub = super::RoomHub::default();
+
+        let (tx, rx) = async_std::channel::bounded(10);
+
+        let meta = ClusterTrackMeta {
+            kind: MediaKind::Audio,
+            active: true,
+            label: None,
+            layers: vec![],
+            status: ClusterTrackStatus::Connected,
+            scaling: "Single".to_string(),
+        };
+        local_hub.add_track("peer1", "track1", meta.clone());
+        local_hub.add_track("peer2", "track1", meta.clone());
+        local_hub.subscribe_peer("peer1", 100, tx);
+
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackAdded("peer1".to_string(), "track1".to_string(), meta)));
+        assert!(rx.try_recv().is_err());
+
+        local_hub.remove_track("peer1", "track1");
+        assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackRemoved("peer1".to_string(), "track1".to_string())));
     }
 }

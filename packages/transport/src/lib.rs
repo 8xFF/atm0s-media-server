@@ -87,13 +87,13 @@ pub enum MediaOutgoingEvent<RM> {
     Rpc(RM),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaPacketExtensions {
     pub abs_send_time: Option<(i64, i64)>,
     pub transport_cc: Option<u16>, // (buf[0] << 8) | buf[1];
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaPacket {
     pub pt: u8,
     pub seq_no: u16,

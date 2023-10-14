@@ -35,7 +35,7 @@ pub enum ClusterEndpointError {
     NotImplement,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ClusterEndpointIncomingEvent {
     PeerTrackMedia(ClusterTrackUuid, MediaPacket),
     PeerTrackAdded(ClusterPeerId, ClusterTrackName, ClusterTrackMeta),
