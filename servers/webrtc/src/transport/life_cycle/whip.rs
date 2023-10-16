@@ -27,13 +27,13 @@ impl TransportLifeCycle for WhipTransportLifeCycle {
         None
     }
 
-    fn on_webrtc_connected(&mut self) -> Option<TransportLifeCycleEvent> {
+    fn on_webrtc_connected(&mut self, now_ms: u64) -> Option<TransportLifeCycleEvent> {
         self.state = State::Connected;
         log::info!("[WhipTransportLifeCycle] on webrtc connected => switched to {:?}", self.state);
         Some(TransportLifeCycleEvent::Connected)
     }
 
-    fn on_ice_state(&mut self, ice: IceConnectionState) -> Option<TransportLifeCycleEvent> {
+    fn on_ice_state(&mut self, now_ms: u64, ice: IceConnectionState) -> Option<TransportLifeCycleEvent> {
         let res = match (&self.state, ice) {
             (State::Connected, IceConnectionState::Disconnected) => {
                 self.state = State::Reconnecting;
@@ -56,7 +56,7 @@ impl TransportLifeCycle for WhipTransportLifeCycle {
         res
     }
 
-    fn on_data_channel(&mut self, connected: bool) -> Option<TransportLifeCycleEvent> {
+    fn on_data_channel(&mut self, now_ms: u64, connected: bool) -> Option<TransportLifeCycleEvent> {
         panic!("should not happend")
     }
 }

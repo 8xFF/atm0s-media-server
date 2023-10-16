@@ -93,6 +93,7 @@ pub struct TrackInfo {
     pub peer_hash: u32,
     pub peer: String,
     pub kind: MediaKind,
+    #[serde(rename = "stream")]
     pub track: String,
     pub state: Option<ClusterTrackMeta>,
 }
@@ -100,25 +101,41 @@ pub struct TrackInfo {
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRpcIn {
     PeerClose,
-    SenderToggle(RpcRequest<SenderToggle>),
-    ReceiverSwitch(RpcRequest<ReceiverSwitch>),
-    ReceiverLimit(RpcRequest<ReceiverLimit>),
-    ReceiverDisconnect(RpcRequest<ReceiverDisconnect>),
     MixMinusSourceAdd(RpcRequest<MixMinusSource>),
     MixMinusSourceRemove(RpcRequest<MixMinusSource>),
     MixMinusToggle(RpcRequest<MixMinusToggle>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum RemoteTrackRpcIn {
+    Toggle(RpcRequest<SenderToggle>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LocalTrackRpcIn {
+    Switch(RpcRequest<ReceiverSwitch>),
+    Limit(RpcRequest<ReceiverLimit>),
+    Disconnect(RpcRequest<ReceiverDisconnect>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRpcOut {
-    SenderToggleRes(RpcResponse<bool>),
-    ReceiverSwitchRes(RpcResponse<bool>),
-    ReceiverLimitRes(RpcResponse<bool>),
-    ReceiverDisconnectRes(RpcResponse<bool>),
     MixMinusSourceAddRes(RpcResponse<bool>),
     MixMinusSourceRemoveRes(RpcResponse<bool>),
     MixMinusToggleRes(RpcResponse<bool>),
     TrackAdded(TrackInfo),
     TrackUpdated(TrackInfo),
     TrackRemoved(TrackInfo),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum RemoteTrackRpcOut {
+    ToggleRes(RpcResponse<bool>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LocalTrackRpcOut {
+    SwitchRes(RpcResponse<bool>),
+    LimitRes(RpcResponse<bool>),
+    DisconnectRes(RpcResponse<bool>),
 }

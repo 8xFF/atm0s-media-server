@@ -1,19 +1,63 @@
 use str0m::media::{MediaKind, Mid};
 use transport::TrackId;
 
+const ZERO_CHAR: u8 = 48;
+
 //TODO optimize this
 pub fn mid_to_track(mid: &Mid) -> TrackId {
     let mut track = 0;
     for c in mid.as_bytes() {
         track *= 10;
-        track += *c as u16;
+        track += (*c - ZERO_CHAR) as u16;
     }
     track
 }
 
 //TODO optimize this
 pub fn track_to_mid(track_id: TrackId) -> Mid {
-    Mid::from_array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (track_id / 100) as u8, ((track_id % 100) / 10) as u8, (track_id % 10) as u8])
+    if track_id < 10 {
+        Mid::from_array([track_id as u8 + ZERO_CHAR, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32])
+    } else if track_id < 100 {
+        Mid::from_array([
+            (track_id / 10) as u8 + ZERO_CHAR,
+            (track_id % 10) as u8 + ZERO_CHAR,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+        ])
+    } else if track_id < 1000 {
+        Mid::from_array([
+            (track_id / 100) as u8 + ZERO_CHAR,
+            ((track_id % 100) / 10) as u8 + ZERO_CHAR,
+            (track_id % 10) as u8 + ZERO_CHAR,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+            32,
+        ])
+    } else {
+        panic!("not supported");
+    }
 }
 
 pub fn to_transport_kind(value: MediaKind) -> transport::MediaKind {
@@ -25,6 +69,7 @@ pub fn to_transport_kind(value: MediaKind) -> transport::MediaKind {
 
 #[cfg(test)]
 mod tests {
+    #[test]
     fn test_mid() {
         let mid = "100".into();
         let track = super::mid_to_track(&mid);

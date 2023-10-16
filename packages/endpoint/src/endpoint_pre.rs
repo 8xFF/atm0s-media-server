@@ -1,9 +1,9 @@
 use cluster::ClusterEndpoint;
-use transport::MediaTransport;
+use transport::Transport;
 use utils::ServerError;
 
 use crate::{
-    rpc::{EndpointRpcIn, EndpointRpcOut},
+    rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     MediaEndpoint,
 };
 
@@ -21,7 +21,11 @@ impl MediaEndpointPreconditional {
         Ok(())
     }
 
-    pub fn build<E, T: MediaTransport<E, EndpointRpcIn, EndpointRpcOut>, C: ClusterEndpoint>(&mut self, transport: T, cluster: C) -> MediaEndpoint<T, E, C> {
+    pub fn build<E, T: Transport<E, EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn, EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>, C: ClusterEndpoint>(
+        &mut self,
+        transport: T,
+        cluster: C,
+    ) -> MediaEndpoint<T, E, C> {
         MediaEndpoint::new(transport, cluster, &self.room, &self.peer)
     }
 }

@@ -390,8 +390,10 @@ dependencies = [
  "async-std",
  "async-trait",
  "cluster",
+ "log",
  "parking_lot",
  "transport",
+ "utils",
 ]
 
 [[package]]
@@ -574,6 +576,7 @@ dependencies = [
 name = "endpoint"
 version = "0.1.0"
 dependencies = [
+ "async-std",
  "async-trait",
  "cluster",
  "futures",

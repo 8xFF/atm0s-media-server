@@ -5,16 +5,19 @@ pub type TrackName = String;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 pub enum MediaKind {
+    #[serde(rename = "audio")]
     Audio,
+    #[serde(rename = "video")]
     Video,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum MediaSampleRate {
     Hz8000,
     Hz16000,
     Hz32000,
     Hz48000,
+    Hz90000, //For video
     Hz96000,
     Hz192000,
     HzCustom(u32),
@@ -27,6 +30,7 @@ impl From<u32> for MediaSampleRate {
             16000 => MediaSampleRate::Hz16000,
             32000 => MediaSampleRate::Hz32000,
             48000 => MediaSampleRate::Hz48000,
+            90000 => MediaSampleRate::Hz90000,
             96000 => MediaSampleRate::Hz96000,
             192000 => MediaSampleRate::Hz192000,
             _ => MediaSampleRate::HzCustom(value),
@@ -41,6 +45,7 @@ impl From<MediaSampleRate> for u32 {
             MediaSampleRate::Hz16000 => 16000,
             MediaSampleRate::Hz32000 => 32000,
             MediaSampleRate::Hz48000 => 48000,
+            MediaSampleRate::Hz90000 => 90000,
             MediaSampleRate::Hz96000 => 96000,
             MediaSampleRate::Hz192000 => 192000,
             MediaSampleRate::HzCustom(value) => value,
@@ -48,14 +53,14 @@ impl From<MediaSampleRate> for u32 {
     }
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct TrackMeta {
     pub kind: MediaKind,
     pub sample_rate: MediaSampleRate,
     pub label: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct TransportStats {
     rtt: u32,
     loss: u32,
@@ -63,28 +68,58 @@ pub struct TransportStats {
     bitrate: u32,
 }
 
-#[derive(Debug)]
-pub enum MediaIncomingEvent<RM> {
+#[derive(PartialEq, Eq, Debug)]
+pub enum RemoteTrackIncomingEvent<RR> {
+    MediaPacket(MediaPacket),
+    Rpc(RR),
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum LocalTrackIncomingEvent<RL> {
+    RequestKeyFrame,
+    Rpc(RL),
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum TransportStateEvent {
     Connected,
     Reconnecting,
     Reconnected,
     Disconnected,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum TransportIncomingEvent<RE, RR, RL> {
+    State(TransportStateEvent),
     Continue,
     RemoteTrackAdded(TrackName, TrackId, TrackMeta),
-    RemoteTrackMedia(TrackId, MediaPacket),
-    RemoteTrackRemoved(TrackName, TrackId, TrackMeta),
+    RemoteTrackEvent(TrackId, RemoteTrackIncomingEvent<RR>),
+    RemoteTrackRemoved(TrackName, TrackId),
     LocalTrackAdded(TrackName, TrackId, TrackMeta),
+    LocalTrackEvent(TrackId, LocalTrackIncomingEvent<RL>),
     LocalTrackRemoved(TrackName, TrackId),
-    Rpc(RM),
+    Rpc(RE),
     Stats(TransportStats),
 }
 
-pub enum MediaOutgoingEvent<RM> {
-    Media(TrackId, MediaPacket),
-    RequestPli(TrackId),
-    RequestSli(TrackId),
+#[derive(PartialEq, Eq, Debug)]
+pub enum RemoteTrackOutgoingEvent<RR> {
+    RequestKeyFrame,
+    Rpc(RR),
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum LocalTrackOutgoingEvent<RL> {
+    MediaPacket(MediaPacket),
+    Rpc(RL),
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum TransportOutgoingEvent<RE, RR, RL> {
+    RemoteTrackEvent(TrackId, RemoteTrackOutgoingEvent<RR>),
+    LocalTrackEvent(TrackId, LocalTrackOutgoingEvent<RL>),
     RequestLimitBitrate(u32),
-    Rpc(RM),
+    Rpc(RE),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,16 +140,16 @@ pub struct MediaPacket {
 }
 
 #[derive(Debug)]
-pub enum MediaTransportError {
+pub enum TransportError {
     /// This is connect error, the transport should try to reconnect if need
     ConnectError(String),
     /// This is a fatal error, the transport should be closed
     ConnectionError(String),
-    NotImplement,
-    Other(String),
+    /// Network error
+    NetworkError,
 }
 
-impl ToString for MediaTransportError {
+impl ToString for TransportError {
     fn to_string(&self) -> String {
         //TODO
         "MediaTransportError_ToString".to_string()
@@ -122,8 +157,9 @@ impl ToString for MediaTransportError {
 }
 
 #[async_trait::async_trait]
-pub trait MediaTransport<E, RmIn, RmOut> {
-    fn on_event(&mut self, event: MediaOutgoingEvent<RmOut>) -> Result<(), MediaTransportError>;
-    fn on_custom_event(&mut self, event: E) -> Result<(), MediaTransportError>;
-    async fn recv(&mut self) -> Result<MediaIncomingEvent<RmIn>, MediaTransportError>;
+pub trait Transport<E, RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> {
+    fn on_tick(&mut self, now_ms: u64) -> Result<(), TransportError>;
+    fn on_event(&mut self, now_ms: u64, event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError>;
+    fn on_custom_event(&mut self, now_ms: u64, event: E) -> Result<(), TransportError>;
+    async fn recv(&mut self, now_ms: u64) -> Result<TransportIncomingEvent<RmIn, RrIn, RlIn>, TransportError>;
 }

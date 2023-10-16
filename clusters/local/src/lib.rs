@@ -1,72 +1,101 @@
 use std::sync::Arc;
 
 use async_std::channel::{Receiver, Sender};
-use cluster::{generate_cluster_track_uuid, Cluster, ClusterEndpoint, ClusterEndpointError, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent};
+use cluster::{
+    generate_cluster_track_uuid, Cluster, ClusterEndpoint, ClusterEndpointError, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent,
+    ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent,
+};
 use event_hub::LocalEventHub;
 use media_hub::LocalMediaHub;
 use parking_lot::RwLock;
+use utils::{hash_str, ResourceTracking};
 
 mod event_hub;
 mod media_hub;
 
-pub struct RoomLocal {
-    consumer_id: u32,
+pub struct PeerLocal {
+    peer_id_hash: u64,
     room_id: String,
     peer_id: String,
     event_hub: Arc<RwLock<LocalEventHub>>,
     media_hub: Arc<RwLock<LocalMediaHub>>,
     tx: Sender<ClusterEndpointIncomingEvent>,
     rx: Receiver<ClusterEndpointIncomingEvent>,
+    tracking: ResourceTracking,
 }
 
-impl RoomLocal {
-    pub fn new(consumer_id: u32, event_hub: Arc<RwLock<LocalEventHub>>, media_hub: Arc<RwLock<LocalMediaHub>>, room_id: &str, peer_id: &str) -> Self {
+impl PeerLocal {
+    pub fn new(event_hub: Arc<RwLock<LocalEventHub>>, media_hub: Arc<RwLock<LocalMediaHub>>, room_id: &str, peer_id: &str) -> Self {
         let (tx, rx) = async_std::channel::bounded(100);
+        log::debug!("[PeerLocal {}/{}] created", room_id, peer_id);
         Self {
-            consumer_id,
+            peer_id_hash: hash_str(&format!("{}-{}", room_id, peer_id)) << 16,
             event_hub,
             media_hub,
             room_id: room_id.into(),
             peer_id: peer_id.into(),
             tx,
             rx,
+            tracking: Default::default(),
         }
     }
 }
 
 #[async_trait::async_trait]
-impl ClusterEndpoint for RoomLocal {
+impl ClusterEndpoint for PeerLocal {
     fn on_event(&mut self, event: ClusterEndpointOutgoingEvent) -> Result<(), ClusterEndpointError> {
         match event {
-            ClusterEndpointOutgoingEvent::TrackAdded(track_name, track_meta) => {
+            ClusterEndpointOutgoingEvent::TrackAdded(track_id, track_name, track_meta) => {
+                self.tracking.add2("track", &track_name);
+                let track_uuid = generate_cluster_track_uuid(&self.room_id, &self.peer_id, &track_name);
                 self.event_hub.write().add_track(&self.room_id, &self.peer_id, &track_name, track_meta);
+                self.media_hub.write().add_track(track_uuid, track_id, self.tx.clone());
             }
-            ClusterEndpointOutgoingEvent::TrackMedia(track_uuid, pkt) => {
-                self.media_hub.read().relay(track_uuid, pkt);
-            }
-            ClusterEndpointOutgoingEvent::TrackRemoved(track_name) => {
+            ClusterEndpointOutgoingEvent::TrackRemoved(_track_id, track_name) => {
+                self.tracking.remove2("track", &track_name);
+                let track_uuid = generate_cluster_track_uuid(&self.room_id, &self.peer_id, &track_name);
                 self.event_hub.write().remove_track(&self.room_id, &self.peer_id, &track_name);
-            }
-            ClusterEndpointOutgoingEvent::SubscribeTrack(peer_id, track_name, consumer_id) => {
-                let track_uuid = generate_cluster_track_uuid(&self.room_id, &peer_id, &track_name);
-                self.media_hub.write().subscribe(track_uuid, consumer_id, self.tx.clone());
-            }
-            ClusterEndpointOutgoingEvent::UnsubscribeTrack(peer_id, track_name, consumer_id) => {
-                let track_uuid = generate_cluster_track_uuid(&self.room_id, &peer_id, &track_name);
-                self.media_hub.write().unsubscribe(track_uuid, consumer_id);
+                self.media_hub.write().remove_track(track_uuid);
             }
             ClusterEndpointOutgoingEvent::SubscribeRoom => {
-                self.event_hub.write().subscribe_room(&self.room_id, self.consumer_id, self.tx.clone());
+                self.tracking.add("sub-room");
+                self.event_hub.write().subscribe_room(&self.room_id, self.peer_id_hash as u32, self.tx.clone());
             }
             ClusterEndpointOutgoingEvent::UnsubscribeRoom => {
-                self.event_hub.write().unsubscribe_room(&self.room_id, self.consumer_id);
+                self.tracking.remove("sub-room");
+                self.event_hub.write().unsubscribe_room(&self.room_id, self.peer_id_hash as u32);
             }
             ClusterEndpointOutgoingEvent::SubscribePeer(peer_id) => {
-                self.event_hub.write().subscribe_peer(&self.room_id, &peer_id, self.consumer_id, self.tx.clone());
+                self.tracking.add2("sub-peer", &peer_id);
+                self.event_hub.write().subscribe_peer(&self.room_id, &peer_id, self.peer_id_hash as u32, self.tx.clone());
             }
             ClusterEndpointOutgoingEvent::UnsubscribePeer(peer_id) => {
-                self.event_hub.write().unsubscribe_peer(&self.room_id, &peer_id, self.consumer_id);
+                self.tracking.remove2("sub-peer", &peer_id);
+                self.event_hub.write().unsubscribe_peer(&self.room_id, &peer_id, self.peer_id_hash as u32);
             }
+            ClusterEndpointOutgoingEvent::LocalTrackEvent(track_id, event) => match event {
+                ClusterLocalTrackOutgoingEvent::Subscribe(peer_id, track_name) => {
+                    self.tracking.add3("sub-track", &peer_id, &track_name);
+                    let consumer_id = self.peer_id_hash | track_id as u64;
+                    let track_uuid = generate_cluster_track_uuid(&self.room_id, &peer_id, &track_name);
+                    self.media_hub.write().subscribe(track_uuid, consumer_id, self.tx.clone());
+                }
+                ClusterLocalTrackOutgoingEvent::Unsubscribe(peer_id, track_name) => {
+                    self.tracking.remove3("sub-track", &peer_id, &track_name);
+                    let consumer_id = self.peer_id_hash | track_id as u64;
+                    let track_uuid = generate_cluster_track_uuid(&self.room_id, &peer_id, &track_name);
+                    self.media_hub.write().unsubscribe(track_uuid, consumer_id);
+                }
+                ClusterLocalTrackOutgoingEvent::RequestKeyFrame => {
+                    let consumer_id = self.peer_id_hash | track_id as u64;
+                    self.media_hub.read().forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
+                }
+            },
+            ClusterEndpointOutgoingEvent::RemoteTrackEvent(_track_id, cluster_track_uuid, event) => match event {
+                ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt) => {
+                    self.media_hub.write().relay(cluster_track_uuid, pkt);
+                }
+            },
         }
         Ok(())
     }
@@ -76,8 +105,17 @@ impl ClusterEndpoint for RoomLocal {
     }
 }
 
+impl Drop for PeerLocal {
+    fn drop(&mut self) {
+        log::debug!("[PeerLocal {}/{}] drop", self.room_id, self.peer_id);
+        if !self.tracking.is_empty() {
+            log::error!("PeerLocal {}-{} tracking not empty: {}", self.room_id, self.peer_id, self.tracking.dump());
+        }
+        assert!(self.tracking.is_empty());
+    }
+}
+
 pub struct ServerLocal {
-    consumer_id_seed: u32,
     event_hub: Arc<RwLock<LocalEventHub>>,
     media_hub: Arc<RwLock<LocalMediaHub>>,
 }
@@ -85,17 +123,14 @@ pub struct ServerLocal {
 impl ServerLocal {
     pub fn new() -> Self {
         Self {
-            consumer_id_seed: 0,
             event_hub: Arc::new(RwLock::new(LocalEventHub::default())),
             media_hub: Arc::new(RwLock::new(LocalMediaHub::default())),
         }
     }
 }
 
-impl Cluster<RoomLocal> for ServerLocal {
-    fn build(&mut self, room_id: &str, peer_id: &str) -> RoomLocal {
-        let consumer_id = self.consumer_id_seed;
-        self.consumer_id_seed += 1;
-        RoomLocal::new(consumer_id, self.event_hub.clone(), self.media_hub.clone(), room_id, peer_id)
+impl Cluster<PeerLocal> for ServerLocal {
+    fn build(&mut self, room_id: &str, peer_id: &str) -> PeerLocal {
+        PeerLocal::new(self.event_hub.clone(), self.media_hub.clone(), room_id, peer_id)
     }
 }

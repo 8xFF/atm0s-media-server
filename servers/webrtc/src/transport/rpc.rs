@@ -1,5 +1,5 @@
 use endpoint::{
-    rpc::{MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, SenderToggle},
+    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle},
     EndpointRpcIn, EndpointRpcOut, RpcRequest,
 };
 use serde::Serialize;
@@ -30,10 +30,6 @@ pub enum RpcError {
 
 pub fn rpc_to_string(rpc: EndpointRpcOut) -> String {
     match rpc {
-        EndpointRpcOut::SenderToggleRes(res) => serde_json::to_string(&res).expect("should serialize json"),
-        EndpointRpcOut::ReceiverSwitchRes(res) => serde_json::to_string(&res).expect("should serialize json"),
-        EndpointRpcOut::ReceiverLimitRes(res) => serde_json::to_string(&res).expect("should serialize json"),
-        EndpointRpcOut::ReceiverDisconnectRes(res) => serde_json::to_string(&res).expect("should serialize json"),
         EndpointRpcOut::MixMinusSourceAddRes(res) => serde_json::to_string(&res).expect("should serialize json"),
         EndpointRpcOut::MixMinusSourceRemoveRes(res) => serde_json::to_string(&res).expect("should serialize json"),
         EndpointRpcOut::MixMinusToggleRes(res) => serde_json::to_string(&res).expect("should serialize json"),
@@ -43,7 +39,27 @@ pub fn rpc_to_string(rpc: EndpointRpcOut) -> String {
     }
 }
 
-pub fn rpc_from_string(s: &str) -> Result<EndpointRpcIn, RpcError> {
+pub fn rpc_remote_track_to_string(rpc: RemoteTrackRpcOut) -> String {
+    match rpc {
+        RemoteTrackRpcOut::ToggleRes(res) => serde_json::to_string(&res).expect("should serialize json"),
+    }
+}
+
+pub fn rpc_local_track_to_string(rpc: LocalTrackRpcOut) -> String {
+    match rpc {
+        LocalTrackRpcOut::SwitchRes(res) => serde_json::to_string(&res).expect("should serialize json"),
+        LocalTrackRpcOut::LimitRes(res) => serde_json::to_string(&res).expect("should serialize json"),
+        LocalTrackRpcOut::DisconnectRes(res) => serde_json::to_string(&res).expect("should serialize json"),
+    }
+}
+
+pub enum IncomingRpc {
+    Endpoint(EndpointRpcIn),
+    RemoteTrack(String, RemoteTrackRpcIn),
+    LocalTrack(String, LocalTrackRpcIn),
+}
+
+pub fn rpc_from_string(s: &str) -> Result<IncomingRpc, RpcError> {
     let json: serde_json::Value = serde_json::from_str(s).map_err(|e| RpcError::InvalidJson)?;
     let rpc_type = json["type"].as_str().ok_or(RpcError::InvalidRpc)?;
     if rpc_type.eq("request") {
@@ -51,33 +67,33 @@ pub fn rpc_from_string(s: &str) -> Result<EndpointRpcIn, RpcError> {
         let request = json["request"].as_str().ok_or(RpcError::InvalidRpc)?;
         let value = json["data"].clone();
         match request {
-            "peer.close" => Ok(EndpointRpcIn::PeerClose),
+            "peer.close" => Ok(IncomingRpc::Endpoint(EndpointRpcIn::PeerClose)),
             "sender.toggle" => match serde_json::from_value::<SenderToggle>(value) {
-                Ok(params) => Ok(EndpointRpcIn::SenderToggle(RpcRequest::from(req_id, params))),
+                Ok(params) => Ok(IncomingRpc::RemoteTrack(params.name.clone(), RemoteTrackRpcIn::Toggle(RpcRequest::from(req_id, params)))),
                 Err(_err) => Err(RpcError::InvalidJson),
             },
             "receiver.switch" => match serde_json::from_value::<ReceiverSwitch>(value) {
-                Ok(params) => Ok(EndpointRpcIn::ReceiverSwitch(RpcRequest::from(req_id, params))),
+                Ok(params) => Ok(IncomingRpc::LocalTrack(params.id.clone(), LocalTrackRpcIn::Switch(RpcRequest::from(req_id, params)))),
                 Err(_err) => Err(RpcError::InvalidJson),
             },
             "receiver.limit" => match serde_json::from_value::<ReceiverLimit>(value) {
-                Ok(params) => Ok(EndpointRpcIn::ReceiverLimit(RpcRequest::from(req_id, params))),
+                Ok(params) => Ok(IncomingRpc::LocalTrack(params.id.clone(), LocalTrackRpcIn::Limit(RpcRequest::from(req_id, params)))),
                 Err(_err) => Err(RpcError::InvalidJson),
             },
             "receiver.disconnect" => match serde_json::from_value::<ReceiverDisconnect>(value) {
-                Ok(params) => Ok(EndpointRpcIn::ReceiverDisconnect(RpcRequest::from(req_id, params))),
+                Ok(params) => Ok(IncomingRpc::LocalTrack(params.id.clone(), LocalTrackRpcIn::Disconnect(RpcRequest::from(req_id, params)))),
                 Err(_err) => Err(RpcError::InvalidJson),
             },
             "mix_minus.add" => match serde_json::from_value::<MixMinusSource>(value) {
-                Ok(params) => Ok(EndpointRpcIn::MixMinusSourceAdd(RpcRequest::from(req_id, params))),
+                Ok(params) => Ok(IncomingRpc::Endpoint(EndpointRpcIn::MixMinusSourceAdd(RpcRequest::from(req_id, params)))),
                 Err(_err) => Err(RpcError::InvalidJson),
             },
             "mix_minus.remove" => match serde_json::from_value::<MixMinusSource>(value) {
-                Ok(params) => Ok(EndpointRpcIn::MixMinusSourceRemove(RpcRequest::from(req_id, params))),
+                Ok(params) => Ok(IncomingRpc::Endpoint(EndpointRpcIn::MixMinusSourceRemove(RpcRequest::from(req_id, params)))),
                 Err(_err) => Err(RpcError::InvalidJson),
             },
             "mix_minus.toggle" => match serde_json::from_value::<MixMinusToggle>(value) {
-                Ok(params) => Ok(EndpointRpcIn::MixMinusToggle(RpcRequest::from(req_id, params))),
+                Ok(params) => Ok(IncomingRpc::Endpoint(EndpointRpcIn::MixMinusToggle(RpcRequest::from(req_id, params)))),
                 Err(_err) => Err(RpcError::InvalidJson),
             },
             _ => Err(RpcError::InvalidRpc),

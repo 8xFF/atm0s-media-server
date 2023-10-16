@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use transport::{MediaKind, MediaPacket};
+use transport::{MediaKind, MediaPacket, TrackId};
 
 pub type ClusterTrackUuid = u64;
 pub type ClusterPeerId = String;
 pub type ClusterTrackName = String;
-pub type ClusterConsumerId = u64;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ClusterTrackStatus {
@@ -36,23 +35,47 @@ pub enum ClusterEndpointError {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ClusterRemoteTrackIncomingEvent {
+    RequestKeyFrame,
+    RequestLimitBitrate(u32),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ClusterLocalTrackIncomingEvent {
+    MediaPacket(MediaPacket),
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ClusterEndpointIncomingEvent {
-    PeerTrackMedia(ClusterTrackUuid, MediaPacket),
     PeerTrackAdded(ClusterPeerId, ClusterTrackName, ClusterTrackMeta),
     PeerTrackUpdated(ClusterPeerId, ClusterTrackName, ClusterTrackMeta),
     PeerTrackRemoved(ClusterPeerId, ClusterTrackName),
+    LocalTrackEvent(TrackId, ClusterLocalTrackIncomingEvent),
+    RemoteTrackEvent(TrackId, ClusterRemoteTrackIncomingEvent),
 }
 
+#[derive(PartialEq, Eq, Debug)]
+pub enum ClusterRemoteTrackOutgoingEvent {
+    MediaPacket(MediaPacket),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClusterLocalTrackOutgoingEvent {
+    RequestKeyFrame,
+    Subscribe(ClusterPeerId, ClusterTrackName),
+    Unsubscribe(ClusterPeerId, ClusterTrackName),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum ClusterEndpointOutgoingEvent {
-    TrackMedia(ClusterTrackUuid, MediaPacket),
-    TrackAdded(ClusterTrackName, ClusterTrackMeta),
-    TrackRemoved(ClusterTrackName),
+    TrackAdded(TrackId, ClusterTrackName, ClusterTrackMeta),
+    TrackRemoved(TrackId, ClusterTrackName),
     SubscribeRoom,
     UnsubscribeRoom,
     SubscribePeer(ClusterPeerId),
     UnsubscribePeer(ClusterPeerId),
-    SubscribeTrack(ClusterPeerId, ClusterTrackName, ClusterConsumerId),
-    UnsubscribeTrack(ClusterPeerId, ClusterTrackName, ClusterConsumerId),
+    LocalTrackEvent(TrackId, ClusterLocalTrackOutgoingEvent),
+    RemoteTrackEvent(TrackId, ClusterTrackUuid, ClusterRemoteTrackOutgoingEvent),
 }
 
 /// generate for other peer

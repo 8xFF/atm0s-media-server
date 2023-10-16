@@ -1,23 +1,45 @@
-use cluster::{ClusterTrackMeta, ClusterTrackStatus};
-use transport::{MediaKind, MediaPacket, TrackId, TrackMeta};
+use std::collections::VecDeque;
 
-pub enum RemoteTrackOutput {}
+use cluster::{generate_cluster_track_uuid, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackStatus, ClusterTrackUuid};
+use transport::{RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta};
 
+use crate::{
+    rpc::{RemoteTrackRpcIn, RemoteTrackRpcOut},
+    RpcResponse,
+};
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum RemoteTrackOutput {
+    Transport(RemoteTrackOutgoingEvent<RemoteTrackRpcOut>),
+    Cluster(ClusterRemoteTrackOutgoingEvent),
+}
+
+#[allow(dead_code)]
 pub struct RemoteTrack {
+    cluster_track_uuid: ClusterTrackUuid,
     track_id: TrackId,
     track_name: String,
     track_meta: TrackMeta,
-    cluster_track_uuid: u64,
+    out_actions: VecDeque<RemoteTrackOutput>,
 }
 
 impl RemoteTrack {
-    pub fn new(track_id: TrackId, track_name: &str, track_meta: TrackMeta) -> Self {
+    pub fn new(room_id: &str, peer_id: &str, track_id: TrackId, track_name: &str, track_meta: TrackMeta) -> Self {
         Self {
+            cluster_track_uuid: generate_cluster_track_uuid(room_id, peer_id, track_name),
             track_id,
             track_name: track_name.into(),
             track_meta,
-            cluster_track_uuid: 0, //TODO
+            out_actions: Default::default(),
         }
+    }
+
+    pub fn track_name(&self) -> &str {
+        &self.track_name
+    }
+
+    pub fn cluster_track_uuid(&self) -> ClusterTrackUuid {
+        self.cluster_track_uuid
     }
 
     pub fn cluster_meta(&self) -> ClusterTrackMeta {
@@ -33,11 +55,99 @@ impl RemoteTrack {
 
     pub fn on_tick(&mut self, now_ms: u64) {}
 
-    pub fn on_pkt(&mut self, pkt: MediaPacket) -> Option<(u64, MediaPacket)> {
-        Some((self.cluster_track_uuid, pkt))
+    pub fn on_cluster_event(&mut self, event: ClusterRemoteTrackIncomingEvent) {
+        match event {
+            ClusterRemoteTrackIncomingEvent::RequestKeyFrame => {
+                self.out_actions.push_back(RemoteTrackOutput::Transport(RemoteTrackOutgoingEvent::RequestKeyFrame));
+            }
+            ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(_) => {
+                //TODO
+            }
+        }
+    }
+
+    pub fn on_transport_event(&mut self, event: RemoteTrackIncomingEvent<RemoteTrackRpcIn>) {
+        match event {
+            RemoteTrackIncomingEvent::MediaPacket(pkt) => {
+                log::debug!("[RemoteTrack {}] media from transport pkt {} {}", self.track_name, pkt.pt, pkt.seq_no);
+                self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt)));
+            }
+            RemoteTrackIncomingEvent::Rpc(event) => match event {
+                RemoteTrackRpcIn::Toggle(req) => {
+                    self.out_actions
+                        .push_back(RemoteTrackOutput::Transport(RemoteTrackOutgoingEvent::Rpc(RemoteTrackRpcOut::ToggleRes(RpcResponse::success(
+                            req.req_id, true,
+                        )))));
+                }
+            },
+        }
     }
 
     pub fn pop_action(&mut self) -> Option<RemoteTrackOutput> {
-        None
+        self.out_actions.pop_front()
+    }
+
+    /// Close this and cleanup everything
+    /// This should be called when the track is removed from the peer
+    pub fn close(&mut self) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use cluster::ClusterRemoteTrackIncomingEvent;
+    use transport::{MediaKind, MediaPacket, MediaPacketExtensions, MediaSampleRate, TrackMeta};
+
+    use crate::endpoint_wrap::internal::remote_track::RemoteTrackOutput;
+
+    use super::RemoteTrack;
+
+    #[test]
+    fn incoming_media_should_fire_cluster_media() {
+        let mut track = RemoteTrack::new(
+            "room1",
+            "peer1",
+            100,
+            "video_main",
+            TrackMeta {
+                kind: MediaKind::Audio,
+                sample_rate: MediaSampleRate::Hz48000,
+                label: None,
+            },
+        );
+
+        let pkt = MediaPacket {
+            pt: 111,
+            seq_no: 1,
+            time: 1000,
+            marker: true,
+            ext_vals: MediaPacketExtensions {
+                abs_send_time: None,
+                transport_cc: None,
+            },
+            nackable: true,
+            payload: vec![1, 2, 3],
+        };
+        track.on_transport_event(transport::RemoteTrackIncomingEvent::MediaPacket(pkt.clone()));
+        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Cluster(cluster::ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt))));
+        assert_eq!(track.pop_action(), None);
+    }
+
+    #[test]
+    fn incoming_request_keyframe_should_fire_transport_event() {
+        let mut track = RemoteTrack::new(
+            "room1",
+            "peer1",
+            100,
+            "video_main",
+            TrackMeta {
+                kind: MediaKind::Audio,
+                sample_rate: MediaSampleRate::Hz48000,
+                label: None,
+            },
+        );
+
+        track.on_cluster_event(ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
+        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Transport(transport::RemoteTrackOutgoingEvent::RequestKeyFrame)));
+        assert_eq!(track.pop_action(), None);
     }
 }

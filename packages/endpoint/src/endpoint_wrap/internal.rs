@@ -1,24 +1,28 @@
 use std::collections::{HashMap, VecDeque};
 
-use cluster::{generate_cluster_track_uuid, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterTrackMeta};
-use transport::{MediaIncomingEvent, MediaKind, MediaOutgoingEvent, TrackId};
+use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent};
+use transport::{MediaKind, TrackId, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
 use utils::hash_str;
 
-use crate::rpc::{EndpointRpcIn, EndpointRpcOut, RpcResponse, TrackInfo};
+use crate::rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, TrackInfo};
 
 use self::{
-    local_track::{LocalTrack, LocalTrackSource},
-    remote_track::RemoteTrack,
+    local_track::{LocalTrack, LocalTrackOutput},
+    remote_track::{RemoteTrack, RemoteTrackOutput},
 };
 
 mod local_track;
 mod remote_track;
 
-pub enum MediaEndpointInteralEvent {}
+#[derive(Debug, PartialEq, Eq)]
+pub enum MediaEndpointInteralEvent {
+    ConnectionClosed,
+}
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum MediaInternalAction {
     Internal(MediaEndpointInteralEvent),
-    Endpoint(MediaOutgoingEvent<EndpointRpcOut>),
+    Endpoint(TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>),
     Cluster(ClusterEndpointOutgoingEvent),
 }
 
@@ -34,6 +38,7 @@ pub struct MediaEndpointInteral {
 
 impl MediaEndpointInteral {
     pub fn new(room_id: &str, peer_id: &str) -> Self {
+        log::info!("[MediaEndpointInteral {}/{}] create", room_id, peer_id);
         Self {
             room_id: room_id.into(),
             peer_id: peer_id.into(),
@@ -46,10 +51,10 @@ impl MediaEndpointInteral {
     }
 
     fn push_rpc(&mut self, rpc: EndpointRpcOut) {
-        self.output_actions.push_back(MediaInternalAction::Endpoint(MediaOutgoingEvent::Rpc(rpc)));
+        self.output_actions.push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(rpc)));
     }
 
-    fn push_endpoint(&mut self, event: MediaOutgoingEvent<EndpointRpcOut>) {
+    fn push_endpoint(&mut self, event: TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>) {
         self.output_actions.push_back(MediaInternalAction::Endpoint(event));
     }
 
@@ -64,54 +69,58 @@ impl MediaEndpointInteral {
     pub fn on_tick(&mut self, now_ms: u64) {
         for (_, track) in self.local_tracks.iter_mut() {
             track.on_tick(now_ms);
-            while let Some(event) = track.pop_action() {
-                //TODO
-            }
         }
 
         for (_, track) in self.remote_tracks.iter_mut() {
             track.on_tick(now_ms);
-            while let Some(event) = track.pop_action() {
-                //TODO
-            }
         }
+
+        self.pop_tracks_actions();
     }
 
-    pub fn on_transport(&mut self, event: MediaIncomingEvent<EndpointRpcIn>) {
+    pub fn on_transport(&mut self, event: TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>) {
         match event {
-            MediaIncomingEvent::Connected => {}
-            MediaIncomingEvent::Reconnecting => {}
-            MediaIncomingEvent::Reconnected => {}
-            MediaIncomingEvent::Disconnected => {}
-            MediaIncomingEvent::Continue => {}
-            MediaIncomingEvent::Rpc(rpc) => self.process_rpc(rpc),
-            MediaIncomingEvent::Stats(stats) => todo!(),
-            MediaIncomingEvent::RemoteTrackAdded(track_name, track_id, meta) => {
+            TransportIncomingEvent::State(state) => {
+                log::info!("[EndpointInternal] switch state to {:?}", state);
+                match state {
+                    TransportStateEvent::Connected => {}
+                    TransportStateEvent::Reconnecting => {}
+                    TransportStateEvent::Reconnected => {}
+                    TransportStateEvent::Disconnected => {
+                        self.push_internal(MediaEndpointInteralEvent::ConnectionClosed);
+                    }
+                }
+            }
+            TransportIncomingEvent::Continue => {}
+            TransportIncomingEvent::Rpc(rpc) => self.process_rpc(rpc),
+            TransportIncomingEvent::Stats(stats) => todo!(),
+            TransportIncomingEvent::RemoteTrackAdded(track_name, track_id, meta) => {
+                log::info!("[EndpointInternal] on remote track added {} {}", track_name, track_id);
                 if !self.remote_tracks.contains_key(&track_id) {
-                    let track = RemoteTrack::new(track_id, &track_name, meta);
-                    self.push_cluster(ClusterEndpointOutgoingEvent::TrackAdded(track_name, track.cluster_meta()));
+                    let track = RemoteTrack::new(&self.room_id, &self.peer_id, track_id, &track_name, meta);
+                    self.push_cluster(ClusterEndpointOutgoingEvent::TrackAdded(track_id, track_name, track.cluster_meta()));
                     self.remote_tracks.insert(track_id, track);
                 } else {
                     log::warn!("[EndpointInternal] remote track already exists {:?}", track_id);
                 }
             }
-            MediaIncomingEvent::RemoteTrackMedia(track_id, pkt) => {
+            TransportIncomingEvent::RemoteTrackEvent(track_id, event) => {
                 if let Some(track) = self.remote_tracks.get_mut(&track_id) {
-                    if let Some((cluster_track_uuid, pkt)) = track.on_pkt(pkt) {
-                        self.push_cluster(ClusterEndpointOutgoingEvent::TrackMedia(cluster_track_uuid, pkt));
-                    }
+                    track.on_transport_event(event);
                 } else {
                     log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
                 }
             }
-            MediaIncomingEvent::RemoteTrackRemoved(track_name, track_id, meta) => {
-                if let Some(track) = self.remote_tracks.remove(&track_id) {
-                    self.push_cluster(ClusterEndpointOutgoingEvent::TrackRemoved(track_name));
+            TransportIncomingEvent::RemoteTrackRemoved(track_name, track_id) => {
+                if let Some(mut track) = self.remote_tracks.remove(&track_id) {
+                    track.close();
+                    self.pop_remote_track_actions(track_id, &mut track);
+                    self.push_cluster(ClusterEndpointOutgoingEvent::TrackRemoved(track_id, track_name));
                 } else {
                     log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
                 }
             }
-            MediaIncomingEvent::LocalTrackAdded(track_name, track_id, meta) => {
+            TransportIncomingEvent::LocalTrackAdded(track_name, track_id, meta) => {
                 if !self.local_tracks.contains_key(&track_id) {
                     let track = LocalTrack::new(&self.room_id, &self.peer_id, track_id, &track_name, meta);
                     self.local_tracks.insert(track_id, track);
@@ -120,8 +129,17 @@ impl MediaEndpointInteral {
                     log::warn!("[EndpointInternal] local track already exists {:?}", track_id);
                 }
             }
-            MediaIncomingEvent::LocalTrackRemoved(track_name, track_id) => {
-                if let Some(track) = self.local_tracks.remove(&track_id) {
+            TransportIncomingEvent::LocalTrackEvent(track_id, event) => {
+                if let Some(mut track) = self.local_tracks.get_mut(&track_id) {
+                    track.on_transport_event(event);
+                } else {
+                    log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
+                }
+            }
+            TransportIncomingEvent::LocalTrackRemoved(track_name, track_id) => {
+                if let Some(mut track) = self.local_tracks.remove(&track_id) {
+                    track.close();
+                    self.pop_local_track_actions(track_id, &mut track);
                     self.local_track_map.remove(&track_name);
                 } else {
                     log::warn!("[EndpointInternal] local track not found {:?}", track_id);
@@ -131,26 +149,12 @@ impl MediaEndpointInteral {
                 panic!("not implement {:?}", event)
             }
         }
+
+        self.pop_tracks_actions();
     }
 
     pub fn on_cluster(&mut self, event: ClusterEndpointIncomingEvent) {
         match event {
-            ClusterEndpointIncomingEvent::PeerTrackMedia(cluster_track_uuid, pkt) => {
-                //TODO reduce for check here
-                let mut out_events = vec![];
-                for (_, track) in self.local_tracks.iter_mut() {
-                    if let Some(track_source_track_uuid) = track.source_uuid() {
-                        if track_source_track_uuid == cluster_track_uuid {
-                            if let Some((track_id, pkt)) = track.on_pkt(&pkt) {
-                                out_events.push(MediaOutgoingEvent::<EndpointRpcOut>::Media(track_id.clone(), pkt));
-                            }
-                        }
-                    }
-                }
-                for event in out_events {
-                    self.push_endpoint(event);
-                }
-            }
             ClusterEndpointIncomingEvent::PeerTrackAdded(peer, track, meta) => {
                 self.cluster_track_map.insert((peer.clone(), track.clone()), meta.kind);
                 self.push_rpc(EndpointRpcOut::TrackAdded(TrackInfo {
@@ -173,7 +177,7 @@ impl MediaEndpointInteral {
             }
             ClusterEndpointIncomingEvent::PeerTrackRemoved(peer, track) => {
                 if let Some(kind) = self.cluster_track_map.remove(&(peer.clone(), track.clone())) {
-                    self.push_rpc(EndpointRpcOut::TrackAdded(TrackInfo {
+                    self.push_rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
                         peer_hash: hash_str(&peer) as u32,
                         peer,
                         kind,
@@ -182,7 +186,23 @@ impl MediaEndpointInteral {
                     }));
                 }
             }
+            ClusterEndpointIncomingEvent::LocalTrackEvent(track_id, event) => {
+                if let Some(track) = self.local_tracks.get_mut(&track_id) {
+                    track.on_cluster_event(event);
+                } else {
+                    log::warn!("[EndpointInternal] local track not found {:?}", track_id);
+                }
+            }
+            ClusterEndpointIncomingEvent::RemoteTrackEvent(track_id, event) => {
+                if let Some(track) = self.remote_tracks.get_mut(&track_id) {
+                    track.on_cluster_event(event);
+                } else {
+                    log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
+                }
+            }
         }
+
+        self.pop_tracks_actions();
     }
 
     pub fn pop_action(&mut self) -> Option<MediaInternalAction> {
@@ -194,46 +214,205 @@ impl MediaEndpointInteral {
             EndpointRpcIn::PeerClose => {
                 todo!()
             }
-            EndpointRpcIn::SenderToggle(req) => {
-                todo!()
-            }
-            EndpointRpcIn::ReceiverSwitch(req) => {
-                if let Some(track_id) = self.local_track_map.get(&req.data.id) {
-                    if let Some(track) = self.local_tracks.get_mut(track_id) {
-                        //TODO handle priority
-                        let consumer_id = track.consumer_uuid();
-                        let cluster_track_uuid = generate_cluster_track_uuid(&self.room_id, &req.data.remote.peer, &req.data.remote.stream);
-                        let old_source = track.repace_source(Some(LocalTrackSource::new(&req.data.remote.peer, &req.data.remote.stream, cluster_track_uuid)));
-                        if let Some(old_source) = old_source {
-                            self.push_cluster(ClusterEndpointOutgoingEvent::UnsubscribeTrack(old_source.peer, old_source.track, old_source.uuid));
-                        }
-                        self.push_cluster(ClusterEndpointOutgoingEvent::SubscribeTrack(req.data.remote.peer, req.data.remote.stream, consumer_id));
-                        self.push_rpc(EndpointRpcOut::ReceiverSwitchRes(RpcResponse::success(req.req_id, true)));
-                    } else {
-                        log::warn!("[EndpointInternal] local track not found {:?}", track_id);
-                        self.push_rpc(EndpointRpcOut::ReceiverSwitchRes(RpcResponse::error(req.req_id)));
-                    }
-                } else {
-                    log::warn!("[EndpointInternal] local track not found {:?}", req.data.id);
-                    self.push_rpc(EndpointRpcOut::ReceiverSwitchRes(RpcResponse::error(req.req_id)));
-                }
-            }
-            EndpointRpcIn::ReceiverLimit(req) => {
-                if let Some(track_id) = self.local_track_map.get(&req.data.id) {
-                    if let Some(track) = self.local_tracks.get_mut(track_id) {
-                        track.limit(req.data.limit);
-                        self.push_rpc(EndpointRpcOut::ReceiverLimitRes(RpcResponse::success(req.req_id, true)));
-                    } else {
-                        self.push_rpc(EndpointRpcOut::ReceiverLimitRes(RpcResponse::error(req.req_id)));
-                    }
-                } else {
-                    self.push_rpc(EndpointRpcOut::ReceiverLimitRes(RpcResponse::error(req.req_id)));
-                }
-            }
-            EndpointRpcIn::ReceiverDisconnect(_) => todo!(),
             EndpointRpcIn::MixMinusSourceAdd(_) => todo!(),
             EndpointRpcIn::MixMinusSourceRemove(_) => todo!(),
             EndpointRpcIn::MixMinusToggle(_) => todo!(),
         }
+    }
+
+    fn pop_tracks_actions(&mut self) {
+        for (track_id, track) in self.local_tracks.iter_mut() {
+            while let Some(action) = track.pop_action() {
+                match action {
+                    LocalTrackOutput::Transport(event) => {
+                        self.output_actions.push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LocalTrackEvent(*track_id, event)));
+                    }
+                    LocalTrackOutput::Cluster(event) => {
+                        self.output_actions
+                            .push_back(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(*track_id, event)));
+                    }
+                }
+            }
+        }
+
+        for (track_id, track) in self.remote_tracks.iter_mut() {
+            while let Some(action) = track.pop_action() {
+                match action {
+                    RemoteTrackOutput::Transport(event) => {
+                        self.output_actions.push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::RemoteTrackEvent(*track_id, event)));
+                    }
+                    RemoteTrackOutput::Cluster(event) => {
+                        let cluster_track_uuid = track.cluster_track_uuid();
+                        self.output_actions
+                            .push_back(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(*track_id, cluster_track_uuid, event)));
+                    }
+                }
+            }
+        }
+    }
+
+    fn pop_local_track_actions(&mut self, track_id: TrackId, track: &mut LocalTrack) {
+        while let Some(action) = track.pop_action() {
+            match action {
+                LocalTrackOutput::Transport(event) => {
+                    self.output_actions.push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LocalTrackEvent(track_id, event)));
+                }
+                LocalTrackOutput::Cluster(event) => {
+                    self.output_actions
+                        .push_back(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(track_id, event)));
+                }
+            }
+        }
+    }
+
+    fn pop_remote_track_actions(&mut self, track_id: TrackId, track: &mut RemoteTrack) {
+        while let Some(action) = track.pop_action() {
+            match action {
+                RemoteTrackOutput::Transport(event) => {
+                    self.output_actions.push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::RemoteTrackEvent(track_id, event)));
+                }
+                RemoteTrackOutput::Cluster(event) => {
+                    let cluster_track_uuid = track.cluster_track_uuid();
+                    self.output_actions
+                        .push_back(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(track_id, cluster_track_uuid, event)));
+                }
+            }
+        }
+    }
+
+    /// Close this and cleanup everything
+    /// This should be called when the endpoint is closed
+    /// - Close all tracks
+    pub fn close(&mut self) {
+        let local_tracks = std::mem::take(&mut self.local_tracks);
+        for (track_id, mut track) in local_tracks {
+            log::info!("[MediaEndpointInteral {}/{}] close local track {}", self.room_id, self.peer_id, track_id);
+            track.close();
+            self.pop_local_track_actions(track_id, &mut track);
+        }
+
+        let remote_tracks = std::mem::take(&mut self.remote_tracks);
+        for (track_id, mut track) in remote_tracks {
+            log::info!("[MediaEndpointInteral {}/{}] close remote track {}", self.room_id, self.peer_id, track_id);
+            track.close();
+            self.pop_remote_track_actions(track_id, &mut track);
+            self.push_cluster(ClusterEndpointOutgoingEvent::TrackRemoved(track_id, track.track_name().to_string()));
+        }
+    }
+}
+
+impl Drop for MediaEndpointInteral {
+    fn drop(&mut self) {
+        log::info!("[MediaEndpointInteral {}/{}] drop", self.room_id, self.peer_id);
+        assert!(self.local_tracks.is_empty());
+        assert!(self.remote_tracks.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterTrackMeta};
+    use transport::{MediaKind, MediaSampleRate, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent};
+    use utils::hash_str;
+
+    use crate::{endpoint_wrap::internal::MediaInternalAction, rpc::TrackInfo, EndpointRpcOut};
+
+    use super::MediaEndpointInteral;
+
+    #[test]
+    fn should_fire_cluster_when_remote_track_added() {
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+
+        endpoint.on_transport(TransportIncomingEvent::RemoteTrackAdded(
+            "audio_main".to_string(),
+            100,
+            TrackMeta {
+                kind: MediaKind::Audio,
+                sample_rate: MediaSampleRate::Hz48000,
+                label: None,
+            },
+        ));
+
+        assert_eq!(endpoint.remote_tracks.len(), 1);
+
+        // should output cluster event
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackAdded(
+                100,
+                "audio_main".to_string(),
+                ClusterTrackMeta {
+                    kind: MediaKind::Audio,
+                    scaling: "Single".to_string(),
+                    layers: vec![],
+                    status: cluster::ClusterTrackStatus::Connected,
+                    active: true,
+                    label: None,
+                }
+            )))
+        );
+        assert_eq!(endpoint.pop_action(), None);
+
+        endpoint.on_transport(TransportIncomingEvent::RemoteTrackRemoved("audio_main".to_string(), 100));
+
+        // should output cluster event
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackRemoved(100, "audio_main".to_string())))
+        );
+        assert_eq!(endpoint.pop_action(), None);
+    }
+
+    #[test]
+    fn should_fire_rpc_when_cluster_track_added() {
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+
+        endpoint.on_cluster(ClusterEndpointIncomingEvent::PeerTrackAdded(
+            "peer2".to_string(),
+            "audio_main".to_string(),
+            ClusterTrackMeta {
+                kind: MediaKind::Audio,
+                scaling: "Single".to_string(),
+                layers: vec![],
+                status: cluster::ClusterTrackStatus::Connected,
+                active: true,
+                label: None,
+            },
+        ));
+
+        // should output rpc event
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
+                peer_hash: hash_str("peer2") as u32,
+                peer: "peer2".to_string(),
+                kind: MediaKind::Audio,
+                track: "audio_main".to_string(),
+                state: Some(ClusterTrackMeta {
+                    kind: MediaKind::Audio,
+                    scaling: "Single".to_string(),
+                    layers: vec![],
+                    status: cluster::ClusterTrackStatus::Connected,
+                    active: true,
+                    label: None,
+                }),
+            }))))
+        );
+        assert_eq!(endpoint.pop_action(), None);
+
+        endpoint.on_cluster(ClusterEndpointIncomingEvent::PeerTrackRemoved("peer2".to_string(), "audio_main".to_string()));
+
+        // should output rpc event
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
+                peer_hash: hash_str("peer2") as u32,
+                peer: "peer2".to_string(),
+                kind: MediaKind::Audio,
+                track: "audio_main".to_string(),
+                state: None,
+            }))))
+        );
+        assert_eq!(endpoint.pop_action(), None);
     }
 }

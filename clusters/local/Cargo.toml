@@ -6,7 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+log = { workspace = true }
 cluster = { workspace = true }
+utils = { workspace = true }
 transport = { workspace = true }
 async-trait = { workspace = true }
 async-std = { workspace = true }

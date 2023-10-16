@@ -41,7 +41,7 @@ impl HttpApis {
     /// connect whip endpoint
     #[oai(path = "/webrtc/connect", method = "post")]
     async fn create_webrtc(&self, ctx: Data<&Sender<RpcEvent>>, body: Json<WebrtcConnectRequest>) -> Result<Json<WebrtcConnectApiResponse>> {
-        log::info!("[HttpApis] create webrtc endpoint with sdp {}", body.0.sdp);
+        log::info!("[HttpApis] create Webrtc endpoint {}/{}", body.0.room, body.0.peer);
         let (res, rx) = RpcResponse::<WebrtcConnectResponse>::new();
         ctx.0
             .send(RpcEvent::WebrtcConnect(body.0, res))
@@ -49,7 +49,7 @@ impl HttpApis {
             .map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let (_code, res) = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whip endpoint created with conn_id {} and sdp {}", res.conn_id, res.sdp);
+        log::info!("[HttpApis] Webrtc endpoint created with conn_id {}", res.conn_id);
         Ok(Json(WebrtcConnectApiResponse {
             status: true,
             error: None,
