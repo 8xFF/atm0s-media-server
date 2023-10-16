@@ -8,7 +8,7 @@ use transport::{TransportError, TransportIncomingEvent, TransportStateEvent};
 pub(crate) mod sdk;
 pub(crate) mod whip;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TransportLifeCycleEvent {
     New,
     Connected,

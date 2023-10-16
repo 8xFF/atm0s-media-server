@@ -3,7 +3,7 @@ use str0m::IceConnectionState;
 use super::{TransportLifeCycle, TransportLifeCycleEvent};
 
 const CONNECT_TIMEOUT: u64 = 10000;
-const RECONNECT_TIMEOUT: u64 = 3000;
+const RECONNECT_TIMEOUT: u64 = 30000;
 
 #[derive(Debug)]
 pub enum State {
@@ -29,7 +29,7 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
     fn on_tick(&mut self, now_ms: u64) -> Option<TransportLifeCycleEvent> {
         match self.state {
             State::New { at_ms } => {
-                if at_ms + CONNECT_TIMEOUT < now_ms {
+                if at_ms + CONNECT_TIMEOUT <= now_ms {
                     log::info!("[SdkTransportLifeCycle] on webrtc connect timeout => switched to Failed");
                     self.state = State::Failed;
                     Some(TransportLifeCycleEvent::ConnectError)
@@ -37,9 +37,17 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
                     None
                 }
             }
-            State::Connected { datachannel, at_ms } => None,
-            State::Reconnecting { datachannel, at_ms } => {
-                if at_ms + RECONNECT_TIMEOUT < now_ms {
+            State::Connected { datachannel, at_ms } => {
+                if !datachannel && at_ms + CONNECT_TIMEOUT <= now_ms {
+                    log::info!("[SdkTransportLifeCycle] on webrtc datachannel timeout => switched to Failed");
+                    self.state = State::Failed;
+                    Some(TransportLifeCycleEvent::ConnectError)
+                } else {
+                    None
+                }
+            }
+            State::Reconnecting { datachannel: _, at_ms } => {
+                if at_ms + RECONNECT_TIMEOUT <= now_ms {
                     log::info!("[SdkTransportLifeCycle] on webrtc reconnect timeout => switched to Failed");
                     self.state = State::Failed;
                     Some(TransportLifeCycleEvent::Failed)
@@ -100,4 +108,67 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
     }
 }
 
-//TODO test this
+#[cfg(test)]
+mod tests {
+    use crate::transport::life_cycle::{
+        sdk::{CONNECT_TIMEOUT, RECONNECT_TIMEOUT},
+        TransportLifeCycle, TransportLifeCycleEvent,
+    };
+
+    use super::SdkTransportLifeCycle;
+
+    #[test]
+    fn simple() {
+        let mut life_cycle = SdkTransportLifeCycle::new(0);
+
+        // webrtc connected should not switch
+        assert!(life_cycle.on_webrtc_connected(0).is_none());
+
+        // next datachannel connected should switch to connected
+        assert_eq!(life_cycle.on_data_channel(0, true), Some(TransportLifeCycleEvent::Connected));
+
+        // next ice disconnect should switch to reconnecting
+        assert_eq!(life_cycle.on_ice_state(0, str0m::IceConnectionState::Disconnected), Some(TransportLifeCycleEvent::Reconnecting));
+
+        // next connected should switch to reconnected
+        assert_eq!(life_cycle.on_ice_state(0, str0m::IceConnectionState::Connected), Some(TransportLifeCycleEvent::Reconnected));
+
+        // next datachannel disconnect should switch to closed
+        assert_eq!(life_cycle.on_data_channel(0, false), Some(TransportLifeCycleEvent::Closed));
+    }
+
+    #[test]
+    fn connect_timeout() {
+        let mut life_cycle = SdkTransportLifeCycle::new(0);
+
+        assert_eq!(life_cycle.on_tick(CONNECT_TIMEOUT - 1), None);
+        assert_eq!(life_cycle.on_tick(CONNECT_TIMEOUT), Some(TransportLifeCycleEvent::ConnectError));
+    }
+
+    #[test]
+    fn connect_datachannel_timeout() {
+        let mut life_cycle = SdkTransportLifeCycle::new(0);
+
+        life_cycle.on_webrtc_connected(1000);
+
+        assert_eq!(life_cycle.on_tick(1000 + CONNECT_TIMEOUT - 1), None);
+        assert_eq!(life_cycle.on_tick(1000 + CONNECT_TIMEOUT), Some(TransportLifeCycleEvent::ConnectError));
+    }
+
+    #[test]
+    fn reconnect_timeout() {
+        let mut life_cycle = SdkTransportLifeCycle::new(0);
+
+        // webrtc connected should not switch
+        assert!(life_cycle.on_webrtc_connected(100).is_none());
+
+        // next datachannel connected should switch to connected
+        assert_eq!(life_cycle.on_data_channel(200, true), Some(TransportLifeCycleEvent::Connected));
+
+        // next ice disconnect should switch to reconnecting
+        assert_eq!(life_cycle.on_ice_state(1000, str0m::IceConnectionState::Disconnected), Some(TransportLifeCycleEvent::Reconnecting));
+
+        assert_eq!(life_cycle.on_tick(1000 + RECONNECT_TIMEOUT - 1), None);
+        assert_eq!(life_cycle.on_tick(1000 + RECONNECT_TIMEOUT), Some(TransportLifeCycleEvent::Failed));
+    }
+}
