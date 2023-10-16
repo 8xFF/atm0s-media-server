@@ -110,7 +110,7 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
 
 #[cfg(test)]
 mod tests {
-    use crate::transport::life_cycle::{
+    use crate::transport::internal::life_cycle::{
         sdk::{CONNECT_TIMEOUT, RECONNECT_TIMEOUT},
         TransportLifeCycle, TransportLifeCycleEvent,
     };

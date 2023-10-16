@@ -9,7 +9,7 @@ use utils::{ServerError, Timer};
 
 use crate::{
     rpc::{RpcEvent, RpcResponse, WebrtcConnectResponse, WhipConnectResponse},
-    transport::life_cycle::{sdk::SdkTransportLifeCycle, whip::WhipTransportLifeCycle},
+    transport::internal::life_cycle::{sdk::SdkTransportLifeCycle, whip::WhipTransportLifeCycle},
     transport::{WebrtcTransport, WebrtcTransportEvent},
 };
 
