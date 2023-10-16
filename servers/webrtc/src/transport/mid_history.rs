@@ -18,4 +18,16 @@ impl MidHistory {
     }
 }
 
-//TODO test this
+#[cfg(test)]
+mod test {
+    #[test]
+    fn should_work() {
+        let mut history = super::MidHistory::default();
+        assert_eq!(history.get(Some(1), 1), Some(1));
+        assert_eq!(history.get(None, 1), Some(1));
+        assert_eq!(history.get(None, 2), None);
+        assert_eq!(history.get(Some(2), 2), Some(2));
+        assert_eq!(history.get(None, 2), Some(2));
+        assert_eq!(history.get(None, 1), Some(1));
+    }
+}

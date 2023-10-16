@@ -23,6 +23,7 @@ fn event_to_json<E: Serialize>(event: &str, e: E) -> String {
     .to_string()
 }
 
+#[derive(Debug)]
 pub enum RpcError {
     InvalidRpc,
     InvalidJson,
@@ -60,7 +61,7 @@ pub enum IncomingRpc {
 }
 
 pub fn rpc_from_string(s: &str) -> Result<IncomingRpc, RpcError> {
-    let json: serde_json::Value = serde_json::from_str(s).map_err(|e| RpcError::InvalidJson)?;
+    let json: serde_json::Value = serde_json::from_str(s).map_err(|_e| RpcError::InvalidJson)?;
     let rpc_type = json["type"].as_str().ok_or(RpcError::InvalidRpc)?;
     if rpc_type.eq("request") {
         let req_id = json["req_id"].as_u64().ok_or(RpcError::InvalidRpc)?;
@@ -102,5 +103,26 @@ pub fn rpc_from_string(s: &str) -> Result<IncomingRpc, RpcError> {
         Err(RpcError::InvalidRpc)
     } else {
         Err(RpcError::InvalidRpc)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use transport::MediaKind;
+
+    #[test]
+    fn from_string_should_work() {
+        let s = r#"{"req_id":1,"type":"request","request":"sender.toggle","data":{"name":"test","kind":"audio","label":"label"}}"#;
+        let rpc = super::rpc_from_string(s).unwrap();
+        match rpc {
+            super::IncomingRpc::RemoteTrack(name, super::RemoteTrackRpcIn::Toggle(req)) => {
+                assert_eq!(name, "test");
+                assert_eq!(req.req_id, 1);
+                assert_eq!(req.data.name, "test");
+                assert_eq!(req.data.kind, MediaKind::Audio);
+                assert_eq!(req.data.label, Some("label".to_string()));
+            }
+            _ => panic!("should be remote track toggle"),
+        }
     }
 }

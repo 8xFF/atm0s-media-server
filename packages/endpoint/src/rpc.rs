@@ -53,7 +53,7 @@ pub struct BitrateLimit {
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct SenderToggle {
     pub name: String,
-    pub kind: String,
+    pub kind: MediaKind,
     pub track: Option<String>,
     pub label: Option<String>,
 }

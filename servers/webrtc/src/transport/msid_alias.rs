@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MsidInfo {
     pub label: String,
     pub kind: String,
@@ -33,4 +33,27 @@ impl MsidAlias {
     }
 }
 
-//TODO test this
+#[cfg(test)]
+mod test {
+    #[test]
+    fn should_work() {
+        let mut alias = super::MsidAlias::default();
+        alias.add_alias("uuid", "label", "kind", "name");
+        assert_eq!(
+            alias.get_alias("uuid", "track_id"),
+            Some(super::MsidInfo {
+                label: "label".to_string(),
+                kind: "kind".to_string(),
+                name: "name".to_string(),
+            })
+        );
+        assert_eq!(
+            alias.get_alias("stream_id", "uuid"),
+            Some(super::MsidInfo {
+                label: "label".to_string(),
+                kind: "kind".to_string(),
+                name: "name".to_string(),
+            })
+        );
+    }
+}
