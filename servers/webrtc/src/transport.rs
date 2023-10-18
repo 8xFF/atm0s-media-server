@@ -25,6 +25,7 @@ use self::internal::{life_cycle::TransportLifeCycle, WebrtcTransportInternal};
 
 pub(crate) mod internal;
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Str0mAction {
     Media(Mid, MediaPacket),
     RequestKeyFrame(Mid),

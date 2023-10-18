@@ -1,4 +1,5 @@
 use str0m::IceConnectionState;
+use transport::{ConnectErrorReason, ConnectionErrorReason};
 
 use super::{TransportLifeCycle, TransportLifeCycleEvent};
 
@@ -32,7 +33,7 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
                 if at_ms + CONNECT_TIMEOUT <= now_ms {
                     log::info!("[SdkTransportLifeCycle] on webrtc connect timeout => switched to Failed");
                     self.state = State::Failed;
-                    Some(TransportLifeCycleEvent::ConnectError)
+                    Some(TransportLifeCycleEvent::ConnectError(ConnectErrorReason::Timeout))
                 } else {
                     None
                 }
@@ -41,7 +42,7 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
                 if !datachannel && at_ms + CONNECT_TIMEOUT <= now_ms {
                     log::info!("[SdkTransportLifeCycle] on webrtc datachannel timeout => switched to Failed");
                     self.state = State::Failed;
-                    Some(TransportLifeCycleEvent::ConnectError)
+                    Some(TransportLifeCycleEvent::ConnectError(ConnectErrorReason::Timeout))
                 } else {
                     None
                 }
@@ -50,7 +51,7 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
                 if at_ms + RECONNECT_TIMEOUT <= now_ms {
                     log::info!("[SdkTransportLifeCycle] on webrtc reconnect timeout => switched to Failed");
                     self.state = State::Failed;
-                    Some(TransportLifeCycleEvent::Failed)
+                    Some(TransportLifeCycleEvent::Failed(ConnectionErrorReason::Timeout))
                 } else {
                     None
                 }
@@ -110,6 +111,8 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
 
 #[cfg(test)]
 mod tests {
+    use transport::{ConnectErrorReason, ConnectionErrorReason};
+
     use crate::transport::internal::life_cycle::{
         sdk::{CONNECT_TIMEOUT, RECONNECT_TIMEOUT},
         TransportLifeCycle, TransportLifeCycleEvent,
@@ -142,7 +145,7 @@ mod tests {
         let mut life_cycle = SdkTransportLifeCycle::new(0);
 
         assert_eq!(life_cycle.on_tick(CONNECT_TIMEOUT - 1), None);
-        assert_eq!(life_cycle.on_tick(CONNECT_TIMEOUT), Some(TransportLifeCycleEvent::ConnectError));
+        assert_eq!(life_cycle.on_tick(CONNECT_TIMEOUT), Some(TransportLifeCycleEvent::ConnectError(ConnectErrorReason::Timeout)));
     }
 
     #[test]
@@ -152,7 +155,7 @@ mod tests {
         life_cycle.on_webrtc_connected(1000);
 
         assert_eq!(life_cycle.on_tick(1000 + CONNECT_TIMEOUT - 1), None);
-        assert_eq!(life_cycle.on_tick(1000 + CONNECT_TIMEOUT), Some(TransportLifeCycleEvent::ConnectError));
+        assert_eq!(life_cycle.on_tick(1000 + CONNECT_TIMEOUT), Some(TransportLifeCycleEvent::ConnectError(ConnectErrorReason::Timeout)));
     }
 
     #[test]
@@ -169,6 +172,6 @@ mod tests {
         assert_eq!(life_cycle.on_ice_state(1000, str0m::IceConnectionState::Disconnected), Some(TransportLifeCycleEvent::Reconnecting));
 
         assert_eq!(life_cycle.on_tick(1000 + RECONNECT_TIMEOUT - 1), None);
-        assert_eq!(life_cycle.on_tick(1000 + RECONNECT_TIMEOUT), Some(TransportLifeCycleEvent::Failed));
+        assert_eq!(life_cycle.on_tick(1000 + RECONNECT_TIMEOUT), Some(TransportLifeCycleEvent::Failed(ConnectionErrorReason::Timeout)));
     }
 }

@@ -29,9 +29,9 @@ pub struct ClusterTrackMeta {
     pub label: Option<String>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum ClusterEndpointError {
     InternalError,
-    NotImplement,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

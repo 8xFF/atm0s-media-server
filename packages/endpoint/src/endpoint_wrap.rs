@@ -86,7 +86,7 @@ where
                 }
             }
             _ = self.tick.next().fuse() => {
-                self.transport.on_tick(self.timer.now_ms());
+                self.transport.on_tick(self.timer.now_ms())?;
                 self.internal.on_tick(self.timer.now_ms());
             }
         }

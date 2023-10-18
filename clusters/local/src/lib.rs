@@ -134,3 +134,43 @@ impl Cluster<PeerLocal> for ServerLocal {
         PeerLocal::new(self.event_hub.clone(), self.media_hub.clone(), room_id, peer_id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use async_std::prelude::FutureExt;
+    use cluster::{Cluster, ClusterEndpoint, ClusterEndpointIncomingEvent, ClusterTrackMeta};
+
+    #[async_std::test]
+    async fn subscribe_room() {
+        let mut server_local = super::ServerLocal::new();
+        let mut peer1 = server_local.build("room", "peer1");
+        let mut peer2 = server_local.build("room", "peer2");
+
+        peer1.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribeRoom).unwrap();
+        let meta = ClusterTrackMeta {
+            kind: transport::MediaKind::Audio,
+            active: true,
+            label: None,
+            scaling: "Single".to_string(),
+            layers: vec![],
+            status: cluster::ClusterTrackStatus::Connected,
+        };
+        peer2.on_event(cluster::ClusterEndpointOutgoingEvent::TrackAdded(1, "audio_main".to_string(), meta.clone())).unwrap();
+
+        assert_eq!(
+            peer1.recv().timeout(Duration::from_secs(1)).await,
+            Ok(Ok(ClusterEndpointIncomingEvent::PeerTrackAdded("peer2".to_string(), "audio_main".to_string(), meta.clone())))
+        );
+
+        peer2.on_event(cluster::ClusterEndpointOutgoingEvent::TrackRemoved(1, "audio_main".to_string())).unwrap();
+
+        assert_eq!(
+            peer1.recv().timeout(Duration::from_secs(1)).await,
+            Ok(Ok(ClusterEndpointIncomingEvent::PeerTrackRemoved("peer2".to_string(), "audio_main".to_string())))
+        );
+
+        peer1.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribeRoom).unwrap();
+    }
+}

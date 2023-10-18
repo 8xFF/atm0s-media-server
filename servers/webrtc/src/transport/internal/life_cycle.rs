@@ -1,9 +1,11 @@
+use std::collections::VecDeque;
+
 use endpoint::{
     rpc::{LocalTrackRpcIn, RemoteTrackRpcIn},
     EndpointRpcIn,
 };
 use str0m::IceConnectionState;
-use transport::{TransportError, TransportIncomingEvent, TransportStateEvent};
+use transport::{ConnectErrorReason, ConnectionErrorReason, TransportError, TransportIncomingEvent, TransportStateEvent};
 
 pub(crate) mod sdk;
 pub(crate) mod whip;
@@ -12,10 +14,10 @@ pub(crate) mod whip;
 pub enum TransportLifeCycleEvent {
     New,
     Connected,
-    ConnectError,
+    ConnectError(ConnectErrorReason),
     Reconnecting,
     Reconnected,
-    Failed,
+    Failed(ConnectionErrorReason),
     Closed,
 }
 
@@ -26,15 +28,15 @@ pub trait TransportLifeCycle: Send {
     fn on_data_channel(&mut self, now_ms: u64, connected: bool) -> Option<TransportLifeCycleEvent>;
 }
 
-pub fn life_cycle_event_to_event(state: Option<TransportLifeCycleEvent>) -> Result<TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>, TransportError> {
+pub fn life_cycle_event_to_event(state: Option<TransportLifeCycleEvent>, actions: &mut VecDeque<Result<TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>, TransportError>>) {
     match state {
-        Some(TransportLifeCycleEvent::New) => Ok(TransportIncomingEvent::Continue),
-        Some(TransportLifeCycleEvent::ConnectError) => Err(TransportError::ConnectError("unknown".to_string())),
-        Some(TransportLifeCycleEvent::Connected) => Ok(TransportIncomingEvent::State(TransportStateEvent::Connected)),
-        Some(TransportLifeCycleEvent::Reconnecting) => Ok(TransportIncomingEvent::State(TransportStateEvent::Reconnecting)),
-        Some(TransportLifeCycleEvent::Reconnected) => Ok(TransportIncomingEvent::State(TransportStateEvent::Reconnected)),
-        Some(TransportLifeCycleEvent::Closed) => Ok(TransportIncomingEvent::State(TransportStateEvent::Disconnected)),
-        Some(TransportLifeCycleEvent::Failed) => Err(TransportError::ConnectionError("unknown".to_string())),
-        None => Ok(TransportIncomingEvent::Continue),
+        Some(TransportLifeCycleEvent::New) => {}
+        Some(TransportLifeCycleEvent::ConnectError(res)) => actions.push_back(Err(TransportError::ConnectError(res))),
+        Some(TransportLifeCycleEvent::Connected) => actions.push_back(Ok(TransportIncomingEvent::State(TransportStateEvent::Connected))),
+        Some(TransportLifeCycleEvent::Reconnecting) => actions.push_back(Ok(TransportIncomingEvent::State(TransportStateEvent::Reconnecting))),
+        Some(TransportLifeCycleEvent::Reconnected) => actions.push_back(Ok(TransportIncomingEvent::State(TransportStateEvent::Reconnected))),
+        Some(TransportLifeCycleEvent::Closed) => actions.push_back(Ok(TransportIncomingEvent::State(TransportStateEvent::Disconnected))),
+        Some(TransportLifeCycleEvent::Failed(res)) => actions.push_back(Err(TransportError::ConnectionError(res))),
+        None => {}
     }
 }

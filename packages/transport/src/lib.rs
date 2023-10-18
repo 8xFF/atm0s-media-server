@@ -139,14 +139,32 @@ pub struct MediaPacket {
     pub payload: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
+pub enum ConnectErrorReason {
+    Timeout,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum ConnectionErrorReason {
+    Timeout,
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub enum TransportRuntimeError {
+    RpcInvalid,
+    TrackIdNotFound,
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub enum TransportError {
     /// This is connect error, the transport should try to reconnect if need
-    ConnectError(String),
+    ConnectError(ConnectErrorReason),
     /// This is a fatal error, the transport should be closed
-    ConnectionError(String),
+    ConnectionError(ConnectionErrorReason),
     /// Network error
     NetworkError,
+    /// Runtime error
+    RuntimeError(TransportRuntimeError),
 }
 
 impl ToString for TransportError {

@@ -54,10 +54,6 @@ impl MediaEndpointInteral {
         self.output_actions.push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(rpc)));
     }
 
-    fn push_endpoint(&mut self, event: TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>) {
-        self.output_actions.push_back(MediaInternalAction::Endpoint(event));
-    }
-
     fn push_cluster(&mut self, event: ClusterEndpointOutgoingEvent) {
         self.output_actions.push_back(MediaInternalAction::Cluster(event));
     }
@@ -93,7 +89,9 @@ impl MediaEndpointInteral {
             }
             TransportIncomingEvent::Continue => {}
             TransportIncomingEvent::Rpc(rpc) => self.process_rpc(rpc),
-            TransportIncomingEvent::Stats(stats) => todo!(),
+            TransportIncomingEvent::Stats(_stats) => {
+                //TODO process stats event for limiting local tracks
+            }
             TransportIncomingEvent::RemoteTrackAdded(track_name, track_id, meta) => {
                 log::info!("[EndpointInternal] on remote track added {} {}", track_name, track_id);
                 if !self.remote_tracks.contains_key(&track_id) {
@@ -130,7 +128,7 @@ impl MediaEndpointInteral {
                 }
             }
             TransportIncomingEvent::LocalTrackEvent(track_id, event) => {
-                if let Some(mut track) = self.local_tracks.get_mut(&track_id) {
+                if let Some(track) = self.local_tracks.get_mut(&track_id) {
                     track.on_transport_event(event);
                 } else {
                     log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
@@ -144,9 +142,6 @@ impl MediaEndpointInteral {
                 } else {
                     log::warn!("[EndpointInternal] local track not found {:?}", track_id);
                 }
-            }
-            _ => {
-                panic!("not implement {:?}", event)
             }
         }
 
@@ -311,18 +306,25 @@ impl Drop for MediaEndpointInteral {
 
 #[cfg(test)]
 mod tests {
-    use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterTrackMeta};
-    use transport::{MediaKind, MediaSampleRate, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent};
+    use cluster::{generate_cluster_track_uuid, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta};
+    use transport::{
+        LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent,
+    };
     use utils::hash_str;
 
-    use crate::{endpoint_wrap::internal::MediaInternalAction, rpc::TrackInfo, EndpointRpcOut};
+    use crate::{
+        endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction},
+        rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverSwitch, RemoteStream, TrackInfo},
+        EndpointRpcOut, RpcRequest, RpcResponse,
+    };
 
     use super::MediaEndpointInteral;
 
     #[test]
-    fn should_fire_cluster_when_remote_track_added() {
+    fn should_fire_cluster_when_remote_track_added_then_close() {
         let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
 
+        let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
         endpoint.on_transport(TransportIncomingEvent::RemoteTrackAdded(
             "audio_main".to_string(),
             100,
@@ -352,6 +354,98 @@ mod tests {
             )))
         );
         assert_eq!(endpoint.pop_action(), None);
+
+        // should handle pkt
+        let pkt = transport::MediaPacket {
+            pt: 111,
+            seq_no: 1,
+            time: 1000,
+            marker: true,
+            ext_vals: transport::MediaPacketExtensions {
+                abs_send_time: None,
+                transport_cc: None,
+            },
+            nackable: true,
+            payload: vec![1, 2, 3],
+        };
+        endpoint.on_transport(TransportIncomingEvent::RemoteTrackEvent(100, RemoteTrackIncomingEvent::MediaPacket(pkt.clone())));
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(
+                100,
+                cluster_track_uuid,
+                ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt)
+            )))
+        );
+
+        // close should fire cluster event
+        endpoint.close();
+
+        // should output cluster event
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackRemoved(100, "audio_main".to_string())))
+        );
+        assert_eq!(endpoint.pop_action(), None);
+    }
+
+    #[test]
+    fn should_fire_cluster_when_remote_track_added_then_removed() {
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+
+        let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
+        endpoint.on_transport(TransportIncomingEvent::RemoteTrackAdded(
+            "audio_main".to_string(),
+            100,
+            TrackMeta {
+                kind: MediaKind::Audio,
+                sample_rate: MediaSampleRate::Hz48000,
+                label: None,
+            },
+        ));
+
+        assert_eq!(endpoint.remote_tracks.len(), 1);
+
+        // should output cluster event
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackAdded(
+                100,
+                "audio_main".to_string(),
+                ClusterTrackMeta {
+                    kind: MediaKind::Audio,
+                    scaling: "Single".to_string(),
+                    layers: vec![],
+                    status: cluster::ClusterTrackStatus::Connected,
+                    active: true,
+                    label: None,
+                }
+            )))
+        );
+        assert_eq!(endpoint.pop_action(), None);
+
+        // should handle pkt
+        let pkt = transport::MediaPacket {
+            pt: 111,
+            seq_no: 1,
+            time: 1000,
+            marker: true,
+            ext_vals: transport::MediaPacketExtensions {
+                abs_send_time: None,
+                transport_cc: None,
+            },
+            nackable: true,
+            payload: vec![1, 2, 3],
+        };
+        endpoint.on_transport(TransportIncomingEvent::RemoteTrackEvent(100, RemoteTrackIncomingEvent::MediaPacket(pkt.clone())));
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(
+                100,
+                cluster_track_uuid,
+                ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt)
+            )))
+        );
 
         endpoint.on_transport(TransportIncomingEvent::RemoteTrackRemoved("audio_main".to_string(), 100));
 
@@ -414,5 +508,73 @@ mod tests {
             }))))
         );
         assert_eq!(endpoint.pop_action(), None);
+    }
+
+    #[test]
+    fn should_fire_disconnect_when_transport_disconnect() {
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+
+        endpoint.on_transport(TransportIncomingEvent::State(TransportStateEvent::Disconnected));
+
+        // should output internal event
+        assert_eq!(endpoint.pop_action(), Some(MediaInternalAction::Internal(MediaEndpointInteralEvent::ConnectionClosed)));
+        assert_eq!(endpoint.pop_action(), None);
+    }
+
+    #[test]
+    fn should_fire_answer_rpc() {
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+
+        endpoint.on_transport(TransportIncomingEvent::LocalTrackAdded(
+            "audio_0".to_string(),
+            1,
+            TrackMeta {
+                kind: MediaKind::Audio,
+                sample_rate: MediaSampleRate::Hz48000,
+                label: None,
+            },
+        ));
+
+        // should output rpc response and subscribe when rpc switch
+        endpoint.on_transport(TransportIncomingEvent::LocalTrackEvent(
+            1,
+            LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Switch(RpcRequest {
+                req_id: 1,
+                data: ReceiverSwitch {
+                    id: "audio_0".to_string(),
+                    priority: 1000,
+                    remote: RemoteStream {
+                        peer: "peer2".to_string(),
+                        stream: "audio_main".to_string(),
+                    },
+                },
+            })),
+        ));
+
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                1,
+                ClusterLocalTrackOutgoingEvent::Subscribe("peer2".to_string(), "audio_main".to_string())
+            )))
+        );
+
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::LocalTrackEvent(
+                1,
+                LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::SwitchRes(RpcResponse::success(1, true)))
+            )))
+        );
+
+        endpoint.close();
+
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                1,
+                ClusterLocalTrackOutgoingEvent::Unsubscribe("peer2".to_string(), "audio_main".to_string())
+            )))
+        );
     }
 }
