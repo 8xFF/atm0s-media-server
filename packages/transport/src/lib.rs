@@ -60,6 +60,20 @@ pub struct TrackMeta {
     pub label: Option<String>,
 }
 
+impl TrackMeta {
+    pub fn new(kind: MediaKind, sample_rate: MediaSampleRate, label: Option<String>) -> Self {
+        Self { kind, sample_rate, label }
+    }
+
+    pub fn new_audio(label: Option<String>) -> Self {
+        Self {
+            kind: MediaKind::Audio,
+            sample_rate: MediaSampleRate::Hz48000,
+            label,
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Debug)]
 pub struct TransportStats {
     rtt: u32,
@@ -137,6 +151,23 @@ pub struct MediaPacket {
     pub ext_vals: MediaPacketExtensions,
     pub nackable: bool,
     pub payload: Vec<u8>,
+}
+
+impl MediaPacket {
+    pub fn default_audio(seq_no: u16, time: u32, payload: Vec<u8>) -> Self {
+        Self {
+            pt: 111,
+            seq_no,
+            time,
+            marker: false,
+            ext_vals: MediaPacketExtensions {
+                abs_send_time: None,
+                transport_cc: None,
+            },
+            nackable: false,
+            payload,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug)]

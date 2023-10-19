@@ -149,14 +149,7 @@ mod tests {
         let mut peer2 = server_local.build("room", "peer2");
 
         peer1.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribeRoom).unwrap();
-        let meta = ClusterTrackMeta {
-            kind: transport::MediaKind::Audio,
-            active: true,
-            label: None,
-            scaling: "Single".to_string(),
-            layers: vec![],
-            status: cluster::ClusterTrackStatus::Connected,
-        };
+        let meta = ClusterTrackMeta::default_audio();
         peer2.on_event(cluster::ClusterEndpointOutgoingEvent::TrackAdded(1, "audio_main".to_string(), meta.clone())).unwrap();
 
         assert_eq!(

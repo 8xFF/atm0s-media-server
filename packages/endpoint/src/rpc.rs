@@ -1,6 +1,7 @@
 use cluster::ClusterTrackMeta;
 use serde::{Deserialize, Serialize};
 use transport::MediaKind;
+use utils::hash_str;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct RpcRequest<D> {
@@ -96,6 +97,18 @@ pub struct TrackInfo {
     #[serde(rename = "stream")]
     pub track: String,
     pub state: Option<ClusterTrackMeta>,
+}
+
+impl TrackInfo {
+    pub fn new_audio(peer: &str, track: &str, state: Option<ClusterTrackMeta>) -> Self {
+        Self {
+            peer_hash: hash_str(peer) as u32,
+            peer: peer.to_string(),
+            kind: MediaKind::Audio,
+            track: track.to_string(),
+            state,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -75,14 +75,7 @@ mod tests {
         let (tx, rx) = async_std::channel::bounded(10);
         peer_hub.subscribe(100, tx);
 
-        let meta = ClusterTrackMeta {
-            kind: MediaKind::Audio,
-            active: true,
-            label: None,
-            layers: vec![],
-            status: ClusterTrackStatus::Connected,
-            scaling: "Single".to_string(),
-        };
+        let meta = ClusterTrackMeta::default_audio();
         peer_hub.add_track("track1", meta.clone());
 
         assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackAdded("peer1".to_string(), "track1".to_string(), meta.clone())));
@@ -101,14 +94,7 @@ mod tests {
         let mut peer_hub = PeerHub::new("peer1");
 
         let (tx, rx) = async_std::channel::bounded(10);
-        let meta = ClusterTrackMeta {
-            kind: MediaKind::Audio,
-            active: true,
-            label: None,
-            layers: vec![],
-            status: ClusterTrackStatus::Connected,
-            scaling: "Single".to_string(),
-        };
+        let meta = ClusterTrackMeta::default_audio();
         peer_hub.add_track("track1", meta.clone());
         peer_hub.subscribe(100, tx);
 

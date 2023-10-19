@@ -20,13 +20,33 @@ pub enum ClusterTrackStatus {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub enum ClusterTrackScalingType {
+    Single,
+    Simulcast,
+    Svc,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct ClusterTrackMeta {
     pub kind: MediaKind,
-    pub scaling: String,
+    pub scaling: ClusterTrackScalingType,
     pub layers: Vec<u32>,
     pub status: ClusterTrackStatus,
     pub active: bool,
     pub label: Option<String>,
+}
+
+impl ClusterTrackMeta {
+    pub fn default_audio() -> Self {
+        Self {
+            kind: MediaKind::Audio,
+            scaling: ClusterTrackScalingType::Single,
+            layers: vec![],
+            status: ClusterTrackStatus::Connected,
+            active: true,
+            label: None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]

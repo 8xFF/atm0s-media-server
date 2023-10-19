@@ -2,10 +2,9 @@ use std::collections::VecDeque;
 
 use cluster::{ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent};
 use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, TrackId, TrackMeta};
-use utils::hash_str;
 
 use crate::{
-    rpc::{BitrateLimit, LocalTrackRpcIn, LocalTrackRpcOut},
+    rpc::{LocalTrackRpcIn, LocalTrackRpcOut},
     RpcResponse,
 };
 
@@ -53,7 +52,7 @@ impl LocalTrack {
         }
     }
 
-    pub fn on_tick(&mut self, now_ms: u64) {}
+    pub fn on_tick(&mut self, _now_ms: u64) {}
 
     pub fn on_cluster_event(&mut self, event: ClusterLocalTrackIncomingEvent) {
         match event {
@@ -123,7 +122,7 @@ impl LocalTrack {
 #[cfg(test)]
 mod tests {
     use cluster::{ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent};
-    use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaPacket, MediaPacketExtensions, MediaSampleRate, TrackMeta};
+    use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, TrackMeta};
 
     use crate::{
         endpoint_wrap::internal::local_track::LocalTrackOutput,
@@ -135,47 +134,16 @@ mod tests {
 
     #[test]
     fn incoming_cluster_media_should_fire_transport() {
-        let mut track = LocalTrack::new(
-            "room1",
-            "peer1",
-            100,
-            "audio_main",
-            TrackMeta {
-                kind: MediaKind::Audio,
-                sample_rate: MediaSampleRate::Hz48000,
-                label: None,
-            },
-        );
+        let mut track = LocalTrack::new("room1", "peer1", 100, "audio_main", TrackMeta::new_audio(None));
 
-        let pkt = MediaPacket {
-            pt: 111,
-            seq_no: 1,
-            time: 1000,
-            marker: true,
-            ext_vals: MediaPacketExtensions {
-                abs_send_time: None,
-                transport_cc: None,
-            },
-            nackable: true,
-            payload: vec![1, 2, 3],
-        };
+        let pkt = MediaPacket::default_audio(1, 1000, vec![1, 2, 3]);
         track.on_cluster_event(ClusterLocalTrackIncomingEvent::MediaPacket(pkt.clone()));
         assert_eq!(track.pop_action(), Some(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::MediaPacket(pkt))));
     }
 
     #[test]
     fn incoming_transport_keyframe_request_should_fire_cluster() {
-        let mut track = LocalTrack::new(
-            "room1",
-            "peer1",
-            100,
-            "audio_main",
-            TrackMeta {
-                kind: MediaKind::Audio,
-                sample_rate: MediaSampleRate::Hz48000,
-                label: None,
-            },
-        );
+        let mut track = LocalTrack::new("room1", "peer1", 100, "audio_main", TrackMeta::new_audio(None));
 
         track.on_transport_event(LocalTrackIncomingEvent::RequestKeyFrame);
         assert_eq!(track.pop_action(), Some(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::RequestKeyFrame)));
@@ -183,17 +151,7 @@ mod tests {
 
     #[test]
     fn incoming_rpc_switch_disconnect() {
-        let mut track = LocalTrack::new(
-            "room1",
-            "peer1",
-            100,
-            "audio_main",
-            TrackMeta {
-                kind: MediaKind::Audio,
-                sample_rate: MediaSampleRate::Hz48000,
-                label: None,
-            },
-        );
+        let mut track = LocalTrack::new("room1", "peer1", 100, "audio_main", TrackMeta::new_audio(None));
 
         track.on_transport_event(LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Switch(RpcRequest {
             req_id: 1,

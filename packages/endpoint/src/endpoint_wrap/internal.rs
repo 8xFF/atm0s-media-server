@@ -308,9 +308,9 @@ impl Drop for MediaEndpointInteral {
 mod tests {
     use cluster::{generate_cluster_track_uuid, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta};
     use transport::{
-        LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent,
+        LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaPacket, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent,
+        TransportStateEvent,
     };
-    use utils::hash_str;
 
     use crate::{
         endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction},
@@ -325,15 +325,7 @@ mod tests {
         let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
 
         let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
-        endpoint.on_transport(TransportIncomingEvent::RemoteTrackAdded(
-            "audio_main".to_string(),
-            100,
-            TrackMeta {
-                kind: MediaKind::Audio,
-                sample_rate: MediaSampleRate::Hz48000,
-                label: None,
-            },
-        ));
+        endpoint.on_transport(TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
 
         assert_eq!(endpoint.remote_tracks.len(), 1);
 
@@ -343,31 +335,13 @@ mod tests {
             Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackAdded(
                 100,
                 "audio_main".to_string(),
-                ClusterTrackMeta {
-                    kind: MediaKind::Audio,
-                    scaling: "Single".to_string(),
-                    layers: vec![],
-                    status: cluster::ClusterTrackStatus::Connected,
-                    active: true,
-                    label: None,
-                }
+                ClusterTrackMeta::default_audio()
             )))
         );
         assert_eq!(endpoint.pop_action(), None);
 
         // should handle pkt
-        let pkt = transport::MediaPacket {
-            pt: 111,
-            seq_no: 1,
-            time: 1000,
-            marker: true,
-            ext_vals: transport::MediaPacketExtensions {
-                abs_send_time: None,
-                transport_cc: None,
-            },
-            nackable: true,
-            payload: vec![1, 2, 3],
-        };
+        let pkt = MediaPacket::default_audio(1, 1000, vec![1, 2, 3]);
         endpoint.on_transport(TransportIncomingEvent::RemoteTrackEvent(100, RemoteTrackIncomingEvent::MediaPacket(pkt.clone())));
         assert_eq!(
             endpoint.pop_action(),
@@ -394,15 +368,7 @@ mod tests {
         let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
 
         let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
-        endpoint.on_transport(TransportIncomingEvent::RemoteTrackAdded(
-            "audio_main".to_string(),
-            100,
-            TrackMeta {
-                kind: MediaKind::Audio,
-                sample_rate: MediaSampleRate::Hz48000,
-                label: None,
-            },
-        ));
+        endpoint.on_transport(TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
 
         assert_eq!(endpoint.remote_tracks.len(), 1);
 
@@ -412,31 +378,13 @@ mod tests {
             Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackAdded(
                 100,
                 "audio_main".to_string(),
-                ClusterTrackMeta {
-                    kind: MediaKind::Audio,
-                    scaling: "Single".to_string(),
-                    layers: vec![],
-                    status: cluster::ClusterTrackStatus::Connected,
-                    active: true,
-                    label: None,
-                }
+                ClusterTrackMeta::default_audio()
             )))
         );
         assert_eq!(endpoint.pop_action(), None);
 
         // should handle pkt
-        let pkt = transport::MediaPacket {
-            pt: 111,
-            seq_no: 1,
-            time: 1000,
-            marker: true,
-            ext_vals: transport::MediaPacketExtensions {
-                abs_send_time: None,
-                transport_cc: None,
-            },
-            nackable: true,
-            payload: vec![1, 2, 3],
-        };
+        let pkt = MediaPacket::default_audio(1, 1000, vec![1, 2, 3]);
         endpoint.on_transport(TransportIncomingEvent::RemoteTrackEvent(100, RemoteTrackIncomingEvent::MediaPacket(pkt.clone())));
         assert_eq!(
             endpoint.pop_action(),
@@ -464,33 +412,17 @@ mod tests {
         endpoint.on_cluster(ClusterEndpointIncomingEvent::PeerTrackAdded(
             "peer2".to_string(),
             "audio_main".to_string(),
-            ClusterTrackMeta {
-                kind: MediaKind::Audio,
-                scaling: "Single".to_string(),
-                layers: vec![],
-                status: cluster::ClusterTrackStatus::Connected,
-                active: true,
-                label: None,
-            },
+            ClusterTrackMeta::default_audio(),
         ));
 
         // should output rpc event
         assert_eq!(
             endpoint.pop_action(),
-            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
-                peer_hash: hash_str("peer2") as u32,
-                peer: "peer2".to_string(),
-                kind: MediaKind::Audio,
-                track: "audio_main".to_string(),
-                state: Some(ClusterTrackMeta {
-                    kind: MediaKind::Audio,
-                    scaling: "Single".to_string(),
-                    layers: vec![],
-                    status: cluster::ClusterTrackStatus::Connected,
-                    active: true,
-                    label: None,
-                }),
-            }))))
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo::new_audio(
+                "peer2",
+                "audio_main",
+                Some(ClusterTrackMeta::default_audio())
+            )))))
         );
         assert_eq!(endpoint.pop_action(), None);
 
@@ -499,13 +431,9 @@ mod tests {
         // should output rpc event
         assert_eq!(
             endpoint.pop_action(),
-            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
-                peer_hash: hash_str("peer2") as u32,
-                peer: "peer2".to_string(),
-                kind: MediaKind::Audio,
-                track: "audio_main".to_string(),
-                state: None,
-            }))))
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo::new_audio(
+                "peer2", "audio_main", None
+            )))))
         );
         assert_eq!(endpoint.pop_action(), None);
     }
@@ -525,15 +453,7 @@ mod tests {
     fn should_fire_answer_rpc() {
         let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
 
-        endpoint.on_transport(TransportIncomingEvent::LocalTrackAdded(
-            "audio_0".to_string(),
-            1,
-            TrackMeta {
-                kind: MediaKind::Audio,
-                sample_rate: MediaSampleRate::Hz48000,
-                label: None,
-            },
-        ));
+        endpoint.on_transport(TransportIncomingEvent::LocalTrackAdded("audio_0".to_string(), 1, TrackMeta::new_audio(None)));
 
         // should output rpc response and subscribe when rpc switch
         endpoint.on_transport(TransportIncomingEvent::LocalTrackEvent(

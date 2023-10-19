@@ -82,14 +82,7 @@ mod tests {
         let (tx, rx) = async_std::channel::bounded(10);
         room_hub.subscribe(100, tx);
 
-        let meta = ClusterTrackMeta {
-            kind: MediaKind::Audio,
-            active: true,
-            label: None,
-            layers: vec![],
-            status: ClusterTrackStatus::Connected,
-            scaling: "Single".to_string(),
-        };
+        let meta = ClusterTrackMeta::default_audio();
         room_hub.add_track("peer1", "track1", meta.clone());
 
         assert_eq!(rx.try_recv(), Ok(ClusterEndpointIncomingEvent::PeerTrackAdded("peer1".to_string(), "track1".to_string(), meta.clone())));
@@ -109,14 +102,7 @@ mod tests {
 
         let (tx, rx) = async_std::channel::bounded(10);
 
-        let meta = ClusterTrackMeta {
-            kind: MediaKind::Audio,
-            active: true,
-            label: None,
-            layers: vec![],
-            status: ClusterTrackStatus::Connected,
-            scaling: "Single".to_string(),
-        };
+        let meta = ClusterTrackMeta::default_audio();
         room_hub.add_track("peer1", "track1", meta.clone());
         room_hub.subscribe(100, tx);
 
@@ -132,14 +118,7 @@ mod tests {
         let (tx, rx) = async_std::channel::bounded(10);
         room_hub.subscribe_peer("peer1", 100, tx);
 
-        let meta = ClusterTrackMeta {
-            kind: MediaKind::Audio,
-            active: true,
-            label: None,
-            layers: vec![],
-            status: ClusterTrackStatus::Connected,
-            scaling: "Single".to_string(),
-        };
+        let meta = ClusterTrackMeta::default_audio();
         room_hub.add_track("peer1", "track1", meta.clone());
         room_hub.add_track("peer2", "track1", meta.clone());
 
@@ -161,14 +140,7 @@ mod tests {
 
         let (tx, rx) = async_std::channel::bounded(10);
 
-        let meta = ClusterTrackMeta {
-            kind: MediaKind::Audio,
-            active: true,
-            label: None,
-            layers: vec![],
-            status: ClusterTrackStatus::Connected,
-            scaling: "Single".to_string(),
-        };
+        let meta = ClusterTrackMeta::default_audio();
         room_hub.add_track("peer1", "track1", meta.clone());
         room_hub.add_track("peer2", "track1", meta.clone());
         room_hub.subscribe_peer("peer1", 100, tx);
