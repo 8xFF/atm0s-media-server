@@ -13,6 +13,6 @@ async fn main() {
     let cluster = ServerLocal::new();
     let mut server = WebrtcServer::new(cluster);
     while let Some(event) = http_server.recv().await {
-        server.on_incomming(event);
+        server.on_incomming(event).await;
     }
 }

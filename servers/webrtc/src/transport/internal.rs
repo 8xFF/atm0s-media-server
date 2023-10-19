@@ -6,7 +6,7 @@ use endpoint::{
 };
 use str0m::{channel::ChannelId, media::Direction, Event};
 use transport::{
-    LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, MediaPacketExtensions, MediaSampleRate, RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta, TransportError,
+    LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, MediaPacketExtensions, RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta, TransportError,
     TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError,
 };
 
@@ -235,11 +235,7 @@ where
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackAdded(
                                 info.name,
                                 track_id,
-                                TrackMeta {
-                                    kind: to_transport_kind(added.kind),
-                                    sample_rate: MediaSampleRate::HzCustom(0), //TODO
-                                    label: Some(info.label),
-                                },
+                                TrackMeta::from_kind(to_transport_kind(added.kind), Some(info.label)),
                             )));
                             Ok(())
                         } else {
@@ -255,11 +251,7 @@ where
                         self.endpoint_actions.push_back(Ok(TransportIncomingEvent::LocalTrackAdded(
                             track_name,
                             track_id,
-                            TrackMeta {
-                                kind: to_transport_kind(added.kind),
-                                sample_rate: MediaSampleRate::HzCustom(0), //TODO
-                                label: None,
-                            },
+                            TrackMeta::from_kind(to_transport_kind(added.kind), None),
                         )));
                         Ok(())
                     }
@@ -490,11 +482,7 @@ mod test {
             Some(Ok(TransportIncomingEvent::RemoteTrackAdded(
                 "audio_main".to_string(),
                 100,
-                transport::TrackMeta {
-                    kind: transport::MediaKind::Audio,
-                    sample_rate: transport::MediaSampleRate::HzCustom(0),
-                    label: Some("label".to_string()),
-                }
+                transport::TrackMeta::from_kind(transport::MediaKind::Audio, Some("label".to_string())),
             )))
         );
         assert_eq!(internal.endpoint_action(), None);

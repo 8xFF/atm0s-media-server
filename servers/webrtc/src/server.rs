@@ -1,20 +1,29 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use async_std::channel::{bounded, Sender};
+use self::webrtc_session::WebrtcSession;
+use crate::rpc::{RpcEvent, RpcResponse, WebrtcConnectResponse};
+use async_std::{channel::Sender, prelude::FutureExt};
 use cluster::{Cluster, ClusterEndpoint};
-use endpoint::MediaEndpointPreconditional;
-use futures::{select, FutureExt};
 use parking_lot::RwLock;
 use utils::{ServerError, Timer};
 
-use crate::{
-    rpc::{RpcEvent, RpcResponse, WebrtcConnectResponse, WhipConnectResponse},
-    transport::internal::life_cycle::{sdk::SdkTransportLifeCycle, whip::WhipTransportLifeCycle},
-    transport::{WebrtcTransport, WebrtcTransportEvent},
-};
+mod webrtc_session;
 
-enum InternalControl {
+#[derive(Clone, Hash, PartialEq, Eq, Debug)]
+struct PeerIdentity {
+    room: String,
+    peer: String,
+}
+
+impl PeerIdentity {
+    pub fn new(room: &str, peer: &str) -> Self {
+        Self { room: room.into(), peer: peer.into() }
+    }
+}
+
+pub enum InternalControl {
     RemoteIce(String, RpcResponse<()>),
+    ForceClose(Sender<()>),
 }
 
 pub struct WebrtcServer<C, CR> {
@@ -22,6 +31,7 @@ pub struct WebrtcServer<C, CR> {
     cluster: C,
     counter: u64,
     conns: Arc<RwLock<HashMap<String, Sender<InternalControl>>>>,
+    peers: Arc<RwLock<HashMap<PeerIdentity, Sender<InternalControl>>>>,
     timer: Arc<dyn Timer>,
 }
 
@@ -36,152 +46,55 @@ where
             cluster,
             counter: 0,
             conns: Arc::new(RwLock::new(HashMap::new())),
+            peers: Arc::new(RwLock::new(HashMap::new())),
             timer: Arc::new(utils::SystemTimer()),
         }
     }
 
-    pub fn on_incomming(&mut self, event: RpcEvent) {
+    pub async fn on_incomming(&mut self, event: RpcEvent) {
         match event {
             RpcEvent::WhipConnect(_token, sdp, mut res) => {
-                let mut endpoint_pre = MediaEndpointPreconditional::new("room1", "peer1"); //TODO fill correct room and peer
-                if let Err(err) = endpoint_pre.check() {
-                    res.answer(200, Err(err));
-                    return;
-                }
-
-                let connect_count = self.counter;
-                self.counter += 1;
-                let room = self.cluster.build("room1", "peer1"); //TODO fill correct room and peer
-                let conns_c = self.conns.clone();
-                async_std::task::spawn(async move {
-                    let mut transport = match WebrtcTransport::new(WhipTransportLifeCycle::new()).await {
-                        Ok(transport) => transport,
-                        Err(err) => {
-                            res.answer(200, Err(ServerError::build("500", err)));
-                            return;
-                        }
-                    };
-                    let answer_sdp = match transport.on_remote_sdp(&sdp) {
-                        Ok(sdp) => sdp,
-                        Err(err) => {
-                            res.answer(200, Err(ServerError::build("ANSWER_SDP_ERROR", err)));
-                            return;
-                        }
-                    };
-                    let conn_id = format!("conn-{}", connect_count);
-                    res.answer(
-                        200,
-                        Ok(WhipConnectResponse {
-                            location: "/location_here".to_string(),
-                            sdp: answer_sdp,
-                        }),
-                    );
-                    let (tx, rx) = bounded(1);
-                    conns_c.write().insert(conn_id.clone(), tx);
-
-                    let mut endpoint = endpoint_pre.build(transport, room);
-
-                    loop {
-                        select! {
-                            e = endpoint.recv().fuse() => match e {
-                                Ok(_) => {},
-                                Err(e) => {
-                                    log::error!("Error on endpoint recv: {:?}", e);
-                                    break;
-                                }
-                            },
-                            e = rx.recv().fuse() => match e {
-                                Ok(InternalControl::RemoteIce(ice, mut res)) => {
-                                    if let Err(err) = endpoint.on_custom_event(WebrtcTransportEvent::RemoteIce(ice)) {
-                                        res.answer(200, Err(ServerError::build("REMOTE_ICE_ERROR", err)));
-                                        return;
-                                    }
-                                    res.answer(200, Ok(()));
-                                }
-                                Err(e) => {
-                                    log::error!("Error on endpoint custom recv: {:?}", e);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    conns_c.write().remove(&conn_id);
-                });
+                res.answer(200, Err(ServerError::build("NOT_IMPLEMENTED", "Not implemented now")));
             }
             RpcEvent::WebrtcConnect(req, mut res) => {
-                let mut endpoint_pre = MediaEndpointPreconditional::new(&req.room, &req.peer);
-                if let Err(err) = endpoint_pre.check() {
-                    res.answer(200, Err(err));
-                    return;
+                let (mut session, tx, answer_sdp) = match WebrtcSession::new(&req.room, &req.peer, &mut self.cluster, &req.sdp, req.senders, self.timer.now_ms()).await {
+                    Ok(res) => res,
+                    Err(e) => {
+                        log::error!("Error on create webrtc session: {:?}", e);
+                        res.answer(200, Err(ServerError::build("CONNECT_ERROR", format!("{:?}", e))));
+                        return;
+                    }
+                };
+
+                let connect_id = format!("conn-{}", self.counter);
+                self.counter += 1;
+                let local_peer_id = PeerIdentity::new(&req.room, &req.peer);
+
+                res.answer_async(
+                    200,
+                    Ok(WebrtcConnectResponse {
+                        sdp: answer_sdp,
+                        conn_id: connect_id.clone(),
+                    }),
+                )
+                .await;
+
+                let peers_c = self.peers.clone();
+                let conns_c = self.conns.clone();
+
+                conns_c.write().insert(connect_id.clone(), tx.clone());
+                if let Some(old_tx) = peers_c.write().insert(local_peer_id.clone(), tx) {
+                    let (tx, rx) = async_std::channel::bounded(1);
+                    old_tx.send(InternalControl::ForceClose(tx.clone())).await;
+                    rx.recv().timeout(Duration::from_secs(1)).await;
                 }
 
-                let now_ms = self.timer.now_ms();
-                let room = self.cluster.build(&req.room, &req.peer);
-                let connect_count = self.counter;
-                self.counter += 1;
-                let conns_c = self.conns.clone();
                 async_std::task::spawn(async move {
-                    let mut transport = match WebrtcTransport::new(SdkTransportLifeCycle::new(now_ms)).await {
-                        Ok(transport) => transport,
-                        Err(err) => {
-                            log::error!("Transport error {:?}", err);
-                            res.answer(200, Err(ServerError::build("500", err)));
-                            return;
-                        }
-                    };
-
-                    for sender in req.senders {
-                        transport.map_remote_stream(sender);
-                    }
-                    let answer_sdp = match transport.on_remote_sdp(&req.sdp) {
-                        Ok(sdp) => sdp,
-                        Err(err) => {
-                            log::error!("Transport error {:?}", err);
-                            res.answer(200, Err(ServerError::build("ANSWER_SDP_ERROR", err)));
-                            return;
-                        }
-                    };
-                    let conn_id = format!("conn-{}", connect_count);
-                    res.answer(
-                        200,
-                        Ok(WebrtcConnectResponse {
-                            sdp: answer_sdp,
-                            conn_id: conn_id.clone(),
-                        }),
-                    );
-                    let (tx, rx) = bounded(1);
-                    conns_c.write().insert(conn_id.clone(), tx);
-
-                    let mut endpoint = endpoint_pre.build(transport, room);
-
                     log::info!("[WebrtcServer] start loop for endpoint");
-                    loop {
-                        select! {
-                            e = endpoint.recv().fuse() => match e {
-                                Ok(_) => {},
-                                Err(e) => {
-                                    log::error!("Error on endpoint recv: {:?}", e);
-                                    break;
-                                }
-                            },
-                            e = rx.recv().fuse() => match e {
-                                Ok(InternalControl::RemoteIce(ice, mut res)) => {
-                                    if let Err(err) = endpoint.on_custom_event(WebrtcTransportEvent::RemoteIce(ice)) {
-                                        res.answer(200, Err(ServerError::build("REMOTE_ICE_ERROR", err)));
-                                        return;
-                                    }
-                                    res.answer(200, Ok(()));
-                                }
-                                Err(e) => {
-                                    log::error!("Error on endpoint custom recv: {:?}", e);
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                    while let Some(_) = session.recv().await {}
                     log::info!("[WebrtcServer] stop loop for endpoint");
-                    conns_c.write().remove(&conn_id);
+                    conns_c.write().remove(&connect_id);
+                    peers_c.write().remove(&local_peer_id);
                 });
             }
             RpcEvent::WebrtcRemoteIce(conn_id, ice, res) => {

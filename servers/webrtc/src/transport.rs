@@ -171,7 +171,7 @@ where
                     return Ok(TransportIncomingEvent::Continue);
                 }
                 Output::Event(e) => {
-                    self.internal.on_str0m_event(now_ms, e);
+                    self.internal.on_str0m_event(now_ms, e)?;
                     if let Some(action) = self.internal.endpoint_action() {
                         return action;
                     } else {
@@ -237,6 +237,10 @@ where
             todo!("handle rtc error")
         }
         return Ok(TransportIncomingEvent::Continue);
+    }
+
+    async fn close(&mut self) {
+        //TODO force close this
     }
 }
 

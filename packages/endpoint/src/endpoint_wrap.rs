@@ -93,6 +93,10 @@ where
 
         return Ok(MediaEndpointOutput::Continue);
     }
+
+    pub async fn close(&mut self) {
+        self.transport.close().await;
+    }
 }
 
 impl<T, E, C> Drop for MediaEndpoint<T, E, C>
@@ -103,7 +107,7 @@ where
         log::info!("[EndpointWrap] drop");
         //TODO handle error of cluster unsub room
         self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribeRoom);
-        self.internal.close();
+        self.internal.before_drop();
         while let Some(out) = self.internal.pop_action() {
             match out {
                 MediaInternalAction::Cluster(e) => {

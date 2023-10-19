@@ -278,7 +278,7 @@ impl MediaEndpointInteral {
     /// Close this and cleanup everything
     /// This should be called when the endpoint is closed
     /// - Close all tracks
-    pub fn close(&mut self) {
+    pub fn before_drop(&mut self) {
         let local_tracks = std::mem::take(&mut self.local_tracks);
         for (track_id, mut track) in local_tracks {
             log::info!("[MediaEndpointInteral {}/{}] close local track {}", self.room_id, self.peer_id, track_id);
@@ -353,7 +353,7 @@ mod tests {
         );
 
         // close should fire cluster event
-        endpoint.close();
+        endpoint.before_drop();
 
         // should output cluster event
         assert_eq!(
@@ -487,7 +487,7 @@ mod tests {
             )))
         );
 
-        endpoint.close();
+        endpoint.before_drop();
 
         assert_eq!(
             endpoint.pop_action(),

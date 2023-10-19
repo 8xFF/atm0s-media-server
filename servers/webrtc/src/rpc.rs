@@ -17,6 +17,10 @@ impl<T> RpcResponse<T> {
     pub fn answer(&mut self, code: u16, res: Result<T, ServerError>) {
         self.tx.send_blocking((code, res));
     }
+
+    pub async fn answer_async(&mut self, code: u16, res: Result<T, ServerError>) {
+        self.tx.send((code, res)).await;
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Object)]

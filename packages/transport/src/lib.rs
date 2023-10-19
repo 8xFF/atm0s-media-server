@@ -13,26 +13,16 @@ pub enum MediaKind {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum MediaSampleRate {
-    Hz8000,
-    Hz16000,
-    Hz32000,
-    Hz48000,
+    Hz48000, //For video
     Hz90000, //For video
-    Hz96000,
-    Hz192000,
     HzCustom(u32),
 }
 
 impl From<u32> for MediaSampleRate {
     fn from(value: u32) -> Self {
         match value {
-            8000 => MediaSampleRate::Hz8000,
-            16000 => MediaSampleRate::Hz16000,
-            32000 => MediaSampleRate::Hz32000,
             48000 => MediaSampleRate::Hz48000,
             90000 => MediaSampleRate::Hz90000,
-            96000 => MediaSampleRate::Hz96000,
-            192000 => MediaSampleRate::Hz192000,
             _ => MediaSampleRate::HzCustom(value),
         }
     }
@@ -41,13 +31,8 @@ impl From<u32> for MediaSampleRate {
 impl From<MediaSampleRate> for u32 {
     fn from(value: MediaSampleRate) -> Self {
         match value {
-            MediaSampleRate::Hz8000 => 8000,
-            MediaSampleRate::Hz16000 => 16000,
-            MediaSampleRate::Hz32000 => 32000,
             MediaSampleRate::Hz48000 => 48000,
             MediaSampleRate::Hz90000 => 90000,
-            MediaSampleRate::Hz96000 => 96000,
-            MediaSampleRate::Hz192000 => 192000,
             MediaSampleRate::HzCustom(value) => value,
         }
     }
@@ -63,6 +48,17 @@ pub struct TrackMeta {
 impl TrackMeta {
     pub fn new(kind: MediaKind, sample_rate: MediaSampleRate, label: Option<String>) -> Self {
         Self { kind, sample_rate, label }
+    }
+
+    pub fn from_kind(kind: MediaKind, label: Option<String>) -> Self {
+        Self {
+            kind,
+            sample_rate: match kind {
+                MediaKind::Audio => MediaSampleRate::Hz48000,
+                MediaKind::Video => MediaSampleRate::Hz90000,
+            },
+            label,
+        }
     }
 
     pub fn new_audio(label: Option<String>) -> Self {
@@ -211,4 +207,5 @@ pub trait Transport<E, RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> {
     fn on_event(&mut self, now_ms: u64, event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError>;
     fn on_custom_event(&mut self, now_ms: u64, event: E) -> Result<(), TransportError>;
     async fn recv(&mut self, now_ms: u64) -> Result<TransportIncomingEvent<RmIn, RrIn, RlIn>, TransportError>;
+    async fn close(&mut self);
 }
