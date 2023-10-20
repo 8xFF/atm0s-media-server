@@ -76,7 +76,9 @@ pub enum ClusterEndpointIncomingEvent {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum ClusterRemoteTrackOutgoingEvent {
+    TrackAdded(ClusterTrackName, ClusterTrackMeta),
     MediaPacket(MediaPacket),
+    TrackRemoved(ClusterTrackName),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -88,8 +90,6 @@ pub enum ClusterLocalTrackOutgoingEvent {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterEndpointOutgoingEvent {
-    TrackAdded(TrackId, ClusterTrackName, ClusterTrackMeta),
-    TrackRemoved(TrackId, ClusterTrackName),
     SubscribeRoom,
     UnsubscribeRoom,
     SubscribePeer(ClusterPeerId),

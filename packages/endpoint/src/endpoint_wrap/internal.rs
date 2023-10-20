@@ -96,7 +96,6 @@ impl MediaEndpointInteral {
                 log::info!("[EndpointInternal] on remote track added {} {}", track_name, track_id);
                 if !self.remote_tracks.contains_key(&track_id) {
                     let track = RemoteTrack::new(&self.room_id, &self.peer_id, track_id, &track_name, meta);
-                    self.push_cluster(ClusterEndpointOutgoingEvent::TrackAdded(track_id, track_name, track.cluster_meta()));
                     self.remote_tracks.insert(track_id, track);
                 } else {
                     log::warn!("[EndpointInternal] remote track already exists {:?}", track_id);
@@ -109,11 +108,10 @@ impl MediaEndpointInteral {
                     log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
                 }
             }
-            TransportIncomingEvent::RemoteTrackRemoved(track_name, track_id) => {
+            TransportIncomingEvent::RemoteTrackRemoved(_track_name, track_id) => {
                 if let Some(mut track) = self.remote_tracks.remove(&track_id) {
                     track.close();
                     self.pop_remote_track_actions(track_id, &mut track);
-                    self.push_cluster(ClusterEndpointOutgoingEvent::TrackRemoved(track_id, track_name));
                 } else {
                     log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
                 }
@@ -291,7 +289,6 @@ impl MediaEndpointInteral {
             log::info!("[MediaEndpointInteral {}/{}] close remote track {}", self.room_id, self.peer_id, track_id);
             track.close();
             self.pop_remote_track_actions(track_id, &mut track);
-            self.push_cluster(ClusterEndpointOutgoingEvent::TrackRemoved(track_id, track.track_name().to_string()));
         }
     }
 }
@@ -307,10 +304,7 @@ impl Drop for MediaEndpointInteral {
 #[cfg(test)]
 mod tests {
     use cluster::{generate_cluster_track_uuid, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta};
-    use transport::{
-        LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaPacket, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent,
-        TransportStateEvent,
-    };
+    use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, RemoteTrackIncomingEvent, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
 
     use crate::{
         endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction},
@@ -329,20 +323,17 @@ mod tests {
 
         assert_eq!(endpoint.remote_tracks.len(), 1);
 
-        // should output cluster event
-        assert_eq!(
-            endpoint.pop_action(),
-            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackAdded(
-                100,
-                "audio_main".to_string(),
-                ClusterTrackMeta::default_audio()
-            )))
-        );
-        assert_eq!(endpoint.pop_action(), None);
-
         // should handle pkt
         let pkt = MediaPacket::default_audio(1, 1000, vec![1, 2, 3]);
         endpoint.on_transport(TransportIncomingEvent::RemoteTrackEvent(100, RemoteTrackIncomingEvent::MediaPacket(pkt.clone())));
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(
+                100,
+                cluster_track_uuid,
+                ClusterRemoteTrackOutgoingEvent::TrackAdded("audio_main".to_string(), ClusterTrackMeta::default_audio())
+            )))
+        );
         assert_eq!(
             endpoint.pop_action(),
             Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(
@@ -358,7 +349,11 @@ mod tests {
         // should output cluster event
         assert_eq!(
             endpoint.pop_action(),
-            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackRemoved(100, "audio_main".to_string())))
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(
+                100,
+                cluster_track_uuid,
+                ClusterRemoteTrackOutgoingEvent::TrackRemoved("audio_main".to_string())
+            )))
         );
         assert_eq!(endpoint.pop_action(), None);
     }
@@ -372,20 +367,17 @@ mod tests {
 
         assert_eq!(endpoint.remote_tracks.len(), 1);
 
-        // should output cluster event
-        assert_eq!(
-            endpoint.pop_action(),
-            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackAdded(
-                100,
-                "audio_main".to_string(),
-                ClusterTrackMeta::default_audio()
-            )))
-        );
-        assert_eq!(endpoint.pop_action(), None);
-
         // should handle pkt
         let pkt = MediaPacket::default_audio(1, 1000, vec![1, 2, 3]);
         endpoint.on_transport(TransportIncomingEvent::RemoteTrackEvent(100, RemoteTrackIncomingEvent::MediaPacket(pkt.clone())));
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(
+                100,
+                cluster_track_uuid,
+                ClusterRemoteTrackOutgoingEvent::TrackAdded("audio_main".to_string(), ClusterTrackMeta::default_audio())
+            )))
+        );
         assert_eq!(
             endpoint.pop_action(),
             Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(
@@ -400,7 +392,11 @@ mod tests {
         // should output cluster event
         assert_eq!(
             endpoint.pop_action(),
-            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::TrackRemoved(100, "audio_main".to_string())))
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::RemoteTrackEvent(
+                100,
+                cluster_track_uuid,
+                ClusterRemoteTrackOutgoingEvent::TrackRemoved("audio_main".to_string())
+            )))
         );
         assert_eq!(endpoint.pop_action(), None);
     }

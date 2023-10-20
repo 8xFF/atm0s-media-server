@@ -218,7 +218,7 @@ where
                 let track_id = rtp.header.ext_vals.mid.map(|mid| utils::mid_to_track(&mid));
                 let ssrc: &u32 = &rtp.header.ssrc;
                 if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
-                    log::info!("on rtp {} => {}", rtp.header.ssrc, track_id);
+                    log::debug!("on rtp {} => {}", rtp.header.ssrc, track_id);
                     self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(
                         track_id,
                         RemoteTrackIncomingEvent::MediaPacket(MediaPacket {

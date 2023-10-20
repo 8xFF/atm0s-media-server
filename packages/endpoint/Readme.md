@@ -3,11 +3,11 @@
 This package implement core features of media-server
 
 - [x] publish/unpublish
-- [] view/unview
-- [] mute/unmute
+- [x] view/unview
+- [x] mute/unmute
+- [] simulcast/svc
 - [] audio mix-minus
 - [] bitrate manager, allocation
-- [] simulcast/svc
 - [] recording
 - [] metrics, logging, score
 - [] payments

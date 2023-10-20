@@ -45,18 +45,6 @@ impl PeerLocal {
 impl ClusterEndpoint for PeerLocal {
     fn on_event(&mut self, event: ClusterEndpointOutgoingEvent) -> Result<(), ClusterEndpointError> {
         match event {
-            ClusterEndpointOutgoingEvent::TrackAdded(track_id, track_name, track_meta) => {
-                self.tracking.add2("track", &track_name);
-                let track_uuid = generate_cluster_track_uuid(&self.room_id, &self.peer_id, &track_name);
-                self.event_hub.write().add_track(&self.room_id, &self.peer_id, &track_name, track_meta);
-                self.media_hub.write().add_track(track_uuid, track_id, self.tx.clone());
-            }
-            ClusterEndpointOutgoingEvent::TrackRemoved(_track_id, track_name) => {
-                self.tracking.remove2("track", &track_name);
-                let track_uuid = generate_cluster_track_uuid(&self.room_id, &self.peer_id, &track_name);
-                self.event_hub.write().remove_track(&self.room_id, &self.peer_id, &track_name);
-                self.media_hub.write().remove_track(track_uuid);
-            }
             ClusterEndpointOutgoingEvent::SubscribeRoom => {
                 self.tracking.add("sub-room");
                 self.event_hub.write().subscribe_room(&self.room_id, self.peer_id_hash as u32, self.tx.clone());
@@ -91,9 +79,21 @@ impl ClusterEndpoint for PeerLocal {
                     self.media_hub.read().forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
                 }
             },
-            ClusterEndpointOutgoingEvent::RemoteTrackEvent(_track_id, cluster_track_uuid, event) => match event {
+            ClusterEndpointOutgoingEvent::RemoteTrackEvent(track_id, cluster_track_uuid, event) => match event {
+                ClusterRemoteTrackOutgoingEvent::TrackAdded(track_name, track_meta) => {
+                    self.tracking.add2("track", &track_name);
+                    let track_uuid = generate_cluster_track_uuid(&self.room_id, &self.peer_id, &track_name);
+                    self.event_hub.write().add_track(&self.room_id, &self.peer_id, &track_name, track_meta);
+                    self.media_hub.write().add_track(track_uuid, track_id, self.tx.clone());
+                }
                 ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt) => {
                     self.media_hub.write().relay(cluster_track_uuid, pkt);
+                }
+                ClusterRemoteTrackOutgoingEvent::TrackRemoved(track_name) => {
+                    self.tracking.remove2("track", &track_name);
+                    let track_uuid = generate_cluster_track_uuid(&self.room_id, &self.peer_id, &track_name);
+                    self.event_hub.write().remove_track(&self.room_id, &self.peer_id, &track_name);
+                    self.media_hub.write().remove_track(track_uuid);
                 }
             },
         }
@@ -140,24 +140,37 @@ mod tests {
     use std::time::Duration;
 
     use async_std::prelude::FutureExt;
-    use cluster::{Cluster, ClusterEndpoint, ClusterEndpointIncomingEvent, ClusterTrackMeta};
+    use cluster::{generate_cluster_track_uuid, Cluster, ClusterEndpoint, ClusterEndpointIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta};
 
     #[async_std::test]
     async fn subscribe_room() {
         let mut server_local = super::ServerLocal::new();
         let mut peer1 = server_local.build("room", "peer1");
         let mut peer2 = server_local.build("room", "peer2");
+        let cluster_track_uuid = generate_cluster_track_uuid("room", "peer2", "audio_main");
 
         peer1.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribeRoom).unwrap();
         let meta = ClusterTrackMeta::default_audio();
-        peer2.on_event(cluster::ClusterEndpointOutgoingEvent::TrackAdded(1, "audio_main".to_string(), meta.clone())).unwrap();
+        peer2
+            .on_event(cluster::ClusterEndpointOutgoingEvent::RemoteTrackEvent(
+                1,
+                cluster_track_uuid,
+                ClusterRemoteTrackOutgoingEvent::TrackAdded("audio_main".to_string(), meta.clone()),
+            ))
+            .unwrap();
 
         assert_eq!(
             peer1.recv().timeout(Duration::from_secs(1)).await,
             Ok(Ok(ClusterEndpointIncomingEvent::PeerTrackAdded("peer2".to_string(), "audio_main".to_string(), meta.clone())))
         );
 
-        peer2.on_event(cluster::ClusterEndpointOutgoingEvent::TrackRemoved(1, "audio_main".to_string())).unwrap();
+        peer2
+            .on_event(cluster::ClusterEndpointOutgoingEvent::RemoteTrackEvent(
+                1,
+                cluster_track_uuid,
+                ClusterRemoteTrackOutgoingEvent::TrackRemoved("audio_main".to_string()),
+            ))
+            .unwrap();
 
         assert_eq!(
             peer1.recv().timeout(Duration::from_secs(1)).await,
