@@ -23,13 +23,13 @@ impl<T> RpcResponse<T> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Object)]
+#[derive(Serialize, Deserialize, Debug, Object, PartialEq, Eq)]
 pub struct WebrtcConnectRequestReceivers {
     pub audio: u8,
     pub video: u8,
 }
 
-#[derive(Serialize, Deserialize, Debug, Object)]
+#[derive(Serialize, Deserialize, Debug, Object, PartialEq, Eq)]
 pub struct WebrtcConnectRequestSender {
     pub kind: String,
     pub name: String,
@@ -38,7 +38,7 @@ pub struct WebrtcConnectRequestSender {
     pub screen: Option<bool>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Object)]
+#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq)]
 pub struct WebrtcConnectRequest {
     pub version: Option<String>,
     pub room: String,

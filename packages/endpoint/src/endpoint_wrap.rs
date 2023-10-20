@@ -65,7 +65,13 @@ where
                 },
                 MediaInternalAction::Endpoint(e) => {
                     if let Err(e) = self.transport.on_event(self.timer.now_ms(), e) {
-                        return Err(e);
+                        //only ending session if is critical error
+                        match &e {
+                            TransportError::ConnectError(_) => return Err(e),
+                            TransportError::ConnectionError(_) => return Err(e),
+                            TransportError::NetworkError => {}
+                            TransportError::RuntimeError(_) => {}
+                        }
                     }
                 }
                 MediaInternalAction::Cluster(e) => {
@@ -78,7 +84,16 @@ where
 
         select! {
             event = self.transport.recv(self.timer.now_ms()).fuse() => {
-                self.internal.on_transport(event?);
+                match event {
+                    Ok(event) => self.internal.on_transport(event),
+                    //only ending session if is critical error
+                    Err(e) => match &e {
+                        TransportError::ConnectError(_) => return Err(e),
+                        TransportError::ConnectionError(_) => return Err(e),
+                        TransportError::NetworkError => {},
+                        TransportError::RuntimeError(_) => {},
+                    }
+                }
             },
             event = self.cluster.recv().fuse() => {
                 if let Ok(event) = event {

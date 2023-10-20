@@ -2,7 +2,7 @@
 
 This package implement core features of media-server
 
-- [] publish/unpublish
+- [x] publish/unpublish
 - [] view/unview
 - [] mute/unmute
 - [] audio mix-minus

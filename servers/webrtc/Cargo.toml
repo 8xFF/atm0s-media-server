@@ -24,3 +24,5 @@ env_logger = { workspace = true }
 async-compat = "*"
 serde = { workspace = true }
 serde_json = { workspace = true }
+lz4_flex = { version = "0.9.3" }
+flate2 = { version = "1.0.24" }

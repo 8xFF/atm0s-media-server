@@ -6,7 +6,7 @@ use std::{
 
 use async_std::prelude::FutureExt;
 use endpoint::{
-    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
+    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, RpcResponse},
     EndpointRpcIn, EndpointRpcOut,
 };
 use str0m::{
@@ -21,7 +21,11 @@ use transport::{MediaPacket, Transport, TransportError, TransportIncomingEvent, 
 
 use crate::rpc::WebrtcConnectRequestSender;
 
-use self::internal::{life_cycle::TransportLifeCycle, WebrtcTransportInternal};
+use self::internal::{
+    life_cycle::TransportLifeCycle,
+    rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
+    WebrtcTransportInternal,
+};
 
 pub(crate) mod internal;
 
@@ -30,6 +34,7 @@ pub enum Str0mAction {
     Media(Mid, MediaPacket),
     RequestKeyFrame(Mid),
     Datachannel(ChannelId, String),
+    Rpc(TransportRpcIn),
 }
 
 pub enum WebrtcTransportEvent {
@@ -85,9 +90,30 @@ where
         Ok(sdp.to_sdp_string())
     }
 
-    fn pop_internal_str0m_actions(&mut self) {
+    fn pop_internal_str0m_actions(&mut self, now_ms: u64) {
         while let Some(action) = self.internal.str0m_action() {
             match action {
+                Str0mAction::Rpc(rpc) => match rpc {
+                    TransportRpcIn::UpdateSdp(req) => {
+                        if let Ok(sdp) = SdpOffer::from_sdp_string(&req.data.sdp) {
+                            for sender in req.data.senders {
+                                self.internal.map_remote_stream(sender);
+                            }
+                            match self.rtc.sdp_api().accept_offer(sdp) {
+                                Ok(sdp) => {
+                                    let sdp = sdp.to_sdp_string();
+                                    let res = RpcResponse::success(req.req_id, UpdateSdpResponse { sdp });
+                                    self.internal.on_transport_rpc(now_ms, TransportRpcOut::UpdateSdpRes(res));
+                                }
+                                Err(e) => {
+                                    log::error!("[TransportWebrtc] error on accept offer {:?}", e);
+                                    let res = RpcResponse::error(req.req_id);
+                                    self.internal.on_transport_rpc(now_ms, TransportRpcOut::UpdateSdpRes(res));
+                                }
+                            }
+                        }
+                    }
+                },
                 Str0mAction::Media(mid, pkt) => {
                     if let Some(stream) = self.rtc.direct_api().stream_tx_by_mid(mid, None) {
                         stream
@@ -115,7 +141,7 @@ where
                     if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
                         stream.request_keyframe(KeyframeRequestKind::Pli);
                     } else {
-                        log::warn!("[TransportWebrtc] missing track for mid {}", mid);
+                        log::warn!("[TransportWebrtc] missing track for mid {} when requesting key-frame", mid);
                         debug_assert!(false, "should not missing mid");
                     }
                 }
@@ -145,13 +171,13 @@ where
 
     fn on_event(&mut self, now_ms: u64, event: TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>) -> Result<(), TransportError> {
         self.internal.on_endpoint_event(now_ms, event)?;
-        self.pop_internal_str0m_actions();
+        self.pop_internal_str0m_actions(now_ms);
         Ok(())
     }
 
     fn on_custom_event(&mut self, now_ms: u64, event: WebrtcTransportEvent) -> Result<(), TransportError> {
         self.internal.on_custom_event(now_ms, event)?;
-        self.pop_internal_str0m_actions();
+        self.pop_internal_str0m_actions(now_ms);
         Ok(())
     }
 
@@ -159,7 +185,7 @@ where
         if let Some(action) = self.internal.endpoint_action() {
             return action;
         }
-        self.pop_internal_str0m_actions();
+        self.pop_internal_str0m_actions(now_ms);
 
         let timeout = match self.rtc.poll_output() {
             Ok(o) => match o {

@@ -18,6 +18,8 @@ impl<D> RpcRequest<D> {
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct RpcResponse<D> {
     pub req_id: u64,
+    #[serde(rename = "type")]
+    _type: String,
     pub success: bool,
     pub data: Option<D>,
 }
@@ -26,13 +28,19 @@ impl<D> RpcResponse<D> {
     pub fn success(req_id: u64, data: D) -> Self {
         Self {
             req_id,
+            _type: "answer".to_string(),
             success: true,
             data: Some(data),
         }
     }
 
     pub fn error(req_id: u64) -> Self {
-        Self { req_id, success: false, data: None }
+        Self {
+            req_id,
+            _type: "answer".to_string(),
+            success: false,
+            data: None,
+        }
     }
 }
 

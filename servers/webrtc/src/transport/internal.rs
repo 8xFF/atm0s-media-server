@@ -1,5 +1,6 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
+use ::utils::HashMapMultiKey;
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     EndpointRpcIn, EndpointRpcOut,
@@ -15,10 +16,11 @@ use self::{
     local_track_id_generator::LocalTrackIdGenerator,
     mid_history::MidHistory,
     msid_alias::MsidAlias,
-    rpc::{rpc_from_string, rpc_local_track_to_string, rpc_remote_track_to_string, rpc_to_string, IncomingRpc},
+    rpc::{rpc_from_string, rpc_local_track_to_string, rpc_remote_track_to_string, rpc_to_string, IncomingRpc, TransportRpcOut},
+    string_compression::StringCompression,
     utils::{to_transport_kind, track_to_mid},
 };
-use crate::rpc::WebrtcConnectRequestSender;
+use crate::{rpc::WebrtcConnectRequestSender, transport::internal::rpc::rpc_internal_to_string};
 
 use super::{Str0mAction, WebrtcTransportEvent};
 
@@ -26,7 +28,8 @@ pub(crate) mod life_cycle;
 mod local_track_id_generator;
 mod mid_history;
 mod msid_alias;
-mod rpc;
+pub(crate) mod rpc;
+mod string_compression;
 mod utils;
 
 pub struct WebrtcTransportInternal<L>
@@ -36,13 +39,14 @@ where
     life_cycle: L,
     msid_alias: MsidAlias,
     mid_history: MidHistory,
-    local_track_id_map: HashMap<String, TrackId>,
-    remote_track_id_map: HashMap<String, TrackId>,
+    local_track_id_map: HashMapMultiKey<TrackId, String, bool>,
+    remote_track_id_map: HashMapMultiKey<TrackId, String, bool>,
     local_track_id_gen: LocalTrackIdGenerator,
     channel_id: Option<ChannelId>,
     channel_pending_msgs: VecDeque<String>,
     endpoint_actions: VecDeque<Result<TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>, TransportError>>,
     str0m_actions: VecDeque<Str0mAction>,
+    string_compression: StringCompression,
 }
 
 impl<L> WebrtcTransportInternal<L>
@@ -63,6 +67,7 @@ where
             channel_pending_msgs: Default::default(),
             endpoint_actions: Default::default(),
             str0m_actions: Default::default(),
+            string_compression: StringCompression::default(),
         }
     }
 
@@ -135,6 +140,12 @@ where
         Ok(())
     }
 
+    pub fn on_transport_rpc(&mut self, _now_ms: u64, rpc: TransportRpcOut) {
+        let msg = rpc_internal_to_string(rpc);
+        log::info!("[TransportWebrtc] on transport out rpc: {}", msg);
+        self.send_msg(msg);
+    }
+
     pub fn on_str0m_event(&mut self, now_ms: u64, event: str0m::Event) -> Result<(), TransportError> {
         match event {
             Event::Connected => {
@@ -148,43 +159,48 @@ where
                 Ok(())
             }
             Event::ChannelData(data) => {
-                if !data.binary {
-                    if let Ok(data) = String::from_utf8(data.data) {
-                        match rpc_from_string(&data) {
-                            Ok(IncomingRpc::Endpoint(rpc)) => {
-                                log::info!("[TransportWebrtcInternal] on incoming endpoint rpc: [{:?}]", rpc);
-                                self.endpoint_actions.push_back(Ok(TransportIncomingEvent::Rpc(rpc)));
+                let msg = match data.binary {
+                    true => self.string_compression.uncompress_zlib(&data.data),
+                    false => String::from_utf8(data.data).ok(),
+                };
+                if let Some(data) = msg {
+                    match rpc_from_string(&data) {
+                        Ok(IncomingRpc::Endpoint(rpc)) => {
+                            log::info!("[TransportWebrtcInternal] on incoming endpoint rpc: [{:?}]", rpc);
+                            self.endpoint_actions.push_back(Ok(TransportIncomingEvent::Rpc(rpc)));
+                            Ok(())
+                        }
+                        Ok(IncomingRpc::Transport(rpc)) => {
+                            log::info!("[TransportWebrtcInternal] on incoming transport sdp rpc: [{:?}]", rpc);
+                            self.str0m_actions.push_back(Str0mAction::Rpc(rpc));
+                            Ok(())
+                        }
+                        Ok(IncomingRpc::LocalTrack(track_name, rpc)) => {
+                            if let Some((_, track_id)) = self.local_track_id_map.get_by_k2(&track_name) {
+                                log::info!("[TransportWebrtcInternal] on incoming local track[{}] rpc: [{:?}]", track_name, rpc);
+                                self.endpoint_actions
+                                    .push_back(Ok(TransportIncomingEvent::LocalTrackEvent(*track_id, LocalTrackIncomingEvent::Rpc(rpc))));
                                 Ok(())
-                            }
-                            Ok(IncomingRpc::LocalTrack(track_name, rpc)) => {
-                                if let Some(track_id) = self.local_track_id_map.get(&track_name) {
-                                    log::info!("[TransportWebrtcInternal] on incoming local track[{}] rpc: [{:?}]", track_name, rpc);
-                                    self.endpoint_actions
-                                        .push_back(Ok(TransportIncomingEvent::LocalTrackEvent(*track_id, LocalTrackIncomingEvent::Rpc(rpc))));
-                                    Ok(())
-                                } else {
-                                    log::warn!("[TransportWebrtcInternal] on incoming local invalid track[{}] rpc: [{:?}]", track_name, rpc);
-                                    Err(TransportError::RuntimeError(TransportRuntimeError::TrackIdNotFound))
-                                }
-                            }
-                            Ok(IncomingRpc::RemoteTrack(track_name, rpc)) => {
-                                if let Some(track_id) = self.remote_track_id_map.get(&track_name) {
-                                    log::info!("[TransportWebrtcInternal] on incoming remote track[{}] rpc: [{:?}]", track_name, rpc);
-                                    self.endpoint_actions
-                                        .push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(*track_id, RemoteTrackIncomingEvent::Rpc(rpc))));
-                                    Ok(())
-                                } else {
-                                    log::warn!("[TransportWebrtcInternal] on incoming remote invalid track[{}] rpc: [{:?}]", track_name, rpc);
-                                    Err(TransportError::RuntimeError(TransportRuntimeError::TrackIdNotFound))
-                                }
-                            }
-                            _ => {
-                                log::warn!("[TransportWebrtcInternal] invalid rpc: {}", data);
-                                Err(TransportError::RuntimeError(TransportRuntimeError::RpcInvalid))
+                            } else {
+                                log::warn!("[TransportWebrtcInternal] on incoming local invalid track[{}] rpc: [{:?}]", track_name, rpc);
+                                Err(TransportError::RuntimeError(TransportRuntimeError::TrackIdNotFound))
                             }
                         }
-                    } else {
-                        Err(TransportError::RuntimeError(TransportRuntimeError::RpcInvalid))
+                        Ok(IncomingRpc::RemoteTrack(track_name, rpc)) => {
+                            if let Some((_, track_id)) = self.remote_track_id_map.get_by_k2(&track_name) {
+                                log::info!("[TransportWebrtcInternal] on incoming remote track[{}] rpc: [{:?}]", track_name, rpc);
+                                self.endpoint_actions
+                                    .push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(*track_id, RemoteTrackIncomingEvent::Rpc(rpc))));
+                                Ok(())
+                            } else {
+                                log::warn!("[TransportWebrtcInternal] on incoming remote invalid track[{}] rpc: [{:?}]", track_name, rpc);
+                                Err(TransportError::RuntimeError(TransportRuntimeError::TrackIdNotFound))
+                            }
+                        }
+                        _ => {
+                            log::warn!("[TransportWebrtcInternal] invalid rpc: {}", data);
+                            Err(TransportError::RuntimeError(TransportRuntimeError::RpcInvalid))
+                        }
                     }
                 } else {
                     Err(TransportError::RuntimeError(TransportRuntimeError::RpcInvalid))
@@ -202,7 +218,7 @@ where
                 let track_id = rtp.header.ext_vals.mid.map(|mid| utils::mid_to_track(&mid));
                 let ssrc: &u32 = &rtp.header.ssrc;
                 if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
-                    // log::info!("on rtp {} => {}", rtp.header.ssrc, track_id);
+                    log::info!("on rtp {} => {}", rtp.header.ssrc, track_id);
                     self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(
                         track_id,
                         RemoteTrackIncomingEvent::MediaPacket(MediaPacket {
@@ -230,7 +246,7 @@ where
                         //remote stream
                         let track_id = utils::mid_to_track(&added.mid);
                         if let Some(info) = self.msid_alias.get_alias(&added.msid.stream_id, &added.msid.track_id) {
-                            self.remote_track_id_map.insert(info.name.clone(), track_id);
+                            self.remote_track_id_map.insert(track_id, info.name.clone(), true);
                             log::info!("[TransportWebrtcInternal] added remote track {} => {} added {:?} {:?}", info.name, track_id, added, info);
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackAdded(
                                 info.name,
@@ -247,7 +263,7 @@ where
                         let track_id = utils::mid_to_track(&added.mid);
                         let track_name = self.local_track_id_gen.generate(added.kind, added.mid);
                         log::info!("[TransportWebrtcInternal] added local track {} => {} added {:?}", track_name, track_id, added);
-                        self.local_track_id_map.insert(track_name.clone(), track_id);
+                        self.local_track_id_map.insert(track_id, track_name.clone(), true);
                         self.endpoint_actions.push_back(Ok(TransportIncomingEvent::LocalTrackAdded(
                             track_name,
                             track_id,
@@ -260,11 +276,36 @@ where
                     }
                 }
             }
-            Event::MediaChanged(_media) => {
-                //TODO
+            Event::MediaChanged(media) => {
+                match media.direction {
+                    Direction::Inactive => {
+                        let track_id = utils::mid_to_track(&media.mid);
+                        if let Some((active, name)) = self.remote_track_id_map.get_mut_by_k1(&track_id) {
+                            log::info!("[TransportWebrtcInternal] switched remote to inactive {}", media.mid);
+                            *active = false;
+                            self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackRemoved(name.clone(), track_id)));
+                        } else if let Some((active, name)) = self.local_track_id_map.get_mut_by_k1(&track_id) {
+                            log::info!("[TransportWebrtcInternal] switched local to inactive {}", media.mid);
+                            *active = false;
+                            self.endpoint_actions.push_back(Ok(TransportIncomingEvent::LocalTrackRemoved(name.clone(), track_id)));
+                        } else {
+                            log::warn!("[TransportWebrtcInternal] switch track to inactive {} but cannot determine remote or local", media.mid);
+                        }
+                    }
+                    Direction::RecvOnly => {
+                        //TODO
+                    }
+                    Direction::SendOnly => {
+                        //TODO
+                    }
+                    Direction::SendRecv => {
+                        //Not support
+                    }
+                }
                 Ok(())
             }
             Event::StreamPaused(_paused) => {
+                log::info!("media paused, {:?}", _paused);
                 //TODO
                 Ok(())
             }
@@ -300,7 +341,7 @@ mod test {
     use endpoint::{rpc::TrackInfo, EndpointRpcOut};
     use str0m::{
         channel::{ChannelData, ChannelId},
-        media::{MediaAdded, MediaTime},
+        media::{Direction, MediaAdded, MediaChanged, MediaKind, MediaTime},
         rtp::{RtpHeader, RtpPacket},
         Msid,
     };
@@ -333,6 +374,50 @@ mod test {
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::State(transport::TransportStateEvent::Disconnected))));
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(internal.str0m_action(), None);
+
+        internal.map_remote_stream(WebrtcConnectRequestSender {
+            kind: "audio".to_string(),
+            name: "audio_main".to_string(),
+            uuid: "track_id".to_string(),
+            label: "label".to_string(),
+            screen: None,
+        });
+        internal
+            .on_str0m_event(
+                100,
+                str0m::Event::MediaAdded(MediaAdded {
+                    mid: track_to_mid(100),
+                    msid: Msid {
+                        stream_id: "stream_id".to_string(),
+                        track_id: "track_id".to_string(),
+                    },
+                    kind: MediaKind::Audio,
+                    direction: Direction::RecvOnly,
+                    simulcast: None,
+                }),
+            )
+            .unwrap();
+
+        assert_eq!(
+            internal.endpoint_action(),
+            Some(Ok(TransportIncomingEvent::RemoteTrackAdded(
+                "audio_main".to_string(),
+                100,
+                transport::TrackMeta::from_kind(transport::MediaKind::Audio, Some("label".to_string())),
+            )))
+        );
+
+        internal
+            .on_str0m_event(
+                100,
+                str0m::Event::MediaChanged(MediaChanged {
+                    mid: track_to_mid(100),
+                    direction: Direction::Inactive,
+                }),
+            )
+            .unwrap();
+
+        assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::RemoteTrackRemoved("audio_main".to_string(), 100,))));
     }
 
     #[test]

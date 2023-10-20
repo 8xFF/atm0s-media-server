@@ -8,7 +8,7 @@ pub enum MixMinusAudioMode {
     ManualAudioStreams,
 }
 
-#[derive(Serialize, Deserialize, Debug, Enum)]
+#[derive(Serialize, Deserialize, Debug, Enum, PartialEq, Eq)]
 pub enum PayloadType {
     VP8,
     VP9,
@@ -16,7 +16,7 @@ pub enum PayloadType {
     OPUS,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Enum)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Enum, PartialEq, Eq)]
 pub enum RemoteBitrateControlMode {
     SumBitrateWithClientSide,
     SumBitrateOnly,
