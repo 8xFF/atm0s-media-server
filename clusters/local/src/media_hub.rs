@@ -90,18 +90,7 @@ mod test {
         let track_uuid = generate_cluster_track_uuid("room", "peer", "track");
         let (tx, rx) = async_std::channel::bounded(100);
         media_hub.subscribe(track_uuid, 1, tx);
-        let pkt = MediaPacket {
-            pt: 111,
-            seq_no: 1,
-            time: 1000,
-            marker: true,
-            ext_vals: MediaPacketExtensions {
-                abs_send_time: None,
-                transport_cc: None,
-            },
-            nackable: true,
-            payload: vec![1, 2, 3],
-        };
+        let pkt = MediaPacket::default_audio(1, 1000, vec![1, 2, 3]);
         media_hub.relay(track_uuid, pkt.clone());
         assert_eq!(
             rx.try_recv(),

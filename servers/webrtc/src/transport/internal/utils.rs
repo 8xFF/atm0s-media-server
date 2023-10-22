@@ -1,4 +1,4 @@
-use str0m::media::{MediaKind, Mid};
+use str0m::media::{MediaKind, Mid, Rid};
 use transport::TrackId;
 
 const ZERO_CHAR: u8 = 48;
@@ -11,6 +11,15 @@ pub fn mid_to_track(mid: &Mid) -> TrackId {
         track += (*c - ZERO_CHAR) as u16;
     }
     track
+}
+
+pub fn rid_to_u16(rid: &Rid) -> TrackId {
+    let mut value = 0;
+    for c in rid.as_bytes() {
+        value *= 10;
+        value += (*c - ZERO_CHAR) as u16;
+    }
+    value
 }
 
 //TODO optimize this

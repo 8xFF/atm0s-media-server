@@ -7,8 +7,8 @@ use endpoint::{
 };
 use str0m::{channel::ChannelId, media::Direction, Event};
 use transport::{
-    LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, MediaPacketExtensions, RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta, TransportError,
-    TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError,
+    LocalTrackIncomingEvent, LocalTrackOutgoingEvent, RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta, TransportError, TransportIncomingEvent, TransportOutgoingEvent,
+    TransportRuntimeError,
 };
 
 use self::{
@@ -17,6 +17,7 @@ use self::{
     mid_history::MidHistory,
     msid_alias::MsidAlias,
     rpc::{rpc_from_string, rpc_local_track_to_string, rpc_remote_track_to_string, rpc_to_string, IncomingRpc, TransportRpcOut},
+    rtp_packet_convert::RtpPacketConverter,
     string_compression::StringCompression,
     utils::{to_transport_kind, track_to_mid},
 };
@@ -29,6 +30,7 @@ mod local_track_id_generator;
 mod mid_history;
 mod msid_alias;
 pub(crate) mod rpc;
+pub(crate) mod rtp_packet_convert;
 mod string_compression;
 mod utils;
 
@@ -39,6 +41,7 @@ where
     life_cycle: L,
     msid_alias: MsidAlias,
     mid_history: MidHistory,
+    rtp_convert: RtpPacketConverter,
     local_track_id_map: HashMapMultiKey<TrackId, String, bool>,
     remote_track_id_map: HashMapMultiKey<TrackId, String, bool>,
     local_track_id_gen: LocalTrackIdGenerator,
@@ -60,6 +63,7 @@ where
             life_cycle,
             msid_alias: Default::default(),
             mid_history: Default::default(),
+            rtp_convert: Default::default(),
             local_track_id_map: Default::default(),
             remote_track_id_map: Default::default(),
             local_track_id_gen: Default::default(),
@@ -218,22 +222,18 @@ where
                 let track_id = rtp.header.ext_vals.mid.map(|mid| utils::mid_to_track(&mid));
                 let ssrc: &u32 = &rtp.header.ssrc;
                 if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
-                    log::debug!("on rtp {} => {}", rtp.header.ssrc, track_id);
-                    self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(
+                    log::debug!(
+                        "on rtp {} => {}, mid: {:?}, rid: {:?} {:?}",
+                        rtp.header.ssrc,
                         track_id,
-                        RemoteTrackIncomingEvent::MediaPacket(MediaPacket {
-                            pt: *(&rtp.header.payload_type as &u8),
-                            seq_no: rtp.header.sequence_number,
-                            time: rtp.header.timestamp,
-                            marker: rtp.header.marker,
-                            ext_vals: MediaPacketExtensions {
-                                abs_send_time: rtp.header.ext_vals.abs_send_time.map(|t| (t.numer(), t.denom())),
-                                transport_cc: rtp.header.ext_vals.transport_cc,
-                            },
-                            nackable: true,
-                            payload: rtp.payload,
-                        }),
-                    )));
+                        rtp.header.ext_vals.mid,
+                        rtp.header.ext_vals.rid,
+                        rtp.header.ext_vals.rid_repair
+                    );
+                    if let Some(pkt) = self.rtp_convert.to_pkt(rtp) {
+                        self.endpoint_actions
+                            .push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(track_id, RemoteTrackIncomingEvent::MediaPacket(pkt))));
+                    }
                     Ok(())
                 } else {
                     log::warn!("on rtp without mid {}", rtp.header.ssrc);
@@ -304,15 +304,27 @@ where
                 }
                 Ok(())
             }
-            Event::StreamPaused(_paused) => {
-                log::info!("media paused, {:?}", _paused);
-                //TODO
-                Ok(())
-            }
             Event::KeyframeRequest(req) => {
                 let track_id = utils::mid_to_track(&req.mid);
                 self.endpoint_actions
                     .push_back(Ok(TransportIncomingEvent::LocalTrackEvent(track_id, LocalTrackIncomingEvent::RequestKeyFrame)));
+                Ok(())
+            }
+            Event::PeerStats(stats) => {
+                log::info!("[TransportWebrtcInternal] on stats {:?}", stats);
+                Ok(())
+            }
+            Event::MediaIngressStats(stats) => {
+                log::info!("[TransportWebrtcInternal] on ingress stats {:?}", stats);
+                Ok(())
+            }
+            Event::MediaEgressStats(stats) => {
+                log::info!("[TransportWebrtcInternal] on egress stats {:?}", stats);
+                Ok(())
+            }
+            Event::EgressBitrateEstimate(bitrate) => {
+                log::debug!("[TransportWebrtcInternal] on egress bitrate estimate {} kbps", bitrate);
+                self.endpoint_actions.push_back(Ok(TransportIncomingEvent::EgressBitrateEstimate(bitrate.as_u64())));
                 Ok(())
             }
             _ => Ok(()),
@@ -345,7 +357,7 @@ mod test {
         rtp::{RtpHeader, RtpPacket},
         Msid,
     };
-    use transport::TransportIncomingEvent;
+    use transport::{PayloadCodec, TransportIncomingEvent};
 
     use crate::rpc::WebrtcConnectRequestSender;
 
@@ -597,7 +609,7 @@ mod test {
                 Some(Ok(TransportIncomingEvent::RemoteTrackEvent(
                     100,
                     transport::RemoteTrackIncomingEvent::MediaPacket(transport::MediaPacket {
-                        pt: 1,
+                        codec: PayloadCodec::Opus,
                         seq_no: 1,
                         time: 1000,
                         marker: false,
@@ -636,7 +648,7 @@ mod test {
                 Some(Ok(TransportIncomingEvent::RemoteTrackEvent(
                     100,
                     transport::RemoteTrackIncomingEvent::MediaPacket(transport::MediaPacket {
-                        pt: 1,
+                        codec: PayloadCodec::Opus,
                         seq_no: 2,
                         time: 1000,
                         marker: false,

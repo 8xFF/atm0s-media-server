@@ -57,7 +57,7 @@ impl LocalTrack {
     pub fn on_cluster_event(&mut self, event: ClusterLocalTrackIncomingEvent) {
         match event {
             ClusterLocalTrackIncomingEvent::MediaPacket(pkt) => {
-                log::debug!("[LocalTrack {}] media from cluster pkt {} {}", self.track_name, pkt.pt, pkt.seq_no);
+                log::debug!("[LocalTrack {}] media from cluster pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
                 self.out_actions.push_back(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::MediaPacket(pkt)));
             }
         }

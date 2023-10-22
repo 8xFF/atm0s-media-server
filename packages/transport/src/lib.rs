@@ -1,42 +1,17 @@
-use serde::{Deserialize, Serialize};
+mod codec;
+mod event;
+mod kind;
+mod packet;
+mod samplerate;
+
+pub use codec::*;
+pub use event::*;
+pub use kind::*;
+pub use packet::*;
+pub use samplerate::*;
 
 pub type TrackId = u16;
 pub type TrackName = String;
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
-pub enum MediaKind {
-    #[serde(rename = "audio")]
-    Audio,
-    #[serde(rename = "video")]
-    Video,
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum MediaSampleRate {
-    Hz48000, //For video
-    Hz90000, //For video
-    HzCustom(u32),
-}
-
-impl From<u32> for MediaSampleRate {
-    fn from(value: u32) -> Self {
-        match value {
-            48000 => MediaSampleRate::Hz48000,
-            90000 => MediaSampleRate::Hz90000,
-            _ => MediaSampleRate::HzCustom(value),
-        }
-    }
-}
-
-impl From<MediaSampleRate> for u32 {
-    fn from(value: MediaSampleRate) -> Self {
-        match value {
-            MediaSampleRate::Hz48000 => 48000,
-            MediaSampleRate::Hz90000 => 90000,
-            MediaSampleRate::HzCustom(value) => value,
-        }
-    }
-}
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct TrackMeta {
@@ -76,94 +51,6 @@ pub struct TransportStats {
     loss: u32,
     jitter: u32,
     bitrate: u32,
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum RemoteTrackIncomingEvent<RR> {
-    MediaPacket(MediaPacket),
-    Rpc(RR),
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum LocalTrackIncomingEvent<RL> {
-    RequestKeyFrame,
-    Rpc(RL),
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum TransportStateEvent {
-    Connected,
-    Reconnecting,
-    Reconnected,
-    Disconnected,
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum TransportIncomingEvent<RE, RR, RL> {
-    State(TransportStateEvent),
-    Continue,
-    RemoteTrackAdded(TrackName, TrackId, TrackMeta),
-    RemoteTrackEvent(TrackId, RemoteTrackIncomingEvent<RR>),
-    RemoteTrackRemoved(TrackName, TrackId),
-    LocalTrackAdded(TrackName, TrackId, TrackMeta),
-    LocalTrackEvent(TrackId, LocalTrackIncomingEvent<RL>),
-    LocalTrackRemoved(TrackName, TrackId),
-    Rpc(RE),
-    Stats(TransportStats),
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum RemoteTrackOutgoingEvent<RR> {
-    RequestKeyFrame,
-    Rpc(RR),
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum LocalTrackOutgoingEvent<RL> {
-    MediaPacket(MediaPacket),
-    Rpc(RL),
-}
-
-#[derive(PartialEq, Eq, Debug)]
-pub enum TransportOutgoingEvent<RE, RR, RL> {
-    RemoteTrackEvent(TrackId, RemoteTrackOutgoingEvent<RR>),
-    LocalTrackEvent(TrackId, LocalTrackOutgoingEvent<RL>),
-    RequestLimitBitrate(u32),
-    Rpc(RE),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MediaPacketExtensions {
-    pub abs_send_time: Option<(i64, i64)>,
-    pub transport_cc: Option<u16>, // (buf[0] << 8) | buf[1];
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MediaPacket {
-    pub pt: u8,
-    pub seq_no: u16,
-    pub time: u32,
-    pub marker: bool,
-    pub ext_vals: MediaPacketExtensions,
-    pub nackable: bool,
-    pub payload: Vec<u8>,
-}
-
-impl MediaPacket {
-    pub fn default_audio(seq_no: u16, time: u32, payload: Vec<u8>) -> Self {
-        Self {
-            pt: 111,
-            seq_no,
-            time,
-            marker: false,
-            ext_vals: MediaPacketExtensions {
-                abs_send_time: None,
-                transport_cc: None,
-            },
-            nackable: false,
-            payload,
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug)]

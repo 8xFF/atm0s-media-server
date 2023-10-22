@@ -67,7 +67,7 @@ impl RemoteTrack {
     pub fn on_transport_event(&mut self, event: RemoteTrackIncomingEvent<RemoteTrackRpcIn>) {
         match event {
             RemoteTrackIncomingEvent::MediaPacket(pkt) => {
-                log::debug!("[RemoteTrack {}] media from transport pkt {} {}", self.track_name, pkt.pt, pkt.seq_no);
+                log::debug!("[RemoteTrack {}] media from transport pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
                 if !self.active {
                     self.active = true;
                     self.out_actions

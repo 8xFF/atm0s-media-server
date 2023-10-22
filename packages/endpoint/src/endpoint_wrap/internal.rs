@@ -76,6 +76,9 @@ impl MediaEndpointInteral {
 
     pub fn on_transport(&mut self, event: TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>) {
         match event {
+            TransportIncomingEvent::EgressBitrateEstimate(_bitrate) => {
+                //TODO change allocation bitrate
+            }
             TransportIncomingEvent::State(state) => {
                 log::info!("[EndpointInternal] switch state to {:?}", state);
                 match state {

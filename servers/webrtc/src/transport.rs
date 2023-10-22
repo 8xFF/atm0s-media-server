@@ -1,7 +1,7 @@
 use std::{
     net::{SocketAddr, UdpSocket},
     os::fd::{AsRawFd, FromRawFd},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use async_std::prelude::FutureExt;
@@ -24,10 +24,13 @@ use crate::rpc::WebrtcConnectRequestSender;
 use self::internal::{
     life_cycle::TransportLifeCycle,
     rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
+    rtp_packet_convert::MediaPacketConvert,
     WebrtcTransportInternal,
 };
 
 pub(crate) mod internal;
+
+const INIT_BWE_BITRATE_KBPS: u64 = 400; //400kbps
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Str0mAction {
@@ -50,6 +53,7 @@ where
     rtc: Rtc,
     internal: WebrtcTransportInternal<L>,
     buf: Vec<u8>,
+    pkt_convert: MediaPacketConvert,
 }
 
 impl<L> WebrtcTransport<L>
@@ -64,7 +68,12 @@ where
         let async_socket = unsafe { async_std::net::UdpSocket::from_raw_fd(socket.as_raw_fd()) };
         let sync_socket: UdpSocket = socket.into();
 
-        let rtc = Rtc::builder().set_ice_lite(true).set_rtp_mode(true).build();
+        let rtc = Rtc::builder()
+            // .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
+            .set_ice_lite(true)
+            .set_rtp_mode(true)
+            .set_stats_interval(Some(Duration::from_millis(500)))
+            .build();
         log::info!("[TransportWebrtc] created");
 
         Ok(Self {
@@ -73,6 +82,7 @@ where
             rtc,
             internal: WebrtcTransportInternal::new(life_cycle),
             buf: vec![0; 2000],
+            pkt_convert: Default::default(),
         })
     }
 
@@ -118,7 +128,7 @@ where
                     if let Some(stream) = self.rtc.direct_api().stream_tx_by_mid(mid, None) {
                         stream
                             .write_rtp(
-                                pkt.pt.into(),
+                                self.pkt_convert.to_pt(&pkt),
                                 (pkt.seq_no as u64).into(),
                                 pkt.time,
                                 Instant::now(),
@@ -128,7 +138,7 @@ where
                                     transport_cc: pkt.ext_vals.transport_cc,
                                     ..Default::default()
                                 },
-                                true,
+                                pkt.nackable,
                                 pkt.payload,
                             )
                             .expect("Should ok");
