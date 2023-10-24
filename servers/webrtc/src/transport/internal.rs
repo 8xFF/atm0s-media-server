@@ -233,8 +233,10 @@ where
                     if let Some(pkt) = self.rtp_convert.to_pkt(rtp) {
                         self.endpoint_actions
                             .push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(track_id, RemoteTrackIncomingEvent::MediaPacket(pkt))));
+                        Ok(())
+                    } else {
+                        Err(TransportError::RuntimeError(TransportRuntimeError::RtpInvalid))
                     }
-                    Ok(())
                 } else {
                     log::warn!("on rtp without mid {}", rtp.header.ssrc);
                     Err(TransportError::RuntimeError(TransportRuntimeError::TrackIdNotFound))
@@ -311,15 +313,15 @@ where
                 Ok(())
             }
             Event::PeerStats(stats) => {
-                log::info!("[TransportWebrtcInternal] on stats {:?}", stats);
+                log::debug!("[TransportWebrtcInternal] on stats {:?}", stats);
                 Ok(())
             }
             Event::MediaIngressStats(stats) => {
-                log::info!("[TransportWebrtcInternal] on ingress stats {:?}", stats);
+                log::debug!("[TransportWebrtcInternal] on ingress stats {:?}", stats);
                 Ok(())
             }
             Event::MediaEgressStats(stats) => {
-                log::info!("[TransportWebrtcInternal] on egress stats {:?}", stats);
+                log::debug!("[TransportWebrtcInternal] on egress stats {:?}", stats);
                 Ok(())
             }
             Event::EgressBitrateEstimate(bitrate) => {
@@ -589,7 +591,7 @@ mod test {
             let mut header = RtpHeader::default();
             header.ext_vals.mid = Some(track_to_mid(100));
             header.ssrc = 10000.into();
-            header.payload_type = 1.into();
+            header.payload_type = 111.into(); //opus
             header.sequence_number = 1;
             header.timestamp = 1000;
 
@@ -628,7 +630,7 @@ mod test {
         {
             let mut header = RtpHeader::default();
             header.ssrc = 10000.into();
-            header.payload_type = 1.into();
+            header.payload_type = 111.into();
             header.sequence_number = 2;
             header.timestamp = 1000;
 

@@ -7,6 +7,13 @@ pub type ClusterTrackUuid = u64;
 pub type ClusterPeerId = String;
 pub type ClusterTrackName = String;
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum ClusterTrackStats {
+    Single { bitrate: u32 },
+    Simulcast { bitrate: u32, layers: [[u32; 3]; 3] },
+    Svc { bitrate: u32, layers: [[u32; 3]; 3] },
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ClusterTrackStatus {
     #[serde(rename = "connecting")]
@@ -63,6 +70,7 @@ pub enum ClusterRemoteTrackIncomingEvent {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ClusterLocalTrackIncomingEvent {
     MediaPacket(MediaPacket),
+    MediaStats(ClusterTrackStats),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -77,13 +85,15 @@ pub enum ClusterEndpointIncomingEvent {
 #[derive(PartialEq, Eq, Debug)]
 pub enum ClusterRemoteTrackOutgoingEvent {
     TrackAdded(ClusterTrackName, ClusterTrackMeta),
-    MediaPacket(MediaPacket),
+    TrackMedia(MediaPacket),
+    TrackStats(ClusterTrackStats),
     TrackRemoved(ClusterTrackName),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterLocalTrackOutgoingEvent {
     RequestKeyFrame,
+    LimitBitrate(u32),
     Subscribe(ClusterPeerId, ClusterTrackName),
     Unsubscribe(ClusterPeerId, ClusterTrackName),
 }

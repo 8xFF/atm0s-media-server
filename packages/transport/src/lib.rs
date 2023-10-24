@@ -43,6 +43,14 @@ impl TrackMeta {
             label,
         }
     }
+
+    pub fn new_video(label: Option<String>) -> Self {
+        Self {
+            kind: MediaKind::Video,
+            sample_rate: MediaSampleRate::Hz90000,
+            label,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -67,6 +75,7 @@ pub enum ConnectionErrorReason {
 pub enum TransportRuntimeError {
     RpcInvalid,
     TrackIdNotFound,
+    RtpInvalid,
 }
 
 #[derive(PartialEq, Eq, Debug)]

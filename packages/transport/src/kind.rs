@@ -7,3 +7,13 @@ pub enum MediaKind {
     #[serde(rename = "video")]
     Video,
 }
+
+impl MediaKind {
+    pub fn is_audio(&self) -> bool {
+        matches!(self, MediaKind::Audio)
+    }
+
+    pub fn is_video(&self) -> bool {
+        matches!(self, MediaKind::Video)
+    }
+}

@@ -51,7 +51,7 @@ pub struct RemoteStream {
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
-pub struct BitrateLimit {
+pub struct ReceiverLayerLimit {
     pub priority: u16,
     pub min_spatial: Option<u8>,
     pub max_spatial: u8,
@@ -89,7 +89,7 @@ pub struct MixMinusToggle {
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct ReceiverLimit {
     pub id: String,
-    pub limit: BitrateLimit,
+    pub limit: ReceiverLayerLimit,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]

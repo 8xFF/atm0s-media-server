@@ -85,7 +85,7 @@ where
         select! {
             event = self.transport.recv(self.timer.now_ms()).fuse() => {
                 match event {
-                    Ok(event) => self.internal.on_transport(event),
+                    Ok(event) => self.internal.on_transport(self.timer.now_ms(), event),
                     //only ending session if is critical error
                     Err(e) => match &e {
                         TransportError::ConnectError(_) => return Err(e),
@@ -97,7 +97,7 @@ where
             },
             event = self.cluster.recv().fuse() => {
                 if let Ok(event) = event {
-                    self.internal.on_cluster(event);
+                    self.internal.on_cluster(self.timer.now_ms(), event);
                 }
             }
             _ = self.tick.next().fuse() => {
@@ -122,7 +122,7 @@ where
         log::info!("[EndpointWrap] drop");
         //TODO handle error of cluster unsub room
         self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribeRoom);
-        self.internal.before_drop();
+        self.internal.before_drop(self.timer.now_ms());
         while let Some(out) = self.internal.pop_action() {
             match out {
                 MediaInternalAction::Cluster(e) => {

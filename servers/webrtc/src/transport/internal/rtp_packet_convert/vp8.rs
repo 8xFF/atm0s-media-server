@@ -134,6 +134,11 @@ impl Vp8Header {
                     } else {
                         None
                     },
+                    tl0_pic_idx: if self.l != 0 {
+                        Some(self.tl0_pic_idx)
+                    } else {
+                        None
+                    },
                     layer_sync: self.y != 0,
                 }),
             )

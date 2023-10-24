@@ -1,6 +1,4 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum MediaSampleRate {
     Hz48000, //For video
     Hz90000, //For video

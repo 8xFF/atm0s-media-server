@@ -118,6 +118,11 @@ impl Vp9Header {
                     } else {
                         None
                     },
+                    spatial_layers: if self.v {
+                        Some(self.ns + 1)
+                    } else {
+                        None
+                    },
                     spatial: self.sid,
                     temporal: self.tid,
                     begin_frame: self.b,
