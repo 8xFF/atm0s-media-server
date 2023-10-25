@@ -15,7 +15,7 @@ impl SingleStreamBitrateMeasure {
         if self.sum == 0 {
             return 0;
         }
-        let res = (self.sum as u32 * 8 * 1000) / window_ms as u32;
+        let res = self.sum as u32 * ((8 * 1000) / window_ms) as u32;
         self.sum = 0;
         res
     }

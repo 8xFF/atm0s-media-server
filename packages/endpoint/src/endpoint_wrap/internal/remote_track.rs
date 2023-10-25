@@ -75,13 +75,14 @@ impl RemoteTrack {
     pub fn on_transport_event(&mut self, now_ms: u64, event: RemoteTrackIncomingEvent<RemoteTrackRpcIn>) {
         match event {
             RemoteTrackIncomingEvent::MediaPacket(pkt) => {
-                log::info!("[RemoteTrack {}] media from transport pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
+                log::debug!("[RemoteTrack {}] media from transport pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
                 if !self.active {
                     self.active = true;
                     self.out_actions
                         .push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackAdded(self.track_name.clone(), self.cluster_meta())));
                 }
                 if let Some(stats) = self.bitrate_measure.add_sample(now_ms, &pkt.codec, pkt.payload.len()) {
+                    log::debug!("[RemoteTrack {}] stats {:?}", self.track_name, stats);
                     self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackStats(stats)));
                 }
                 self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackMedia(pkt)));

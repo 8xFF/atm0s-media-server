@@ -72,10 +72,15 @@ impl LocalTrack {
     }
 
     pub fn set_target(&mut self, target: LocalTrackTarget) {
-        self.filter.set_target(target);
+        log::info!("[LocalTrack {}] set target {:?}", self.track_name, target);
+        if self.filter.set_target(target) {
+            log::info!("[LocalTrack {}] request key-frame", self.track_name);
+            self.out_actions.push_back(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::RequestKeyFrame));
+        }
     }
 
     pub fn set_bitrate(&mut self, bitrate: u32) {
+        log::info!("[LocalTrack {}] set bitrate {:?}", self.track_name, bitrate);
         self.out_actions.push_back(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::LimitBitrate(bitrate)));
     }
 
@@ -90,7 +95,7 @@ impl LocalTrack {
                 }
             }
             ClusterLocalTrackIncomingEvent::MediaStats(stats) => {
-                log::debug!("[LocalTrack {}] stats {:?}", self.track_name, stats);
+                log::info!("[LocalTrack {}] stats {:?}", self.track_name, stats);
                 if self.track_meta.kind.is_video() {
                     self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceStats(stats)));
                 }

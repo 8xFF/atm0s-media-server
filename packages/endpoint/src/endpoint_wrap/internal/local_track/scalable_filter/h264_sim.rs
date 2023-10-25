@@ -64,17 +64,19 @@ impl ScalableFilter for H264SimulcastFilter {
         }
     }
 
-    fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> FilterResult {
+    fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> (FilterResult, bool) {
+        let mut stream_changed = false;
         if let Some(target) = &self.target {
             if target.should_switch(pkt) {
+                stream_changed = true;
                 self.current = self.target.take();
             }
         }
 
         if let Some(current) = &self.current {
-            current.allow(pkt)
+            (current.allow(pkt), stream_changed)
         } else {
-            FilterResult::Reject
+            (FilterResult::Reject, stream_changed)
         }
     }
 }
@@ -89,7 +91,7 @@ mod test {
         // input (spatial, key_only) => need out request key
         SetTarget(u8, bool, bool),
         // input (is_key, spatial, seq, time) => should send
-        Packet(bool, u8, u16, u32, FilterResult),
+        Packet(bool, u8, u16, u32, (FilterResult, bool)),
     }
 
     fn test(data: Vec<Input>) {
@@ -118,24 +120,24 @@ mod test {
         test(vec![
             Input::SetTarget(1, false, true),
             // wait key for active target 1
-            Input::Packet(false, 1, 1, 1000, FilterResult::Reject),
-            Input::Packet(true, 1, 2, 1000, FilterResult::Send),
-            Input::Packet(false, 1, 3, 1000, FilterResult::Send),
-            Input::Packet(false, 0, 1, 1000, FilterResult::Reject),
+            Input::Packet(false, 1, 1, 1000, (FilterResult::Reject, false)),
+            Input::Packet(true, 1, 2, 1000, (FilterResult::Send, true)),
+            Input::Packet(false, 1, 3, 1000, (FilterResult::Send, false)),
+            Input::Packet(false, 0, 1, 1000, (FilterResult::Reject, false)),
             // up layer
             Input::SetTarget(2, false, true),
             // wait key for active target 2
-            Input::Packet(false, 2, 1, 1000, FilterResult::Reject),
-            Input::Packet(true, 2, 2, 1000, FilterResult::Send),
-            Input::Packet(false, 2, 3, 1000, FilterResult::Send),
-            Input::Packet(false, 1, 4, 1000, FilterResult::Reject),
+            Input::Packet(false, 2, 1, 1000, (FilterResult::Reject, false)),
+            Input::Packet(true, 2, 2, 1000, (FilterResult::Send, true)),
+            Input::Packet(false, 2, 3, 1000, (FilterResult::Send, false)),
+            Input::Packet(false, 1, 4, 1000, (FilterResult::Reject, false)),
             // down layer
             Input::SetTarget(0, false, true),
             // wait key for active target 0
-            Input::Packet(false, 0, 2, 1000, FilterResult::Reject),
-            Input::Packet(true, 0, 3, 1000, FilterResult::Send),
-            Input::Packet(false, 0, 4, 1000, FilterResult::Send),
-            Input::Packet(false, 1, 5, 1000, FilterResult::Reject),
+            Input::Packet(false, 0, 2, 1000, (FilterResult::Reject, false)),
+            Input::Packet(true, 0, 3, 1000, (FilterResult::Send, true)),
+            Input::Packet(false, 0, 4, 1000, (FilterResult::Send, false)),
+            Input::Packet(false, 1, 5, 1000, (FilterResult::Reject, false)),
         ]);
     }
 }

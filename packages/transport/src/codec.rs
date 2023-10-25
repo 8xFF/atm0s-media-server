@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct H264Simulcast {
     pub spatial: u8,
@@ -16,6 +18,16 @@ pub struct Vp8Simulcast {
     pub spatial: u8,
     pub temporal: u8,
     pub layer_sync: bool,
+}
+
+impl Display for Vp8Simulcast {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "(pid:{:?},tl0:{:?},s:{},t:{},ls:{})",
+            self.picture_id, self.tl0_pic_idx, self.spatial, self.temporal, self.layer_sync
+        )
+    }
 }
 
 impl Vp8Simulcast {
@@ -80,6 +92,18 @@ pub enum PayloadCodec {
     Vp9(bool, Vp9Profile, Option<Vp9Svc>),
     H264(bool, H264Profile, Option<H264Simulcast>),
     Opus,
+}
+
+impl Display for PayloadCodec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PayloadCodec::Vp8(is_key, Some(meta)) => write!(f, "VP8({},{})", is_key, meta),
+            PayloadCodec::Vp8(is_key, None) => write!(f, "VP8({})", is_key),
+            PayloadCodec::Vp9(_, _, _) => write!(f, "VP9"),
+            PayloadCodec::H264(_, _, _) => write!(f, "H264"),
+            PayloadCodec::Opus => write!(f, "OPUS"),
+        }
+    }
 }
 
 impl PayloadCodec {

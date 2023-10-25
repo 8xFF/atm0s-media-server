@@ -153,4 +153,40 @@ pub fn payload_parse(payload: &[u8], rid: Option<u16>) -> (bool, Option<Vp8Simul
     vp8_header.parse_from(payload, rid)
 }
 
+pub fn payload_rewrite(payload: &mut [u8], codec: &Vp8Simulcast) {
+    let mut payload_index = 0;
+
+    let b = payload[payload_index];
+    payload_index += 1;
+
+    let x = (b & 0x80) >> 7;
+    let mut i = 0;
+    let mut l = 0;
+    if x == 1 {
+        let b = payload[payload_index];
+        payload_index += 1;
+        i = (b & 0x80) >> 7;
+        l = (b & 0x40) >> 6;
+    }
+
+    // has PictureID
+    if i == 1 {
+        if payload[payload_index] & 0x80 > 0 {
+            // M == 1, PID is 16bit
+            payload[payload_index] = 0x80 | (codec.picture_id.unwrap_or(0) >> 8) as u8;
+            payload[payload_index + 1] = codec.picture_id.unwrap_or(0) as u8;
+            payload_index += 2;
+        } else {
+            //8bit
+            payload[payload_index] = 0x7F & codec.picture_id.unwrap_or(0) as u8;
+            payload_index += 1;
+        }
+    }
+
+    if l == 1 {
+        payload[payload_index] = codec.tl0_pic_idx.unwrap_or(0);
+        payload_index += 1;
+    }
+}
+
 //TODO test this

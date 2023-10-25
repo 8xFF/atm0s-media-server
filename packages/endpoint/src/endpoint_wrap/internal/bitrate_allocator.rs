@@ -64,8 +64,8 @@ impl TrackSlot {
                     let mut target_spatial = min_spatial;
                     let mut target_temporal = min_temporal;
 
-                    for spatial in min_spatial..3 {
-                        for temporal in min_temporal..3 {
+                    for spatial in min_spatial..(self.limit.max_spatial + 1) {
+                        for temporal in min_temporal..(self.limit.max_temporal + 1) {
                             if layers[spatial as usize][temporal as usize] == 0 {
                                 break;
                             }
@@ -94,8 +94,8 @@ impl TrackSlot {
                     let mut target_spatial = min_spatial;
                     let mut target_temporal = min_temporal;
 
-                    for spatial in min_spatial..3 {
-                        for temporal in min_temporal..3 {
+                    for spatial in min_spatial..(self.limit.max_spatial + 1) {
+                        for temporal in min_temporal..(self.limit.max_temporal + 1) {
                             if layers[spatial as usize][temporal as usize] == 0 {
                                 break;
                             }
@@ -155,6 +155,7 @@ impl BitrateAllocator {
     }
 
     pub fn add_local_track(&mut self, track: TrackId, priority: u16) {
+        log::info!("[BitrateAllocator] add track {} priority {}", track, priority);
         //remove if already has
         self.tracks.retain(|slot| slot.track_id != track);
         self.tracks.push(TrackSlot {
@@ -173,12 +174,14 @@ impl BitrateAllocator {
     }
 
     pub fn update_local_track_limit(&mut self, track: TrackId, limit: ReceiverLayerLimit) {
+        log::info!("[BitrateAllocator] update track {} limit {:?}", track, limit);
         //finding which track to update
         self.tracks.iter_mut().find(|slot| slot.track_id == track).map(|slot| slot.limit = limit);
         self.tracks.sort_by_key(|t| t.priority());
     }
 
     pub fn remove_local_track(&mut self, track: TrackId) {
+        log::info!("[BitrateAllocator] remove track {}", track);
         self.tracks.retain(|slot| slot.track_id != track);
     }
 
@@ -362,6 +365,7 @@ mod tests {
                     },
                 ))),
                 Data::Output(None),
+                // update for using min_spatial
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 2, 1, 1)),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, DEFAULT_BITRATE_OUT_BPS))),
@@ -373,6 +377,19 @@ mod tests {
                     LocalTrackTarget::Scalable {
                         spatial: 1,
                         temporal: 1,
+                        key_only: false,
+                    },
+                ))),
+                Data::Output(None),
+                // update for using limit max_spatial
+                Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 0, 0, 0, 0)),
+                Data::SetEstBitrate(1_000_000),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, 1_000_000))),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(
+                    1,
+                    LocalTrackTarget::Scalable {
+                        spatial: 0,
+                        temporal: 0,
                         key_only: false,
                     },
                 ))),

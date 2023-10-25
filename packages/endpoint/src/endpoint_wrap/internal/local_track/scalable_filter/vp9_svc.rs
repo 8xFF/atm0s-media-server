@@ -112,7 +112,7 @@ impl ScalableFilter for Vp9SvcFilter {
         key_frame
     }
 
-    fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> FilterResult {
+    fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> (FilterResult, bool) {
         match &pkt.codec {
             PayloadCodec::Vp9(_, _, Some(svc)) => {
                 if let Some(spatial_layers) = svc.spatial_layers {
@@ -129,9 +129,9 @@ impl ScalableFilter for Vp9SvcFilter {
         }
 
         if let Some(current) = &self.current {
-            current.allow(self.spatial_layers, pkt, &mut self.pic_id_rewrite)
+            (current.allow(self.spatial_layers, pkt, &mut self.pic_id_rewrite), false)
         } else {
-            FilterResult::Reject
+            (FilterResult::Reject, false)
         }
     }
 }

@@ -37,7 +37,8 @@ trait ScalableFilter: Send + Sync {
     /// Returns true if the packet should be sent to the remote peer.
     /// This is used to implement simulcast and SVC.
     /// The packet is modified in place to remove layers that should not be sent.
-    fn should_send(&mut self, pkt: &mut MediaPacket) -> FilterResult;
+    /// Also return stream just changed or not, in case of just changed => need reinit seq and ts rewriter
+    fn should_send(&mut self, pkt: &mut MediaPacket) -> (FilterResult, bool);
 }
 
 enum CodecFilter {
@@ -49,13 +50,13 @@ enum CodecFilter {
 }
 
 impl CodecFilter {
-    pub fn should_send(&mut self, pkt: &mut MediaPacket) -> FilterResult {
+    pub fn should_send(&mut self, pkt: &mut MediaPacket) -> (FilterResult, bool) {
         match self {
             CodecFilter::Vp8(filter) => filter.should_send(pkt),
             CodecFilter::Vp9(filter) => filter.should_send(pkt),
             CodecFilter::H264(filter) => filter.should_send(pkt),
             CodecFilter::Video(filter) => filter.should_send(pkt),
-            CodecFilter::Passthrough => FilterResult::Send,
+            CodecFilter::Passthrough => (FilterResult::Send, false),
         }
     }
 
@@ -116,6 +117,7 @@ impl ScalablePacketFilter {
         self.seq_rewrite.reinit();
     }
 
+    /// set target and return true if need a key frame
     pub fn set_target(&mut self, target: LocalTrackTarget) -> bool {
         match target {
             LocalTrackTarget::WaitStart => {
@@ -169,7 +171,9 @@ impl ScalablePacketFilter {
             return None;
         }
 
-        let filter_res = match &mut self.filter {
+        let pre_codec = pkt.codec.clone();
+
+        let (filter_res, reinit) = match &mut self.filter {
             Some(filter) => filter.should_send(&mut pkt),
             None => {
                 let mut filter = match &pkt.codec {
@@ -190,19 +194,29 @@ impl ScalablePacketFilter {
             }
         };
 
+        if reinit {
+            self.ts_rewrite.reinit();
+            self.seq_rewrite.reinit();
+        }
+
         match filter_res {
             FilterResult::Send => {
                 let seq = self.seq_rewrite.generate(pkt.seq_no as u64)?;
                 let ts = self.ts_rewrite.generate(now_ms, pkt.time as u64);
+                log::debug!("[ScalablePacketFilter] rewrite {} {} {} => to {}, {}, {}", pkt.seq_no, pkt.time, pre_codec, seq, ts, pkt.codec);
                 pkt.time = ts as u32;
                 pkt.seq_no = seq as u16;
                 Some(pkt)
             }
             FilterResult::Drop => {
+                log::debug!("[ScalablePacketFilter] drop {} {} {}", pkt.seq_no, pkt.time, pre_codec);
                 self.seq_rewrite.drop_value(pkt.seq_no as u64);
                 None
             }
-            FilterResult::Reject => None,
+            FilterResult::Reject => {
+                log::debug!("[ScalablePacketFilter] reject {} {} {}", pkt.seq_no, pkt.time, pre_codec);
+                None
+            }
         }
     }
 }

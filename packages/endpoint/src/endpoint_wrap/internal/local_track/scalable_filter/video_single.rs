@@ -21,14 +21,14 @@ impl ScalableFilter for VideoSingleFilter {
         false
     }
 
-    fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> FilterResult {
+    fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> (FilterResult, bool) {
         if self.wait_key {
             if pkt.codec.is_key() {
                 self.wait_key = false;
             } else {
-                return FilterResult::Reject;
+                return (FilterResult::Reject, false);
             }
         }
-        FilterResult::Send
+        (FilterResult::Send, false)
     }
 }

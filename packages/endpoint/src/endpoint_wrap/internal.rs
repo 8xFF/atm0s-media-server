@@ -12,7 +12,7 @@ use self::{
     remote_track::{RemoteTrack, RemoteTrackOutput},
 };
 
-const DEFAULT_BITRATE_OUT_BPS: u32 = 1_000_000;
+const DEFAULT_BITRATE_OUT_BPS: u32 = 3_000_000;
 
 mod bitrate_allocator;
 mod local_track;
@@ -591,6 +591,14 @@ mod tests {
             Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
                 1,
                 ClusterLocalTrackOutgoingEvent::LimitBitrate(DEFAULT_BITRATE_OUT_BPS)
+            )))
+        );
+
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                1,
+                ClusterLocalTrackOutgoingEvent::RequestKeyFrame
             )))
         );
 

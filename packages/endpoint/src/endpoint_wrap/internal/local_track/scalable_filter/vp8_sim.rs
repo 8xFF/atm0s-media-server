@@ -5,6 +5,16 @@
 //! For TL0IDX:
 //!
 //! Ref: https://github.com/versatica/mediasoup/issues/40
+//!
+//! TL0PICIDX:  8 bits temporal level zero index.  TL0PICIDX is a
+//! running index for the temporal base layer frames, i.e., the
+//! frames with TID set to 0.  If TID is larger than 0, TL0PICIDX
+//! indicates on which base-layer frame the current image depends.
+//! TL0PICIDX MUST be incremented when TID is 0.  The index MAY
+//! start at a random value, and it MUST wrap to 0 after reaching
+//! the maximum number 255.  Use of TL0PICIDX depends on the
+//! presence of TID.  Therefore, it is RECOMMENDED that the TID be
+//! used whenever TL0PICIDX is.
 
 use transport::PayloadCodec;
 use utils::SeqRewrite;
@@ -50,9 +60,7 @@ impl Selection {
                         if let Some(pic_id) = sim.picture_id {
                             pic_id_rewrite.drop_value(pic_id as u64);
                         }
-                        if let Some(tl0idx) = sim.tl0_pic_idx {
-                            tl0idx_rewrite.drop_value(tl0idx as u64);
-                        }
+                        // We dont need drop tl01picidx because it only increment in base layer with TID (temporal) = 0, which never drop
                         FilterResult::Drop
                     }
                 } else {
@@ -113,19 +121,29 @@ impl ScalableFilter for Vp8SimulcastFilter {
         key_frame
     }
 
-    fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> FilterResult {
+    fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> (FilterResult, bool) {
+        let mut stream_changed = false;
         if let Some(target) = &self.target {
             if target.should_switch(&self.current, pkt) {
-                self.pic_id_rewrite.reinit();
-                self.tl0idx_rewrite.reinit();
+                stream_changed = if let Some(current) = &self.current {
+                    current.spatial != target.spatial
+                } else {
+                    true
+                };
+
+                if stream_changed {
+                    self.pic_id_rewrite.reinit();
+                    self.tl0idx_rewrite.reinit();
+                }
+
                 self.current = self.target.take();
             }
         }
 
         if let Some(current) = &self.current {
-            current.allow(pkt, &mut self.pic_id_rewrite, &mut self.tl0idx_rewrite)
+            (current.allow(pkt, &mut self.pic_id_rewrite, &mut self.tl0idx_rewrite), stream_changed)
         } else {
-            FilterResult::Reject
+            (FilterResult::Reject, stream_changed)
         }
     }
 }
@@ -140,20 +158,22 @@ mod test {
         // input (spatial, temporal, key_only) => need out request key
         SetTarget(u8, u8, bool, bool),
         // input (is_key, spatial, temporal, layer_sync, seq, time) => should send
-        Packet(bool, u8, u8, bool, u16, u32, FilterResult),
+        Packet(bool, u8, u8, bool, u16, u32, (FilterResult, bool)),
     }
 
     fn test(data: Vec<Input>) {
         let mut filter = super::Vp8SimulcastFilter::default();
 
+        let mut index = 0;
         for row in data {
+            index += 1;
             match row {
                 Input::SetTarget(spatial, temporal, key_only, need_key) => {
-                    assert_eq!(filter.set_target_layer(spatial, temporal, key_only), need_key);
+                    assert_eq!(filter.set_target_layer(spatial, temporal, key_only), need_key, "index: {}", index);
                 }
                 Input::Packet(is_key, spatial, temporal, layer_sync, seq, time, send_expected) => {
                     let mut pkt = MediaPacket::simple_video(PayloadCodec::Vp8(is_key, Some(Vp8Simulcast::new(spatial, temporal, layer_sync))), seq, time, vec![1, 2, 3]);
-                    assert_eq!(filter.should_send(&mut pkt), send_expected);
+                    assert_eq!(filter.should_send(&mut pkt), send_expected, "index: {}", index);
                 }
             }
         }
@@ -163,9 +183,18 @@ mod test {
     fn simple() {
         test(vec![
             Input::SetTarget(0, 1, false, true),
-            Input::Packet(false, 0, 0, false, 0, 100, FilterResult::Reject),
-            Input::Packet(true, 0, 0, true, 1, 200, FilterResult::Send),
-            Input::Packet(true, 0, 2, true, 2, 200, FilterResult::Drop),
+            Input::Packet(false, 0, 0, false, 0, 100, (FilterResult::Reject, false)),
+            Input::Packet(true, 0, 0, true, 1, 200, (FilterResult::Send, true)),
+            Input::Packet(true, 0, 2, true, 2, 200, (FilterResult::Drop, false)),
+            Input::SetTarget(1, 2, false, true),
+            Input::Packet(false, 0, 0, false, 0, 100, (FilterResult::Send, false)),
+            Input::Packet(false, 1, 0, true, 1, 200, (FilterResult::Reject, false)),
+            Input::Packet(true, 1, 0, true, 1, 200, (FilterResult::Send, true)),
+            Input::Packet(true, 1, 2, true, 2, 200, (FilterResult::Send, false)),
         ])
     }
+
+    //TODO test rewrite picture_id, tl0picidx in bellow cases:
+    // - Simulcast switch temporal need remain picture_id, tl0picidx incresement
+    // - Simulcast switch spatial need increase picture_id, tl0picidx
 }

@@ -125,4 +125,14 @@ impl MediaPacketConvert {
 
         pt.into()
     }
+
+    pub fn rewrite_codec(&self, media: &mut MediaPacket) {
+        match &media.codec {
+            PayloadCodec::Vp8(_, Some(sim)) => {
+                vp8::payload_rewrite(&mut media.payload, sim);
+            }
+            PayloadCodec::Vp9(_, _, Some(svc)) => {}
+            _ => {}
+        }
+    }
 }

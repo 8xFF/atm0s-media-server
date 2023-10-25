@@ -7,7 +7,7 @@ mod transport;
 
 #[async_std::main]
 async fn main() {
-    env_logger::builder().format_timestamp_millis().init();
+    env_logger::builder().format_module_path(false).format_timestamp_millis().init();
     let mut http_server = rpc::http::HttpRpcServer::new(3000);
     http_server.start().await;
     let cluster = ServerLocal::new();
