@@ -5,7 +5,7 @@ use crate::rpc::{RpcEvent, RpcResponse, WebrtcConnectResponse};
 use async_std::{channel::Sender, prelude::FutureExt};
 use cluster::{Cluster, ClusterEndpoint};
 use parking_lot::RwLock;
-use utils::{ServerError, Timer};
+use utils::{EndpointSubscribeScope, ServerError, Timer};
 
 mod webrtc_session;
 
@@ -57,7 +57,8 @@ where
                 res.answer(200, Err(ServerError::build("NOT_IMPLEMENTED", "Not implemented now")));
             }
             RpcEvent::WebrtcConnect(req, mut res) => {
-                let (mut session, tx, answer_sdp) = match WebrtcSession::new(&req.room, &req.peer, &mut self.cluster, &req.sdp, req.senders, self.timer.now_ms()).await {
+                let sub_scope = req.sub_scope.unwrap_or(EndpointSubscribeScope::RoomAuto);
+                let (mut session, tx, answer_sdp) = match WebrtcSession::new(&req.room, &req.peer, sub_scope, &mut self.cluster, &req.sdp, req.senders, self.timer.now_ms()).await {
                     Ok(res) => res,
                     Err(e) => {
                         log::error!("Error on create webrtc session: {:?}", e);

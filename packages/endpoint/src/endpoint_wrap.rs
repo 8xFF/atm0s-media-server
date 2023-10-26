@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use async_std::stream::StreamExt;
 use cluster::ClusterEndpoint;
 use futures::{select, FutureExt};
 use transport::{Transport, TransportError};
-use utils::Timer;
+use utils::{EndpointSubscribeScope, Timer};
 
 use crate::{
     endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction},
@@ -18,6 +18,7 @@ mod internal;
 pub enum MediaEndpointOutput {
     Continue,
     ConnectionClosed,
+    ConnectionCloseRequest,
 }
 
 pub struct MediaEndpoint<T, E, C>
@@ -30,6 +31,8 @@ where
     cluster: C,
     tick: async_std::stream::Interval,
     timer: Arc<dyn Timer>,
+    sub_scope: EndpointSubscribeScope,
+    peer_subscribe: HashMap<String, ()>,
 }
 
 impl<T, E, C> MediaEndpoint<T, E, C>
@@ -37,10 +40,14 @@ where
     T: Transport<E, EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn, EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>,
     C: ClusterEndpoint,
 {
-    pub fn new(transport: T, mut cluster: C, room: &str, peer: &str) -> Self {
+    pub fn new(transport: T, mut cluster: C, room: &str, peer: &str, sub_scope: EndpointSubscribeScope) -> Self {
         log::info!("[EndpointWrap] create");
         //TODO handle error of cluster sub room
-        cluster.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribeRoom);
+        if matches!(sub_scope, EndpointSubscribeScope::RoomAuto) {
+            if let Err(_e) = cluster.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribeRoom) {
+                todo!("handle error")
+            }
+        }
         Self {
             _tmp_e: std::marker::PhantomData,
             internal: MediaEndpointInteral::new(room, peer),
@@ -48,6 +55,8 @@ where
             cluster,
             tick: async_std::stream::interval(std::time::Duration::from_millis(100)),
             timer: Arc::new(utils::SystemTimer()),
+            sub_scope,
+            peer_subscribe: HashMap::new(),
         }
     }
 
@@ -62,6 +71,25 @@ where
                     MediaEndpointInteralEvent::ConnectionClosed => {
                         return Ok(MediaEndpointOutput::ConnectionClosed);
                     }
+                    MediaEndpointInteralEvent::ConnectionCloseRequest => {
+                        return Ok(MediaEndpointOutput::ConnectionCloseRequest);
+                    }
+                    MediaEndpointInteralEvent::SubscribePeer(peer) => {
+                        if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
+                            self.peer_subscribe.insert(peer.clone(), ());
+                            if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribePeer(peer)) {
+                                todo!("handle error")
+                            }
+                        }
+                    }
+                    MediaEndpointInteralEvent::UnsubscribePeer(peer) => {
+                        if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
+                            self.peer_subscribe.remove(&peer);
+                            if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribePeer(peer)) {
+                                todo!("handle error")
+                            }
+                        }
+                    }
                 },
                 MediaInternalAction::Endpoint(e) => {
                     if let Err(e) = self.transport.on_event(self.timer.now_ms(), e) {
@@ -75,7 +103,7 @@ where
                     }
                 }
                 MediaInternalAction::Cluster(e) => {
-                    if let Err(e) = self.cluster.on_event(e) {
+                    if let Err(_e) = self.cluster.on_event(e) {
                         todo!("handle error")
                     }
                 }
@@ -120,8 +148,20 @@ where
 {
     fn drop(&mut self) {
         log::info!("[EndpointWrap] drop");
-        //TODO handle error of cluster unsub room
-        self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribeRoom);
+        match self.sub_scope {
+            EndpointSubscribeScope::RoomAuto => {
+                if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribeRoom) {
+                    todo!("handle error")
+                }
+            }
+            EndpointSubscribeScope::RoomManual => {
+                for peer in self.peer_subscribe.keys() {
+                    if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribePeer(peer.clone())) {
+                        todo!("handle error")
+                    }
+                }
+            }
+        }
         self.internal.before_drop(self.timer.now_ms());
         while let Some(out) = self.internal.pop_action() {
             match out {

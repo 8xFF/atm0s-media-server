@@ -1,6 +1,6 @@
 use cluster::ClusterEndpoint;
 use transport::Transport;
-use utils::ServerError;
+use utils::{EndpointSubscribeScope, ServerError};
 
 use crate::{
     rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
@@ -10,11 +10,16 @@ use crate::{
 pub struct MediaEndpointPreconditional {
     room: String,
     peer: String,
+    subscribe_scope: EndpointSubscribeScope,
 }
 
 impl MediaEndpointPreconditional {
-    pub fn new(room: &str, peer: &str) -> Self {
-        Self { room: room.into(), peer: peer.into() }
+    pub fn new(room: &str, peer: &str, subscribe_scope: EndpointSubscribeScope) -> Self {
+        Self {
+            room: room.into(),
+            peer: peer.into(),
+            subscribe_scope,
+        }
     }
 
     pub fn check(&mut self) -> Result<(), ServerError> {
@@ -22,10 +27,10 @@ impl MediaEndpointPreconditional {
     }
 
     pub fn build<E, T: Transport<E, EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn, EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>, C: ClusterEndpoint>(
-        &mut self,
+        self,
         transport: T,
         cluster: C,
     ) -> MediaEndpoint<T, E, C> {
-        MediaEndpoint::new(transport, cluster, &self.room, &self.peer)
+        MediaEndpoint::new(transport, cluster, &self.room, &self.peer, self.subscribe_scope)
     }
 }

@@ -2,6 +2,14 @@ use poem_openapi::Enum;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Copy, Clone, Enum)]
+pub enum EndpointSubscribeScope {
+    #[serde(rename = "room_auto")]
+    RoomAuto,
+    #[serde(rename = "room_manual")]
+    RoomManual,
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Copy, Clone, Enum)]
 pub enum MixMinusAudioMode {
     Disabled,
     AllAudioStreams,

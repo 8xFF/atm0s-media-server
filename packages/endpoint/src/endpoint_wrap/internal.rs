@@ -21,6 +21,9 @@ mod remote_track;
 #[derive(Debug, PartialEq, Eq)]
 pub enum MediaEndpointInteralEvent {
     ConnectionClosed,
+    ConnectionCloseRequest,
+    SubscribePeer(String),
+    UnsubscribePeer(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -228,8 +231,10 @@ impl MediaEndpointInteral {
     fn process_rpc(&mut self, rpc: EndpointRpcIn) {
         match rpc {
             EndpointRpcIn::PeerClose => {
-                todo!()
+                self.push_internal(MediaEndpointInteralEvent::ConnectionCloseRequest);
             }
+            EndpointRpcIn::SubscribePeer(peer) => {}
+            EndpointRpcIn::UnsubscribePeer(peer) => {}
             EndpointRpcIn::MixMinusSourceAdd(_) => todo!(),
             EndpointRpcIn::MixMinusSourceRemove(_) => todo!(),
             EndpointRpcIn::MixMinusToggle(_) => todo!(),

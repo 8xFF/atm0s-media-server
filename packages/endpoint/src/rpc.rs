@@ -45,6 +45,11 @@ impl<D> RpcResponse<D> {
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
+pub struct RemotePeer {
+    pub peer: String,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct RemoteStream {
     pub peer: String,
     pub stream: String,
@@ -122,6 +127,8 @@ impl TrackInfo {
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRpcIn {
     PeerClose,
+    SubscribePeer(RpcRequest<RemotePeer>),
+    UnsubscribePeer(RpcRequest<RemotePeer>),
     MixMinusSourceAdd(RpcRequest<MixMinusSource>),
     MixMinusSourceRemove(RpcRequest<MixMinusSource>),
     MixMinusToggle(RpcRequest<MixMinusToggle>),
