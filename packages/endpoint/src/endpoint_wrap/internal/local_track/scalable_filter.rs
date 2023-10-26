@@ -178,7 +178,7 @@ impl ScalablePacketFilter {
             None => {
                 let mut filter = match &pkt.codec {
                     PayloadCodec::Vp8(_, Some(_)) => CodecFilter::Vp8(Vp8SimulcastFilter::default()),
-                    PayloadCodec::Vp9(_, _, Some(_)) => CodecFilter::Vp9(Vp9SvcFilter::default()),
+                    PayloadCodec::Vp9(_, _, Some(_)) => CodecFilter::Vp9(Vp9SvcFilter::new(false)),
                     PayloadCodec::H264(_, _, Some(_)) => CodecFilter::H264(H264SimulcastFilter::default()),
                     PayloadCodec::Vp8(_, None) | PayloadCodec::Vp9(_, _, None) | PayloadCodec::H264(_, _, None) => CodecFilter::Video(VideoSingleFilter::default()),
                     _ => CodecFilter::Passthrough,
