@@ -8,11 +8,12 @@ use crate::{
     RpcResponse,
 };
 
-use self::scalable_filter::ScalablePacketFilter;
+use self::{scalable_filter::ScalablePacketFilter, source_stats_gen::SourceStatsGenerator};
 
 use super::bitrate_allocator::LocalTrackTarget;
 
 mod scalable_filter;
+mod source_stats_gen;
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct LocalTrackSource {
@@ -54,6 +55,7 @@ pub struct LocalTrack {
     source: Option<LocalTrackSource>,
     out_actions: VecDeque<LocalTrackOutput>,
     filter: ScalablePacketFilter,
+    source_stats_generator: SourceStatsGenerator,
 }
 
 impl LocalTrack {
@@ -68,6 +70,7 @@ impl LocalTrack {
             source: None,
             out_actions: Default::default(),
             filter: ScalablePacketFilter::new(sample_rate),
+            source_stats_generator: Default::default(),
         }
     }
 
@@ -80,7 +83,7 @@ impl LocalTrack {
     }
 
     pub fn set_bitrate(&mut self, bitrate: u32) {
-        log::info!("[LocalTrack {}] set bitrate {:?}", self.track_name, bitrate);
+        log::debug!("[LocalTrack {}] set bitrate {:?}", self.track_name, bitrate);
         self.out_actions.push_back(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::LimitBitrate(bitrate)));
     }
 
@@ -89,6 +92,11 @@ impl LocalTrack {
     pub fn on_cluster_event(&mut self, now_ms: u64, event: ClusterLocalTrackIncomingEvent) {
         match event {
             ClusterLocalTrackIncomingEvent::MediaPacket(pkt) => {
+                if let Some(stats) = self.source_stats_generator.on_pkt(&pkt) {
+                    log::info!("[LocalTrack {}] auto generate stats {:?}", self.track_name, stats);
+                    self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceStats(stats)));
+                }
+
                 if let Some(pkt) = self.filter.process(now_ms, pkt) {
                     log::debug!("[LocalTrack {}] media from cluster pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
                     self.out_actions.push_back(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::MediaPacket(pkt)));
@@ -96,9 +104,8 @@ impl LocalTrack {
             }
             ClusterLocalTrackIncomingEvent::MediaStats(stats) => {
                 log::info!("[LocalTrack {}] stats {:?}", self.track_name, stats);
-                if self.track_meta.kind.is_video() {
-                    self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceStats(stats)));
-                }
+                self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceStats(stats)));
+                self.source_stats_generator.arrived_stats();
             }
         }
     }
@@ -113,6 +120,7 @@ impl LocalTrack {
                     let new_source = LocalTrackSource::new(&req.data.remote.peer, &req.data.remote.stream);
                     // only switch if the source is different
                     if !self.source.eq(&Some(new_source.clone())) {
+                        self.source_stats_generator.switched_source();
                         self.filter.switched_source();
                         let old_source = self.source.replace(new_source);
                         if let Some(old_source) = old_source {
@@ -139,6 +147,7 @@ impl LocalTrack {
                         )))));
                 }
                 LocalTrackRpcIn::Disconnect(req) => {
+                    self.source_stats_generator.switched_source();
                     self.filter.switched_source();
                     if let Some(old_source) = self.source.take() {
                         self.out_actions
@@ -209,7 +218,7 @@ mod tests {
         track.on_transport_event(LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Switch(RpcRequest {
             req_id: 1,
             data: ReceiverSwitch {
-                id: "audio_0".to_string(),
+                id: "video_0".to_string(),
                 priority,
                 remote: RemoteStream {
                     peer: "peer2".into(),
@@ -279,4 +288,6 @@ mod tests {
         );
         assert_eq!(track.pop_action(), None);
     }
+
+    //TODO testing auto generate source stats from first media packet if not arrived any stats before that
 }

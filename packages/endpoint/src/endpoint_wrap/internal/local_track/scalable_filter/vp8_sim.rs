@@ -136,6 +136,7 @@ impl ScalableFilter for Vp8SimulcastFilter {
                     self.tl0idx_rewrite.reinit();
                 }
 
+                log::info!("[Vp8SimulcastFilter] switch to spatial: {}, temporal: {}", target.spatial, target.temporal);
                 self.current = self.target.take();
             }
         }

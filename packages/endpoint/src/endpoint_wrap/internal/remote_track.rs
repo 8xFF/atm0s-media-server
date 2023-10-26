@@ -1,4 +1,6 @@
-use cluster::{generate_cluster_track_uuid, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackScalingType, ClusterTrackStatus, ClusterTrackUuid};
+use cluster::{
+    generate_cluster_track_uuid, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackScalingType, ClusterTrackStats, ClusterTrackStatus, ClusterTrackUuid,
+};
 use std::collections::VecDeque;
 use transport::{RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta};
 
@@ -27,7 +29,7 @@ pub struct RemoteTrack {
     track_meta: TrackMeta,
     out_actions: VecDeque<RemoteTrackOutput>,
     active: bool,
-    bitrate_measure: BitrateMeasure,
+    bitrate_measure: Option<(BitrateMeasure, Option<ClusterTrackStats>)>,
 }
 
 impl RemoteTrack {
@@ -36,10 +38,14 @@ impl RemoteTrack {
             cluster_track_uuid: generate_cluster_track_uuid(room_id, peer_id, track_name),
             track_id,
             track_name: track_name.into(),
+            bitrate_measure: if track_meta.kind.is_video() {
+                Some((BitrateMeasure::new(BITRATE_WINDOW_MS), None))
+            } else {
+                None
+            },
             track_meta,
             out_actions: Default::default(),
             active: false, //we need wait for first rtp packet
-            bitrate_measure: BitrateMeasure::new(BITRATE_WINDOW_MS),
         }
     }
 
@@ -81,9 +87,16 @@ impl RemoteTrack {
                     self.out_actions
                         .push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackAdded(self.track_name.clone(), self.cluster_meta())));
                 }
-                if let Some(stats) = self.bitrate_measure.add_sample(now_ms, &pkt.codec, pkt.payload.len()) {
-                    log::debug!("[RemoteTrack {}] stats {:?}", self.track_name, stats);
-                    self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackStats(stats)));
+                if let Some((bitrate_measure, previous_stats)) = &mut self.bitrate_measure {
+                    if let Some(stats) = bitrate_measure.add_sample(now_ms, &pkt.codec, pkt.payload.len()) {
+                        log::debug!("[RemoteTrack {}] stats {:?}", self.track_name, stats);
+                        *previous_stats = Some(stats.clone());
+                        self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackStats(stats)));
+                    } else if pkt.codec.is_key() {
+                        if let Some(stats) = previous_stats {
+                            self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackStats(stats.clone())));
+                        }
+                    }
                 }
                 self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackMedia(pkt)));
             }
@@ -221,5 +234,10 @@ mod tests {
     #[test]
     fn incoming_pkt_should_fire_stats() {
         //TODO test calc bitrate
+    }
+
+    #[test]
+    fn incoming_video_key_frame_should_fire_stats_before() {
+        //TODO test incoming_video_key_frame_should_fire_stats_before
     }
 }

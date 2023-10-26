@@ -122,4 +122,11 @@ impl PayloadCodec {
             _ => false,
         }
     }
+
+    pub fn is_video(&self) -> bool {
+        match self {
+            PayloadCodec::Opus => false,
+            _ => true,
+        }
+    }
 }
