@@ -131,7 +131,9 @@ impl MediaPacketConvert {
             PayloadCodec::Vp8(_, Some(sim)) => {
                 vp8::payload_rewrite(&mut media.payload, sim);
             }
-            PayloadCodec::Vp9(_, _, Some(svc)) => {}
+            PayloadCodec::Vp9(_, _, Some(svc)) => {
+                vp9::payload_rewrite(&mut media.payload, svc);
+            }
             _ => {}
         }
     }
