@@ -61,15 +61,15 @@ impl TrackSlot {
                 } else {
                     let min_spatial = self.limit.min_spatial.unwrap_or(0);
                     let min_temporal = self.limit.min_temporal.unwrap_or(0);
-                    let mut target_spatial = min_spatial;
-                    let mut target_temporal = min_temporal;
+                    let mut target_spatial = 0;
+                    let mut target_temporal = 0;
 
-                    for spatial in min_spatial..(self.limit.max_spatial + 1) {
-                        for temporal in min_temporal..(self.limit.max_temporal + 1) {
+                    for spatial in 0..(self.limit.max_spatial + 1) {
+                        for temporal in 0..(self.limit.max_temporal + 1) {
                             if layers[spatial as usize][temporal as usize] == 0 {
                                 break;
                             }
-                            if layers[spatial as usize][temporal as usize] <= bitrate {
+                            if layers[spatial as usize][temporal as usize] <= bitrate || (spatial <= min_spatial && temporal <= min_temporal) {
                                 target_spatial = spatial as u8;
                                 target_temporal = temporal as u8;
                             } else {
@@ -91,15 +91,15 @@ impl TrackSlot {
                 } else {
                     let min_spatial = self.limit.min_spatial.unwrap_or(0);
                     let min_temporal = self.limit.min_temporal.unwrap_or(0);
-                    let mut target_spatial = min_spatial;
-                    let mut target_temporal = min_temporal;
+                    let mut target_spatial = 0;
+                    let mut target_temporal = 0;
 
-                    for spatial in min_spatial..(self.limit.max_spatial + 1) {
-                        for temporal in min_temporal..(self.limit.max_temporal + 1) {
+                    for spatial in 0..(self.limit.max_spatial + 1) {
+                        for temporal in 0..(self.limit.max_temporal + 1) {
                             if layers[spatial as usize][temporal as usize] == 0 {
                                 break;
                             }
-                            if layers[spatial as usize][temporal as usize] <= bitrate {
+                            if layers[spatial as usize][temporal as usize] <= bitrate || (spatial <= min_spatial && temporal <= min_temporal) {
                                 target_spatial = spatial as u8;
                                 target_temporal = temporal as u8;
                             } else {
@@ -396,6 +396,88 @@ mod tests {
                 Data::Output(None),
                 Data::RemoveLocalTrack(1),
                 Data::Tick,
+                Data::Output(None),
+            ],
+        );
+    }
+
+    #[test]
+    fn simulcast_min_spatial_overwrite() {
+        test(
+            100000,
+            vec![
+                Data::AddLocalTrack(1, 100),
+                Data::UpdateSourceBitrate(
+                    1,
+                    ClusterTrackStats::Simulcast {
+                        bitrate: 100000,
+                        layers: [[100_000, 150_000, 200_000], [200_000, 300_000, 400_000], [0, 0, 0]],
+                    },
+                ),
+                Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 2, 2, 2)),
+                Data::Tick,
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, 100000))),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(
+                    1,
+                    LocalTrackTarget::Scalable {
+                        spatial: 1,
+                        temporal: 2,
+                        key_only: false,
+                    },
+                ))),
+                Data::Output(None),
+                Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 0, 2, 0)),
+                Data::Tick,
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, 100000))),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(
+                    1,
+                    LocalTrackTarget::Scalable {
+                        spatial: 1,
+                        temporal: 0,
+                        key_only: false,
+                    },
+                ))),
+                Data::Output(None),
+            ],
+        );
+    }
+
+    #[test]
+    fn svc_min_spatial_overwrite() {
+        test(
+            100000,
+            vec![
+                Data::AddLocalTrack(1, 100),
+                Data::UpdateSourceBitrate(
+                    1,
+                    ClusterTrackStats::Svc {
+                        bitrate: 100000,
+                        layers: [[100_000, 150_000, 200_000], [200_000, 300_000, 400_000], [0, 0, 0]],
+                    },
+                ),
+                Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 2, 2, 2)),
+                Data::Tick,
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, 100000))),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(
+                    1,
+                    LocalTrackTarget::Scalable {
+                        spatial: 1,
+                        temporal: 2,
+                        key_only: false,
+                    },
+                ))),
+                Data::Output(None),
+                Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 0, 2, 0)),
+                Data::Tick,
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, 100000))),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(
+                    1,
+                    LocalTrackTarget::Scalable {
+                        spatial: 1,
+                        temporal: 0,
+                        key_only: false,
+                    },
+                ))),
                 Data::Output(None),
             ],
         );
