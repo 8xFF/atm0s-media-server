@@ -158,8 +158,8 @@ mod test {
     enum Input {
         // input (spatial, temporal, key_only) => need out request key
         SetTarget(u8, u8, bool, bool),
-        // input (is_key, spatial, temporal, layer_sync, seq, time) => should send
-        Packet(bool, u8, u8, bool, u16, u32, (FilterResult, bool)),
+        // input (is_key, spatial, temporal, layer_sync, pic_id, tl01, seq, time) => (FilterResult, switched, pic_id, tl01)
+        Packet(bool, u8, u8, Option<u16>, Option<u8>, bool, u16, u32, (FilterResult, bool, Option<u16>, Option<u8>)),
     }
 
     fn test(data: Vec<Input>) {
@@ -172,9 +172,33 @@ mod test {
                 Input::SetTarget(spatial, temporal, key_only, need_key) => {
                     assert_eq!(filter.set_target_layer(spatial, temporal, key_only), need_key, "index: {}", index);
                 }
-                Input::Packet(is_key, spatial, temporal, layer_sync, seq, time, send_expected) => {
-                    let mut pkt = MediaPacket::simple_video(PayloadCodec::Vp8(is_key, Some(Vp8Simulcast::new(spatial, temporal, layer_sync))), seq, time, vec![1, 2, 3]);
-                    assert_eq!(filter.should_send(&mut pkt), send_expected, "index: {}", index);
+                Input::Packet(is_key, spatial, temporal, pic_id, tl01, layer_sync, seq, time, (result, swiched, exp_pic_id, exp_tl01)) => {
+                    let mut pkt = MediaPacket::simple_video(
+                        PayloadCodec::Vp8(
+                            is_key,
+                            Some(Vp8Simulcast {
+                                spatial,
+                                temporal,
+                                layer_sync,
+                                picture_id: pic_id,
+                                tl0_pic_idx: tl01,
+                            }),
+                        ),
+                        seq,
+                        time,
+                        vec![1, 2, 3],
+                    );
+                    let res = filter.should_send(&mut pkt);
+                    assert_eq!(res, (result, swiched), "index: {}", index);
+                    if matches!(res.0, FilterResult::Send) {
+                        match &pkt.codec {
+                            PayloadCodec::Vp8(_, Some(sim)) => {
+                                assert_eq!(sim.picture_id, exp_pic_id, "index: {}", index);
+                                assert_eq!(sim.tl0_pic_idx, exp_tl01, "index: {}", index);
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             }
         }
@@ -184,18 +208,50 @@ mod test {
     fn simple() {
         test(vec![
             Input::SetTarget(0, 1, false, true),
-            Input::Packet(false, 0, 0, false, 0, 100, (FilterResult::Reject, false)),
-            Input::Packet(true, 0, 0, true, 1, 200, (FilterResult::Send, true)),
-            Input::Packet(true, 0, 2, true, 2, 200, (FilterResult::Drop, false)),
+            Input::Packet(false, 0, 0, None, None, false, 0, 100, (FilterResult::Reject, false, None, None)),
+            Input::Packet(true, 0, 0, None, None, true, 1, 200, (FilterResult::Send, true, None, None)),
+            Input::Packet(true, 0, 2, None, None, true, 2, 200, (FilterResult::Drop, false, None, None)),
             Input::SetTarget(1, 2, false, true),
-            Input::Packet(false, 0, 0, false, 0, 100, (FilterResult::Send, false)),
-            Input::Packet(false, 1, 0, true, 1, 200, (FilterResult::Reject, false)),
-            Input::Packet(true, 1, 0, true, 1, 200, (FilterResult::Send, true)),
-            Input::Packet(true, 1, 2, true, 2, 200, (FilterResult::Send, false)),
+            Input::Packet(false, 0, 0, None, None, false, 0, 100, (FilterResult::Send, false, None, None)),
+            Input::Packet(false, 1, 0, None, None, true, 1, 200, (FilterResult::Reject, false, None, None)),
+            Input::Packet(true, 1, 0, None, None, true, 1, 200, (FilterResult::Send, true, None, None)),
+            Input::Packet(true, 1, 2, None, None, true, 2, 200, (FilterResult::Send, false, None, None)),
         ])
     }
 
-    //TODO test rewrite picture_id, tl0picidx in bellow cases:
-    // - Simulcast switch temporal need remain picture_id, tl0picidx incresement
-    // - Simulcast switch spatial need increase picture_id, tl0picidx
+    #[test]
+    fn rewrite_pic_id_tl01_temporal_remain_increasement() {
+        test(vec![
+            Input::SetTarget(0, 1, false, true),
+            Input::Packet(false, 0, 0, Some(1), Some(1), false, 0, 100, (FilterResult::Reject, false, None, None)),
+            Input::Packet(true, 0, 0, Some(2), Some(2), true, 1, 200, (FilterResult::Send, true, Some(1), Some(1))),
+            Input::Packet(false, 0, 1, Some(3), Some(2), true, 2, 300, (FilterResult::Send, false, Some(2), Some(1))),
+            Input::SetTarget(0, 2, false, false),
+            // This packet Drop then need to drop pic_id
+            Input::Packet(false, 0, 2, Some(4), Some(2), false, 3, 400, (FilterResult::Drop, false, None, None)),
+            Input::Packet(false, 0, 2, Some(5), Some(2), true, 4, 500, (FilterResult::Send, false, Some(3), Some(1))),
+            Input::Packet(false, 0, 0, Some(6), Some(3), true, 5, 600, (FilterResult::Send, false, Some(4), Some(2))),
+            Input::Packet(false, 0, 1, Some(7), Some(3), true, 6, 700, (FilterResult::Send, false, Some(5), Some(2))),
+            Input::Packet(false, 0, 2, Some(8), Some(3), true, 7, 800, (FilterResult::Send, false, Some(6), Some(2))),
+            Input::Packet(false, 0, 2, Some(8), Some(3), true, 8, 900, (FilterResult::Send, false, Some(6), Some(2))),
+        ])
+    }
+
+    #[test]
+    fn rewrite_pic_id_tl01_spatial_switch_stream_remain_continuos() {
+        test(vec![
+            Input::SetTarget(0, 1, false, true),
+            Input::Packet(false, 0, 0, Some(1), Some(1), false, 0, 100, (FilterResult::Reject, false, None, None)),
+            Input::Packet(true, 0, 0, Some(2), Some(2), true, 1, 200, (FilterResult::Send, true, Some(1), Some(1))),
+            Input::Packet(false, 0, 1, Some(3), Some(2), true, 2, 300, (FilterResult::Send, false, Some(2), Some(1))),
+            Input::SetTarget(1, 2, false, true),
+            // This packet Drop then need to drop pic_id
+            Input::Packet(false, 1, 2, Some(98), Some(50), false, 3, 400, (FilterResult::Reject, false, None, None)),
+            Input::Packet(false, 1, 2, Some(99), Some(50), true, 4, 500, (FilterResult::Reject, false, None, None)),
+            Input::Packet(true, 1, 0, Some(100), Some(51), true, 5, 600, (FilterResult::Send, true, Some(3), Some(2))),
+            Input::Packet(false, 1, 1, Some(101), Some(51), true, 6, 700, (FilterResult::Send, false, Some(4), Some(2))),
+            Input::Packet(false, 1, 2, Some(102), Some(51), true, 7, 800, (FilterResult::Send, false, Some(5), Some(2))),
+            Input::Packet(false, 1, 2, Some(102), Some(51), true, 8, 900, (FilterResult::Send, false, Some(5), Some(2))),
+        ])
+    }
 }
