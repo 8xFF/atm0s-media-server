@@ -18,7 +18,6 @@ pub struct SdpBox {}
 
 impl SdpBox {
     pub fn rewrite_answer(&mut self, answer: &str) -> String {
-        log::info!("before rewrite answer: {}", answer);
         let mut media_type = None;
         let mut direction = None;
         let mut audio_index = 0;
@@ -107,3 +106,5 @@ impl SdpBox {
         new_media_lines.join("\r\n")
     }
 }
+
+//TODO test this

@@ -56,6 +56,7 @@ pub enum Str0mAction {
     RequestKeyFrame(Mid, RequestKeyframeKind),
     Datachannel(usize, String),
     Rpc(TransportRpcIn),
+    ConfigEgressBitrate { current: u32, desired: u32 },
 }
 
 pub struct WebrtcTransportInternal<L>
@@ -148,8 +149,12 @@ where
                     self.send_msg(msg);
                 }
             },
-            TransportOutgoingEvent::RequestLimitBitrate(_bitrate) => {
+            TransportOutgoingEvent::RequestIngressBitrate(_bitrate) => {
                 //TODO
+            }
+            TransportOutgoingEvent::ConfigEgressBitrate { current, desired } => {
+                log::debug!("[TransportWebrtc] config egress bitrate: {} {}", current, desired);
+                self.str0m_actions.push_back(Str0mAction::ConfigEgressBitrate { current, desired });
             }
             TransportOutgoingEvent::Rpc(rpc) => {
                 let msg = rpc_to_string(rpc);
@@ -311,7 +316,7 @@ where
                 Ok(())
             }
             Str0mInput::EgressBitrateEstimate(bitrate) => {
-                log::info!("[TransportWebrtcInternal] on egress bitrate estimate {} bps", bitrate);
+                log::debug!("[TransportWebrtcInternal] on egress bitrate estimate {} bps", bitrate);
                 self.endpoint_actions.push_back(Ok(TransportIncomingEvent::EgressBitrateEstimate(bitrate)));
                 Ok(())
             }

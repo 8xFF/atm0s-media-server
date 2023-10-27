@@ -371,6 +371,10 @@ impl MediaEndpointInteral {
                         track.set_bitrate(bitrate);
                     }
                 }
+                BitrateAllocationAction::ConfigEgressBitrate { current, desired } => {
+                    self.output_actions
+                        .push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::ConfigEgressBitrate { current, desired }));
+                }
             }
         }
 
@@ -591,6 +595,14 @@ mod tests {
                 1,
                 LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::SwitchRes(RpcResponse::success(1, true)))
             )))
+        );
+
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::ConfigEgressBitrate {
+                current: 0,
+                desired: 80_000 //Default of single stream
+            }))
         );
 
         assert_eq!(

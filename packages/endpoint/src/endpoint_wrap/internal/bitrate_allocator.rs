@@ -9,6 +9,29 @@ const SINGLE_STREAM_BASED_BITRATE: u32 = 80_000; //100kbps
 const SIMULCAST_BASED_BITRATE: u32 = 60_000; //60kbps
 const SVC_BASED_BITRATE: u32 = 60_000; //60kbps
 
+fn get_next_bitrate(layers: &[[u32; 3]; 3], max_spatial: u8, max_temporal: u8, current: u32) -> u32 {
+    let mut next = current;
+    for spatial in 0..(max_spatial + 1) {
+        if next > current || spatial as usize > layers.len() {
+            break;
+        }
+        for temporal in 0..(max_temporal + 1) {
+            if temporal as usize > layers[spatial as usize].len() {
+                break;
+            }
+            if layers[spatial as usize][temporal as usize] > current {
+                next = layers[spatial as usize][temporal as usize];
+                break;
+            }
+        }
+    }
+    if next == current {
+        next * 11 / 10
+    } else {
+        next
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocalTrackTarget {
     WaitStart,
@@ -21,6 +44,13 @@ pub enum LocalTrackTarget {
 pub enum BitrateAllocationAction {
     LimitLocalTrack(TrackId, LocalTrackTarget),
     LimitLocalTrackBitrate(TrackId, u32),
+    ConfigEgressBitrate { current: u32, desired: u32 },
+}
+
+struct TrackTarget {
+    changed: Option<LocalTrackTarget>,
+    current: u32,
+    desired: u32,
 }
 
 struct TrackSlot {
@@ -46,19 +76,20 @@ impl TrackSlot {
         }
     }
 
-    pub fn update_target(&mut self, bitrate: u32) -> Option<LocalTrackTarget> {
-        let new_target = match &self.source {
-            Some(ClusterTrackStats::Single { bitrate: _ }) => {
+    pub fn update_target(&mut self, bitrate: u32) -> TrackTarget {
+        let (new_target, current, desired) = match &self.source {
+            Some(ClusterTrackStats::Single { bitrate: source_bitrate }) => {
                 if bitrate >= SINGLE_STREAM_BASED_BITRATE {
-                    LocalTrackTarget::Single { key_only: false }
+                    (LocalTrackTarget::Single { key_only: false }, *source_bitrate, *source_bitrate * 6 / 5)
                 } else {
-                    LocalTrackTarget::Pause
+                    (LocalTrackTarget::Pause, 0, SINGLE_STREAM_BASED_BITRATE)
                 }
             }
             Some(ClusterTrackStats::Simulcast { bitrate: _, layers }) => {
                 if bitrate < SIMULCAST_BASED_BITRATE {
-                    LocalTrackTarget::Pause
+                    (LocalTrackTarget::Pause, 0, SIMULCAST_BASED_BITRATE)
                 } else {
+                    let mut current_bitrate = layers[0][0];
                     let min_spatial = self.limit.min_spatial.unwrap_or(0);
                     let min_temporal = self.limit.min_temporal.unwrap_or(0);
                     let mut target_spatial = 0;
@@ -70,6 +101,7 @@ impl TrackSlot {
                                 break;
                             }
                             if layers[spatial as usize][temporal as usize] <= bitrate || (spatial <= min_spatial && temporal <= min_temporal) {
+                                current_bitrate = layers[spatial as usize][temporal as usize];
                                 target_spatial = spatial as u8;
                                 target_temporal = temporal as u8;
                             } else {
@@ -77,18 +109,21 @@ impl TrackSlot {
                             }
                         }
                     }
+                    let desired_bitrate = get_next_bitrate(layers, self.limit.max_spatial, self.limit.max_temporal, current_bitrate);
 
-                    LocalTrackTarget::Scalable {
+                    let target = LocalTrackTarget::Scalable {
                         spatial: target_spatial,
                         temporal: target_temporal,
                         key_only: false,
-                    }
+                    };
+                    (target, current_bitrate, desired_bitrate)
                 }
             }
             Some(ClusterTrackStats::Svc { bitrate: _, layers }) => {
                 if bitrate < SVC_BASED_BITRATE {
-                    LocalTrackTarget::Pause
+                    (LocalTrackTarget::Pause, 0, SVC_BASED_BITRATE)
                 } else {
+                    let mut current_bitrate = layers[0][0];
                     let min_spatial = self.limit.min_spatial.unwrap_or(0);
                     let min_temporal = self.limit.min_temporal.unwrap_or(0);
                     let mut target_spatial = 0;
@@ -100,6 +135,7 @@ impl TrackSlot {
                                 break;
                             }
                             if layers[spatial as usize][temporal as usize] <= bitrate || (spatial <= min_spatial && temporal <= min_temporal) {
+                                current_bitrate = layers[spatial as usize][temporal as usize];
                                 target_spatial = spatial as u8;
                                 target_temporal = temporal as u8;
                             } else {
@@ -108,25 +144,30 @@ impl TrackSlot {
                         }
                     }
 
-                    LocalTrackTarget::Scalable {
+                    let desired_bitrate = get_next_bitrate(layers, self.limit.max_spatial, self.limit.max_temporal, current_bitrate);
+
+                    let target = LocalTrackTarget::Scalable {
                         spatial: target_spatial,
                         temporal: target_temporal,
                         key_only: false,
-                    }
+                    };
+                    (target, current_bitrate, desired_bitrate)
                 }
             }
             None => {
                 // TODO optimize this, we need to avoid pause track when there is no source, this make slow to start remote stream
-                LocalTrackTarget::WaitStart
+                (LocalTrackTarget::WaitStart, 0, SINGLE_STREAM_BASED_BITRATE)
             }
         };
 
-        if self.target != Some(new_target.clone()) {
+        let changed = if self.target != Some(new_target.clone()) {
             self.target = Some(new_target.clone());
             Some(new_target)
         } else {
             None
-        }
+        };
+
+        TrackTarget { changed, current, desired }
     }
 }
 
@@ -190,6 +231,8 @@ impl BitrateAllocator {
     }
 
     fn refresh(&mut self) {
+        let mut current_bitrate = 0;
+        let mut desired_bitrate = 0;
         let mut used_bitrate = 0;
         let mut track_bitrates: HashMap<TrackId, u32> = Default::default();
         let mut sum_priority = 0;
@@ -213,17 +256,26 @@ impl BitrateAllocator {
         }
 
         for track in self.tracks.iter_mut() {
-            if let Some(bitrate) = track_bitrates.get(&track.track_id) {
-                if let Some(target) = track.update_target(*bitrate) {
-                    self.out_actions.push_back(BitrateAllocationAction::LimitLocalTrack(track.track_id, target));
-                }
+            let bitrate = track_bitrates.get(&track.track_id).unwrap_or(&0);
+            let output = track.update_target(*bitrate);
+            if *bitrate > 0 {
                 self.out_actions.push_back(BitrateAllocationAction::LimitLocalTrackBitrate(track.track_id, *bitrate));
             }
+            if let Some(target) = output.changed {
+                self.out_actions.push_back(BitrateAllocationAction::LimitLocalTrack(track.track_id, target));
+            }
+            current_bitrate += output.current;
+            desired_bitrate += output.desired;
         }
+
+        self.out_actions.push_back(BitrateAllocationAction::ConfigEgressBitrate {
+            current: current_bitrate,
+            desired: desired_bitrate,
+        });
     }
 
     pub fn pop_action(&mut self) -> Option<BitrateAllocationAction> {
-        self.out_actions.pop_back()
+        self.out_actions.pop_front()
     }
 }
 
@@ -234,7 +286,7 @@ mod tests {
 
     use crate::{endpoint_wrap::internal::DEFAULT_BITRATE_OUT_BPS, rpc::ReceiverLayerLimit};
 
-    use super::{BitrateAllocationAction, BitrateAllocator, LocalTrackTarget, SINGLE_STREAM_BASED_BITRATE};
+    use super::{get_next_bitrate, BitrateAllocationAction, BitrateAllocator, LocalTrackTarget, SINGLE_STREAM_BASED_BITRATE};
 
     fn create_receiver_limit(priority: u16, max_spatial: u8, max_temporal: u8) -> ReceiverLayerLimit {
         ReceiverLayerLimit {
@@ -285,6 +337,25 @@ mod tests {
     }
 
     #[test]
+    fn next_bitrate_increasing() {
+        let layers = [[100, 200, 300], [400, 500, 600], [700, 800, 900]];
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 100), 200);
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 200), 300);
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 300), 400);
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 900), 990);
+    }
+
+    #[test]
+    fn next_bitrate_disconnect() {
+        let layers = [[100, 200, 500], [400, 500, 800], [700, 800, 900]];
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 100), 200);
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 200), 500);
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 500), 800);
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 800), 900);
+        assert_eq!(get_next_bitrate(&layers, 2, 2, 900), 990);
+    }
+
+    #[test]
     fn single_track() {
         test(
             DEFAULT_BITRATE_OUT_BPS,
@@ -293,14 +364,20 @@ mod tests {
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, DEFAULT_BITRATE_OUT_BPS))),
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(1, LocalTrackTarget::WaitStart))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 0,
+                    desired: SINGLE_STREAM_BASED_BITRATE,
+                })),
                 Data::Output(None),
                 Data::UpdateSourceBitrate(1, ClusterTrackStats::Single { bitrate: 100_000 }),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, DEFAULT_BITRATE_OUT_BPS))),
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(1, LocalTrackTarget::Single { key_only: false }))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 100_000, desired: 120_000 })),
                 Data::Output(None),
                 Data::RemoveLocalTrack(1),
                 Data::Tick,
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 0, desired: 0 })),
                 Data::Output(None),
             ],
         );
@@ -315,27 +392,35 @@ mod tests {
                 Data::AddLocalTrack(2, 300),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(
-                    2,
-                    SINGLE_STREAM_BASED_BITRATE + (DEFAULT_BITRATE_OUT_BPS - SINGLE_STREAM_BASED_BITRATE * 2) * 3 / 4,
-                ))),
-                Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(2, LocalTrackTarget::WaitStart))),
-                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(
                     1,
                     SINGLE_STREAM_BASED_BITRATE + (DEFAULT_BITRATE_OUT_BPS - SINGLE_STREAM_BASED_BITRATE * 2) * 1 / 4,
                 ))),
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(1, LocalTrackTarget::WaitStart))),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(
+                    2,
+                    SINGLE_STREAM_BASED_BITRATE + (DEFAULT_BITRATE_OUT_BPS - SINGLE_STREAM_BASED_BITRATE * 2) * 3 / 4,
+                ))),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(2, LocalTrackTarget::WaitStart))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 0,
+                    desired: SINGLE_STREAM_BASED_BITRATE * 2,
+                })),
                 Data::Output(None),
                 Data::UpdateLocalTrack(1, create_receiver_limit(300, 2, 2)),
                 Data::UpdateLocalTrack(2, create_receiver_limit(100, 2, 2)),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(
-                    1,
-                    SINGLE_STREAM_BASED_BITRATE + (DEFAULT_BITRATE_OUT_BPS - SINGLE_STREAM_BASED_BITRATE * 2) * 3 / 4,
-                ))),
-                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(
                     2,
                     SINGLE_STREAM_BASED_BITRATE + (DEFAULT_BITRATE_OUT_BPS - SINGLE_STREAM_BASED_BITRATE * 2) * 1 / 4,
                 ))),
+                Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(
+                    1,
+                    SINGLE_STREAM_BASED_BITRATE + (DEFAULT_BITRATE_OUT_BPS - SINGLE_STREAM_BASED_BITRATE * 2) * 3 / 4,
+                ))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 0,
+                    desired: SINGLE_STREAM_BASED_BITRATE * 2,
+                })),
                 Data::Output(None),
             ],
         );
@@ -364,11 +449,13 @@ mod tests {
                         key_only: false,
                     },
                 ))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 800_000, desired: 880_000 })),
                 Data::Output(None),
                 // update for using min_spatial
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 2, 1, 1)),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, DEFAULT_BITRATE_OUT_BPS))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 800_000, desired: 880_000 })),
                 Data::Output(None),
                 Data::SetEstBitrate(100_000),
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, 100_000))),
@@ -380,6 +467,7 @@ mod tests {
                         key_only: false,
                     },
                 ))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 300_000, desired: 400_000 })),
                 Data::Output(None),
                 // update for using limit max_spatial
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 0, 0, 0, 0)),
@@ -393,9 +481,11 @@ mod tests {
                         key_only: false,
                     },
                 ))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 100_000, desired: 110_000 })),
                 Data::Output(None),
                 Data::RemoveLocalTrack(1),
                 Data::Tick,
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 0, desired: 0 })),
                 Data::Output(None),
             ],
         );
@@ -425,7 +515,9 @@ mod tests {
                         key_only: false,
                     },
                 ))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 400_000, desired: 440_000 })),
                 Data::Output(None),
+                // limit to temporal 0
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 0, 2, 0)),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, 100000))),
@@ -437,6 +529,7 @@ mod tests {
                         key_only: false,
                     },
                 ))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 200_000, desired: 220_000 })),
                 Data::Output(None),
             ],
         );
@@ -466,6 +559,7 @@ mod tests {
                         key_only: false,
                     },
                 ))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 400_000, desired: 440_000 })),
                 Data::Output(None),
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 0, 2, 0)),
                 Data::Tick,
@@ -478,6 +572,7 @@ mod tests {
                         key_only: false,
                     },
                 ))),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 200_000, desired: 220_000 })),
                 Data::Output(None),
             ],
         );

@@ -1,10 +1,10 @@
 use crate::PayloadCodec;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MediaPacketExtensions {
-    pub abs_send_time: Option<(i64, i64)>,
-    pub transport_cc: Option<u16>, // (buf[0] << 8) | buf[1];
-}
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct MediaPacketExtensions {
+//     pub abs_send_time: Option<(i64, i64)>,
+//     pub transport_cc: Option<u16>, // (buf[0] << 8) | buf[1];
+// }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaPacket {
@@ -12,7 +12,7 @@ pub struct MediaPacket {
     pub seq_no: u16,
     pub time: u32,
     pub marker: bool,
-    pub ext_vals: MediaPacketExtensions,
+    // pub ext_vals: MediaPacketExtensions,
     pub nackable: bool,
     pub payload: Vec<u8>,
 }
@@ -24,10 +24,10 @@ impl MediaPacket {
             seq_no,
             time,
             marker: false,
-            ext_vals: MediaPacketExtensions {
-                abs_send_time: None,
-                transport_cc: None,
-            },
+            // ext_vals: MediaPacketExtensions {
+            //     abs_send_time: None,
+            //     transport_cc: None,
+            // },
             nackable: false,
             payload,
         }
@@ -39,10 +39,10 @@ impl MediaPacket {
             seq_no,
             time,
             marker: false,
-            ext_vals: MediaPacketExtensions {
-                abs_send_time: None,
-                transport_cc: None,
-            },
+            // ext_vals: MediaPacketExtensions {
+            //     abs_send_time: None,
+            //     transport_cc: None,
+            // },
             nackable: false,
             payload,
         }

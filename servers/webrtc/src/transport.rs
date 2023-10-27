@@ -12,8 +12,8 @@ use endpoint::{
 use str0m::{
     bwe::Bitrate,
     change::SdpOffer,
-    media::{KeyframeRequestKind, MediaTime},
-    net::Receive,
+    media::KeyframeRequestKind,
+    net::{Protocol, Receive},
     rtp::ExtensionValues,
     Candidate, Input, Output, Rtc, RtcError,
 };
@@ -39,7 +39,7 @@ mod rtp_packet_convert;
 pub mod sdp_box;
 mod str0m_event_convert;
 
-const INIT_BWE_BITRATE_KBPS: u64 = 400; //400kbps
+const INIT_BWE_BITRATE_KBPS: u64 = 1500; //1500kbps
 
 pub enum WebrtcTransportEvent {
     RemoteIce(String),
@@ -71,12 +71,14 @@ where
         let async_socket = unsafe { async_std::net::UdpSocket::from_raw_fd(socket.as_raw_fd()) };
         let sync_socket: UdpSocket = socket.into();
 
-        let rtc = Rtc::builder()
+        let mut rtc = Rtc::builder()
             .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
             .set_ice_lite(true)
             .set_rtp_mode(true)
             .set_stats_interval(Some(Duration::from_millis(500)))
             .build();
+        rtc.direct_api().enable_twcc_feedback();
+
         log::info!("[TransportWebrtc] created");
 
         Ok(Self {
@@ -98,7 +100,7 @@ where
     pub fn on_remote_sdp(&mut self, sdp: &str) -> Result<String, RtcError> {
         //TODO get ip address
         let addr = self.sync_socket.local_addr().expect("Should has local port");
-        let candidate = Candidate::host(addr).expect("Should create candidate");
+        let candidate = Candidate::host(addr, Protocol::Udp).expect("Should create candidate");
         self.rtc.add_local_candidate(candidate);
 
         let sdp_offer = SdpOffer::from_sdp_string(sdp)?;
@@ -140,11 +142,7 @@ where
                                 pkt.time,
                                 Instant::now(),
                                 pkt.marker,
-                                ExtensionValues {
-                                    abs_send_time: pkt.ext_vals.abs_send_time.map(|t| MediaTime::new(t.0, t.1)),
-                                    transport_cc: pkt.ext_vals.transport_cc,
-                                    ..Default::default()
-                                },
+                                ExtensionValues::default(),
                                 pkt.nackable,
                                 pkt.payload,
                             )
@@ -179,6 +177,11 @@ where
                         log::warn!("[TransportWebrtc] missing channel for id {:?}", cid);
                         debug_assert!(false, "should not missing channel id");
                     }
+                }
+                Str0mAction::ConfigEgressBitrate { current, desired } => {
+                    let mut bwe = self.rtc.bwe();
+                    bwe.set_current_bitrate(Bitrate::bps(current as u64));
+                    bwe.set_desired_bitrate(Bitrate::bps(desired as u64));
                 }
             }
         }
@@ -269,6 +272,7 @@ where
                 Input::Receive(
                     Instant::now(),
                     Receive {
+                        proto: Protocol::Udp,
                         source,
                         destination: self.async_socket.local_addr().expect("Should has local_addr"),
                         contents: self.buf.as_slice().try_into().unwrap(),
@@ -295,7 +299,9 @@ where
     }
 
     async fn close(&mut self) {
-        //TODO force close this
+        if let Some(cid) = self.event_convert.channel_id(0) {
+            self.rtc.direct_api().close_data_channel(cid);
+        }
     }
 }
 

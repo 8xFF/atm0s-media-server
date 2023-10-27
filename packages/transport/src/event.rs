@@ -57,6 +57,7 @@ pub enum LocalTrackOutgoingEvent<RL> {
 pub enum TransportOutgoingEvent<RE, RR, RL> {
     RemoteTrackEvent(TrackId, RemoteTrackOutgoingEvent<RR>),
     LocalTrackEvent(TrackId, LocalTrackOutgoingEvent<RL>),
-    RequestLimitBitrate(u32),
+    ConfigEgressBitrate { current: u32, desired: u32 },
+    RequestIngressBitrate(u32),
     Rpc(RE),
 }

@@ -1,6 +1,6 @@
 use self::rid_history::RidHistory;
 use str0m::media::Pt;
-use transport::{H264Profile, MediaPacket, MediaPacketExtensions, PayloadCodec, Vp9Profile};
+use transport::{H264Profile, MediaPacket, PayloadCodec, Vp9Profile};
 
 use super::mid_convert::rid_to_u16;
 
@@ -41,47 +41,47 @@ impl RtpPacketConverter {
     pub fn to_pkt(&mut self, rtp: str0m::rtp::RtpPacket) -> Option<MediaPacket> {
         let rid = self.rid_history.get(rtp.header.ext_vals.rid.map(|rid| rid_to_u16(&rid)), *(&rtp.header.ssrc as &u32));
 
-        let codec = match *rtp.header.payload_type {
-            PAYLOAD_TYPE_OPUS => Some(PayloadCodec::Opus),
+        let (codec, nackable) = match *rtp.header.payload_type {
+            PAYLOAD_TYPE_OPUS => Some((PayloadCodec::Opus, false)),
             PAYLOAD_TYPE_VP8 => {
                 let (is_key, sim) = vp8::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::Vp8(is_key, sim))
+                Some((PayloadCodec::Vp8(is_key, sim), true))
             }
             PAYLOAD_TYPE_VP9_P0 => {
                 let (is_key, svc) = vp9::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::Vp9(is_key, Vp9Profile::P0, svc))
+                Some((PayloadCodec::Vp9(is_key, Vp9Profile::P0, svc), true))
             }
             PAYLOAD_TYPE_VP9_P2 => {
                 let (is_key, svc) = vp9::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::Vp9(is_key, Vp9Profile::P2, svc))
+                Some((PayloadCodec::Vp9(is_key, Vp9Profile::P2, svc), true))
             }
             PAYLOAD_TYPE_H264_42001F_NON => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::H264(is_key, H264Profile::P42001fNonInterleaved, sim))
+                Some((PayloadCodec::H264(is_key, H264Profile::P42001fNonInterleaved, sim), true))
             }
             PAYLOAD_TYPE_H264_42001F_SINGLE => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::H264(is_key, H264Profile::P42001fSingleNal, sim))
+                Some((PayloadCodec::H264(is_key, H264Profile::P42001fSingleNal, sim), true))
             }
             PAYLOAD_TYPE_H264_42E01F_NON => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::H264(is_key, H264Profile::P42e01fNonInterleaved, sim))
+                Some((PayloadCodec::H264(is_key, H264Profile::P42e01fNonInterleaved, sim), true))
             }
             PAYLOAD_TYPE_H264_42E01F_SINGLE => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::H264(is_key, H264Profile::P42e01fSingleNal, sim))
+                Some((PayloadCodec::H264(is_key, H264Profile::P42e01fSingleNal, sim), true))
             }
             PAYLOAD_TYPE_H264_4D001F_NON => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::H264(is_key, H264Profile::P4d001fNonInterleaved, sim))
+                Some((PayloadCodec::H264(is_key, H264Profile::P4d001fNonInterleaved, sim), true))
             }
             PAYLOAD_TYPE_H264_4D001F_SINGLE => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::H264(is_key, H264Profile::P4d001fSingleNal, sim))
+                Some((PayloadCodec::H264(is_key, H264Profile::P4d001fSingleNal, sim), true))
             }
             PAYLOAD_TYPE_H264_64001F_NON => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
-                Some(PayloadCodec::H264(is_key, H264Profile::P64001fNonInterleaved, sim))
+                Some((PayloadCodec::H264(is_key, H264Profile::P64001fNonInterleaved, sim), true))
             }
             _ => None,
         }?;
@@ -90,11 +90,11 @@ impl RtpPacketConverter {
             seq_no: rtp.header.sequence_number,
             time: rtp.header.timestamp,
             marker: rtp.header.marker,
-            ext_vals: MediaPacketExtensions {
-                abs_send_time: rtp.header.ext_vals.abs_send_time.map(|t| (t.numer(), t.denom())),
-                transport_cc: rtp.header.ext_vals.transport_cc,
-            },
-            nackable: true,
+            // ext_vals: MediaPacketExtensions {
+            //     abs_send_time: rtp.header.ext_vals.abs_send_time.map(|t| (t.numer(), t.denom())),
+            //     transport_cc: rtp.header.ext_vals.transport_cc,
+            // },
+            nackable: nackable,
             payload: rtp.payload,
         })
     }
