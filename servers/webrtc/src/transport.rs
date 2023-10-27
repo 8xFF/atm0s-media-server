@@ -1,14 +1,19 @@
 use std::time::{Duration, Instant};
 
 use async_std::prelude::FutureExt;
+use combine::Parser;
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, RpcResponse},
     EndpointRpcIn, EndpointRpcOut,
 };
 use str0m::{bwe::Bitrate, change::SdpOffer, media::KeyframeRequestKind, net::Receive, rtp::ExtensionValues, Candidate, Input, Output, Rtc, RtcError};
 use transport::{RequestKeyframeKind, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
+use utils::ServerError;
 
-use crate::rpc::WebrtcConnectRequestSender;
+use crate::{
+    rpc::{WebrtcConnectRequestSender, WebrtcRemoteIceRequest},
+    transport::ice_candidate_parse::candidate,
+};
 
 use self::{
     internal::{
@@ -22,6 +27,7 @@ use self::{
     str0m_event_convert::Str0mEventConvert,
 };
 
+mod ice_candidate_parse;
 pub(crate) mod internal;
 mod mid_convert;
 mod mid_history;
@@ -33,7 +39,7 @@ mod str0m_event_convert;
 const INIT_BWE_BITRATE_KBPS: u64 = 1500; //1500kbps
 
 pub enum WebrtcTransportEvent {
-    RemoteIce(String),
+    RemoteIce(WebrtcRemoteIceRequest, crate::rpc::RpcResponse<()>),
 }
 
 pub struct WebrtcTransport<L>
@@ -56,7 +62,7 @@ where
     pub async fn new(life_cycle: L) -> Result<Self, std::io::Error> {
         let mut rtc = Rtc::builder()
             .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
-            .set_ice_lite(true)
+            .set_ice_lite(false)
             .set_rtp_mode(true)
             .set_stats_interval(Some(Duration::from_millis(500)))
             .build();
@@ -168,6 +174,17 @@ where
                     bwe.set_current_bitrate(Bitrate::bps(current as u64));
                     bwe.set_desired_bitrate(Bitrate::bps(desired as u64));
                 }
+                Str0mAction::RemoteIce(ice, mut res) => match candidate().parse(ice.candidate.as_str()) {
+                    Ok((can, _)) => {
+                        log::info!("on remote ice {:?}", can);
+                        self.rtc.add_remote_candidate(can);
+                        res.answer(200, Ok(()));
+                    }
+                    Err(e) => {
+                        log::error!("error on parse ice candidate {:?}", e);
+                        res.answer(200, Err(ServerError::build("ICE_CANDIDATE_PARSE_ERROR", format!("{:?}", e))));
+                    }
+                },
             }
         }
     }

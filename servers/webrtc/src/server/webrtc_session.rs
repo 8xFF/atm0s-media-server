@@ -72,10 +72,8 @@ impl<E: ClusterEndpoint> WebrtcSession<E> {
             },
             e = self.rx.recv().fuse() => match e {
                 Ok(InternalControl::RemoteIce(ice, mut res)) => {
-                    if let Err(err) = self.endpoint.on_custom_event(WebrtcTransportEvent::RemoteIce(ice)) {
+                    if let Err(err) = self.endpoint.on_custom_event(WebrtcTransportEvent::RemoteIce(ice, res.clone())) {
                         res.answer(200, Err(ServerError::build("REMOTE_ICE_ERROR", err)));
-                    } else {
-                        res.answer(200, Ok(()));
                     }
                     Some(())
                 }

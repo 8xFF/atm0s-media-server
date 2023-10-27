@@ -4,7 +4,7 @@ use poem_openapi::{payload::Json, Object, OpenApi};
 use serde::{Deserialize, Serialize};
 use utils::Response;
 
-use crate::rpc::{RpcEvent, RpcResponse, WebrtcConnectRequest, WebrtcConnectResponse, WhipConnectResponse};
+use crate::rpc::{RpcEvent, RpcResponse, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WhipConnectResponse};
 
 use super::payload_sdp::ApplicationSdp;
 
@@ -18,6 +18,7 @@ pub struct WebrtcSdp {
 }
 
 pub type WebrtcConnectApiResponse = Response<WebrtcSdp>;
+pub type WebrtcIceRemoteApiResponse = Response<WebrtcRemoteIceResponse>;
 
 pub struct HttpApis;
 
@@ -38,7 +39,7 @@ impl HttpApis {
         Ok(ApplicationSdp(res.sdp))
     }
 
-    /// connect whip endpoint
+    /// connect webrtc endpoint
     #[oai(path = "/webrtc/connect", method = "post")]
     async fn create_webrtc(&self, ctx: Data<&Sender<RpcEvent>>, body: Json<WebrtcConnectRequest>) -> Result<Json<WebrtcConnectApiResponse>> {
         log::info!("[HttpApis] create Webrtc endpoint {}/{}", body.0.room, body.0.peer);
@@ -59,6 +60,24 @@ impl HttpApis {
                 sdp: res.sdp,
                 service_token: None,
             }),
+        }))
+    }
+
+    /// sending remote ice candidate
+    #[oai(path = "/webrtc/ice_remote", method = "post")]
+    async fn webrtc_ice_remote(&self, ctx: Data<&Sender<RpcEvent>>, body: Json<WebrtcRemoteIceRequest>) -> Result<Json<WebrtcIceRemoteApiResponse>> {
+        log::info!("[HttpApis] on Webrtc endpoint ice-remote {}/{:?}", body.0.candidate, body.0.sdp_mid);
+        let (res, rx) = RpcResponse::<()>::new();
+        ctx.0
+            .send(RpcEvent::WebrtcRemoteIce(body.0, res))
+            .await
+            .map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+        let (_code, res) = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        Ok(Json(WebrtcIceRemoteApiResponse {
+            status: true,
+            error: None,
+            data: Some("OK".to_string()),
         }))
     }
 }
