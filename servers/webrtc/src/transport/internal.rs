@@ -15,10 +15,10 @@ use self::{
     life_cycle::{life_cycle_event_to_event, TransportLifeCycle},
     local_track_id_generator::LocalTrackIdGenerator,
     mid_history::MidHistory,
-    msid_alias::MsidAlias,
     rpc::{rpc_from_string, rpc_local_track_to_string, rpc_remote_track_to_string, rpc_to_string, IncomingRpc, TransportRpcOut},
     rtp_packet_convert::RtpPacketConverter,
     string_compression::StringCompression,
+    track_info_queue::TrackInfoQueue,
     utils::{to_transport_kind, track_to_mid},
 };
 use crate::{rpc::WebrtcConnectRequestSender, transport::internal::rpc::rpc_internal_to_string};
@@ -28,10 +28,10 @@ use super::{Str0mAction, WebrtcTransportEvent};
 pub(crate) mod life_cycle;
 mod local_track_id_generator;
 mod mid_history;
-mod msid_alias;
 pub(crate) mod rpc;
 pub(crate) mod rtp_packet_convert;
 mod string_compression;
+mod track_info_queue;
 mod utils;
 
 pub struct WebrtcTransportInternal<L>
@@ -39,7 +39,7 @@ where
     L: TransportLifeCycle,
 {
     life_cycle: L,
-    msid_alias: MsidAlias,
+    track_info_queue: TrackInfoQueue,
     mid_history: MidHistory,
     rtp_convert: RtpPacketConverter,
     local_track_id_map: HashMapMultiKey<TrackId, String, bool>,
@@ -61,7 +61,7 @@ where
 
         Self {
             life_cycle,
-            msid_alias: Default::default(),
+            track_info_queue: Default::default(),
             mid_history: Default::default(),
             rtp_convert: Default::default(),
             local_track_id_map: Default::default(),
@@ -76,7 +76,7 @@ where
     }
 
     pub fn map_remote_stream(&mut self, sender: WebrtcConnectRequestSender) {
-        self.msid_alias.add_alias(&sender.uuid, &sender.label, &sender.kind, &sender.name);
+        self.track_info_queue.add(&sender.uuid, &sender.label, &sender.kind, &sender.name);
     }
 
     fn send_msg(&mut self, msg: String) {
@@ -247,7 +247,7 @@ where
                     Direction::RecvOnly => {
                         //remote stream
                         let track_id = utils::mid_to_track(&added.mid);
-                        if let Some(info) = self.msid_alias.get_alias(&added.msid.stream_id, &added.msid.track_id) {
+                        if let Some(info) = self.track_info_queue.pop(added.kind) {
                             self.remote_track_id_map.insert(track_id, info.name.clone(), true);
                             log::info!("[TransportWebrtcInternal] added remote track {} => {} added {:?} {:?}", info.name, track_id, added, info);
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackAdded(
@@ -401,10 +401,6 @@ mod test {
                 100,
                 str0m::Event::MediaAdded(MediaAdded {
                     mid: track_to_mid(100),
-                    msid: Msid {
-                        stream_id: "stream_id".to_string(),
-                        track_id: "track_id".to_string(),
-                    },
                     kind: MediaKind::Audio,
                     direction: Direction::RecvOnly,
                     simulcast: None,
@@ -564,10 +560,6 @@ mod test {
                 1000,
                 str0m::Event::MediaAdded(MediaAdded {
                     mid: track_to_mid(100),
-                    msid: Msid {
-                        stream_id: "stream_id".to_string(),
-                        track_id: "track_id".to_string(),
-                    },
                     kind: str0m::media::MediaKind::Audio,
                     direction: str0m::media::Direction::RecvOnly,
                     simulcast: None,

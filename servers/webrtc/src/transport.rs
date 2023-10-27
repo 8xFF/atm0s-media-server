@@ -21,14 +21,18 @@ use transport::{MediaPacket, Transport, TransportError, TransportIncomingEvent, 
 
 use crate::rpc::WebrtcConnectRequestSender;
 
-use self::internal::{
-    life_cycle::TransportLifeCycle,
-    rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
-    rtp_packet_convert::MediaPacketConvert,
-    WebrtcTransportInternal,
+use self::{
+    internal::{
+        life_cycle::TransportLifeCycle,
+        rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
+        rtp_packet_convert::MediaPacketConvert,
+        WebrtcTransportInternal,
+    },
+    sdp_box::SdpBox,
 };
 
 pub(crate) mod internal;
+pub mod sdp_box;
 
 const INIT_BWE_BITRATE_KBPS: u64 = 400; //400kbps
 
@@ -50,6 +54,7 @@ where
 {
     sync_socket: UdpSocket,
     async_socket: async_std::net::UdpSocket,
+    sdp_box: SdpBox,
     rtc: Rtc,
     internal: WebrtcTransportInternal<L>,
     buf: Vec<u8>,
@@ -79,6 +84,7 @@ where
         Ok(Self {
             sync_socket,
             async_socket,
+            sdp_box: Default::default(),
             rtc,
             internal: WebrtcTransportInternal::new(life_cycle),
             buf: vec![0; 2000],
@@ -96,8 +102,9 @@ where
         let candidate = Candidate::host(addr).expect("Should create candidate");
         self.rtc.add_local_candidate(candidate);
 
-        let sdp = self.rtc.sdp_api().accept_offer(SdpOffer::from_sdp_string(sdp)?)?;
-        Ok(sdp.to_sdp_string())
+        let mut sdp_offer = SdpOffer::from_sdp_string(sdp)?;
+        let sdp_answer = self.rtc.sdp_api().accept_offer(sdp_offer)?;
+        Ok(self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string()))
     }
 
     fn pop_internal_str0m_actions(&mut self, now_ms: u64) {
@@ -105,13 +112,13 @@ where
             match action {
                 Str0mAction::Rpc(rpc) => match rpc {
                     TransportRpcIn::UpdateSdp(req) => {
-                        if let Ok(sdp) = SdpOffer::from_sdp_string(&req.data.sdp) {
+                        if let Ok(mut sdp_offer) = SdpOffer::from_sdp_string(&req.data.sdp) {
                             for sender in req.data.senders {
                                 self.internal.map_remote_stream(sender);
                             }
-                            match self.rtc.sdp_api().accept_offer(sdp) {
-                                Ok(sdp) => {
-                                    let sdp = sdp.to_sdp_string();
+                            match self.rtc.sdp_api().accept_offer(sdp_offer) {
+                                Ok(sdp_answer) => {
+                                    let sdp = self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string());
                                     let res = RpcResponse::success(req.req_id, UpdateSdpResponse { sdp });
                                     self.internal.on_transport_rpc(now_ms, TransportRpcOut::UpdateSdpRes(res));
                                 }

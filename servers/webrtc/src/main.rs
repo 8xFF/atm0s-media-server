@@ -1,9 +1,9 @@
-use cluster_local::ServerLocal;
-use server::WebrtcServer;
-
-pub(crate) mod rpc;
+mod rpc;
 mod server;
 mod transport;
+
+use cluster_local::ServerLocal;
+use server::WebrtcServer;
 
 #[async_std::main]
 async fn main() {
