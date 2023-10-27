@@ -1,22 +1,11 @@
-use std::{
-    net::{SocketAddr, UdpSocket},
-    os::fd::{AsRawFd, FromRawFd},
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use async_std::prelude::FutureExt;
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, RpcResponse},
     EndpointRpcIn, EndpointRpcOut,
 };
-use str0m::{
-    bwe::Bitrate,
-    change::SdpOffer,
-    media::KeyframeRequestKind,
-    net::{Protocol, Receive},
-    rtp::ExtensionValues,
-    Candidate, Input, Output, Rtc, RtcError,
-};
+use str0m::{bwe::Bitrate, change::SdpOffer, media::KeyframeRequestKind, net::Receive, rtp::ExtensionValues, Candidate, Input, Output, Rtc, RtcError};
 use transport::{RequestKeyframeKind, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
 
 use crate::rpc::WebrtcConnectRequestSender;
@@ -27,6 +16,7 @@ use self::{
         rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
         Str0mAction, WebrtcTransportInternal,
     },
+    net::ComposeSocket,
     rtp_packet_convert::MediaPacketConvert,
     sdp_box::SdpBox,
     str0m_event_convert::Str0mEventConvert,
@@ -35,6 +25,7 @@ use self::{
 pub(crate) mod internal;
 mod mid_convert;
 mod mid_history;
+mod net;
 mod rtp_packet_convert;
 pub mod sdp_box;
 mod str0m_event_convert;
@@ -49,8 +40,7 @@ pub struct WebrtcTransport<L>
 where
     L: TransportLifeCycle,
 {
-    sync_socket: UdpSocket,
-    async_socket: async_std::net::UdpSocket,
+    socket: ComposeSocket,
     sdp_box: SdpBox,
     rtc: Rtc,
     internal: WebrtcTransportInternal<L>,
@@ -64,13 +54,6 @@ where
     L: TransportLifeCycle,
 {
     pub async fn new(life_cycle: L) -> Result<Self, std::io::Error> {
-        let addr: SocketAddr = "127.0.0.1:0".parse().expect("Should parse ip address");
-        let socket = socket2::Socket::new(socket2::Domain::IPV4, socket2::Type::DGRAM, None).expect("Should create socket");
-        socket.bind(&addr.into())?;
-
-        let async_socket = unsafe { async_std::net::UdpSocket::from_raw_fd(socket.as_raw_fd()) };
-        let sync_socket: UdpSocket = socket.into();
-
         let mut rtc = Rtc::builder()
             .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
             .set_ice_lite(true)
@@ -79,11 +62,18 @@ where
             .build();
         rtc.direct_api().enable_twcc_feedback();
 
+        let socket = ComposeSocket::new(0).await?;
+
+        for (addr, proto) in socket.local_addrs() {
+            log::info!("[TransportWebrtc] listen on {}::/{}", proto, addr);
+            let candidate = Candidate::host(addr, proto).expect("Should create candidate");
+            rtc.add_local_candidate(candidate);
+        }
+
         log::info!("[TransportWebrtc] created");
 
         Ok(Self {
-            sync_socket,
-            async_socket,
+            socket,
             sdp_box: Default::default(),
             rtc,
             internal: WebrtcTransportInternal::new(life_cycle),
@@ -98,11 +88,6 @@ where
     }
 
     pub fn on_remote_sdp(&mut self, sdp: &str) -> Result<String, RtcError> {
-        //TODO get ip address
-        let addr = self.sync_socket.local_addr().expect("Should has local port");
-        let candidate = Candidate::host(addr, Protocol::Udp).expect("Should create candidate");
-        self.rtc.add_local_candidate(candidate);
-
         let sdp_offer = SdpOffer::from_sdp_string(sdp)?;
         let sdp_answer = self.rtc.sdp_api().accept_offer(sdp_offer)?;
         Ok(self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string()))
@@ -219,7 +204,7 @@ where
             Ok(o) => match o {
                 Output::Timeout(t) => t,
                 Output::Transmit(t) => {
-                    if let Err(_e) = self.async_socket.send_to(&t.contents, t.destination).await {
+                    if let Err(_e) = self.socket.send_to(&t.contents, t.proto, t.source, t.destination).await {
                         log::error!("Error sending data: {}", _e);
                     }
                     return Ok(TransportIncomingEvent::Continue);
@@ -249,8 +234,13 @@ where
         // socket.set_read_timeout(Some(0)) is not ok
         if duration.is_zero() {
             // Drive time forwards in rtc straight away.
-            self.rtc.handle_input(Input::Timeout(Instant::now())).unwrap();
-            return Ok(TransportIncomingEvent::Continue);
+            return match self.rtc.handle_input(Input::Timeout(Instant::now())) {
+                Ok(_) => Ok(TransportIncomingEvent::Continue),
+                Err(e) => {
+                    log::error!("[TransportWebrtc] error handle input rtc: {:?}", e);
+                    Ok(TransportIncomingEvent::Continue)
+                }
+            };
         }
 
         // Scale up buffer to receive an entire UDP packet.
@@ -263,18 +253,19 @@ where
         // This is where having an async loop shines. We can await multiple things to
         // happen such as outgoing media data, the timeout and incoming network traffic.
         // When using async there is no need to set timeout on the socket.
-        let input = match self.async_socket.recv_from(&mut self.buf).timeout(duration).await {
-            Ok(Ok((n, source))) => {
+        let input = match self.socket.recv(&mut self.buf).timeout(duration).await {
+            Ok(Ok((n, source, destination, proto))) => {
                 // UDP data received.
                 unsafe {
                     self.buf.set_len(n);
                 }
+                log::trace!("received from {} => {}, proto {} len {}", source, destination, proto, n);
                 Input::Receive(
                     Instant::now(),
                     Receive {
-                        proto: Protocol::Udp,
+                        proto,
                         source,
-                        destination: self.async_socket.local_addr().expect("Should has local_addr"),
+                        destination,
                         contents: self.buf.as_slice().try_into().unwrap(),
                     },
                 )
