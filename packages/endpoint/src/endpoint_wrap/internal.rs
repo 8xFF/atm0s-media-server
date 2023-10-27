@@ -408,7 +408,9 @@ impl Drop for MediaEndpointInteral {
 #[cfg(test)]
 mod tests {
     use cluster::{generate_cluster_track_uuid, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta};
-    use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, RemoteTrackIncomingEvent, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
+    use transport::{
+        LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, RemoteTrackIncomingEvent, RequestKeyframeKind, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent,
+    };
 
     use crate::{
         endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS},
@@ -603,7 +605,7 @@ mod tests {
             endpoint.pop_action(),
             Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
                 1,
-                ClusterLocalTrackOutgoingEvent::RequestKeyFrame
+                ClusterLocalTrackOutgoingEvent::RequestKeyFrame(RequestKeyframeKind::Pli)
             )))
         );
 

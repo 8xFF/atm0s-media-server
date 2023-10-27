@@ -5,34 +5,58 @@ use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     EndpointRpcIn, EndpointRpcOut,
 };
-use str0m::{channel::ChannelId, media::Direction, Event};
+use str0m::{
+    media::{Direction, MediaKind, Mid, Simulcast},
+    IceConnectionState,
+};
 use transport::{
-    LocalTrackIncomingEvent, LocalTrackOutgoingEvent, RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta, TransportError, TransportIncomingEvent, TransportOutgoingEvent,
-    TransportRuntimeError,
+    LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, RequestKeyframeKind, TrackId, TrackMeta, TransportError, TransportIncomingEvent,
+    TransportOutgoingEvent, TransportRuntimeError,
 };
 
 use self::{
     life_cycle::{life_cycle_event_to_event, TransportLifeCycle},
     local_track_id_generator::LocalTrackIdGenerator,
-    mid_history::MidHistory,
-    rpc::{rpc_from_string, rpc_local_track_to_string, rpc_remote_track_to_string, rpc_to_string, IncomingRpc, TransportRpcOut},
-    rtp_packet_convert::RtpPacketConverter,
+    rpc::{rpc_from_string, rpc_local_track_to_string, rpc_remote_track_to_string, rpc_to_string, IncomingRpc, TransportRpcIn, TransportRpcOut},
     string_compression::StringCompression,
     track_info_queue::TrackInfoQueue,
-    utils::{to_transport_kind, track_to_mid},
+    utils::to_transport_kind,
 };
 use crate::{rpc::WebrtcConnectRequestSender, transport::internal::rpc::rpc_internal_to_string};
 
-use super::{Str0mAction, WebrtcTransportEvent};
+use super::{
+    mid_convert::{mid_to_track, track_to_mid},
+    WebrtcTransportEvent,
+};
 
 pub(crate) mod life_cycle;
 mod local_track_id_generator;
-mod mid_history;
 pub(crate) mod rpc;
-pub(crate) mod rtp_packet_convert;
 mod string_compression;
 mod track_info_queue;
-mod utils;
+pub(crate) mod utils;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Str0mInput {
+    Connected,
+    ChannelOpen(usize, String),
+    ChannelData(usize, bool, Vec<u8>),
+    ChannelClosed(usize),
+    IceConnectionStateChange(IceConnectionState),
+    MediaPacket(TrackId, MediaPacket),
+    MediaAdded(Direction, Mid, MediaKind, Option<Simulcast>),
+    MediaChanged(Direction, Mid),
+    KeyframeRequest(Mid, RequestKeyframeKind),
+    EgressBitrateEstimate(u64),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Str0mAction {
+    Media(Mid, MediaPacket),
+    RequestKeyFrame(Mid, RequestKeyframeKind),
+    Datachannel(usize, String),
+    Rpc(TransportRpcIn),
+}
 
 pub struct WebrtcTransportInternal<L>
 where
@@ -40,12 +64,10 @@ where
 {
     life_cycle: L,
     track_info_queue: TrackInfoQueue,
-    mid_history: MidHistory,
-    rtp_convert: RtpPacketConverter,
     local_track_id_map: HashMapMultiKey<TrackId, String, bool>,
     remote_track_id_map: HashMapMultiKey<TrackId, String, bool>,
     local_track_id_gen: LocalTrackIdGenerator,
-    channel_id: Option<ChannelId>,
+    channel_id: Option<usize>,
     channel_pending_msgs: VecDeque<String>,
     endpoint_actions: VecDeque<Result<TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>, TransportError>>,
     str0m_actions: VecDeque<Str0mAction>,
@@ -62,8 +84,6 @@ where
         Self {
             life_cycle,
             track_info_queue: Default::default(),
-            mid_history: Default::default(),
-            rtp_convert: Default::default(),
             local_track_id_map: Default::default(),
             remote_track_id_map: Default::default(),
             local_track_id_gen: Default::default(),
@@ -118,9 +138,9 @@ where
                 }
             },
             TransportOutgoingEvent::RemoteTrackEvent(track_id, event) => match event {
-                RemoteTrackOutgoingEvent::RequestKeyFrame => {
+                RemoteTrackOutgoingEvent::RequestKeyFrame(kind) => {
                     let mid = track_to_mid(track_id);
-                    self.str0m_actions.push_back(Str0mAction::RequestKeyFrame(mid));
+                    self.str0m_actions.push_back(Str0mAction::RequestKeyFrame(mid, kind));
                 }
                 RemoteTrackOutgoingEvent::Rpc(rpc) => {
                     let msg = rpc_remote_track_to_string(rpc);
@@ -150,22 +170,22 @@ where
         self.send_msg(msg);
     }
 
-    pub fn on_str0m_event(&mut self, now_ms: u64, event: str0m::Event) -> Result<(), TransportError> {
+    pub fn on_str0m_event(&mut self, now_ms: u64, event: Str0mInput) -> Result<(), TransportError> {
         match event {
-            Event::Connected => {
+            Str0mInput::Connected => {
                 life_cycle_event_to_event(self.life_cycle.on_webrtc_connected(now_ms), &mut self.endpoint_actions);
                 Ok(())
             }
-            Event::ChannelOpen(chanel_id, _name) => {
+            Str0mInput::ChannelOpen(chanel_id, _name) => {
                 self.channel_id = Some(chanel_id);
                 self.restore_msgs();
                 life_cycle_event_to_event(self.life_cycle.on_data_channel(now_ms, true), &mut self.endpoint_actions);
                 Ok(())
             }
-            Event::ChannelData(data) => {
-                let msg = match data.binary {
-                    true => self.string_compression.uncompress_zlib(&data.data),
-                    false => String::from_utf8(data.data).ok(),
+            Str0mInput::ChannelData(_channel_id, binary, data) => {
+                let msg = match binary {
+                    true => self.string_compression.uncompress_zlib(&data),
+                    false => String::from_utf8(data).ok(),
                 };
                 if let Some(data) = msg {
                     match rpc_from_string(&data) {
@@ -210,50 +230,31 @@ where
                     Err(TransportError::RuntimeError(TransportRuntimeError::RpcInvalid))
                 }
             }
-            Event::ChannelClose(_chanel_id) => {
+            Str0mInput::ChannelClosed(_chanel_id) => {
                 life_cycle_event_to_event(self.life_cycle.on_data_channel(now_ms, false), &mut self.endpoint_actions);
                 Ok(())
             }
-            Event::IceConnectionStateChange(state) => {
+            Str0mInput::IceConnectionStateChange(state) => {
                 life_cycle_event_to_event(self.life_cycle.on_ice_state(now_ms, state), &mut self.endpoint_actions);
                 Ok(())
             }
-            Event::RtpPacket(rtp) => {
-                let track_id = rtp.header.ext_vals.mid.map(|mid| utils::mid_to_track(&mid));
-                let ssrc: &u32 = &rtp.header.ssrc;
-                if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
-                    log::debug!(
-                        "on rtp {} => {}, mid: {:?}, rid: {:?} {:?}",
-                        rtp.header.ssrc,
-                        track_id,
-                        rtp.header.ext_vals.mid,
-                        rtp.header.ext_vals.rid,
-                        rtp.header.ext_vals.rid_repair
-                    );
-                    if let Some(pkt) = self.rtp_convert.to_pkt(rtp) {
-                        self.endpoint_actions
-                            .push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(track_id, RemoteTrackIncomingEvent::MediaPacket(pkt))));
-                        Ok(())
-                    } else {
-                        Err(TransportError::RuntimeError(TransportRuntimeError::RtpInvalid))
-                    }
-                } else {
-                    log::warn!("on rtp without mid {}", rtp.header.ssrc);
-                    Err(TransportError::RuntimeError(TransportRuntimeError::TrackIdNotFound))
-                }
+            Str0mInput::MediaPacket(track_id, pkt) => {
+                self.endpoint_actions
+                    .push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(track_id, RemoteTrackIncomingEvent::MediaPacket(pkt))));
+                Ok(())
             }
-            Event::MediaAdded(added) => {
-                match added.direction {
+            Str0mInput::MediaAdded(direction, mid, kind, _sim) => {
+                match direction {
                     Direction::RecvOnly => {
                         //remote stream
-                        let track_id = utils::mid_to_track(&added.mid);
-                        if let Some(info) = self.track_info_queue.pop(added.kind) {
+                        let track_id = mid_to_track(&mid);
+                        if let Some(info) = self.track_info_queue.pop(kind) {
                             self.remote_track_id_map.insert(track_id, info.name.clone(), true);
-                            log::info!("[TransportWebrtcInternal] added remote track {} => {} added {:?} {:?}", info.name, track_id, added, info);
+                            log::info!("[TransportWebrtcInternal] added remote track {} => {} added {:?}", info.name, track_id, info);
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackAdded(
                                 info.name,
                                 track_id,
-                                TrackMeta::from_kind(to_transport_kind(added.kind), Some(info.label)),
+                                TrackMeta::from_kind(to_transport_kind(kind), Some(info.label)),
                             )));
                             Ok(())
                         } else {
@@ -262,15 +263,12 @@ where
                     }
                     Direction::SendOnly => {
                         //local stream
-                        let track_id = utils::mid_to_track(&added.mid);
-                        let track_name = self.local_track_id_gen.generate(added.kind, added.mid);
-                        log::info!("[TransportWebrtcInternal] added local track {} => {} added {:?}", track_name, track_id, added);
+                        let track_id = mid_to_track(&mid);
+                        let track_name = self.local_track_id_gen.generate(kind, mid);
+                        log::info!("[TransportWebrtcInternal] added local track {} => {} ", track_name, track_id);
                         self.local_track_id_map.insert(track_id, track_name.clone(), true);
-                        self.endpoint_actions.push_back(Ok(TransportIncomingEvent::LocalTrackAdded(
-                            track_name,
-                            track_id,
-                            TrackMeta::from_kind(to_transport_kind(added.kind), None),
-                        )));
+                        self.endpoint_actions
+                            .push_back(Ok(TransportIncomingEvent::LocalTrackAdded(track_name, track_id, TrackMeta::from_kind(to_transport_kind(kind), None))));
                         Ok(())
                     }
                     _ => {
@@ -278,20 +276,20 @@ where
                     }
                 }
             }
-            Event::MediaChanged(media) => {
-                match media.direction {
+            Str0mInput::MediaChanged(direction, mid) => {
+                match direction {
                     Direction::Inactive => {
-                        let track_id = utils::mid_to_track(&media.mid);
+                        let track_id = mid_to_track(&mid);
                         if let Some((active, name)) = self.remote_track_id_map.get_mut_by_k1(&track_id) {
-                            log::info!("[TransportWebrtcInternal] switched remote to inactive {}", media.mid);
+                            log::info!("[TransportWebrtcInternal] switched remote to inactive {}", mid);
                             *active = false;
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackRemoved(name.clone(), track_id)));
                         } else if let Some((active, name)) = self.local_track_id_map.get_mut_by_k1(&track_id) {
-                            log::info!("[TransportWebrtcInternal] switched local to inactive {}", media.mid);
+                            log::info!("[TransportWebrtcInternal] switched local to inactive {}", mid);
                             *active = false;
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::LocalTrackRemoved(name.clone(), track_id)));
                         } else {
-                            log::warn!("[TransportWebrtcInternal] switch track to inactive {} but cannot determine remote or local", media.mid);
+                            log::warn!("[TransportWebrtcInternal] switch track to inactive {} but cannot determine remote or local", mid);
                         }
                     }
                     Direction::RecvOnly => {
@@ -306,30 +304,17 @@ where
                 }
                 Ok(())
             }
-            Event::KeyframeRequest(req) => {
-                let track_id = utils::mid_to_track(&req.mid);
+            Str0mInput::KeyframeRequest(mid, kind) => {
+                let track_id = mid_to_track(&mid);
                 self.endpoint_actions
-                    .push_back(Ok(TransportIncomingEvent::LocalTrackEvent(track_id, LocalTrackIncomingEvent::RequestKeyFrame)));
+                    .push_back(Ok(TransportIncomingEvent::LocalTrackEvent(track_id, LocalTrackIncomingEvent::RequestKeyFrame(kind))));
                 Ok(())
             }
-            Event::PeerStats(stats) => {
-                log::debug!("[TransportWebrtcInternal] on stats {:?}", stats);
+            Str0mInput::EgressBitrateEstimate(bitrate) => {
+                log::info!("[TransportWebrtcInternal] on egress bitrate estimate {} bps", bitrate);
+                self.endpoint_actions.push_back(Ok(TransportIncomingEvent::EgressBitrateEstimate(bitrate)));
                 Ok(())
             }
-            Event::MediaIngressStats(stats) => {
-                log::debug!("[TransportWebrtcInternal] on ingress stats {:?}", stats);
-                Ok(())
-            }
-            Event::MediaEgressStats(stats) => {
-                log::debug!("[TransportWebrtcInternal] on egress stats {:?}", stats);
-                Ok(())
-            }
-            Event::EgressBitrateEstimate(bitrate) => {
-                log::debug!("[TransportWebrtcInternal] on egress bitrate estimate {} kbps", bitrate);
-                self.endpoint_actions.push_back(Ok(TransportIncomingEvent::EgressBitrateEstimate(bitrate.as_u64())));
-                Ok(())
-            }
-            _ => Ok(()),
         }
     }
 
@@ -350,29 +335,25 @@ impl<L: TransportLifeCycle> Drop for WebrtcTransportInternal<L> {
 
 #[cfg(test)]
 mod test {
-    use std::time::Instant;
-
     use endpoint::{rpc::TrackInfo, EndpointRpcOut};
-    use str0m::{
-        channel::{ChannelData, ChannelId},
-        media::{Direction, MediaAdded, MediaChanged, MediaKind, MediaTime},
-        rtp::{RtpHeader, RtpPacket},
-        Msid,
+    use str0m::media::{Direction, MediaKind};
+    use transport::{MediaPacket, TransportIncomingEvent};
+
+    use crate::{
+        rpc::WebrtcConnectRequestSender,
+        transport::{internal::Str0mInput, mid_convert::track_to_mid},
     };
-    use transport::{PayloadCodec, TransportIncomingEvent};
 
-    use crate::rpc::WebrtcConnectRequestSender;
-
-    use super::{life_cycle::sdk::SdkTransportLifeCycle, utils::track_to_mid, WebrtcTransportInternal};
+    use super::{life_cycle::sdk::SdkTransportLifeCycle, WebrtcTransportInternal};
 
     fn create_connected_internal() -> WebrtcTransportInternal<SdkTransportLifeCycle> {
         let mut internal = WebrtcTransportInternal::new(SdkTransportLifeCycle::new(0));
 
         // we need wait both webrtc and datachannel connected
-        internal.on_str0m_event(100, str0m::Event::Connected).unwrap();
+        internal.on_str0m_event(100, Str0mInput::Connected).unwrap();
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(internal.str0m_action(), None);
-        internal.on_str0m_event(100, str0m::Event::ChannelOpen(ChannelId(0), "data".to_string())).unwrap();
+        internal.on_str0m_event(100, Str0mInput::ChannelOpen(0, "data".to_string())).unwrap();
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::State(transport::TransportStateEvent::Connected))));
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(internal.str0m_action(), None);
@@ -384,7 +365,7 @@ mod test {
     fn simple_flow_webrtc_connected() {
         let mut internal = create_connected_internal();
 
-        internal.on_str0m_event(100, str0m::Event::ChannelClose(ChannelId(0))).unwrap();
+        internal.on_str0m_event(100, Str0mInput::ChannelClosed(0)).unwrap();
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::State(transport::TransportStateEvent::Disconnected))));
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(internal.str0m_action(), None);
@@ -397,15 +378,7 @@ mod test {
             screen: None,
         });
         internal
-            .on_str0m_event(
-                100,
-                str0m::Event::MediaAdded(MediaAdded {
-                    mid: track_to_mid(100),
-                    kind: MediaKind::Audio,
-                    direction: Direction::RecvOnly,
-                    simulcast: None,
-                }),
-            )
+            .on_str0m_event(100, Str0mInput::MediaAdded(Direction::RecvOnly, track_to_mid(100), MediaKind::Audio, None))
             .unwrap();
 
         assert_eq!(
@@ -417,15 +390,7 @@ mod test {
             )))
         );
 
-        internal
-            .on_str0m_event(
-                100,
-                str0m::Event::MediaChanged(MediaChanged {
-                    mid: track_to_mid(100),
-                    direction: Direction::Inactive,
-                }),
-            )
-            .unwrap();
+        internal.on_str0m_event(100, Str0mInput::MediaChanged(Direction::Inactive, track_to_mid(100))).unwrap();
 
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::RemoteTrackRemoved("audio_main".to_string(), 100,))));
     }
@@ -434,12 +399,12 @@ mod test {
     fn simple_flow_webrtc_connection_reconnect() {
         let mut internal = create_connected_internal();
 
-        internal.on_str0m_event(100, str0m::Event::IceConnectionStateChange(str0m::IceConnectionState::Disconnected)).unwrap();
+        internal.on_str0m_event(100, Str0mInput::IceConnectionStateChange(str0m::IceConnectionState::Disconnected)).unwrap();
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::State(transport::TransportStateEvent::Reconnecting))));
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(internal.str0m_action(), None);
 
-        internal.on_str0m_event(100, str0m::Event::IceConnectionStateChange(str0m::IceConnectionState::Connected)).unwrap();
+        internal.on_str0m_event(100, Str0mInput::IceConnectionStateChange(str0m::IceConnectionState::Connected)).unwrap();
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::State(transport::TransportStateEvent::Reconnected))));
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(internal.str0m_action(), None);
@@ -449,7 +414,7 @@ mod test {
     fn simple_flow_webrtc_connection_failed() {
         let mut internal = create_connected_internal();
 
-        internal.on_str0m_event(100, str0m::Event::IceConnectionStateChange(str0m::IceConnectionState::Disconnected)).unwrap();
+        internal.on_str0m_event(100, Str0mInput::IceConnectionStateChange(str0m::IceConnectionState::Disconnected)).unwrap();
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::State(transport::TransportStateEvent::Reconnecting))));
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(internal.str0m_action(), None);
@@ -481,13 +446,8 @@ mod test {
     fn invalid_rpc() {
         let mut internal = create_connected_internal();
 
-        let data = ChannelData {
-            id: ChannelId(0),
-            binary: false,
-            data: "".as_bytes().to_vec(),
-        };
         assert_eq!(
-            internal.on_str0m_event(1000, str0m::Event::ChannelData(data)),
+            internal.on_str0m_event(1000, Str0mInput::ChannelData(0, false, "".as_bytes().to_vec())),
             Err(transport::TransportError::RuntimeError(transport::TransportRuntimeError::RpcInvalid))
         );
     }
@@ -497,13 +457,7 @@ mod test {
         let mut internal = create_connected_internal();
 
         let req_str = r#"{"req_id":1,"type":"request","request":"peer.close"}"#;
-        let data = ChannelData {
-            id: ChannelId(0),
-            binary: false,
-            data: req_str.as_bytes().to_vec(),
-        };
-
-        assert_eq!(internal.on_str0m_event(1000, str0m::Event::ChannelData(data)), Ok(()));
+        assert_eq!(internal.on_str0m_event(1000, Str0mInput::ChannelData(0, false, req_str.as_bytes().to_vec())), Ok(()));
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::Rpc(endpoint::rpc::EndpointRpcIn::PeerClose))));
         assert_eq!(internal.endpoint_action(), None);
     }
@@ -527,17 +481,17 @@ mod test {
         assert_eq!(internal.str0m_action(), None);
 
         // we need wait both webrtc and datachannel connected
-        internal.on_str0m_event(100, str0m::Event::Connected).unwrap();
+        internal.on_str0m_event(100, Str0mInput::Connected).unwrap();
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(internal.str0m_action(), None);
 
-        internal.on_str0m_event(100, str0m::Event::ChannelOpen(ChannelId(0), "data".to_string())).unwrap();
+        internal.on_str0m_event(100, Str0mInput::ChannelOpen(0, "data".to_string())).unwrap();
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::State(transport::TransportStateEvent::Connected))));
         assert_eq!(internal.endpoint_action(), None);
         assert_eq!(
             internal.str0m_action(),
             Some(crate::transport::Str0mAction::Datachannel(
-                ChannelId(0),
+                0,
                 "{\"data\":{\"kind\":\"audio\",\"peer\":\"test\",\"peer_hash\":1,\"state\":null,\"stream\":\"track\"},\"event\":\"stream_added\",\"type\":\"event\"}".to_string()
             ))
         );
@@ -556,15 +510,7 @@ mod test {
         });
 
         internal
-            .on_str0m_event(
-                1000,
-                str0m::Event::MediaAdded(MediaAdded {
-                    mid: track_to_mid(100),
-                    kind: str0m::media::MediaKind::Audio,
-                    direction: str0m::media::Direction::RecvOnly,
-                    simulcast: None,
-                }),
-            )
+            .on_str0m_event(1000, Str0mInput::MediaAdded(Direction::RecvOnly, track_to_mid(100), MediaKind::Audio, None))
             .unwrap();
 
         // must fire remote track added to endpoint
@@ -580,80 +526,12 @@ mod test {
 
         // must fire remote track pkt to endpoint
         {
-            let mut header = RtpHeader::default();
-            header.ext_vals.mid = Some(track_to_mid(100));
-            header.ssrc = 10000.into();
-            header.payload_type = 111.into(); //opus
-            header.sequence_number = 1;
-            header.timestamp = 1000;
-
-            let pkt = RtpPacket {
-                seq_no: 1.into(),
-                time: MediaTime::new(1000, 1000),
-                header,
-                payload: vec![1, 2, 3],
-                timestamp: Instant::now(),
-                last_sender_info: None,
-                nackable: false,
-            };
-            internal.on_str0m_event(2000, str0m::Event::RtpPacket(pkt)).unwrap();
+            let pkt = MediaPacket::simple_audio(1, 1000, vec![1, 2, 3]);
+            internal.on_str0m_event(2000, Str0mInput::MediaPacket(100, pkt.clone())).unwrap();
 
             assert_eq!(
                 internal.endpoint_action(),
-                Some(Ok(TransportIncomingEvent::RemoteTrackEvent(
-                    100,
-                    transport::RemoteTrackIncomingEvent::MediaPacket(transport::MediaPacket {
-                        codec: PayloadCodec::Opus,
-                        seq_no: 1,
-                        time: 1000,
-                        marker: false,
-                        ext_vals: transport::MediaPacketExtensions {
-                            abs_send_time: None,
-                            transport_cc: None,
-                        },
-                        nackable: true,
-                        payload: vec![1, 2, 3],
-                    })
-                )))
-            );
-        }
-
-        // must fire remote track rtp without mid to endpoint
-        {
-            let mut header = RtpHeader::default();
-            header.ssrc = 10000.into();
-            header.payload_type = 111.into();
-            header.sequence_number = 2;
-            header.timestamp = 1000;
-
-            let pkt = RtpPacket {
-                seq_no: 2.into(),
-                time: MediaTime::new(1000, 1000),
-                header,
-                payload: vec![1, 2, 3],
-                timestamp: Instant::now(),
-                last_sender_info: None,
-                nackable: false,
-            };
-            internal.on_str0m_event(2000, str0m::Event::RtpPacket(pkt)).unwrap();
-
-            assert_eq!(
-                internal.endpoint_action(),
-                Some(Ok(TransportIncomingEvent::RemoteTrackEvent(
-                    100,
-                    transport::RemoteTrackIncomingEvent::MediaPacket(transport::MediaPacket {
-                        codec: PayloadCodec::Opus,
-                        seq_no: 2,
-                        time: 1000,
-                        marker: false,
-                        ext_vals: transport::MediaPacketExtensions {
-                            abs_send_time: None,
-                            transport_cc: None,
-                        },
-                        nackable: true,
-                        payload: vec![1, 2, 3],
-                    })
-                )))
+                Some(Ok(TransportIncomingEvent::RemoteTrackEvent(100, transport::RemoteTrackIncomingEvent::MediaPacket(pkt))))
             );
         }
     }

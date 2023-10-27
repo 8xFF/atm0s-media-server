@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use cluster::{ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterTrackStats};
-use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, TrackId, TrackMeta};
+use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, RequestKeyframeKind, TrackId, TrackMeta};
 
 use crate::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverLayerLimit},
@@ -78,7 +78,8 @@ impl LocalTrack {
         log::info!("[LocalTrack {}] set target {:?}", self.track_name, target);
         if self.filter.set_target(target) {
             log::info!("[LocalTrack {}] request key-frame", self.track_name);
-            self.out_actions.push_back(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::RequestKeyFrame));
+            self.out_actions
+                .push_back(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::RequestKeyFrame(RequestKeyframeKind::Pli)));
         }
     }
 
@@ -112,8 +113,8 @@ impl LocalTrack {
 
     pub fn on_transport_event(&mut self, event: LocalTrackIncomingEvent<LocalTrackRpcIn>) {
         match event {
-            LocalTrackIncomingEvent::RequestKeyFrame => {
-                self.out_actions.push_back(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::RequestKeyFrame));
+            LocalTrackIncomingEvent::RequestKeyFrame(kind) => {
+                self.out_actions.push_back(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::RequestKeyFrame(kind)));
             }
             LocalTrackIncomingEvent::Rpc(rpc) => match rpc {
                 LocalTrackRpcIn::Switch(req) => {
@@ -183,7 +184,7 @@ impl LocalTrack {
 #[cfg(test)]
 mod tests {
     use cluster::{ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent};
-    use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, TrackMeta};
+    use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, RequestKeyframeKind, TrackMeta};
 
     use crate::{
         endpoint_wrap::internal::local_track::{LocalTrackInternalOutputEvent, LocalTrackOutput},
@@ -206,8 +207,11 @@ mod tests {
     fn incoming_transport_keyframe_request_should_fire_cluster() {
         let mut track = LocalTrack::new("room1", "peer1", 100, "audio_main", TrackMeta::new_audio(None));
 
-        track.on_transport_event(LocalTrackIncomingEvent::RequestKeyFrame);
-        assert_eq!(track.pop_action(), Some(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::RequestKeyFrame)));
+        track.on_transport_event(LocalTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli));
+        assert_eq!(
+            track.pop_action(),
+            Some(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::RequestKeyFrame(RequestKeyframeKind::Pli)))
+        );
     }
 
     #[test]

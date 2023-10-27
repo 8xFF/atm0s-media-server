@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use str0m::media::MediaKind;
 
@@ -16,7 +16,7 @@ pub struct TrackInfoQueue {
 }
 
 impl TrackInfoQueue {
-    pub fn add(&mut self, uuid: &str, label: &str, kind: &str, name: &str) {
+    pub fn add(&mut self, _uuid: &str, label: &str, kind: &str, name: &str) {
         match kind {
             "audio" | "Audio" | "AUDIO" => self.audios.push_back(MsidInfo {
                 label: label.to_string(),
@@ -53,7 +53,7 @@ mod test {
             queue.pop(str0m::media::MediaKind::Audio),
             Some(MsidInfo {
                 label: "audio_label".to_string(),
-                kind: "kind".to_string(),
+                kind: "audio".to_string(),
                 name: "name".to_string(),
             })
         );
@@ -61,7 +61,7 @@ mod test {
             queue.pop(str0m::media::MediaKind::Video),
             Some(MsidInfo {
                 label: "video_label".to_string(),
-                kind: "kind".to_string(),
+                kind: "video".to_string(),
                 name: "name".to_string(),
             })
         );

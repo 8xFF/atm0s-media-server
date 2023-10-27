@@ -68,9 +68,9 @@ impl RemoteTrack {
 
     pub fn on_cluster_event(&mut self, event: ClusterRemoteTrackIncomingEvent) {
         match event {
-            ClusterRemoteTrackIncomingEvent::RequestKeyFrame => {
+            ClusterRemoteTrackIncomingEvent::RequestKeyFrame(kind) => {
                 log::info!("[RemoteTrack {}] request keyframe", self.track_name);
-                self.out_actions.push_back(RemoteTrackOutput::Transport(RemoteTrackOutgoingEvent::RequestKeyFrame));
+                self.out_actions.push_back(RemoteTrackOutput::Transport(RemoteTrackOutgoingEvent::RequestKeyFrame(kind)));
             }
             ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(_) => {
                 //TODO
@@ -139,7 +139,7 @@ mod tests {
         RpcRequest, RpcResponse,
     };
     use cluster::{ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent};
-    use transport::{MediaKind, MediaPacket, RemoteTrackOutgoingEvent, TrackMeta};
+    use transport::{MediaKind, MediaPacket, RemoteTrackOutgoingEvent, RequestKeyframeKind, TrackMeta};
 
     use super::RemoteTrack;
 
@@ -226,8 +226,11 @@ mod tests {
     fn incoming_request_keyframe_should_fire_transport_event() {
         let mut track = RemoteTrack::new("room1", "peer1", 100, "video_main", TrackMeta::new_audio(None));
 
-        track.on_cluster_event(ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
-        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Transport(transport::RemoteTrackOutgoingEvent::RequestKeyFrame)));
+        track.on_cluster_event(ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli));
+        assert_eq!(
+            track.pop_action(),
+            Some(RemoteTrackOutput::Transport(transport::RemoteTrackOutgoingEvent::RequestKeyFrame(RequestKeyframeKind::Pli)))
+        );
         assert_eq!(track.pop_action(), None);
     }
 

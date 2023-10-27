@@ -10,14 +10,14 @@ use endpoint::{
     EndpointRpcIn, EndpointRpcOut,
 };
 use str0m::{
+    bwe::Bitrate,
     change::SdpOffer,
-    channel::ChannelId,
-    media::{KeyframeRequestKind, MediaTime, Mid},
+    media::{KeyframeRequestKind, MediaTime},
     net::Receive,
     rtp::ExtensionValues,
     Candidate, Input, Output, Rtc, RtcError,
 };
-use transport::{MediaPacket, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
+use transport::{RequestKeyframeKind, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
 
 use crate::rpc::WebrtcConnectRequestSender;
 
@@ -25,24 +25,21 @@ use self::{
     internal::{
         life_cycle::TransportLifeCycle,
         rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
-        rtp_packet_convert::MediaPacketConvert,
-        WebrtcTransportInternal,
+        Str0mAction, WebrtcTransportInternal,
     },
+    rtp_packet_convert::MediaPacketConvert,
     sdp_box::SdpBox,
+    str0m_event_convert::Str0mEventConvert,
 };
 
 pub(crate) mod internal;
+mod mid_convert;
+mod mid_history;
+mod rtp_packet_convert;
 pub mod sdp_box;
+mod str0m_event_convert;
 
 const INIT_BWE_BITRATE_KBPS: u64 = 400; //400kbps
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Str0mAction {
-    Media(Mid, MediaPacket),
-    RequestKeyFrame(Mid),
-    Datachannel(ChannelId, String),
-    Rpc(TransportRpcIn),
-}
 
 pub enum WebrtcTransportEvent {
     RemoteIce(String),
@@ -58,6 +55,7 @@ where
     rtc: Rtc,
     internal: WebrtcTransportInternal<L>,
     buf: Vec<u8>,
+    event_convert: Str0mEventConvert,
     pkt_convert: MediaPacketConvert,
 }
 
@@ -74,7 +72,7 @@ where
         let sync_socket: UdpSocket = socket.into();
 
         let rtc = Rtc::builder()
-            // .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
+            .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
             .set_ice_lite(true)
             .set_rtp_mode(true)
             .set_stats_interval(Some(Duration::from_millis(500)))
@@ -88,6 +86,7 @@ where
             rtc,
             internal: WebrtcTransportInternal::new(life_cycle),
             buf: vec![0; 2000],
+            event_convert: Default::default(),
             pkt_convert: Default::default(),
         })
     }
@@ -102,7 +101,7 @@ where
         let candidate = Candidate::host(addr).expect("Should create candidate");
         self.rtc.add_local_candidate(candidate);
 
-        let mut sdp_offer = SdpOffer::from_sdp_string(sdp)?;
+        let sdp_offer = SdpOffer::from_sdp_string(sdp)?;
         let sdp_answer = self.rtc.sdp_api().accept_offer(sdp_offer)?;
         Ok(self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string()))
     }
@@ -112,7 +111,7 @@ where
             match action {
                 Str0mAction::Rpc(rpc) => match rpc {
                     TransportRpcIn::UpdateSdp(req) => {
-                        if let Ok(mut sdp_offer) = SdpOffer::from_sdp_string(&req.data.sdp) {
+                        if let Ok(sdp_offer) = SdpOffer::from_sdp_string(&req.data.sdp) {
                             for sender in req.data.senders {
                                 self.internal.map_remote_stream(sender);
                             }
@@ -155,18 +154,26 @@ where
                         debug_assert!(false, "should not missing mid");
                     }
                 }
-                Str0mAction::RequestKeyFrame(mid) => {
+                Str0mAction::RequestKeyFrame(mid, kind) => {
                     if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
-                        stream.request_keyframe(KeyframeRequestKind::Pli);
+                        match kind {
+                            RequestKeyframeKind::Pli => stream.request_keyframe(KeyframeRequestKind::Pli),
+                            RequestKeyframeKind::Fir => stream.request_keyframe(KeyframeRequestKind::Fir),
+                        }
                     } else {
                         log::warn!("[TransportWebrtc] missing track for mid {} when requesting key-frame", mid);
                         debug_assert!(false, "should not missing mid");
                     }
                 }
                 Str0mAction::Datachannel(cid, msg) => {
-                    if let Some(mut channel) = self.rtc.channel(cid) {
-                        if let Err(e) = channel.write(false, msg.as_bytes()) {
-                            log::error!("[TransportWebrtc] write datachannel error {:?}", e);
+                    if let Some(cid) = self.event_convert.channel_id(cid) {
+                        if let Some(mut channel) = self.rtc.channel(cid) {
+                            if let Err(e) = channel.write(false, msg.as_bytes()) {
+                                log::error!("[TransportWebrtc] write datachannel error {:?}", e);
+                            }
+                        } else {
+                            log::warn!("[TransportWebrtc] missing channel for id {:?}", cid);
+                            debug_assert!(false, "should not missing channel id");
                         }
                     } else {
                         log::warn!("[TransportWebrtc] missing channel for id {:?}", cid);
@@ -215,9 +222,13 @@ where
                     return Ok(TransportIncomingEvent::Continue);
                 }
                 Output::Event(e) => {
-                    self.internal.on_str0m_event(now_ms, e)?;
-                    if let Some(action) = self.internal.endpoint_action() {
-                        return action;
+                    if let Ok(Some(e)) = self.event_convert.str0m_to_internal(e) {
+                        self.internal.on_str0m_event(now_ms, e)?;
+                        if let Some(action) = self.internal.endpoint_action() {
+                            return action;
+                        } else {
+                            return Ok(TransportIncomingEvent::Continue);
+                        }
                     } else {
                         return Ok(TransportIncomingEvent::Continue);
                     }

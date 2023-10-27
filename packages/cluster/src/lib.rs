@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use transport::{MediaKind, MediaPacket, TrackId};
+use transport::{MediaKind, MediaPacket, RequestKeyframeKind, TrackId};
 
 pub type ClusterTrackUuid = u64;
 pub type ClusterPeerId = String;
@@ -63,7 +63,7 @@ pub enum ClusterEndpointError {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ClusterRemoteTrackIncomingEvent {
-    RequestKeyFrame,
+    RequestKeyFrame(RequestKeyframeKind),
     RequestLimitBitrate(u32),
 }
 
@@ -92,7 +92,7 @@ pub enum ClusterRemoteTrackOutgoingEvent {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterLocalTrackOutgoingEvent {
-    RequestKeyFrame,
+    RequestKeyFrame(RequestKeyframeKind),
     LimitBitrate(u32),
     Subscribe(ClusterPeerId, ClusterTrackName),
     Unsubscribe(ClusterPeerId, ClusterTrackName),

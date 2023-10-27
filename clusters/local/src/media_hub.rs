@@ -94,7 +94,7 @@ impl LocalMediaHub {
 mod test {
     use super::*;
     use cluster::generate_cluster_track_uuid;
-    use transport::MediaPacket;
+    use transport::{MediaPacket, RequestKeyframeKind};
 
     #[test]
     fn test_local_media_hub() {
@@ -126,13 +126,16 @@ mod test {
         let (tx2, _rx2) = async_std::channel::bounded(100);
         media_hub.subscribe(track_uuid, consumer_id, tx2);
 
-        media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
+        media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli));
         assert_eq!(
             rx.try_recv(),
-            Ok(ClusterEndpointIncomingEvent::RemoteTrackEvent(track_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame))
+            Ok(ClusterEndpointIncomingEvent::RemoteTrackEvent(
+                track_id,
+                ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli)
+            ))
         );
         media_hub.remove_track(track_uuid);
-        media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
+        media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli));
         assert!(rx.try_recv().is_err());
     }
 }

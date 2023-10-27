@@ -2,7 +2,7 @@ use self::rid_history::RidHistory;
 use str0m::media::Pt;
 use transport::{H264Profile, MediaPacket, MediaPacketExtensions, PayloadCodec, Vp9Profile};
 
-use super::utils::rid_to_u16;
+use super::mid_convert::rid_to_u16;
 
 mod bit_read;
 mod h264;

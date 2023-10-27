@@ -74,9 +74,9 @@ impl ClusterEndpoint for PeerLocal {
                     let track_uuid = generate_cluster_track_uuid(&self.room_id, &peer_id, &track_name);
                     self.media_hub.write().unsubscribe(track_uuid, consumer_id);
                 }
-                ClusterLocalTrackOutgoingEvent::RequestKeyFrame => {
+                ClusterLocalTrackOutgoingEvent::RequestKeyFrame(kind) => {
                     let consumer_id = self.peer_id_hash | track_id as u64;
-                    self.media_hub.read().forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
+                    self.media_hub.read().forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame(kind));
                 }
                 ClusterLocalTrackOutgoingEvent::LimitBitrate(bitrate) => {
                     //TODO aggerate all consumers bitrate

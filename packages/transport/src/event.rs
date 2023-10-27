@@ -6,9 +6,15 @@ pub enum RemoteTrackIncomingEvent<RR> {
     Rpc(RR),
 }
 
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum RequestKeyframeKind {
+    Pli,
+    Fir,
+}
+
 #[derive(PartialEq, Eq, Debug)]
 pub enum LocalTrackIncomingEvent<RL> {
-    RequestKeyFrame,
+    RequestKeyFrame(RequestKeyframeKind),
     Rpc(RL),
 }
 
@@ -37,7 +43,7 @@ pub enum TransportIncomingEvent<RE, RR, RL> {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum RemoteTrackOutgoingEvent<RR> {
-    RequestKeyFrame,
+    RequestKeyFrame(RequestKeyframeKind),
     Rpc(RR),
 }
 

@@ -13,7 +13,7 @@ cluster-local = { workspace = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }
 utils = { workspace = true }
-str0m = { path = "/Users/giangminh/Workspace/bluesea/research/str0m" }
+str0m = { version = "0.3.0" }
 socket2 = "0.5.4"
 parking_lot = { workspace = true }
 futures = { workspace = true }
