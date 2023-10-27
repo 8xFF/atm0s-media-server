@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use self::webrtc_session::WebrtcSession;
-use crate::rpc::{RpcEvent, RpcResponse, WebrtcConnectResponse};
+use crate::rpc::{RpcEvent, RpcResponse, WebrtcConnectResponse, WebrtcRemoteIceRequest};
 use async_std::{channel::Sender, prelude::FutureExt};
 use cluster::{Cluster, ClusterEndpoint};
 use parking_lot::RwLock;
@@ -22,7 +22,7 @@ impl PeerIdentity {
 }
 
 pub enum InternalControl {
-    RemoteIce(String, RpcResponse<()>),
+    RemoteIce(WebrtcRemoteIceRequest, RpcResponse<()>),
     ForceClose(Sender<()>),
 }
 
@@ -98,9 +98,9 @@ where
                     peers_c.write().remove(&local_peer_id);
                 });
             }
-            RpcEvent::WebrtcRemoteIce(conn_id, ice, res) => {
-                if let Some(tx) = self.conns.read().get(&conn_id) {
-                    if let Err(_e) = tx.send_blocking(InternalControl::RemoteIce(ice, res)) {
+            RpcEvent::WebrtcRemoteIce(req, res) => {
+                if let Some(tx) = self.conns.read().get(&req.conn_id) {
+                    if let Err(_e) = tx.send_blocking(InternalControl::RemoteIce(req, res)) {
                         //TODO handle this
                     };
                 }

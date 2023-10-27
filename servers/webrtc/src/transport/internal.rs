@@ -22,7 +22,10 @@ use self::{
     track_info_queue::TrackInfoQueue,
     utils::to_transport_kind,
 };
-use crate::{rpc::WebrtcConnectRequestSender, transport::internal::rpc::rpc_internal_to_string};
+use crate::{
+    rpc::{RpcResponse, WebrtcConnectRequestSender, WebrtcRemoteIceRequest},
+    transport::internal::rpc::rpc_internal_to_string,
+};
 
 use super::{
     mid_convert::{mid_to_track, track_to_mid},
@@ -57,6 +60,7 @@ pub enum Str0mAction {
     Datachannel(usize, String),
     Rpc(TransportRpcIn),
     ConfigEgressBitrate { current: u32, desired: u32 },
+    RemoteIce(WebrtcRemoteIceRequest, RpcResponse<()>),
 }
 
 pub struct WebrtcTransportInternal<L>
@@ -165,7 +169,12 @@ where
         Ok(())
     }
 
-    pub fn on_custom_event(&mut self, _now_ms: u64, _event: WebrtcTransportEvent) -> Result<(), TransportError> {
+    pub fn on_custom_event(&mut self, _now_ms: u64, event: WebrtcTransportEvent) -> Result<(), TransportError> {
+        match event {
+            WebrtcTransportEvent::RemoteIce(ice, res) => {
+                self.str0m_actions.push_back(Str0mAction::RemoteIce(ice, res));
+            }
+        }
         Ok(())
     }
 
