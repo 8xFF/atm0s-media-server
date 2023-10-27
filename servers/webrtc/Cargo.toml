@@ -13,7 +13,7 @@ cluster-local = { workspace = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }
 utils = { workspace = true }
-str0m = { path = "/Users/giangminh/Workspace/bluesea/research/str0m" }
+str0m = { git = "https://github.com/algesten/str0m.git", hash = "937fe774deab8c9da9fbcc677bf3878007780ece"}
 socket2 = "0.5.4"
 parking_lot = { workspace = true }
 futures = { workspace = true }
@@ -26,3 +26,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 lz4_flex = { version = "0.9.3" }
 flate2 = { version = "1.0.24" }
+
+[dev-dependencies]
+criterion = { version = "0.4", features = ["html_reports"] }
+
+
+[[bench]]
+name = "sdp_rewrite"
+harness = false

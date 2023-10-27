@@ -1,7 +1,7 @@
 use async_std::channel::{bounded, Receiver, Sender};
 use poem_openapi::Object;
 use serde::{Deserialize, Serialize};
-use utils::{MixMinusAudioMode, PayloadType, RemoteBitrateControlMode, ServerError};
+use utils::{EndpointSubscribeScope, MixMinusAudioMode, PayloadType, RemoteBitrateControlMode, ServerError};
 
 pub(crate) mod http;
 
@@ -43,6 +43,7 @@ pub struct WebrtcConnectRequest {
     pub version: Option<String>,
     pub room: String,
     pub peer: String,
+    pub sub_scope: Option<EndpointSubscribeScope>,
     pub token: String,
     pub mix_minus_audio: Option<MixMinusAudioMode>,
     pub join_now: Option<bool>,

@@ -1,11 +1,19 @@
-use cluster::{generate_cluster_track_uuid, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackScalingType, ClusterTrackStatus, ClusterTrackUuid};
+use cluster::{
+    generate_cluster_track_uuid, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackScalingType, ClusterTrackStats, ClusterTrackStatus, ClusterTrackUuid,
+};
 use std::collections::VecDeque;
 use transport::{RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta};
+
+const BITRATE_WINDOW_MS: u64 = 2_000;
 
 use crate::{
     rpc::{RemoteTrackRpcIn, RemoteTrackRpcOut},
     RpcResponse,
 };
+
+use self::bitrate_measure::BitrateMeasure;
+
+mod bitrate_measure;
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum RemoteTrackOutput {
@@ -21,6 +29,7 @@ pub struct RemoteTrack {
     track_meta: TrackMeta,
     out_actions: VecDeque<RemoteTrackOutput>,
     active: bool,
+    bitrate_measure: Option<(BitrateMeasure, Option<ClusterTrackStats>)>,
 }
 
 impl RemoteTrack {
@@ -29,6 +38,11 @@ impl RemoteTrack {
             cluster_track_uuid: generate_cluster_track_uuid(room_id, peer_id, track_name),
             track_id,
             track_name: track_name.into(),
+            bitrate_measure: if track_meta.kind.is_video() {
+                Some((BitrateMeasure::new(BITRATE_WINDOW_MS), None))
+            } else {
+                None
+            },
             track_meta,
             out_actions: Default::default(),
             active: false, //we need wait for first rtp packet
@@ -54,9 +68,9 @@ impl RemoteTrack {
 
     pub fn on_cluster_event(&mut self, event: ClusterRemoteTrackIncomingEvent) {
         match event {
-            ClusterRemoteTrackIncomingEvent::RequestKeyFrame => {
+            ClusterRemoteTrackIncomingEvent::RequestKeyFrame(kind) => {
                 log::info!("[RemoteTrack {}] request keyframe", self.track_name);
-                self.out_actions.push_back(RemoteTrackOutput::Transport(RemoteTrackOutgoingEvent::RequestKeyFrame));
+                self.out_actions.push_back(RemoteTrackOutput::Transport(RemoteTrackOutgoingEvent::RequestKeyFrame(kind)));
             }
             ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(_) => {
                 //TODO
@@ -64,16 +78,27 @@ impl RemoteTrack {
         }
     }
 
-    pub fn on_transport_event(&mut self, event: RemoteTrackIncomingEvent<RemoteTrackRpcIn>) {
+    pub fn on_transport_event(&mut self, now_ms: u64, event: RemoteTrackIncomingEvent<RemoteTrackRpcIn>) {
         match event {
             RemoteTrackIncomingEvent::MediaPacket(pkt) => {
-                log::debug!("[RemoteTrack {}] media from transport pkt {} {}", self.track_name, pkt.pt, pkt.seq_no);
+                log::debug!("[RemoteTrack {}] media from transport pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
                 if !self.active {
                     self.active = true;
                     self.out_actions
                         .push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackAdded(self.track_name.clone(), self.cluster_meta())));
                 }
-                self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt)));
+                if let Some((bitrate_measure, previous_stats)) = &mut self.bitrate_measure {
+                    if let Some(stats) = bitrate_measure.add_sample(now_ms, &pkt.codec, pkt.payload.len()) {
+                        log::debug!("[RemoteTrack {}] stats {:?}", self.track_name, stats);
+                        *previous_stats = Some(stats.clone());
+                        self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackStats(stats)));
+                    } else if pkt.codec.is_key() {
+                        if let Some(stats) = previous_stats {
+                            self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackStats(stats.clone())));
+                        }
+                    }
+                }
+                self.out_actions.push_back(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackMedia(pkt)));
             }
             RemoteTrackIncomingEvent::Rpc(event) => match event {
                 RemoteTrackRpcIn::Toggle(req) => {
@@ -114,7 +139,7 @@ mod tests {
         RpcRequest, RpcResponse,
     };
     use cluster::{ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent};
-    use transport::{MediaKind, MediaPacket, RemoteTrackOutgoingEvent, TrackMeta};
+    use transport::{MediaKind, MediaPacket, RemoteTrackOutgoingEvent, RequestKeyframeKind, TrackMeta};
 
     use super::RemoteTrack;
 
@@ -122,30 +147,33 @@ mod tests {
     fn normal_cluster_events() {
         let mut track = RemoteTrack::new("room1", "peer1", 100, "audio_main", TrackMeta::new_audio(None));
 
-        let pkt = MediaPacket::default_audio(1, 1000, vec![1, 2, 3]);
-        track.on_transport_event(transport::RemoteTrackIncomingEvent::MediaPacket(pkt.clone()));
+        let pkt = MediaPacket::simple_audio(1, 1000, vec![1, 2, 3]);
+        track.on_transport_event(0, transport::RemoteTrackIncomingEvent::MediaPacket(pkt.clone()));
         assert_eq!(
             track.pop_action(),
             Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackAdded("audio_main".to_string(), track.cluster_meta())))
         );
-        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt))));
+        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackMedia(pkt))));
         assert_eq!(track.pop_action(), None);
 
-        let pkt = MediaPacket::default_audio(2, 1000, vec![1, 2, 3]);
-        track.on_transport_event(transport::RemoteTrackIncomingEvent::MediaPacket(pkt.clone()));
-        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt))));
+        let pkt = MediaPacket::simple_audio(2, 1000, vec![1, 2, 3]);
+        track.on_transport_event(0, transport::RemoteTrackIncomingEvent::MediaPacket(pkt.clone()));
+        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackMedia(pkt))));
         assert_eq!(track.pop_action(), None);
 
         // toggle off
-        track.on_transport_event(transport::RemoteTrackIncomingEvent::Rpc(RemoteTrackRpcIn::Toggle(RpcRequest::from(
-            1,
-            SenderToggle {
-                name: "audio_main".to_string(),
-                kind: MediaKind::Audio,
-                track: None,
-                label: None,
-            },
-        ))));
+        track.on_transport_event(
+            0,
+            transport::RemoteTrackIncomingEvent::Rpc(RemoteTrackRpcIn::Toggle(RpcRequest::from(
+                1,
+                SenderToggle {
+                    name: "audio_main".to_string(),
+                    kind: MediaKind::Audio,
+                    track: None,
+                    label: None,
+                },
+            ))),
+        );
         assert_eq!(
             track.pop_action(),
             Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackRemoved("audio_main".to_string())))
@@ -157,15 +185,18 @@ mod tests {
         assert_eq!(track.pop_action(), None);
 
         // toggle on
-        track.on_transport_event(transport::RemoteTrackIncomingEvent::Rpc(RemoteTrackRpcIn::Toggle(RpcRequest::from(
-            2,
-            SenderToggle {
-                name: "audio_main".to_string(),
-                kind: MediaKind::Audio,
-                track: Some("remote_track_id".to_string()),
-                label: None,
-            },
-        ))));
+        track.on_transport_event(
+            0,
+            transport::RemoteTrackIncomingEvent::Rpc(RemoteTrackRpcIn::Toggle(RpcRequest::from(
+                2,
+                SenderToggle {
+                    name: "audio_main".to_string(),
+                    kind: MediaKind::Audio,
+                    track: Some("remote_track_id".to_string()),
+                    label: None,
+                },
+            ))),
+        );
 
         assert_eq!(
             track.pop_action(),
@@ -174,13 +205,13 @@ mod tests {
         assert_eq!(track.pop_action(), None);
 
         // reactive with incoming pkt
-        let pkt = MediaPacket::default_audio(3, 1000, vec![1, 2, 3]);
-        track.on_transport_event(transport::RemoteTrackIncomingEvent::MediaPacket(pkt.clone()));
+        let pkt = MediaPacket::simple_audio(3, 1000, vec![1, 2, 3]);
+        track.on_transport_event(0, transport::RemoteTrackIncomingEvent::MediaPacket(pkt.clone()));
         assert_eq!(
             track.pop_action(),
             Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackAdded("audio_main".to_string(), track.cluster_meta())))
         );
-        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::MediaPacket(pkt))));
+        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Cluster(ClusterRemoteTrackOutgoingEvent::TrackMedia(pkt))));
         assert_eq!(track.pop_action(), None);
 
         track.close();
@@ -195,8 +226,21 @@ mod tests {
     fn incoming_request_keyframe_should_fire_transport_event() {
         let mut track = RemoteTrack::new("room1", "peer1", 100, "video_main", TrackMeta::new_audio(None));
 
-        track.on_cluster_event(ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
-        assert_eq!(track.pop_action(), Some(RemoteTrackOutput::Transport(transport::RemoteTrackOutgoingEvent::RequestKeyFrame)));
+        track.on_cluster_event(ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli));
+        assert_eq!(
+            track.pop_action(),
+            Some(RemoteTrackOutput::Transport(transport::RemoteTrackOutgoingEvent::RequestKeyFrame(RequestKeyframeKind::Pli)))
+        );
         assert_eq!(track.pop_action(), None);
+    }
+
+    #[test]
+    fn incoming_pkt_should_fire_stats() {
+        //TODO test calc bitrate
+    }
+
+    #[test]
+    fn incoming_video_key_frame_should_fire_stats_before() {
+        //TODO test incoming_video_key_frame_should_fire_stats_before
     }
 }

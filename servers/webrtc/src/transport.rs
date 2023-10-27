@@ -1,7 +1,7 @@
 use std::{
     net::{SocketAddr, UdpSocket},
     os::fd::{AsRawFd, FromRawFd},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use async_std::prelude::FutureExt;
@@ -10,32 +10,36 @@ use endpoint::{
     EndpointRpcIn, EndpointRpcOut,
 };
 use str0m::{
+    bwe::Bitrate,
     change::SdpOffer,
-    channel::ChannelId,
-    media::{KeyframeRequestKind, MediaTime, Mid},
-    net::Receive,
+    media::KeyframeRequestKind,
+    net::{Protocol, Receive},
     rtp::ExtensionValues,
     Candidate, Input, Output, Rtc, RtcError,
 };
-use transport::{MediaPacket, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
+use transport::{RequestKeyframeKind, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
 
 use crate::rpc::WebrtcConnectRequestSender;
 
-use self::internal::{
-    life_cycle::TransportLifeCycle,
-    rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
-    WebrtcTransportInternal,
+use self::{
+    internal::{
+        life_cycle::TransportLifeCycle,
+        rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
+        Str0mAction, WebrtcTransportInternal,
+    },
+    rtp_packet_convert::MediaPacketConvert,
+    sdp_box::SdpBox,
+    str0m_event_convert::Str0mEventConvert,
 };
 
 pub(crate) mod internal;
+mod mid_convert;
+mod mid_history;
+mod rtp_packet_convert;
+pub mod sdp_box;
+mod str0m_event_convert;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum Str0mAction {
-    Media(Mid, MediaPacket),
-    RequestKeyFrame(Mid),
-    Datachannel(ChannelId, String),
-    Rpc(TransportRpcIn),
-}
+const INIT_BWE_BITRATE_KBPS: u64 = 1500; //1500kbps
 
 pub enum WebrtcTransportEvent {
     RemoteIce(String),
@@ -47,9 +51,12 @@ where
 {
     sync_socket: UdpSocket,
     async_socket: async_std::net::UdpSocket,
+    sdp_box: SdpBox,
     rtc: Rtc,
     internal: WebrtcTransportInternal<L>,
     buf: Vec<u8>,
+    event_convert: Str0mEventConvert,
+    pkt_convert: MediaPacketConvert,
 }
 
 impl<L> WebrtcTransport<L>
@@ -64,15 +71,25 @@ where
         let async_socket = unsafe { async_std::net::UdpSocket::from_raw_fd(socket.as_raw_fd()) };
         let sync_socket: UdpSocket = socket.into();
 
-        let rtc = Rtc::builder().set_ice_lite(true).set_rtp_mode(true).build();
+        let mut rtc = Rtc::builder()
+            .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
+            .set_ice_lite(true)
+            .set_rtp_mode(true)
+            .set_stats_interval(Some(Duration::from_millis(500)))
+            .build();
+        rtc.direct_api().enable_twcc_feedback();
+
         log::info!("[TransportWebrtc] created");
 
         Ok(Self {
             sync_socket,
             async_socket,
+            sdp_box: Default::default(),
             rtc,
             internal: WebrtcTransportInternal::new(life_cycle),
             buf: vec![0; 2000],
+            event_convert: Default::default(),
+            pkt_convert: Default::default(),
         })
     }
 
@@ -83,11 +100,12 @@ where
     pub fn on_remote_sdp(&mut self, sdp: &str) -> Result<String, RtcError> {
         //TODO get ip address
         let addr = self.sync_socket.local_addr().expect("Should has local port");
-        let candidate = Candidate::host(addr).expect("Should create candidate");
+        let candidate = Candidate::host(addr, Protocol::Udp).expect("Should create candidate");
         self.rtc.add_local_candidate(candidate);
 
-        let sdp = self.rtc.sdp_api().accept_offer(SdpOffer::from_sdp_string(sdp)?)?;
-        Ok(sdp.to_sdp_string())
+        let sdp_offer = SdpOffer::from_sdp_string(sdp)?;
+        let sdp_answer = self.rtc.sdp_api().accept_offer(sdp_offer)?;
+        Ok(self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string()))
     }
 
     fn pop_internal_str0m_actions(&mut self, now_ms: u64) {
@@ -95,13 +113,13 @@ where
             match action {
                 Str0mAction::Rpc(rpc) => match rpc {
                     TransportRpcIn::UpdateSdp(req) => {
-                        if let Ok(sdp) = SdpOffer::from_sdp_string(&req.data.sdp) {
+                        if let Ok(sdp_offer) = SdpOffer::from_sdp_string(&req.data.sdp) {
                             for sender in req.data.senders {
                                 self.internal.map_remote_stream(sender);
                             }
-                            match self.rtc.sdp_api().accept_offer(sdp) {
-                                Ok(sdp) => {
-                                    let sdp = sdp.to_sdp_string();
+                            match self.rtc.sdp_api().accept_offer(sdp_offer) {
+                                Ok(sdp_answer) => {
+                                    let sdp = self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string());
                                     let res = RpcResponse::success(req.req_id, UpdateSdpResponse { sdp });
                                     self.internal.on_transport_rpc(now_ms, TransportRpcOut::UpdateSdpRes(res));
                                 }
@@ -114,21 +132,18 @@ where
                         }
                     }
                 },
-                Str0mAction::Media(mid, pkt) => {
+                Str0mAction::Media(mid, mut pkt) => {
                     if let Some(stream) = self.rtc.direct_api().stream_tx_by_mid(mid, None) {
+                        self.pkt_convert.rewrite_codec(&mut pkt);
                         stream
                             .write_rtp(
-                                pkt.pt.into(),
+                                self.pkt_convert.to_pt(&pkt),
                                 (pkt.seq_no as u64).into(),
                                 pkt.time,
                                 Instant::now(),
                                 pkt.marker,
-                                ExtensionValues {
-                                    abs_send_time: pkt.ext_vals.abs_send_time.map(|t| MediaTime::new(t.0, t.1)),
-                                    transport_cc: pkt.ext_vals.transport_cc,
-                                    ..Default::default()
-                                },
-                                true,
+                                ExtensionValues::default(),
+                                pkt.nackable,
                                 pkt.payload,
                             )
                             .expect("Should ok");
@@ -137,23 +152,36 @@ where
                         debug_assert!(false, "should not missing mid");
                     }
                 }
-                Str0mAction::RequestKeyFrame(mid) => {
+                Str0mAction::RequestKeyFrame(mid, kind) => {
                     if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
-                        stream.request_keyframe(KeyframeRequestKind::Pli);
+                        match kind {
+                            RequestKeyframeKind::Pli => stream.request_keyframe(KeyframeRequestKind::Pli),
+                            RequestKeyframeKind::Fir => stream.request_keyframe(KeyframeRequestKind::Fir),
+                        }
                     } else {
                         log::warn!("[TransportWebrtc] missing track for mid {} when requesting key-frame", mid);
                         debug_assert!(false, "should not missing mid");
                     }
                 }
                 Str0mAction::Datachannel(cid, msg) => {
-                    if let Some(mut channel) = self.rtc.channel(cid) {
-                        if let Err(e) = channel.write(false, msg.as_bytes()) {
-                            log::error!("[TransportWebrtc] write datachannel error {:?}", e);
+                    if let Some(cid) = self.event_convert.channel_id(cid) {
+                        if let Some(mut channel) = self.rtc.channel(cid) {
+                            if let Err(e) = channel.write(false, msg.as_bytes()) {
+                                log::error!("[TransportWebrtc] write datachannel error {:?}", e);
+                            }
+                        } else {
+                            log::warn!("[TransportWebrtc] missing channel for id {:?}", cid);
+                            debug_assert!(false, "should not missing channel id");
                         }
                     } else {
                         log::warn!("[TransportWebrtc] missing channel for id {:?}", cid);
                         debug_assert!(false, "should not missing channel id");
                     }
+                }
+                Str0mAction::ConfigEgressBitrate { current, desired } => {
+                    let mut bwe = self.rtc.bwe();
+                    bwe.set_current_bitrate(Bitrate::bps(current as u64));
+                    bwe.set_desired_bitrate(Bitrate::bps(desired as u64));
                 }
             }
         }
@@ -197,9 +225,13 @@ where
                     return Ok(TransportIncomingEvent::Continue);
                 }
                 Output::Event(e) => {
-                    self.internal.on_str0m_event(now_ms, e)?;
-                    if let Some(action) = self.internal.endpoint_action() {
-                        return action;
+                    if let Ok(Some(e)) = self.event_convert.str0m_to_internal(e) {
+                        self.internal.on_str0m_event(now_ms, e)?;
+                        if let Some(action) = self.internal.endpoint_action() {
+                            return action;
+                        } else {
+                            return Ok(TransportIncomingEvent::Continue);
+                        }
                     } else {
                         return Ok(TransportIncomingEvent::Continue);
                     }
@@ -240,6 +272,7 @@ where
                 Input::Receive(
                     Instant::now(),
                     Receive {
+                        proto: Protocol::Udp,
                         source,
                         destination: self.async_socket.local_addr().expect("Should has local_addr"),
                         contents: self.buf.as_slice().try_into().unwrap(),
@@ -266,7 +299,9 @@ where
     }
 
     async fn close(&mut self) {
-        //TODO force close this
+        if let Some(cid) = self.event_convert.channel_id(0) {
+            self.rtc.direct_api().close_data_channel(cid);
+        }
     }
 }
 

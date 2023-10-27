@@ -1,8 +1,8 @@
 use async_std::channel::{bounded, Receiver, Sender};
 use cluster::{Cluster, ClusterEndpoint};
-use endpoint::{MediaEndpoint, MediaEndpointPreconditional};
+use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
-use utils::ServerError;
+use utils::{EndpointSubscribeScope, ServerError};
 
 use crate::{
     rpc::WebrtcConnectRequestSender,
@@ -27,12 +27,13 @@ impl<E: ClusterEndpoint> WebrtcSession<E> {
     pub async fn new<C: Cluster<E>>(
         room: &str,
         peer: &str,
+        sub_scope: EndpointSubscribeScope,
         cluster: &mut C,
         sdp: &str,
         senders: Vec<WebrtcConnectRequestSender>,
         now_ms: u64,
     ) -> Result<(Self, Sender<InternalControl>, String), WebrtcSessionError> {
-        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer);
+        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, sub_scope);
         endpoint_pre.check().map_err(|_e| WebrtcSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let mut transport = WebrtcTransport::new(SdkTransportLifeCycle::new(now_ms)).await.map_err(|_| WebrtcSessionError::NetworkError)?;
@@ -49,7 +50,21 @@ impl<E: ClusterEndpoint> WebrtcSession<E> {
     pub async fn recv(&mut self) -> Option<()> {
         select! {
             e = self.endpoint.recv().fuse() => match e {
-                Ok(_) => Some(()),
+                Ok(e) => {
+                    match e {
+                        MediaEndpointOutput::Continue => {}
+                        MediaEndpointOutput::ConnectionClosed => {
+                            log::info!("Connection closed");
+                            return None;
+                        }
+                        MediaEndpointOutput::ConnectionCloseRequest => {
+                            log::info!("Connection close request");
+                            self.endpoint.close().await;
+                            return None;
+                        }
+                    }
+                    Some(())
+                },
                 Err(e) => {
                     log::error!("Error on endpoint recv: {:?}", e);
                     None

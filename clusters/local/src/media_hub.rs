@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use async_std::channel::Sender;
-use cluster::{ClusterEndpointIncomingEvent, ClusterLocalTrackIncomingEvent, ClusterRemoteTrackIncomingEvent, ClusterTrackUuid};
+use cluster::{ClusterEndpointIncomingEvent, ClusterLocalTrackIncomingEvent, ClusterRemoteTrackIncomingEvent, ClusterTrackStats, ClusterTrackUuid};
 use transport::{MediaPacket, TrackId};
 
 pub type ConsumerId = u64;
@@ -22,6 +22,18 @@ impl LocalMediaHub {
             for (consumer_id, tx) in channel.consumers.iter() {
                 let local_track_id = (consumer_id & 0xffff) as u16;
                 let event = ClusterEndpointIncomingEvent::LocalTrackEvent(local_track_id, ClusterLocalTrackIncomingEvent::MediaPacket(pkt.clone()));
+                if let Err(_e) = tx.try_send(event) {
+                    todo!("handle this")
+                }
+            }
+        }
+    }
+
+    pub fn relay_stats(&self, track_uuid: ClusterTrackUuid, stats: ClusterTrackStats) {
+        if let Some(channel) = self.channels.get(&track_uuid) {
+            for (consumer_id, tx) in channel.consumers.iter() {
+                let local_track_id = (consumer_id & 0xffff) as u16;
+                let event = ClusterEndpointIncomingEvent::LocalTrackEvent(local_track_id, ClusterLocalTrackIncomingEvent::MediaStats(stats.clone()));
                 if let Err(_e) = tx.try_send(event) {
                     todo!("handle this")
                 }
@@ -82,7 +94,7 @@ impl LocalMediaHub {
 mod test {
     use super::*;
     use cluster::generate_cluster_track_uuid;
-    use transport::{MediaPacket, MediaPacketExtensions};
+    use transport::{MediaPacket, RequestKeyframeKind};
 
     #[test]
     fn test_local_media_hub() {
@@ -90,18 +102,7 @@ mod test {
         let track_uuid = generate_cluster_track_uuid("room", "peer", "track");
         let (tx, rx) = async_std::channel::bounded(100);
         media_hub.subscribe(track_uuid, 1, tx);
-        let pkt = MediaPacket {
-            pt: 111,
-            seq_no: 1,
-            time: 1000,
-            marker: true,
-            ext_vals: MediaPacketExtensions {
-                abs_send_time: None,
-                transport_cc: None,
-            },
-            nackable: true,
-            payload: vec![1, 2, 3],
-        };
+        let pkt = MediaPacket::simple_audio(1, 1000, vec![1, 2, 3]);
         media_hub.relay(track_uuid, pkt.clone());
         assert_eq!(
             rx.try_recv(),
@@ -125,13 +126,16 @@ mod test {
         let (tx2, _rx2) = async_std::channel::bounded(100);
         media_hub.subscribe(track_uuid, consumer_id, tx2);
 
-        media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
+        media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli));
         assert_eq!(
             rx.try_recv(),
-            Ok(ClusterEndpointIncomingEvent::RemoteTrackEvent(track_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame))
+            Ok(ClusterEndpointIncomingEvent::RemoteTrackEvent(
+                track_id,
+                ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli)
+            ))
         );
         media_hub.remove_track(track_uuid);
-        media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame);
+        media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli));
         assert!(rx.try_recv().is_err());
     }
 }
