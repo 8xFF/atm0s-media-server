@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use webrtc_server::transport::sdp_box::SdpBox;
+use transport_webrtc::SdpBox;
 
 fn criterion_benchmark(c: &mut Criterion) {
     let mut sdp_rewrite = SdpBox::default();

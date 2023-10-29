@@ -5,13 +5,15 @@ members = [
     "packages/transport",
     "packages/utils",
     "clusters/local",
-    "servers/webrtc",
+    "transports/webrtc",
+    "servers/media",
 ]
 
 [workspace.dependencies]
 cluster = { path = "packages/cluster" }
 endpoint = { path = "packages/endpoint" }
 transport = { path = "packages/transport" }
+transport-webrtc = { path = "transports/webrtc" }
 cluster-local = { path = "clusters/local" }
 utils = { path = "packages/utils" }
 futures = "0.3"

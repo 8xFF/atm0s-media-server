@@ -3,12 +3,14 @@ mod event;
 mod kind;
 mod packet;
 mod samplerate;
+mod rpc;
 
 pub use codec::*;
 pub use event::*;
 pub use kind::*;
 pub use packet::*;
 pub use samplerate::*;
+pub use rpc::*;
 
 pub type TrackId = u16;
 pub type TrackName = String;

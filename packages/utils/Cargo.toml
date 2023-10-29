@@ -9,3 +9,4 @@ edition = "2021"
 serde = { workspace = true }
 sorted-vec = "0.7"
 poem-openapi = { version = "*" }
+log = { workspace = true }
