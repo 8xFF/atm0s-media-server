@@ -1,5 +1,5 @@
 [package]
-name = "webrtc-server"
+name = "transport-webrtc"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,20 +8,13 @@ edition = "2021"
 [dependencies]
 endpoint = { workspace = true }
 transport = { workspace = true }
-cluster = { workspace = true }
-cluster-local = { workspace = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }
 utils = { workspace = true }
+poem-openapi = { version = "*", features = ["swagger-ui"] }
 str0m = { git = "https://github.com/algesten/str0m.git", hash = "937fe774deab8c9da9fbcc677bf3878007780ece"}
-socket2 = "0.5.4"
-parking_lot = { workspace = true }
 futures = { workspace = true }
 log = { workpsace = true }
-poem = "*"
-poem-openapi = { version = "*", features = ["swagger-ui"] }
-env_logger = { workspace = true }
-async-compat = "*"
 serde = { workspace = true }
 serde_json = { workspace = true }
 lz4_flex = { version = "0.9.3" }

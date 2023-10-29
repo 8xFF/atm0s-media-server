@@ -32,6 +32,7 @@ impl<T: Send> Payload for ApplicationSdp<T> {
     const CONTENT_TYPE: &'static str = "application/sdp";
 
     fn check_content_type(content_type: &str) -> bool {
+        //TODO: check content type
         return true;
     }
 

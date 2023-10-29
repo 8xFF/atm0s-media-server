@@ -2,9 +2,11 @@ use async_std::channel::Sender;
 use poem::{http::StatusCode, web::Data, Result};
 use poem_openapi::{payload::Json, Object, OpenApi};
 use serde::{Deserialize, Serialize};
+use transport::RpcResponse;
+use transport_webrtc::{WebrtcRemoteIceResponse, WhipConnectResponse, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest};
 use utils::Response;
 
-use crate::rpc::{RpcEvent, RpcResponse, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WhipConnectResponse};
+use crate::rpc::RpcEvent;
 
 use super::payload_sdp::ApplicationSdp;
 
@@ -73,7 +75,7 @@ impl HttpApis {
             .await
             .map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let (_code, res) = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         Ok(Json(WebrtcIceRemoteApiResponse {
             status: true,
             error: None,

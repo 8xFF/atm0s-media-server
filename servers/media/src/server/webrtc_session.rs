@@ -2,12 +2,8 @@ use async_std::channel::{bounded, Receiver, Sender};
 use cluster::{Cluster, ClusterEndpoint};
 use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
+use transport_webrtc::{WebrtcTransport, SdkTransportLifeCycle, WebrtcTransportEvent, WebrtcConnectRequestSender};
 use utils::{EndpointSubscribeScope, ServerError};
-
-use crate::{
-    rpc::WebrtcConnectRequestSender,
-    transport::{internal::life_cycle::sdk::SdkTransportLifeCycle, WebrtcTransport, WebrtcTransportEvent},
-};
 
 use super::InternalControl;
 

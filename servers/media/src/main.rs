@@ -1,6 +1,5 @@
 mod rpc;
 mod server;
-mod transport;
 
 use cluster_local::ServerLocal;
 use server::WebrtcServer;

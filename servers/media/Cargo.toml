@@ -1,0 +1,22 @@
+[package]
+name = "media-server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+endpoint = { workspace = true }
+transport = { workspace = true }
+cluster = { workspace = true }
+cluster-local = { workspace = true }
+transport-webrtc = { workspace = true }
+utils = { workspace = true }
+async-std = { workspace = true }
+parking_lot = { workspace = true }
+futures = { workspace = true }
+log = { workpsace = true }
+poem = "*"
+poem-openapi = { version = "*", features = ["swagger-ui"] }
+env_logger = { workspace = true }
+serde = { workspace = true }

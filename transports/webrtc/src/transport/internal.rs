@@ -23,7 +23,7 @@ use self::{
     utils::to_transport_kind,
 };
 use crate::{
-    rpc::{RpcResponse, WebrtcConnectRequestSender, WebrtcRemoteIceRequest},
+    rpc::{WebrtcConnectRequestSender, WebrtcRemoteIceRequest},
     transport::internal::rpc::rpc_internal_to_string,
 };
 
@@ -60,7 +60,7 @@ pub enum Str0mAction {
     Datachannel(usize, String),
     Rpc(TransportRpcIn),
     ConfigEgressBitrate { current: u32, desired: u32 },
-    RemoteIce(WebrtcRemoteIceRequest, RpcResponse<()>),
+    RemoteIce(WebrtcRemoteIceRequest, transport::RpcResponse<()>),
 }
 
 pub struct WebrtcTransportInternal<L>

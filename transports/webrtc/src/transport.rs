@@ -39,7 +39,7 @@ mod str0m_event_convert;
 const INIT_BWE_BITRATE_KBPS: u64 = 1500; //1500kbps
 
 pub enum WebrtcTransportEvent {
-    RemoteIce(WebrtcRemoteIceRequest, crate::rpc::RpcResponse<()>),
+    RemoteIce(WebrtcRemoteIceRequest, transport::RpcResponse<()>),
 }
 
 pub struct WebrtcTransport<L>
@@ -62,6 +62,9 @@ where
     pub async fn new(life_cycle: L) -> Result<Self, std::io::Error> {
         let mut rtc = Rtc::builder()
             .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
+            .enable_h264(false)
+            .enable_vp8(false)
+            .enable_vp9(true)
             .set_ice_lite(false)
             .set_rtp_mode(true)
             .set_stats_interval(Some(Duration::from_millis(500)))
