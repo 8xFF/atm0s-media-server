@@ -35,6 +35,7 @@ mod net;
 mod rtp_packet_convert;
 pub mod sdp_box;
 mod str0m_event_convert;
+mod pt_mapping;
 
 const INIT_BWE_BITRATE_KBPS: u64 = 1500; //1500kbps
 
@@ -62,8 +63,9 @@ where
     pub async fn new(life_cycle: L) -> Result<Self, std::io::Error> {
         let mut rtc = Rtc::builder()
             .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
-            .enable_h264(false)
-            .enable_vp8(false)
+            .enable_opus(true)
+            .enable_h264(true)
+            .enable_vp8(true)
             .enable_vp9(true)
             .set_ice_lite(false)
             .set_rtp_mode(true)
@@ -99,6 +101,11 @@ where
     pub fn on_remote_sdp(&mut self, sdp: &str) -> Result<String, RtcError> {
         let sdp_offer = SdpOffer::from_sdp_string(sdp)?;
         let sdp_answer = self.rtc.sdp_api().accept_offer(sdp_offer)?;
+
+        //sync payload_type mapping
+        self.event_convert.str0m_sync_codec_config(self.rtc.codec_config());
+        self.pkt_convert.str0m_sync_codec_config(self.rtc.codec_config());
+
         Ok(self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string()))
     }
 
@@ -225,7 +232,7 @@ where
                 Output::Timeout(t) => t,
                 Output::Transmit(t) => {
                     if let Err(_e) = self.socket.send_to(&t.contents, t.proto, t.source, t.destination).await {
-                        log::error!("Error sending data: {}", _e);
+                        log::debug!("Error sending data {} => {}: {}", t.source, t.destination, _e);
                     }
                     return Ok(TransportIncomingEvent::Continue);
                 }

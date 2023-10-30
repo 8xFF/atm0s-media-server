@@ -1,8 +1,11 @@
 use self::rid_history::RidHistory;
-use str0m::media::Pt;
+use str0m::{format::CodecConfig, media::Pt};
 use transport::{H264Profile, MediaPacket, PayloadCodec, Vp9Profile};
 
-use super::mid_convert::rid_to_u16;
+use super::{
+    mid_convert::rid_to_u16,
+    pt_mapping::{LocalPayloadType, PtMapping},
+};
 
 mod bit_read;
 mod h264;
@@ -10,80 +13,67 @@ mod rid_history;
 mod vp8;
 mod vp9;
 
-const PAYLOAD_TYPE_VP8: u8 = 96;
-// const PAYLOAD_TYPE_VP8_RTX: u8 = 97;
-const PAYLOAD_TYPE_VP9_P0: u8 = 98;
-// const PAYLOAD_TYPE_VP9_P0_RTX: u8 = 99;
-const PAYLOAD_TYPE_VP9_P2: u8 = 100;
-// const PAYLOAD_TYPE_VP9_P2_RTX: u8 = 101;
-const PAYLOAD_TYPE_H264_42001F_NON: u8 = 121;
-// const PAYLOAD_TYPE_H264_42001F_NON_RTX: u8 = 103;
-const PAYLOAD_TYPE_H264_42001F_SINGLE: u8 = 125;
-// const PAYLOAD_TYPE_H264_42001F_SINGLE_RTX: u8 = 107;
-const PAYLOAD_TYPE_H264_42E01F_NON: u8 = 108;
-// const PAYLOAD_TYPE_H264_42E01F_NON_RTX: u8 = 109;
-const PAYLOAD_TYPE_H264_42E01F_SINGLE: u8 = 124;
-// const PAYLOAD_TYPE_H264_42E01F_SINGLE_RTX: u8 = 120;
-const PAYLOAD_TYPE_H264_4D001F_NON: u8 = 123;
-// const PAYLOAD_TYPE_H264_4D001F_NON_RTX: u8 = 119;
-const PAYLOAD_TYPE_H264_4D001F_SINGLE: u8 = 35;
-// const PAYLOAD_TYPE_H264_4D001F_SINGLE_RTX: u8 = 36;
-const PAYLOAD_TYPE_H264_64001F_NON: u8 = 114;
-// const PAYLOAD_TYPE_H264_64001F_NON_RTX: u8 = 115;
-const PAYLOAD_TYPE_OPUS: u8 = 111;
-
 #[derive(Default)]
 pub struct RtpPacketConverter {
     rid_history: RidHistory,
+    pt_mapping: PtMapping,
 }
 
 impl RtpPacketConverter {
+    pub fn str0m_sync_codec_config(&mut self, config: &CodecConfig) {
+        self.pt_mapping.str0m_sync_codec_config(config);
+    }
+
     pub fn to_pkt(&mut self, rtp: str0m::rtp::RtpPacket) -> Option<MediaPacket> {
         let rid = self.rid_history.get(rtp.header.ext_vals.rid.map(|rid| rid_to_u16(&rid)), *(&rtp.header.ssrc as &u32));
 
-        let (codec, nackable) = match *rtp.header.payload_type {
-            PAYLOAD_TYPE_OPUS => Some((PayloadCodec::Opus, false)),
-            PAYLOAD_TYPE_VP8 => {
+        let local_pt = self.pt_mapping.to_local(*rtp.header.payload_type);
+        let (codec, nackable) = match local_pt {
+            LocalPayloadType::Opus => Some((PayloadCodec::Opus, false)),
+            LocalPayloadType::Vp8 => {
                 let (is_key, sim) = vp8::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::Vp8(is_key, sim), true))
             }
-            PAYLOAD_TYPE_VP9_P0 => {
+            LocalPayloadType::Vp9P0 => {
                 let (is_key, svc) = vp9::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::Vp9(is_key, Vp9Profile::P0, svc), true))
             }
-            PAYLOAD_TYPE_VP9_P2 => {
+            LocalPayloadType::Vp9P2 => {
                 let (is_key, svc) = vp9::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::Vp9(is_key, Vp9Profile::P2, svc), true))
             }
-            PAYLOAD_TYPE_H264_42001F_NON => {
+            LocalPayloadType::H264_42001fNon => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::H264(is_key, H264Profile::P42001fNonInterleaved, sim), true))
             }
-            PAYLOAD_TYPE_H264_42001F_SINGLE => {
+            LocalPayloadType::H264_42001fSingle => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::H264(is_key, H264Profile::P42001fSingleNal, sim), true))
             }
-            PAYLOAD_TYPE_H264_42E01F_NON => {
+            LocalPayloadType::H264_42e01fNon => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::H264(is_key, H264Profile::P42e01fNonInterleaved, sim), true))
             }
-            PAYLOAD_TYPE_H264_42E01F_SINGLE => {
+            LocalPayloadType::H264_42e01fSingle => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::H264(is_key, H264Profile::P42e01fSingleNal, sim), true))
             }
-            PAYLOAD_TYPE_H264_4D001F_NON => {
+            LocalPayloadType::H264_4d001fNon => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::H264(is_key, H264Profile::P4d001fNonInterleaved, sim), true))
             }
-            PAYLOAD_TYPE_H264_4D001F_SINGLE => {
+            LocalPayloadType::H264_4d001fSingle => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::H264(is_key, H264Profile::P4d001fSingleNal, sim), true))
             }
-            PAYLOAD_TYPE_H264_64001F_NON => {
+            LocalPayloadType::H264_64001fNon => {
                 let (is_key, sim) = h264::payload_parse(&rtp.payload, rid);
                 Some((PayloadCodec::H264(is_key, H264Profile::P64001fNonInterleaved, sim), true))
             }
-            _ => None,
+            LocalPayloadType::Unknown => {
+                log::warn!("unknown payload type {}", rtp.header.payload_type);
+                None
+            }
         }?;
         Some(MediaPacket {
             codec,
@@ -101,29 +91,35 @@ impl RtpPacketConverter {
 }
 
 #[derive(Default)]
-pub struct MediaPacketConvert {}
+pub struct MediaPacketConvert {
+    pt_mapping: PtMapping,
+}
 
 impl MediaPacketConvert {
+    pub fn str0m_sync_codec_config(&mut self, config: &CodecConfig) {
+        self.pt_mapping.str0m_sync_codec_config(config);
+    }
+
     pub fn to_pt(&self, media: &MediaPacket) -> Pt {
-        let pt = match &media.codec {
-            PayloadCodec::Vp8(_, _) => PAYLOAD_TYPE_VP8,
+        let local_pt = match &media.codec {
+            PayloadCodec::Vp8(_, _) => LocalPayloadType::Vp8,
             PayloadCodec::Vp9(_, profile, _) => match profile {
-                Vp9Profile::P0 => PAYLOAD_TYPE_VP9_P0,
-                Vp9Profile::P2 => PAYLOAD_TYPE_VP9_P2,
+                Vp9Profile::P0 => LocalPayloadType::Vp9P0,
+                Vp9Profile::P2 => LocalPayloadType::Vp9P2,
             },
             PayloadCodec::H264(_, profile, _) => match profile {
-                H264Profile::P42001fNonInterleaved => PAYLOAD_TYPE_H264_42001F_NON,
-                H264Profile::P42001fSingleNal => PAYLOAD_TYPE_H264_42001F_SINGLE,
-                H264Profile::P42e01fNonInterleaved => PAYLOAD_TYPE_H264_42E01F_NON,
-                H264Profile::P42e01fSingleNal => PAYLOAD_TYPE_H264_42E01F_SINGLE,
-                H264Profile::P4d001fNonInterleaved => PAYLOAD_TYPE_H264_4D001F_NON,
-                H264Profile::P4d001fSingleNal => PAYLOAD_TYPE_H264_4D001F_SINGLE,
-                H264Profile::P64001fNonInterleaved => PAYLOAD_TYPE_H264_64001F_NON,
+                H264Profile::P42001fNonInterleaved => LocalPayloadType::H264_42001fNon,
+                H264Profile::P42001fSingleNal => LocalPayloadType::H264_42001fSingle,
+                H264Profile::P42e01fNonInterleaved => LocalPayloadType::H264_42e01fNon,
+                H264Profile::P42e01fSingleNal => LocalPayloadType::H264_42e01fSingle,
+                H264Profile::P4d001fNonInterleaved => LocalPayloadType::H264_4d001fNon,
+                H264Profile::P4d001fSingleNal => LocalPayloadType::H264_4d001fSingle,
+                H264Profile::P64001fNonInterleaved => LocalPayloadType::H264_64001fNon,
             },
-            PayloadCodec::Opus => PAYLOAD_TYPE_OPUS,
+            PayloadCodec::Opus => LocalPayloadType::Opus,
         };
 
-        pt.into()
+        self.pt_mapping.to_remote(local_pt).into()
     }
 
     pub fn rewrite_codec(&self, media: &mut MediaPacket) {
