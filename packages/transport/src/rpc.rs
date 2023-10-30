@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use async_std::channel::{Sender, Receiver, bounded};
+use async_std::channel::{bounded, Receiver, Sender};
 use utils::ServerError;
 
 #[derive(Clone)]

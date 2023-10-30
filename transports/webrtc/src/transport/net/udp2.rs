@@ -1,5 +1,5 @@
-use std::net::{SocketAddr, Ipv4Addr, IpAddr};
 use async_std::net::UdpSocket;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 pub struct WebrtcUdpSocket {
     local_addr: SocketAddr,
@@ -12,7 +12,7 @@ impl WebrtcUdpSocket {
         let socket = UdpSocket::bind(addr).await.expect("Should bind udp socket");
 
         Ok(Self {
-            local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), socket.local_addr().expect("").port()) ,
+            local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), socket.local_addr().expect("").port()),
             socket,
         })
     }
@@ -27,10 +27,7 @@ impl WebrtcUdpSocket {
 
     pub async fn recv(&mut self, buf: &mut [u8]) -> std::io::Result<(usize, std::net::SocketAddr, std::net::SocketAddr, str0m::net::Protocol)> {
         // let port = self.local_addr.port();
-        self.socket
-            .recv_from(buf)
-            .await
-            .map(|(size, source)| (size, source, self.local_addr(), str0m::net::Protocol::Udp))
+        self.socket.recv_from(buf).await.map(|(size, source)| (size, source, self.local_addr(), str0m::net::Protocol::Udp))
     }
 
     pub async fn send_to(&mut self, buf: &[u8], _from: std::net::SocketAddr, addr: std::net::SocketAddr) -> std::io::Result<usize> {
