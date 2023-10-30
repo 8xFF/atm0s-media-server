@@ -7,8 +7,8 @@ use cluster::{
 };
 use event_hub::LocalEventHub;
 use media_hub::LocalMediaHub;
+use media_utils::{hash_str, ResourceTracking};
 use parking_lot::RwLock;
-use utils::{hash_str, ResourceTracking};
 
 mod event_hub;
 mod media_hub;

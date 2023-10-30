@@ -11,7 +11,7 @@ transport = { workspace = true }
 cluster = { workspace = true }
 cluster-local = { workspace = true }
 transport-webrtc = { workspace = true }
-utils = { workspace = true }
+media-utils = { workspace = true }
 async-std = { workspace = true }
 parking_lot = { workspace = true }
 futures = { workspace = true }

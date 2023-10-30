@@ -1,5 +1,5 @@
+use media_utils::SeqRewrite;
 use transport::PayloadCodec;
-use utils::SeqRewrite;
 
 use super::{FilterResult, ScalableFilter};
 

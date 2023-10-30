@@ -1,8 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 
 use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent};
+use media_utils::hash_str;
 use transport::{MediaKind, TrackId, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
-use utils::hash_str;
 
 use crate::rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, TrackInfo};
 

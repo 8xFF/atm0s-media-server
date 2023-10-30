@@ -8,5 +8,5 @@ edition = "2021"
 [dependencies]
 async-trait = { workspace = true }
 async-std = { workspace = true }
-utils = { workspace = true }
+media-utils = { workspace = true }
 serde = { workspace = true }

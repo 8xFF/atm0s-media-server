@@ -5,10 +5,10 @@ use crate::rpc::RpcEvent;
 use self::webrtc_session::WebrtcSession;
 use async_std::{channel::Sender, prelude::FutureExt};
 use cluster::{Cluster, ClusterEndpoint};
+use media_utils::{EndpointSubscribeScope, ServerError, Timer};
 use parking_lot::RwLock;
 use transport::RpcResponse;
 use transport_webrtc::{WebrtcConnectResponse, WebrtcRemoteIceRequest};
-use utils::{EndpointSubscribeScope, ServerError, Timer};
 
 mod webrtc_session;
 
@@ -50,7 +50,7 @@ where
             counter: 0,
             conns: Arc::new(RwLock::new(HashMap::new())),
             peers: Arc::new(RwLock::new(HashMap::new())),
-            timer: Arc::new(utils::SystemTimer()),
+            timer: Arc::new(media_utils::SystemTimer()),
         }
     }
 

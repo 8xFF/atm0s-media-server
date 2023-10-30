@@ -2,8 +2,8 @@ use async_std::channel::{bounded, Receiver, Sender};
 use cluster::{Cluster, ClusterEndpoint};
 use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
+use media_utils::{EndpointSubscribeScope, ServerError};
 use transport_webrtc::{SdkTransportLifeCycle, WebrtcConnectRequestSender, WebrtcTransport, WebrtcTransportEvent};
-use utils::{EndpointSubscribeScope, ServerError};
 
 use super::InternalControl;
 
