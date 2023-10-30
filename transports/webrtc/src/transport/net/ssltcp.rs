@@ -144,6 +144,7 @@ impl WebrtcSsltcpListener {
             } else {
                 let (stream, addr) = self.async_listener.accept().await?;
                 self.local_addr = stream.local_addr().expect("Should has local port");
+                log::info!("[SslTcp] New connection from {} => {}", addr, self.local_addr);
                 self.socket = Some(SsltcpStream {
                     local: stream.local_addr().expect("Should has local port"),
                     stream,
