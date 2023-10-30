@@ -6,6 +6,7 @@ use str0m::net::Protocol;
 
 pub(crate) mod ssltcp;
 pub(crate) mod udp;
+pub(crate) mod udp2;
 
 pub struct ComposeSocket {
     udp: udp::WebrtcUdpSocket,
@@ -16,7 +17,7 @@ pub struct ComposeSocket {
 impl ComposeSocket {
     pub async fn new(port: u16) -> Result<Self, std::io::Error> {
         Ok(Self {
-            udp: udp::WebrtcUdpSocket::new(port)?,
+            udp: udp::WebrtcUdpSocket::new(port).await?,
             ssltcp: ssltcp::WebrtcSsltcpListener::new(port).await?,
             ssltcp_buf: vec![0; 2000],
         })

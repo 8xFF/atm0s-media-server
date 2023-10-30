@@ -20,7 +20,7 @@ serde_json = { workspace = true }
 lz4_flex = { version = "0.9.3" }
 flate2 = { version = "1.0.24" }
 local-ip-address = "0.5.6"
-udp_sas = { commit = "c53d6b6ddfea992a71b2911ba1e0e0b1766ee075", git = "https://github.com/bluesea-network/udp_sas.git", features = ["async_std"] }
+udp_sas = { commit = "e6a3f657d03fc3c7198522e6904dbbacd6db37fd", git = "https://github.com/bluesea-network/udp_sas.git", features = ["async_std"] }
 combine = "*"
 
 [dev-dependencies]
