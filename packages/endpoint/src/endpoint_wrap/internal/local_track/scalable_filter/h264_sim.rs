@@ -69,6 +69,8 @@ impl ScalableFilter for H264SimulcastFilter {
         if let Some(target) = &self.target {
             if target.should_switch(pkt) {
                 stream_changed = true;
+
+                log::info!("[H264SimulcastFilter] switch to spatial: {}", target.spatial);
                 self.current = self.target.take();
             }
         }

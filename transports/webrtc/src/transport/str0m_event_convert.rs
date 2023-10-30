@@ -1,4 +1,4 @@
-use str0m::{channel::ChannelId, media::KeyframeRequestKind};
+use str0m::{channel::ChannelId, format::CodecConfig, media::KeyframeRequestKind};
 use transport::RequestKeyframeKind;
 
 use super::{internal::Str0mInput, mid_convert::mid_to_track, mid_history::MidHistory, rtp_packet_convert::RtpPacketConverter};
@@ -23,6 +23,10 @@ impl Str0mEventConvert {
 
     pub fn channel_index(&self, id: ChannelId) -> Option<usize> {
         self.channels.iter().position(|&i| i == id)
+    }
+
+    pub fn str0m_sync_codec_config(&mut self, config: &CodecConfig) {
+        self.rtp_convert.str0m_sync_codec_config(config);
     }
 
     pub fn str0m_to_internal(&mut self, event: str0m::Event) -> Result<Option<Str0mInput>, Str0mEventConvertError> {
@@ -57,15 +61,8 @@ impl Str0mEventConvert {
                 let track_id = rtp.header.ext_vals.mid.map(|mid| mid_to_track(&mid));
                 let ssrc: &u32 = &rtp.header.ssrc;
                 if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
-                    log::debug!(
-                        "on rtp {} => {}, mid: {:?}, rid: {:?} {:?}",
-                        rtp.header.ssrc,
-                        track_id,
-                        rtp.header.ext_vals.mid,
-                        rtp.header.ext_vals.rid,
-                        rtp.header.ext_vals.rid_repair
-                    );
                     if let Some(pkt) = self.rtp_convert.to_pkt(rtp) {
+                        log::trace!("on media {}, {}, {}", pkt.codec, pkt.seq_no, pkt.time);
                         Ok(Some(Str0mInput::MediaPacket(track_id, pkt)))
                     } else {
                         Err(Str0mEventConvertError::RtpInvalid)
