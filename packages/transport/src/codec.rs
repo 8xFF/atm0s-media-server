@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct H264Simulcast {
     pub spatial: u8,
 }
@@ -17,7 +18,7 @@ impl H264Simulcast {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Vp8Simulcast {
     pub picture_id: Option<u16>,
     pub tl0_pic_idx: Option<u8>,
@@ -48,7 +49,7 @@ impl Vp8Simulcast {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Vp9Svc {
     pub spatial: u8,
     pub temporal: u8,
@@ -85,7 +86,7 @@ impl Vp9Svc {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum H264Profile {
     P42001fNonInterleaved,
     P42001fSingleNal,
@@ -110,7 +111,7 @@ impl Display for H264Profile {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Vp9Profile {
     P0,
     P2,
@@ -125,7 +126,7 @@ impl Display for Vp9Profile {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum PayloadCodec {
     Vp8(bool, Option<Vp8Simulcast>),
     Vp9(bool, Vp9Profile, Option<Vp9Svc>),

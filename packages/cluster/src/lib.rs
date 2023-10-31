@@ -7,7 +7,7 @@ pub type ClusterTrackUuid = u64;
 pub type ClusterPeerId = String;
 pub type ClusterTrackName = String;
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum ClusterTrackStats {
     Single { bitrate: u32 },
     Simulcast { bitrate: u32, layers: [[u32; 3]; 3] },
@@ -122,7 +122,6 @@ pub trait ClusterEndpoint: Send + Sync {
     async fn recv(&mut self) -> Result<ClusterEndpointIncomingEvent, ClusterEndpointError>;
 }
 
-#[async_trait::async_trait]
 pub trait Cluster<C>: Send + Sync
 where
     C: ClusterEndpoint,
