@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use async_std::channel::{bounded, Receiver, Sender};
-use utils::ServerError;
+use media_utils::ServerError;
 
 #[derive(Clone)]
 pub struct RpcResponse<T> {

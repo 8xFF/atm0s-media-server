@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
-use ::utils::HashMapMultiKey;
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     EndpointRpcIn, EndpointRpcOut,
 };
+use media_utils::HashMapMultiKey;
 use str0m::{
     media::{Direction, MediaKind, Mid, Simulcast},
     IceConnectionState,

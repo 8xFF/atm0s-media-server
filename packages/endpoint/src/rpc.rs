@@ -1,7 +1,7 @@
 use cluster::ClusterTrackMeta;
+use media_utils::hash_str;
 use serde::{Deserialize, Serialize};
 use transport::MediaKind;
-use utils::hash_str;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct RpcRequest<D> {

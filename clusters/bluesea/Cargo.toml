@@ -1,0 +1,17 @@
+[package]
+name = "cluster-bluesea"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-std = { workspace = true }
+async-trait = { workspace = true }
+log = { workspace = true }
+cluster = { workspace = true }
+transport = { workspace = true }
+media-utils = { workspace = true }
+runner = { git = "ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git" }
+serde = { workspace = true }
+bincode = { version = "1" }
+futures = { workspace = true }
+bytes = { version = "*" }

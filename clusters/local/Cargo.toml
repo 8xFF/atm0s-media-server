@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 log = { workspace = true }
 cluster = { workspace = true }
-utils = { workspace = true }
+media-utils = { workspace = true }
 transport = { workspace = true }
 async-trait = { workspace = true }
 async-std = { workspace = true }

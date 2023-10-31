@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::PayloadCodec;
 
 // #[derive(Debug, Clone, PartialEq, Eq)]
@@ -6,7 +8,7 @@ use crate::PayloadCodec;
 //     pub transport_cc: Option<u16>, // (buf[0] << 8) | buf[1];
 // }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaPacket {
     pub codec: PayloadCodec,
     pub seq_no: u16,

@@ -10,6 +10,6 @@ log = { workspace = true }
 async-std = { workspace = true }
 cluster = { workspace = true }
 transport = { workspace = true }
-utils = { workspace = true }
+media-utils = { workspace = true }
 serde = { workspace = true }
 futures = { workspace = true }

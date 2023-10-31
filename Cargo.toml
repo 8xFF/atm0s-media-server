@@ -3,8 +3,9 @@ members = [
     "packages/cluster",
     "packages/endpoint",
     "packages/transport",
-    "packages/utils",
+    "packages/media-utils",
     "clusters/local",
+    "clusters/bluesea",
     "transports/webrtc",
     "servers/media",
 ]
@@ -15,7 +16,8 @@ endpoint = { path = "packages/endpoint" }
 transport = { path = "packages/transport" }
 transport-webrtc = { path = "transports/webrtc" }
 cluster-local = { path = "clusters/local" }
-utils = { path = "packages/utils" }
+cluster-bluesea = { path = "clusters/bluesea" }
+media-utils = { path = "packages/media-utils" }
 futures = "0.3"
 async-trait = "0.1"
 async-std = { version = "1.12", features = ["tokio1", "unstable", "attributes"] }

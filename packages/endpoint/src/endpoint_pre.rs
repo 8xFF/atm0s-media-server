@@ -1,6 +1,6 @@
 use cluster::ClusterEndpoint;
+use media_utils::{EndpointSubscribeScope, ServerError};
 use transport::Transport;
-use utils::{EndpointSubscribeScope, ServerError};
 
 use crate::{
     rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},

@@ -16,8 +16,8 @@
 //! presence of TID.  Therefore, it is RECOMMENDED that the TID be
 //! used whenever TL0PICIDX is.
 
+use media_utils::SeqRewrite;
 use transport::PayloadCodec;
-use utils::SeqRewrite;
 
 use super::{FilterResult, ScalableFilter};
 

@@ -3,8 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use async_std::stream::StreamExt;
 use cluster::ClusterEndpoint;
 use futures::{select, FutureExt};
+use media_utils::{EndpointSubscribeScope, Timer};
 use transport::{Transport, TransportError};
-use utils::{EndpointSubscribeScope, Timer};
 
 use crate::{
     endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction},
@@ -54,7 +54,7 @@ where
             transport,
             cluster,
             tick: async_std::stream::interval(std::time::Duration::from_millis(100)),
-            timer: Arc::new(utils::SystemTimer()),
+            timer: Arc::new(media_utils::SystemTimer()),
             sub_scope,
             peer_subscribe: HashMap::new(),
         }

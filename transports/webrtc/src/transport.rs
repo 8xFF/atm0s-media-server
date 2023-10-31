@@ -6,9 +6,9 @@ use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, RpcResponse},
     EndpointRpcIn, EndpointRpcOut,
 };
+use media_utils::ServerError;
 use str0m::{bwe::Bitrate, change::SdpOffer, media::KeyframeRequestKind, net::Receive, rtp::ExtensionValues, Candidate, Input, Output, Rtc, RtcError};
 use transport::{RequestKeyframeKind, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
-use utils::ServerError;
 
 use crate::{
     rpc::{WebrtcConnectRequestSender, WebrtcRemoteIceRequest},
