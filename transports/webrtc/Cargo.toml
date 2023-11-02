@@ -24,7 +24,7 @@ udp_sas = { commit = "e6a3f657d03fc3c7198522e6904dbbacd6db37fd", git = "https://
 combine = "*"
 
 [dev-dependencies]
-criterion = { version = "0.4", features = ["html_reports"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 
 
 [[bench]]
