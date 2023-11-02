@@ -1,9 +1,9 @@
 [![codecov](https://codecov.io/gh/8xFF/decentralized-media-server/graph/badge.svg?token=PRIzilWSJ3)](https://codecov.io/gh/8xFF/decentralized-media-server)
 [![Rust](https://github.com/8xFF/decentralized-media-server/actions/workflows/rust.yml/badge.svg)](https://github.com/8xFF/decentralized-media-server/actions/workflows/rust.yml)
 
-# 8xFF Media Server: Planet Scale Ultra-Low Latency Streaming Server written in Rust
+# 8xFF Media Server: Global-Scale Ultra-Low Latency Streaming Server written in Rust
 
-This is a media server that supports multiple protocols, including WebRTC, RTMP, and SIP. It is designed to handle media streaming at a planet-scale level, making it suitable for large-scale applications. It is designed with awesome [SAN-I/O](https://sans-io.readthedocs.io/) style.
+A media server that supports multiple protocols, including WebRTC, RTMP, and SIP. It is designed to handle media streaming at a planet-scale level, making it suitable for large-scale applications. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
 
 ## Status: Active Development
 
