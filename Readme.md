@@ -35,11 +35,11 @@ With the above reasons, 8xFF Media Server's vision is to create a full-featured 
    - [x] Simulcast/SVC
    - [x] SFU
    - [x] Planet Scale SDN (like [Cloudflare interconnected network](https://blog.cloudflare.com/announcing-cloudflare-calls/))
-   - [] Recording
-   - [] RTMP
-   - [] SIP
+   - [ ] Recording
+   - [ ] RTMP
+   - [ ] SIP
    - [x] WebRTC
-   - [] Whip/Whep
+   - [ ] Whip/Whep
 
 ## Why Rust
 
