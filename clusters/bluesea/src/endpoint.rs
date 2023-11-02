@@ -11,10 +11,7 @@ use media_utils::hash_str;
 use runner::{ChannelUuid, ConsumerRaw, Feedback, FeedbackType, KeyId, KeySource, KeyValueSdk, KeyVersion, LocalSubId, NodeId, NumberInfo, PublisherRaw, PubsubSdk, SubKeyId, ValueType};
 use transport::RequestKeyframeKind;
 
-use crate::{
-    server::{NodeBehaviorEvent, NodeHandleEvent},
-    types::{from_room_value, to_room_key, to_room_value, TrackData},
-};
+use crate::types::{from_room_value, to_room_key, to_room_value, TrackData};
 
 #[repr(u8)]
 enum TrackFeedbackType {
@@ -39,7 +36,7 @@ pub struct BlueseaClusterEndpoint {
     peer_id: String,
     room_key: u64,
     sub_uuid: u64,
-    pubsub_sdk: PubsubSdk<NodeBehaviorEvent, NodeHandleEvent>,
+    pubsub_sdk: PubsubSdk,
     kv_sdk: KeyValueSdk,
     kv_tx: Sender<(KeyId, SubKeyId, Option<ValueType>, KeyVersion, KeySource)>,
     kv_rx: Receiver<(KeyId, SubKeyId, Option<ValueType>, KeyVersion, KeySource)>,
@@ -51,12 +48,12 @@ pub struct BlueseaClusterEndpoint {
     track_sub_map: HashMap<u16, ConsumerRaw>,
     room_sub: Option<()>,
     peer_sub: HashMap<String, ()>,
-    track_pub: HashMap<ChannelUuid, (u16, PublisherRaw<NodeBehaviorEvent, NodeHandleEvent>)>,
+    track_pub: HashMap<ChannelUuid, (u16, PublisherRaw)>,
     remote_track_cached: HashMap<u64, (String, String)>,
 }
 
 impl BlueseaClusterEndpoint {
-    pub(crate) fn new(room_id: &str, peer_id: &str, pubsub_sdk: PubsubSdk<NodeBehaviorEvent, NodeHandleEvent>, kv_sdk: KeyValueSdk) -> Self {
+    pub(crate) fn new(room_id: &str, peer_id: &str, pubsub_sdk: PubsubSdk, kv_sdk: KeyValueSdk) -> Self {
         let (kv_tx, kv_rx) = bounded(100);
         let (data_tx, data_rx) = bounded(100);
         let (data_fb_tx, data_fb_rx) = bounded(100);

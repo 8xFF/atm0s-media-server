@@ -10,7 +10,7 @@ log = { workspace = true }
 cluster = { workspace = true }
 transport = { workspace = true }
 media-utils = { workspace = true }
-runner = { git = "ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git" }
+runner = { git = "https://github.com/8xFF/decentralized-sdn.git" }
 serde = { workspace = true }
 bincode = { version = "1" }
 futures = { workspace = true }

@@ -63,10 +63,6 @@ where
     pub async fn new(life_cycle: L) -> Result<Self, std::io::Error> {
         let mut rtc = Rtc::builder()
             .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
-            .enable_opus(true)
-            .enable_h264(true)
-            .enable_vp8(true)
-            .enable_vp9(true)
             .set_ice_lite(false)
             .set_rtp_mode(true)
             .set_stats_interval(Some(Duration::from_millis(500)))

@@ -31,7 +31,7 @@ pub struct ServerBlueseaConfig {
 
 pub struct ServerBluesea {
     join_handler: Option<async_std::task::JoinHandle<()>>,
-    pubsub_sdk: PubsubSdk<NodeBehaviorEvent, NodeHandleEvent>,
+    pubsub_sdk: PubsubSdk,
     kv_sdk: KeyValueSdk,
 }
 
@@ -46,18 +46,19 @@ impl ServerBluesea {
 
         let router = SharedRouter::new(node_id);
         let manual = ManualBehavior::new(ManualBehaviorConf {
+            node_id,
             neighbours: config.neighbours,
             timer: timer.clone(),
         });
 
         let router_sync_behaviour = LayersSpreadRouterSyncBehavior::new(router.clone());
         let (kv_behaviour, kv_sdk) = KeyValueBehavior::new(node_id, timer.clone(), 3000);
-        let (pubsub_behavior, pubsub_sdk) = PubsubServiceBehaviour::new(node_id, Box::new(ChannelSourceHashmapReal::new(kv_sdk.clone(), node_id)));
+        let (pubsub_behavior, pubsub_sdk) = PubsubServiceBehaviour::new(node_id, Box::new(ChannelSourceHashmapReal::new(kv_sdk.clone(), node_id)), timer.clone());
 
         let mut plane = NetworkPlane::<NodeBehaviorEvent, NodeHandleEvent>::new(NetworkPlaneConfig {
-            local_node_id: node_id,
+            node_id,
             tick_ms: 1000,
-            behavior: vec![Box::new(pubsub_behavior), Box::new(kv_behaviour), Box::new(router_sync_behaviour), Box::new(manual)],
+            behaviors: vec![Box::new(pubsub_behavior), Box::new(kv_behaviour), Box::new(router_sync_behaviour), Box::new(manual)],
             transport,
             timer,
             router: Arc::new(router.clone()),
