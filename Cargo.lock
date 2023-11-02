@@ -420,7 +420,7 @@ dependencies = [
 [[package]]
 name = "bluesea-identity"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "multiaddr",
  "parking_lot",
@@ -431,7 +431,7 @@ dependencies = [
 [[package]]
 name = "bluesea-router"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "bluesea-identity",
 ]
@@ -1483,7 +1483,7 @@ dependencies = [
 [[package]]
 name = "key-value"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-std",
  "bluesea-identity",
@@ -1508,7 +1508,7 @@ dependencies = [
 [[package]]
 name = "layers-spread-router"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "bluesea-identity",
  "bluesea-router",
@@ -1521,7 +1521,7 @@ dependencies = [
 [[package]]
 name = "layers-spread-router-sync"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1602,7 +1602,7 @@ dependencies = [
 [[package]]
 name = "manual-discovery"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-trait",
  "bluesea-identity",
@@ -1709,7 +1709,7 @@ dependencies = [
 [[package]]
 name = "multiaddr"
 version = "0.18.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "arrayref",
  "byteorder",
@@ -1761,7 +1761,7 @@ dependencies = [
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2128,14 +2128,13 @@ dependencies = [
 [[package]]
 name = "pub-sub"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-std",
  "async-trait",
  "bluesea-identity",
  "bluesea-router",
  "bytes",
- "futures",
  "key-value",
  "log",
  "network",
@@ -2263,7 +2262,7 @@ dependencies = [
 [[package]]
 name = "runner"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-std",
  "bluesea-identity",
@@ -2581,7 +2580,7 @@ dependencies = [
 [[package]]
 name = "tcp"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-bincode",
  "async-std",
@@ -2863,7 +2862,7 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 [[package]]
 name = "udp"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-notify",
  "async-std",
@@ -2963,7 +2962,7 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 [[package]]
 name = "utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/bluesea-network/bluesea-sdn-v4.git#aec5a9e9794a18e33086448c10cbc6429b9312c8"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
 dependencies = [
  "async-notify",
  "async-std",
