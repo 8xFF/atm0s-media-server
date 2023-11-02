@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use crate::rpc::RpcEvent;
 
-use self::webrtc_session::WebrtcSession;
+use self::{rtmp_session::RtmpSession, webrtc_session::WebrtcSession};
 use async_std::{channel::Sender, prelude::FutureExt};
 use cluster::{Cluster, ClusterEndpoint};
 use media_utils::{EndpointSubscribeScope, ServerError, Timer};
@@ -10,6 +10,7 @@ use parking_lot::RwLock;
 use transport::RpcResponse;
 use transport_webrtc::{WebrtcConnectResponse, WebrtcRemoteIceRequest};
 
+mod rtmp_session;
 mod webrtc_session;
 
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
@@ -29,7 +30,7 @@ pub enum InternalControl {
     ForceClose(Sender<()>),
 }
 
-pub struct WebrtcServer<C, CR> {
+pub struct MediaServer<C, CR> {
     _tmp_cr: std::marker::PhantomData<CR>,
     cluster: C,
     counter: u64,
@@ -38,7 +39,7 @@ pub struct WebrtcServer<C, CR> {
     timer: Arc<dyn Timer>,
 }
 
-impl<C, CR: 'static> WebrtcServer<C, CR>
+impl<C, CR: 'static> MediaServer<C, CR>
 where
     C: Cluster<CR>,
     CR: ClusterEndpoint,
@@ -56,10 +57,11 @@ where
 
     pub async fn on_incomming(&mut self, event: RpcEvent) {
         match event {
-            RpcEvent::WhipConnect(_token, sdp, mut res) => {
+            RpcEvent::WhipConnect(_token, _sdp, mut res) => {
                 res.answer(200, Err(ServerError::build("NOT_IMPLEMENTED", "Not implemented now")));
             }
             RpcEvent::WebrtcConnect(req, mut res) => {
+                log::info!("[MediaServer] on webrtc connection from {} {}", req.room, req.peer);
                 let sub_scope = req.sub_scope.unwrap_or(EndpointSubscribeScope::RoomAuto);
                 let (mut session, tx, answer_sdp) = match WebrtcSession::new(&req.room, &req.peer, sub_scope, &mut self.cluster, &req.sdp, req.senders, self.timer.now_ms()).await {
                     Ok(res) => res,
@@ -94,9 +96,9 @@ where
                 }
 
                 async_std::task::spawn(async move {
-                    log::info!("[WebrtcServer] start loop for endpoint");
+                    log::info!("[MediaServer] start loop for webrtc endpoint");
                     while let Some(_) = session.recv().await {}
-                    log::info!("[WebrtcServer] stop loop for endpoint");
+                    log::info!("[MediaServer] stop loop for webrtc endpoint");
                     conns_c.write().remove(&connect_id);
                     peers_c.write().remove(&local_peer_id);
                 });
@@ -107,6 +109,22 @@ where
                         //TODO handle this
                     };
                 }
+            }
+            RpcEvent::RtmpConnect(transport, room_id, peer_id) => {
+                log::info!("[MediaServer] on rtmp connection from {} {}", room_id, peer_id);
+                let mut session = match RtmpSession::new(&room_id, &peer_id, &mut self.cluster, transport).await {
+                    Ok(res) => res,
+                    Err(e) => {
+                        log::error!("Error on create rtmp session: {:?}", e);
+                        return;
+                    }
+                };
+
+                async_std::task::spawn(async move {
+                    log::info!("[MediaServer] start loop for rtmp endpoint");
+                    while let Some(_) = session.recv().await {}
+                    log::info!("[MediaServer] stop loop for rtmp endpoint");
+                });
             }
         }
     }

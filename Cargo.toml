@@ -7,6 +7,7 @@ members = [
     "clusters/local",
     "clusters/bluesea",
     "transports/webrtc",
+    "transports/rtmp",
     "servers/media",
 ]
 
@@ -15,6 +16,7 @@ cluster = { path = "packages/cluster" }
 endpoint = { path = "packages/endpoint" }
 transport = { path = "packages/transport" }
 transport-webrtc = { path = "transports/webrtc" }
+transport-rtmp = { path = "transports/rtmp" }
 cluster-local = { path = "clusters/local" }
 cluster-bluesea = { path = "clusters/bluesea" }
 media-utils = { path = "packages/media-utils" }

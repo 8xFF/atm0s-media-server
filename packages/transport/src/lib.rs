@@ -78,6 +78,7 @@ pub enum TransportRuntimeError {
     RpcInvalid,
     TrackIdNotFound,
     RtpInvalid,
+    ProtocolError,
 }
 
 #[derive(PartialEq, Eq, Debug)]

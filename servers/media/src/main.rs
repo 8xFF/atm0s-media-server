@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use clap::Parser;
 
 mod rpc;
@@ -6,7 +8,9 @@ mod server;
 use cluster::{Cluster, ClusterEndpoint};
 use cluster_bluesea::{NodeAddr, NodeId, ServerBluesea, ServerBlueseaConfig};
 use cluster_local::ServerLocal;
-use server::WebrtcServer;
+use server::MediaServer;
+use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
+use transport_rtmp::RtmpTransport;
 
 /// Media Server node
 #[derive(Parser, Debug)]
@@ -23,6 +27,10 @@ struct Args {
     /// Neighbors
     #[arg(env, long)]
     neighbours: Vec<NodeAddr>,
+
+    /// Rtmp port
+    #[arg(env, long)]
+    rtmp_port: Option<u16>,
 }
 
 #[async_std::main]
@@ -30,15 +38,74 @@ async fn main() {
     let args: Args = Args::parse();
     env_logger::builder().format_module_path(false).format_timestamp_millis().init();
 
-    async fn start_server<C, CR>(cluster: C)
+    async fn start_server<C, CR>(cluster: C, http_port: u16, rtmp_port: Option<u16>)
     where
         C: Cluster<CR>,
         CR: ClusterEndpoint + 'static,
     {
-        let mut http_server = rpc::http::HttpRpcServer::new(3000);
+        let (tx, rx) = async_std::channel::bounded(10);
+
+        let mut http_server = rpc::http::HttpRpcServer::new(http_port);
         http_server.start().await;
-        let mut server = WebrtcServer::<C, CR>::new(cluster);
-        while let Some(event) = http_server.recv().await {
+        let tx_c = tx.clone();
+        async_std::task::spawn(async move {
+            log::info!("Start http server on {}", http_port);
+            while let Some(event) = http_server.recv().await {
+                tx_c.send(event).await;
+            }
+        });
+
+        if let Some(rtmp_port) = rtmp_port {
+            let tx_c = tx.clone();
+            let addr = format!("0.0.0.0:{rtmp_port}").parse::<SocketAddr>().expect("Should parse ip address");
+            let tcp_server = async_std::net::TcpListener::bind(addr).await.expect("Should bind tcp server");
+            async_std::task::spawn(async move {
+                log::info!("Start rtmp server on {}", rtmp_port);
+                while let Ok((stream, addr)) = tcp_server.accept().await {
+                    log::info!("on rtmp connection from {}", addr);
+                    let tx_c = tx_c.clone();
+                    async_std::task::spawn(async move {
+                        let mut transport = RtmpTransport::new(stream);
+                        //wait connected or disconnected
+                        let mut connected = false;
+                        while let Ok(e) = transport.recv(0).await {
+                            match e {
+                                TransportIncomingEvent::State(state) => {
+                                    log::info!("[RtmpServer] state: {:?}", state);
+                                    match state {
+                                        TransportStateEvent::Connected => {
+                                            connected = true;
+                                            break;
+                                        }
+                                        TransportStateEvent::Disconnected => {
+                                            break;
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        if !connected {
+                            log::warn!("Rtmp connection not connected");
+                            return;
+                        }
+
+                        match (transport.room(), transport.peer()) {
+                            (Some(r), Some(p)) => {
+                                tx_c.send(rpc::RpcEvent::RtmpConnect(transport, r, p)).await;
+                            }
+                            _ => {}
+                        }
+                    });
+                }
+            });
+        }
+
+        let mut server = MediaServer::<C, CR>::new(cluster);
+
+        while let Ok(event) = rx.recv().await {
             server.on_incomming(event).await;
         }
     }
@@ -46,11 +113,11 @@ async fn main() {
     match args.node_id {
         Some(node_id) => {
             let cluster = ServerBluesea::new(node_id, ServerBlueseaConfig { neighbours: args.neighbours }).await;
-            start_server(cluster).await;
+            start_server(cluster, args.http_port, args.rtmp_port).await;
         }
         None => {
             let cluster = ServerLocal::new();
-            start_server(cluster).await;
+            start_server(cluster, args.http_port, args.rtmp_port).await;
         }
     }
 }

@@ -13,6 +13,7 @@ cluster = { workspace = true }
 cluster-local = { workspace = true }
 cluster-bluesea = { workspace = true }
 transport-webrtc = { workspace = true }
+transport-rtmp = { workspace = true }
 media-utils = { workspace = true }
 async-std = { workspace = true }
 parking_lot = { workspace = true }
