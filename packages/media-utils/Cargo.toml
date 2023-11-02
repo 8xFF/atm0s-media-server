@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 serde = { workspace = true }
-sorted-vec = "0.7"
+sorted-vec = "0.8"
 poem-openapi = { version = "*" }
 log = { workspace = true }
