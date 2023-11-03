@@ -34,7 +34,7 @@ impl HttpApis {
         ctx.0
             .send(RpcEvent::WhipConnect("token".to_string(), body.0, res))
             .await
-            .map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+            .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let (_code, res) = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Whip endpoint created with location {} and sdp {}", res.location, res.sdp);
@@ -49,7 +49,7 @@ impl HttpApis {
         ctx.0
             .send(RpcEvent::WebrtcConnect(body.0, res))
             .await
-            .map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+            .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let (_code, res) = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Webrtc endpoint created with conn_id {}", res.conn_id);
@@ -73,7 +73,7 @@ impl HttpApis {
         ctx.0
             .send(RpcEvent::WebrtcRemoteIce(body.0, res))
             .await
-            .map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+            .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let (_code, res) = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         Ok(Json(WebrtcIceRemoteApiResponse {

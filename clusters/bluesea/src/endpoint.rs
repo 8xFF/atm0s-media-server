@@ -55,7 +55,7 @@ pub struct BlueseaClusterEndpoint {
 impl BlueseaClusterEndpoint {
     pub(crate) fn new(room_id: &str, peer_id: &str, pubsub_sdk: PubsubSdk, kv_sdk: KeyValueSdk) -> Self {
         let (kv_tx, kv_rx) = bounded(100);
-        let (data_tx, data_rx) = bounded(100);
+        let (data_tx, data_rx) = bounded(1000);
         let (data_fb_tx, data_fb_rx) = bounded(100);
 
         Self {
