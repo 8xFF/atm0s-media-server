@@ -1,17 +1,22 @@
 use std::collections::VecDeque;
 
+use bytes::Bytes;
 use rml_rtmp::{
     chunk_io::Packet,
     handshake::{Handshake, HandshakeProcessResult, PeerType},
     sessions::{PublishMode, ServerSession, ServerSessionConfig, ServerSessionError, ServerSessionEvent, ServerSessionResult},
 };
+use transport::MediaKind;
+
+pub(crate) mod audio_convert;
+pub(crate) mod video_convert;
 
 #[derive(Debug)]
 pub enum ServerEvent {
-    DisconnectConnection,
     OutboundPacket(Packet),
     ConnectionRequested { request_id: u32, app_name: String },
     PublishRequest { request_id: u32, app_name: String, stream_key: String },
+    PublishData { kind: MediaKind, data: Bytes, ts_ms: u32 },
     PublishFinished { app_name: String, stream_key: String },
 }
 
@@ -148,6 +153,11 @@ impl RtmpSession {
             } => {
                 //TODO custom rml_rtmp for avoid stream_key each time
                 log::debug!("[RtmpSession] Audio data received: {} {} {:?}", app_name, stream_key, timestamp);
+                self.outputs.push_back(ServerEvent::PublishData {
+                    kind: MediaKind::Audio,
+                    data,
+                    ts_ms: timestamp.value,
+                });
             }
             ServerSessionEvent::VideoDataReceived {
                 app_name,
@@ -156,30 +166,22 @@ impl RtmpSession {
                 timestamp,
             } => {
                 //TODO custom rml_rtmp for avoid stream_key each time
-                log::debug!("[RtmpSession] Audio video received: {:?} {:?} {:?}", app_name, stream_key, timestamp);
+                log::debug!("[RtmpSession] Video video received: {:?} {:?} {:?}", app_name, stream_key, timestamp);
+                self.outputs.push_back(ServerEvent::PublishData {
+                    kind: MediaKind::Video,
+                    data,
+                    ts_ms: timestamp.value,
+                });
             }
-            ServerSessionEvent::PlayStreamRequested {
-                request_id,
-                app_name,
-                stream_key,
-                start_at,
-                duration,
-                reset,
-                stream_id,
-            } => {
+            ServerSessionEvent::PlayStreamRequested { request_id, .. } => {
                 //auto reject
                 self.session.reject_request(request_id, "NetStream.Play.StreamNotFound", "No such stream")?;
             }
-            ServerSessionEvent::PlayStreamFinished { app_name, stream_key } => {}
-            ServerSessionEvent::AcknowledgementReceived { bytes_received } => {}
-            ServerSessionEvent::PingResponseReceived { timestamp } => {}
-            ServerSessionEvent::ClientChunkSizeChanged { new_chunk_size } => {}
-            ServerSessionEvent::UnhandleableAmf0Command {
-                command_name,
-                transaction_id,
-                command_object,
-                additional_values,
-            } => {}
+            ServerSessionEvent::PlayStreamFinished { .. } => {}
+            ServerSessionEvent::AcknowledgementReceived { .. } => {}
+            ServerSessionEvent::PingResponseReceived { .. } => {}
+            ServerSessionEvent::ClientChunkSizeChanged { .. } => {}
+            ServerSessionEvent::UnhandleableAmf0Command { .. } => {}
         }
 
         Ok(())

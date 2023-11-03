@@ -64,7 +64,7 @@ async fn main() {
                 while let Ok((stream, addr)) = tcp_server.accept().await {
                     log::info!("on rtmp connection from {}", addr);
                     let tx_c = tx_c.clone();
-                    async_std::task::spawn(async move {
+                    async_std::task::spawn_local(async move {
                         let mut transport = RtmpTransport::new(stream);
                         //wait connected or disconnected
                         let mut connected = false;
