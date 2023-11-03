@@ -26,7 +26,7 @@ pub struct PeerLocal {
 
 impl PeerLocal {
     pub fn new(event_hub: Arc<RwLock<LocalEventHub>>, media_hub: Arc<RwLock<LocalMediaHub>>, room_id: &str, peer_id: &str) -> Self {
-        let (tx, rx) = async_std::channel::bounded(100);
+        let (tx, rx) = async_std::channel::bounded(1000);
         log::debug!("[PeerLocal {}/{}] created", room_id, peer_id);
         Self {
             peer_id_hash: hash_str(&format!("{}-{}", room_id, peer_id)) << 16,

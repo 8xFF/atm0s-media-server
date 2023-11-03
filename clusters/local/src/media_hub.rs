@@ -23,7 +23,7 @@ impl LocalMediaHub {
                 let local_track_id = (consumer_id & 0xffff) as u16;
                 let event = ClusterEndpointIncomingEvent::LocalTrackEvent(local_track_id, ClusterLocalTrackIncomingEvent::MediaPacket(pkt.clone()));
                 if let Err(_e) = tx.try_send(event) {
-                    todo!("handle this")
+                    todo!("handle this {}", _e)
                 }
             }
         }
@@ -35,7 +35,7 @@ impl LocalMediaHub {
                 let local_track_id = (consumer_id & 0xffff) as u16;
                 let event = ClusterEndpointIncomingEvent::LocalTrackEvent(local_track_id, ClusterLocalTrackIncomingEvent::MediaStats(stats.clone()));
                 if let Err(_e) = tx.try_send(event) {
-                    todo!("handle this")
+                    todo!("handle this {}", _e)
                 }
             }
         }
@@ -48,7 +48,7 @@ impl LocalMediaHub {
                 if let Some((track_id, tx)) = &channel.track {
                     let event = ClusterEndpointIncomingEvent::RemoteTrackEvent(*track_id, event.clone());
                     if let Err(_e) = tx.try_send(event) {
-                        todo!("handle this")
+                        todo!("handle this {}", _e)
                     }
                 }
             }
