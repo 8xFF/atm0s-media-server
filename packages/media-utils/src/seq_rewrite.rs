@@ -112,7 +112,7 @@ impl<const MAX: u64, const DROPPED_QUEUE_LEN: usize> SeqRewrite<MAX, DROPPED_QUE
         let extended_input = self.extended_seq(input);
         // Mark as dropped if 'input' is higher than anyone already processed.
         if self.is_seq_higher_than(input, self.max_input) {
-            self.dropped.insert(extended_input);
+            self.dropped.push(extended_input);
         }
 
         // Delete dropped inputs older than input - MaxValue/2.
