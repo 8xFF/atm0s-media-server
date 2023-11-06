@@ -1,0 +1,17 @@
+[package]
+name = "transport-sip"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+endpoint = { workspace = true }
+transport = { workspace = true }
+async-std = { workspace = true }
+async-trait = { workspace = true }
+media-utils = { workspace = true }
+log = { workspace = true }
+futures = { workspace = true }
+bytes = "*"
+rsip = { git = "https://github.com/8xFF/rsip.git" }
