@@ -31,14 +31,14 @@ impl RegisterProcessor {
             res.raw
                 .headers
                 .push(rsip::Header::Allow(Allow(vec![Method::Invite, Method::Ack, Method::Cancel, Method::Options, Method::Bye]).into()));
-            self.actions.push_back(ProcessorAction::SendResponse(res));
+            self.actions.push_back(ProcessorAction::SendResponse(None, res));
             self.actions.push_back(ProcessorAction::Finished(Ok(())));
         } else {
             let mut res = self.init_req.build_response(StatusCode::Forbidden, None);
             res.raw
                 .headers
                 .push(rsip::Header::Allow(Allow(vec![Method::Invite, Method::Ack, Method::Cancel, Method::Options, Method::Bye]).into()));
-            self.actions.push_back(ProcessorAction::SendResponse(res));
+            self.actions.push_back(ProcessorAction::SendResponse(None, res));
             self.actions.push_back(ProcessorAction::Finished(Err("WrongUser".into())));
         }
     }
@@ -65,7 +65,7 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
                     }
                     .into(),
                 );
-                self.actions.push_back(ProcessorAction::SendResponse(res));
+                self.actions.push_back(ProcessorAction::SendResponse(None, res));
                 Ok(())
             }
         } else {
@@ -82,7 +82,7 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
                 }
                 .into(),
             );
-            self.actions.push_back(ProcessorAction::SendResponse(res));
+            self.actions.push_back(ProcessorAction::SendResponse(None, res));
             Ok(())
         }
     }

@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use super::{sip_request::SipRequest, sip_response::SipResponse};
 
 pub mod call_in;
@@ -7,12 +9,13 @@ pub mod register;
 pub enum ProcessorError {
     Timeout,
     WrongMessage,
+    WrongState,
 }
 
 pub enum ProcessorAction<C> {
     Finished(Result<(), String>),
-    SendRequest(SipRequest),
-    SendResponse(SipResponse),
+    SendRequest(Option<SocketAddr>, SipRequest),
+    SendResponse(Option<SocketAddr>, SipResponse),
     LogicOutput(C),
 }
 

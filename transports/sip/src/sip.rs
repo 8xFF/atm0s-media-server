@@ -1,5 +1,6 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, fmt::Display, net::SocketAddr};
 
+use bytes::Bytes;
 use rsip::{headers::CallId, Method};
 
 use crate::processor::Processor;
@@ -13,8 +14,32 @@ use self::{
 pub mod processor;
 pub mod sip_request;
 pub mod sip_response;
+mod utils;
 
 pub type GroupId = (SocketAddr, CallId);
+
+pub enum SipMessage {
+    Request(SipRequest),
+    Response(SipResponse),
+}
+
+impl SipMessage {
+    pub fn to_bytes(self) -> Bytes {
+        match self {
+            SipMessage::Request(req) => req.to_bytes(),
+            SipMessage::Response(res) => res.to_bytes(),
+        }
+    }
+}
+
+impl Display for SipMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SipMessage::Request(req) => write!(f, "Req({})", req.method()),
+            SipMessage::Response(res) => write!(f, "Res({})", res.raw.status_code()),
+        }
+    }
+}
 
 pub enum SipServerError {}
 
@@ -23,22 +48,22 @@ pub enum SipServerEvent {
     OnRegisterValidate(GroupId, String),
     OnInCallStarted(GroupId, SipRequest),
     OnInCallRequest(GroupId, SipRequest),
-    OnInCallEnded(GroupId),
+    OnInCallResponse(GroupId, SipResponse),
     SendRes(SocketAddr, SipResponse),
     SendReq(SocketAddr, SipRequest),
 }
 
 pub struct SipServer {
-    groups: HashMap<GroupId, u64>,
     register_processors: HashMap<GroupId, RegisterProcessor>,
+    invite_groups: HashMap<GroupId, ()>,
     actions: Vec<SipServerEvent>,
 }
 
 impl SipServer {
     pub fn new() -> Self {
         Self {
-            groups: HashMap::new(),
             register_processors: HashMap::new(),
+            invite_groups: HashMap::new(),
             actions: Vec::new(),
         }
     }
@@ -50,6 +75,10 @@ impl SipServer {
             processor.accept(accept);
             self.process_register_processor(&group_id);
         }
+    }
+
+    pub fn close_in_call(&mut self, group_id: &GroupId) {
+        self.invite_groups.remove(group_id);
     }
 
     pub fn on_req(&mut self, now_ms: u64, from: SocketAddr, req: SipRequest) -> Result<(), SipServerError> {
@@ -70,21 +99,38 @@ impl SipServer {
                 Ok(())
             }
             Method::Invite => {
-                todo!()
-            }
-            Method::Options => {
-                todo!()
+                let group_id: (SocketAddr, CallId) = (from, req.call_id.clone());
+                if let Some(_) = self.invite_groups.get(&group_id) {
+                    self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
+                    Ok(())
+                } else {
+                    self.invite_groups.insert(group_id.clone(), ());
+                    self.actions.push(SipServerEvent::OnInCallStarted(group_id, req));
+                    Ok(())
+                }
             }
             _ => {
-                todo!()
+                let group_id: (SocketAddr, CallId) = (from, req.call_id.clone());
+                if let Some(_) = self.invite_groups.get(&group_id) {
+                    self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
+                    Ok(())
+                } else {
+                    //TODO handle this
+                    Ok(())
+                }
             }
         }
     }
 
     pub fn on_res(&mut self, now_ms: u64, from: SocketAddr, res: SipResponse) -> Result<(), SipServerError> {
-        todo!()
-        // TODO check type of response
-        // Finding transaction for that response and send it to transaction
+        let group_id: (SocketAddr, CallId) = (from, res.call_id.clone());
+        if let Some(_) = self.invite_groups.get(&group_id) {
+            self.actions.push(SipServerEvent::OnInCallResponse(group_id, res));
+            Ok(())
+        } else {
+            //TODO handle this
+            Ok(())
+        }
     }
 
     pub fn pop_action(&mut self) -> Option<SipServerEvent> {
@@ -99,11 +145,11 @@ impl SipServer {
                     self.register_processors.remove(group_id);
                     break;
                 }
-                ProcessorAction::SendRequest(req) => {
-                    self.actions.push(SipServerEvent::SendReq(group_id.0, req));
+                ProcessorAction::SendRequest(remote_addr, req) => {
+                    self.actions.push(SipServerEvent::SendReq(remote_addr.unwrap_or(group_id.0), req));
                 }
-                ProcessorAction::SendResponse(res) => {
-                    self.actions.push(SipServerEvent::SendRes(group_id.0, res));
+                ProcessorAction::SendResponse(remote_addr, res) => {
+                    self.actions.push(SipServerEvent::SendRes(remote_addr.unwrap_or(group_id.0), res));
                 }
                 ProcessorAction::LogicOutput(action) => match action {
                     processor::register::RegisterProcessorAction::Validate(username) => {

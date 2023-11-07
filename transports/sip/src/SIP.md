@@ -81,3 +81,9 @@ Dialog state: a local sequence number, a remote sequence number, a local URI, a 
 ##### For register
 
 https://www.rfc-editor.org/rfc/rfc3261.html#section-10.2.8
+
+##### For Options
+
+Accept will be application/sdp
+
+Response 200 if accepted, 486 if busy ...

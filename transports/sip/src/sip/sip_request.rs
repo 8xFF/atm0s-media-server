@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use rsip::{
-    headers::{Authorization, ContentLength, ContentType},
+    headers::{Authorization, ContentLength, ContentType, UserAgent},
     prelude::ToTypedHeader,
     StatusCode,
 };
@@ -22,6 +22,7 @@ pub enum SipRequestError {
     Missing(RequiredHeader),
 }
 
+#[derive(Clone)]
 pub struct SipRequest {
     pub raw: rsip::Request,
     pub call_id: rsip::headers::CallId,
@@ -110,6 +111,10 @@ impl SipRequest {
         &self.raw.method
     }
 
+    pub fn body_str(&self) -> String {
+        String::from_utf8_lossy(&self.raw.body).to_string()
+    }
+
     pub fn header_authorization(&self) -> Option<&Authorization> {
         for header in self.raw.headers.iter() {
             match header {
@@ -129,6 +134,7 @@ impl SipRequest {
         headers.push(rsip::Header::CSeq(self.cseq.clone().into()));
         let body_len = body.as_ref().map(|(_, body)| body.len()).unwrap_or(0);
         headers.push(rsip::Header::ContentLength(ContentLength::from(body_len as u32)));
+        headers.push(rsip::Header::UserAgent(UserAgent::default()));
 
         if let Some((content_type, _)) = &body {
             headers.push(rsip::Header::ContentType(content_type.clone()));
