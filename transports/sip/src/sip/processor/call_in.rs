@@ -2,17 +2,19 @@ use std::{collections::VecDeque, net::SocketAddr};
 
 use rsip::{
     headers::{self, typed, ContentType},
-    typed::{Allow, Contact},
+    typed::Contact,
     Headers, HostWithPort, Method, Scheme, StatusCode,
 };
 
-use crate::{sip::utils::generate_random_string, sip_request::SipRequest};
-
-use self::invite_transaction::{ServerInviteTransaction, ServerInviteTransactionAction, ServerInviteTransactionEvent};
+use crate::{
+    sip::{
+        transaction::server_invite_transaction::{ServerInviteTransaction, ServerInviteTransactionAction, ServerInviteTransactionEvent, Terminated},
+        utils::generate_random_string,
+    },
+    sip_request::SipRequest,
+};
 
 use super::{Processor, ProcessorAction};
-
-mod invite_transaction;
 
 /**
    Alice                     Bob
@@ -41,7 +43,7 @@ const T2: u64 = 500 * 64;
 
 enum State {
     Connecting { transaction: ServerInviteTransaction },
-    InCall { timer_resend_res: Option<(u64, (ContentType, Vec<u8>))> },
+    InCall { timer_resend_res: Option<(u64, Option<(ContentType, Vec<u8>)>)> },
     Bye { timer_resend_res: u64, timeout: u64 },
     End,
 }
@@ -51,17 +53,23 @@ pub enum CallInProcessorAction {}
 pub struct CallInProcessor {
     state: State,
     local_contact: Contact,
+    remote_contact_addr: Option<SocketAddr>,
     init_req: SipRequest,
     actions: VecDeque<ProcessorAction<CallInProcessorAction>>,
 }
 
 impl CallInProcessor {
     pub fn new(now_ms: u64, local_contact: Contact, req: SipRequest) -> Self {
+        let remote_contact_addr = req.header_contact().map(|contact| contact.uri.host_with_port.try_into().ok()).flatten();
+        if let Some(remote_contact_addr) = &remote_contact_addr {
+            log::info!("[CallInProcessor] created with custom remote_contact_addr {}", remote_contact_addr);
+        }
         Self {
             state: State::Connecting {
                 transaction: ServerInviteTransaction::new(now_ms, local_contact.clone(), req.clone()),
             },
             local_contact,
+            remote_contact_addr,
             init_req: req,
             actions: VecDeque::new(),
         }
@@ -104,7 +112,7 @@ impl CallInProcessor {
         match &mut self.state {
             State::InCall { .. } => {
                 let req = self.create_request(Method::Bye, typed::CSeq { seq: 1, method: Method::Bye }.into());
-                self.actions.push_back(ProcessorAction::SendRequest(None, req));
+                self.actions.push_back(ProcessorAction::SendRequest(self.remote_contact_addr, req));
                 self.state = State::Bye {
                     timer_resend_res: now_ms + T1,
                     timeout: now_ms + T2,
@@ -126,13 +134,13 @@ impl CallInProcessor {
                 ServerInviteTransactionAction::Res(addr, res) => {
                     self.actions.push_back(ProcessorAction::SendResponse(addr, res));
                 }
-                ServerInviteTransactionAction::Terminated(Some(body)) => {
+                ServerInviteTransactionAction::Terminated(Terminated::Accepted(body)) => {
                     self.state = State::InCall {
                         timer_resend_res: Some((now_ms + T1, body)),
                     };
                     break;
                 }
-                ServerInviteTransactionAction::Terminated(None) => {
+                ServerInviteTransactionAction::Terminated(Terminated::Rejected { success: _ }) => {
                     self.state = State::End;
                     self.actions.push_back(ProcessorAction::Finished(Ok(())));
                     break;
@@ -171,7 +179,7 @@ impl CallInProcessor {
 }
 
 impl Processor<CallInProcessorAction> for CallInProcessor {
-    fn start(&mut self, now_ms: u64) -> Result<(), super::ProcessorError> {
+    fn start(&mut self, _now_ms: u64) -> Result<(), super::ProcessorError> {
         Ok(())
     }
 
@@ -184,8 +192,8 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
             State::InCall { timer_resend_res } => {
                 if let Some((timer_resend_res, body)) = timer_resend_res {
                     if now_ms > *timer_resend_res {
-                        let res = ServerInviteTransaction::build_response(&self.init_req, &self.local_contact, StatusCode::OK, Some(body.clone()));
-                        self.actions.push_back(ProcessorAction::SendResponse(None, res));
+                        let res = ServerInviteTransaction::build_response(&self.init_req, &self.local_contact, StatusCode::OK, body.clone());
+                        self.actions.push_back(ProcessorAction::SendResponse(self.remote_contact_addr, res));
                         *timer_resend_res = now_ms + T1;
                     }
                 }
@@ -198,7 +206,7 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
                 } else if now_ms >= *timer_resend_res {
                     *timer_resend_res = now_ms + T1;
                     let req = self.create_request(Method::Bye, typed::CSeq { seq: 1, method: Method::Bye }.into());
-                    self.actions.push_back(ProcessorAction::SendRequest(None, req));
+                    self.actions.push_back(ProcessorAction::SendRequest(self.remote_contact_addr, req));
                 }
             }
             State::End => {}
@@ -207,6 +215,13 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
     }
 
     fn on_req(&mut self, now_ms: u64, req: crate::sip_request::SipRequest) -> Result<(), super::ProcessorError> {
+        if let Some(contact) = req.header_contact() {
+            if let Some(addr) = contact.uri.host_with_port.try_into().ok() {
+                self.remote_contact_addr = Some(addr);
+                log::info!("[CallInProcessor] update sip dest to {}", addr);
+            }
+        }
+
         match &mut self.state {
             State::Connecting { transaction } => {
                 transaction.on_event(now_ms, ServerInviteTransactionEvent::Req(req));
@@ -218,7 +233,7 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
                 }
                 Method::Bye => {
                     let res = req.build_response(StatusCode::OK, None);
-                    self.actions.push_back(ProcessorAction::SendResponse(None, res));
+                    self.actions.push_back(ProcessorAction::SendResponse(self.remote_contact_addr, res));
                     self.actions.push_back(ProcessorAction::Finished(Ok(())));
                     self.state = State::End;
                 }
@@ -230,7 +245,7 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
         Ok(())
     }
 
-    fn on_res(&mut self, now_ms: u64, res: crate::sip_response::SipResponse) -> Result<(), super::ProcessorError> {
+    fn on_res(&mut self, _now_ms: u64, res: crate::sip_response::SipResponse) -> Result<(), super::ProcessorError> {
         match &mut self.state {
             State::Bye { .. } => {
                 if res.cseq.method == Method::Bye {

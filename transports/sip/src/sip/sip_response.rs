@@ -16,6 +16,7 @@ pub enum SipResponseError {
     Missing(RequiredHeader),
 }
 
+#[derive(PartialEq, Eq)]
 pub struct SipResponse {
     pub raw: rsip::Response,
     pub call_id: rsip::headers::CallId,
