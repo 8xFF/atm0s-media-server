@@ -11,6 +11,7 @@ pub enum RegisterProcessorAction {
 }
 
 pub struct RegisterProcessor {
+    #[allow(unused)]
     started_ms: u64,
     actions: VecDeque<ProcessorAction<RegisterProcessorAction>>,
     init_req: SipRequest,
@@ -45,7 +46,7 @@ impl RegisterProcessor {
 }
 
 impl Processor<RegisterProcessorAction> for RegisterProcessor {
-    fn start(&mut self, now_ms: u64) -> Result<(), super::ProcessorError> {
+    fn start(&mut self, _now_ms: u64) -> Result<(), super::ProcessorError> {
         if let Some(authorization) = self.init_req.header_authorization() {
             // TODO check authorization
             if let Ok(auth) = authorization.clone().into_typed() {
@@ -87,18 +88,18 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
         }
     }
 
-    fn on_tick(&mut self, now_ms: u64) -> Result<(), super::ProcessorError> {
+    fn on_tick(&mut self, _now_ms: u64) -> Result<(), super::ProcessorError> {
         //TODO check timeout
         Ok(())
     }
 
     fn on_req(&mut self, now_ms: u64, req: SipRequest) -> Result<(), super::ProcessorError> {
         self.init_req = req;
-        self.start(now_ms);
+        self.start(now_ms)?;
         Ok(())
     }
 
-    fn on_res(&mut self, now_ms: u64, res: SipResponse) -> Result<(), super::ProcessorError> {
+    fn on_res(&mut self, _now_ms: u64, _res: SipResponse) -> Result<(), super::ProcessorError> {
         // not used
         Err(super::ProcessorError::WrongMessage)
     }
