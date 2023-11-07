@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use rsip::{
     headers::{Authorization, ContentLength, ContentType, UserAgent},
     prelude::ToTypedHeader,
+    typed::Contact,
     StatusCode,
 };
 
@@ -119,6 +120,16 @@ impl SipRequest {
         for header in self.raw.headers.iter() {
             match header {
                 rsip::Header::Authorization(auth) => return Some(auth),
+                _ => {}
+            }
+        }
+        None
+    }
+
+    pub fn header_contact(&self) -> Option<Contact> {
+        for header in self.raw.headers.iter() {
+            match header {
+                rsip::Header::Contact(contact) => return Some(contact.typed().ok()?),
                 _ => {}
             }
         }
