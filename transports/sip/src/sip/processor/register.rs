@@ -6,6 +6,9 @@ use crate::sip::{sip_request::SipRequest, sip_response::SipResponse};
 
 use super::{Processor, ProcessorAction};
 
+pub const REALM: &str = "sip.media-server.8xff.io";
+pub const NONCE: &str = "ea9c8e88df84f1cec4341ae6cbe5a359";
+
 pub enum RegisterProcessorAction {
     Validate(String),
 }
@@ -48,7 +51,6 @@ impl RegisterProcessor {
 impl Processor<RegisterProcessorAction> for RegisterProcessor {
     fn start(&mut self, _now_ms: u64) -> Result<(), super::ProcessorError> {
         if let Some(authorization) = self.init_req.header_authorization() {
-            // TODO check authorization
             if let Ok(auth) = authorization.clone().into_typed() {
                 self.actions.push_back(ProcessorAction::LogicOutput(RegisterProcessorAction::Validate(auth.username)));
                 Ok(())
@@ -56,8 +58,8 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
                 let mut res = self.init_req.build_response(StatusCode::Unauthorized, None);
                 res.raw.headers.push(
                     rsip::typed::WwwAuthenticate {
-                        realm: "atlanta.example.com".into(),
-                        nonce: "ea9c8e88df84f1cec4341ae6cbe5a359".into(),
+                        realm: REALM.into(),
+                        nonce: NONCE.into(),
                         algorithm: Some(rsip::headers::auth::Algorithm::Md5),
                         qop: Some(rsip::headers::auth::Qop::Auth),
                         stale: Some("FALSE".into()),
@@ -73,8 +75,8 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
             let mut res = self.init_req.build_response(StatusCode::Unauthorized, None);
             res.raw.headers.push(
                 rsip::typed::WwwAuthenticate {
-                    realm: "atlanta.example.com".into(),
-                    nonce: "ea9c8e88df84f1cec4341ae6cbe5a359".into(),
+                    realm: REALM.into(),
+                    nonce: NONCE.into(),
                     algorithm: Some(rsip::headers::auth::Algorithm::Md5),
                     qop: Some(rsip::headers::auth::Qop::Auth),
                     stale: Some("FALSE".into()),

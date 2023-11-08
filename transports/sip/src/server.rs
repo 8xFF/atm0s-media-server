@@ -1,8 +1,10 @@
-use std::{collections::VecDeque, time::Duration};
+use std::{collections::VecDeque, net::SocketAddr, time::Duration};
 
 use async_std::{net::UdpSocket, stream::Interval};
 use futures::{select, FutureExt, StreamExt};
 use media_utils::{SystemTimer, Timer};
+
+//TODO implement simple firewall here for blocking some ip addresses
 
 use crate::{
     sip_request::SipRequest,
@@ -19,6 +21,7 @@ pub enum SipServerSocketError {
 
 pub enum SipServerSocketMessage {
     Continue,
+    RegisterValidate(GroupId, String),
     InCall(VirtualSocket<GroupId, SipMessage>, SipRequest),
 }
 
@@ -29,13 +32,15 @@ pub struct SipServerSocket {
     timer: SystemTimer,
     interval: Interval,
     virtual_socket_plane: VirtualSocketPlane<GroupId, SipMessage>,
+    bind_addr: SocketAddr,
 }
 
 impl SipServerSocket {
-    pub async fn new() -> Self {
+    pub async fn new(bind_addr: SocketAddr) -> Self {
         log::info!("Listerning on port 5060 for UDP");
         Self {
-            main_socket: UdpSocket::bind("0.0.0.0:5060").await.expect("Should bind udp socket"),
+            bind_addr,
+            main_socket: UdpSocket::bind(bind_addr).await.expect("Should bind udp socket"),
             buf: [0u8; 2048],
             sip_server: SipServer::new(),
             timer: SystemTimer(),
@@ -44,7 +49,40 @@ impl SipServerSocket {
         }
     }
 
+    pub fn accept_register(&mut self, session: GroupId, accept: bool) {
+        self.sip_server.reply_register_validate(session, accept);
+    }
+
     pub async fn recv(&mut self) -> Result<SipServerSocketMessage, SipServerSocketError> {
+        while let Some(output) = self.sip_server.pop_action() {
+            match output {
+                SipServerEvent::OnRegisterValidate(group, username) => {
+                    return Ok(SipServerSocketMessage::RegisterValidate(group, username));
+                }
+                SipServerEvent::OnInCallStarted(group_id, req) => {
+                    log::info!("InCall started {:?}", group_id);
+                    let socket = self.virtual_socket_plane.new_socket(group_id);
+                    return Ok(SipServerSocketMessage::InCall(socket, req));
+                }
+                SipServerEvent::OnInCallRequest(group_id, req) => {
+                    self.virtual_socket_plane.forward(&group_id, SipMessage::Request(req));
+                }
+                SipServerEvent::SendRes(dest, res) => {
+                    log::debug!("Send res to {} {}", dest, res.raw.status_code());
+                    if let Err(e) = self.main_socket.send_to(&res.to_bytes(), dest).await {
+                        log::error!("Sending udp to {dest} error {:?}", e);
+                    }
+                }
+                SipServerEvent::SendReq(dest, req) => {
+                    log::debug!("Send req to {} {}", dest, req.method());
+                    if let Err(e) = self.main_socket.send_to(&req.to_bytes(), dest).await {
+                        log::error!("Sending udp to {dest} error {:?}", e);
+                    }
+                }
+                _ => {}
+            }
+        }
+
         let mut out_msgs = VecDeque::new();
         select! {
             _ = self.interval.next().fuse() => {
@@ -87,8 +125,10 @@ impl SipServerSocket {
                             rsip::SipMessage::Request(req) => {
                                 match SipRequest::from(req) {
                                     Ok(req) => {
-                                        log::info!("on req from {} {}", addr, req.method());
-                                        self.sip_server.on_req(self.timer.now_ms(), addr, req);
+                                        log::debug!("on req from {} {}", addr, req.method());
+                                        if let Err(e) = self.sip_server.on_req(self.timer.now_ms(), addr, req) {
+                                            log::error!("Process sip request error {:?}", e);
+                                        }
                                     },
                                     Err(e) => {
                                         log::warn!("Can not parse request: {:?}", e);
@@ -100,7 +140,9 @@ impl SipServerSocket {
                                 match SipResponse::from(res) {
                                     Ok(res) => {
                                         log::info!("on res from {} {}", addr, res.raw.status_code());
-                                        self.sip_server.on_res(self.timer.now_ms(), addr, res);
+                                        if let Err(e) = self.sip_server.on_res(self.timer.now_ms(), addr, res) {
+                                            log::error!("Process sip response error {:?}", e);
+                                        }
                                     },
                                     Err(e) => {
                                         log::warn!("Can not parse response: {:?}", e);
@@ -121,38 +163,8 @@ impl SipServerSocket {
         while let Some((dest, msg)) = out_msgs.pop_front() {
             let buf = msg.to_bytes();
             log::debug!("Send to {}\n{}", dest, String::from_utf8(buf.to_vec()).unwrap());
-            self.main_socket.send_to(&buf, dest).await;
-        }
-
-        while let Some(output) = self.sip_server.pop_action() {
-            match output {
-                SipServerEvent::OnRegisterValidate(group, username) => {
-                    //TODO implement real logic here
-                    if username.starts_with("100") {
-                        log::info!("Register validate from username {} => accept", username);
-                        self.sip_server.reply_register_validate(group, true);
-                    } else {
-                        log::info!("Register validate from username {} => reject", username);
-                        self.sip_server.reply_register_validate(group, false);
-                    }
-                }
-                SipServerEvent::OnInCallStarted(group_id, req) => {
-                    log::info!("InCall started {:?}", group_id);
-                    let socket = self.virtual_socket_plane.new_socket(group_id);
-                    return Ok(SipServerSocketMessage::InCall(socket, req));
-                }
-                SipServerEvent::OnInCallRequest(group_id, req) => {
-                    self.virtual_socket_plane.forward(&group_id, SipMessage::Request(req));
-                }
-                SipServerEvent::SendRes(dest, res) => {
-                    log::info!("Send res to {} {}", dest, res.raw.status_code());
-                    self.main_socket.send_to(&res.to_bytes(), dest).await;
-                }
-                SipServerEvent::SendReq(dest, req) => {
-                    log::info!("Send req to {} {}", dest, req.method());
-                    self.main_socket.send_to(&req.to_bytes(), dest).await;
-                }
-                _ => {}
+            if let Err(e) = self.main_socket.send_to(&buf, dest).await {
+                log::error!("Sending udp to {dest} error {:?}", e);
             }
         }
 

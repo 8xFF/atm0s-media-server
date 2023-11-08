@@ -7,13 +7,14 @@ pub enum VirtualSocketError {
     ChannelClosed,
 }
 
-pub struct VirtualSocket<ID, MSG> {
+pub struct VirtualSocket<ID: Debug + Clone, MSG> {
     id: ID,
     main_tx: Sender<(ID, Option<(Option<SocketAddr>, MSG)>)>,
     rx: Receiver<MSG>,
+    closed: bool,
 }
 
-impl<ID: Clone, MSG> VirtualSocket<ID, MSG> {
+impl<ID: Debug + Clone, MSG> VirtualSocket<ID, MSG> {
     pub fn send_to(&self, dest: Option<SocketAddr>, msg: MSG) -> Result<(), VirtualSocketError> {
         self.main_tx.try_send((self.id.clone(), Some((dest, msg)))).map_err(|_| VirtualSocketError::ChannelFull)
     }
@@ -22,13 +23,23 @@ impl<ID: Clone, MSG> VirtualSocket<ID, MSG> {
         self.rx.recv().await.map_err(|_| VirtualSocketError::ChannelClosed)
     }
 
-    pub async fn close(&self) {
-        self.main_tx.send((self.id.clone(), None)).await;
+    pub async fn close(&mut self) {
+        self.closed = true;
+        if let Err(e) = self.main_tx.send((self.id.clone(), None)).await {
+            log::error!("[VirtualSocket {:?}] close error {:?}", self.id, e);
+        }
     }
 }
 
-impl<ID, MSG> Drop for VirtualSocket<ID, MSG> {
-    fn drop(&mut self) {}
+impl<ID: Debug + Clone, MSG> Drop for VirtualSocket<ID, MSG> {
+    fn drop(&mut self) {
+        if !self.closed {
+            log::error!("[VirtualSocket {:?}] drop without close", self.id);
+            if let Err(e) = self.main_tx.try_send((self.id.clone(), None)) {
+                log::error!("[VirtualSocket {:?}] close error {:?}", self.id, e);
+            }
+        }
+    }
 }
 pub struct VirtualSocketPlane<ID, MSG> {
     sockets: HashMap<ID, Sender<MSG>>,
@@ -56,6 +67,7 @@ impl<ID: Debug + Clone + Hash + Eq, MSG> VirtualSocketPlane<ID, MSG> {
             id,
             main_tx: self.main_tx.clone(),
             rx,
+            closed: false,
         }
     }
 

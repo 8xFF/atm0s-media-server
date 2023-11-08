@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::{
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
 
 use async_std::net::UdpSocket;
 use sdp_rs::{
@@ -12,7 +15,6 @@ use sdp_rs::{
     },
     MediaDescription, SessionDescription, Time,
 };
-use transport::MediaPacket;
 
 pub type Packet = Vec<u8>;
 
@@ -20,6 +22,7 @@ pub type Packet = Vec<u8>;
 pub enum RtpEngineError {
     InvalidSdp,
     MissingMedia,
+    SocketError,
 }
 
 pub struct RtpEngine {
@@ -27,12 +30,14 @@ pub struct RtpEngine {
 }
 
 impl RtpEngine {
-    pub async fn new() -> Self {
+    pub async fn new(bind_ip: IpAddr) -> Self {
         Self {
-            socket: UdpSocket::bind("192.168.66.113:0").await.expect("Should open port"),
+            //TODO use config
+            socket: UdpSocket::bind(SocketAddr::new(bind_ip, 0)).await.expect("Should open port"),
         }
     }
 
+    #[allow(unused)]
     pub fn local_addr(&self) -> SocketAddr {
         self.socket.local_addr().expect("Should get local addr")
     }
@@ -45,7 +50,10 @@ impl RtpEngine {
             dest_addr = conn.connection_address.base;
         }
         let dest_port = first.media.port;
-        self.socket.connect(SocketAddr::from((dest_addr, dest_port))).await;
+        self.socket.connect(SocketAddr::from((dest_addr, dest_port))).await.map_err(|e| {
+            log::error!("[RtpEngine] connect to {dest_addr}:{dest_port} error {:?}", e);
+            RtpEngineError::SocketError
+        })?;
         Ok(())
     }
 

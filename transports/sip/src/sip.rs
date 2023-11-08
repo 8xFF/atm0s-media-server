@@ -6,7 +6,7 @@ use rsip::{headers::CallId, Method};
 use crate::processor::Processor;
 
 use self::{
-    processor::{register::RegisterProcessor, ProcessorAction},
+    processor::{register::RegisterProcessor, ProcessorAction, ProcessorError},
     sip_request::SipRequest,
     sip_response::SipResponse,
 };
@@ -43,7 +43,11 @@ impl Display for SipMessage {
     }
 }
 
-pub enum SipServerError {}
+#[derive(Debug)]
+pub enum SipServerError {
+    ProcessorError(ProcessorError),
+    ProcessorNotFound,
+}
 
 #[derive(Debug)]
 pub enum SipServerEvent {
@@ -70,7 +74,7 @@ impl SipServer {
         }
     }
 
-    pub fn on_tick(&mut self, now_ms: u64) {}
+    pub fn on_tick(&mut self, _now_ms: u64) {}
 
     pub fn reply_register_validate(&mut self, group_id: GroupId, accept: bool) {
         if let Some(processor) = self.register_processors.get_mut(&group_id) {
@@ -89,11 +93,11 @@ impl SipServer {
                 let group_id: (SocketAddr, CallId) = (from, req.call_id.clone());
                 match self.register_processors.entry(group_id.clone()) {
                     std::collections::hash_map::Entry::Occupied(mut entry) => {
-                        entry.get_mut().on_req(now_ms, req);
+                        entry.get_mut().on_req(now_ms, req).map_err(|e| SipServerError::ProcessorError(e))?;
                     }
                     std::collections::hash_map::Entry::Vacant(entry) => {
                         let mut processor = RegisterProcessor::new(now_ms, req);
-                        processor.start(now_ms);
+                        processor.start(now_ms).map_err(|e| SipServerError::ProcessorError(e))?;
                         entry.insert(processor);
                     }
                 };
@@ -117,21 +121,19 @@ impl SipServer {
                     self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
                     Ok(())
                 } else {
-                    //TODO handle this
-                    Ok(())
+                    Err(SipServerError::ProcessorNotFound)
                 }
             }
         }
     }
 
-    pub fn on_res(&mut self, now_ms: u64, from: SocketAddr, res: SipResponse) -> Result<(), SipServerError> {
+    pub fn on_res(&mut self, _now_ms: u64, from: SocketAddr, res: SipResponse) -> Result<(), SipServerError> {
         let group_id: (SocketAddr, CallId) = (from, res.call_id.clone());
         if let Some(_) = self.invite_groups.get(&group_id) {
             self.actions.push(SipServerEvent::OnInCallResponse(group_id, res));
             Ok(())
         } else {
-            //TODO handle this
-            Ok(())
+            Err(SipServerError::ProcessorNotFound)
         }
     }
 
@@ -140,10 +142,10 @@ impl SipServer {
     }
 
     fn process_register_processor(&mut self, group_id: &(SocketAddr, CallId)) -> Option<()> {
-        let mut processor = self.register_processors.get_mut(group_id)?;
+        let processor = self.register_processors.get_mut(group_id)?;
         while let Some(action) = processor.pop_action() {
             match action {
-                ProcessorAction::Finished(res) => {
+                ProcessorAction::Finished(_) => {
                     self.register_processors.remove(group_id);
                     break;
                 }

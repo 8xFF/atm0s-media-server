@@ -50,6 +50,7 @@ CSeq: 1 CANCEL\r
 User-Agent: Zoiper v2.10.19.5\r
 Content-Length: 0\r\n\r\n";
 
+#[allow(unused)]
 pub const BYE_REQ: &str = "BYE sip:192.168.66.113 SIP/2.0\r
 Via: SIP/2.0/UDP 192.168.66.155:59530;branch=z9hG4bK-524287-1---b77e9fcb60843fbe;rport\r
 Max-Forwards: 70\r
