@@ -6,12 +6,14 @@ pub mod call_in;
 pub mod call_out;
 pub mod register;
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum ProcessorError {
     Timeout,
     WrongMessage,
     WrongState,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum ProcessorAction<C> {
     Finished(Result<(), String>),
     SendRequest(Option<SocketAddr>, SipRequest),

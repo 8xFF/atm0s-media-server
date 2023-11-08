@@ -48,6 +48,7 @@ enum State {
     End,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum CallInProcessorAction {}
 
 pub struct CallInProcessor {
@@ -80,6 +81,7 @@ impl CallInProcessor {
             State::Connecting { transaction } => {
                 log::info!("[CallInProcessor] switched ringing call");
                 transaction.on_event(now_ms, ServerInviteTransactionEvent::Status(StatusCode::Ringing, None));
+                self.process_transaction(now_ms);
                 Ok(())
             }
             _ => Err(super::ProcessorError::WrongState),
@@ -91,6 +93,7 @@ impl CallInProcessor {
             State::Connecting { transaction } => {
                 log::info!("[CallInProcessor] accept call {:?}", body);
                 transaction.on_event(now_ms, ServerInviteTransactionEvent::Status(StatusCode::OK, body));
+                self.process_transaction(now_ms);
                 Ok(())
             }
             _ => Err(super::ProcessorError::WrongState),
@@ -102,6 +105,7 @@ impl CallInProcessor {
             State::Connecting { transaction } => {
                 log::info!("[CallInProcessor] reject call");
                 transaction.on_event(now_ms, ServerInviteTransactionEvent::Status(StatusCode::BusyHere, None));
+                self.process_transaction(now_ms);
                 Ok(())
             }
             _ => Err(super::ProcessorError::WrongState),
@@ -150,7 +154,7 @@ impl CallInProcessor {
     }
 
     fn create_request(&self, method: Method, cseq: headers::CSeq) -> SipRequest {
-         //TODO fix with real hostname
+        //TODO fix with real hostname
         let request = rsip::Request {
             method,
             uri: rsip::Uri {
@@ -261,5 +265,110 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
 
     fn pop_action(&mut self) -> Option<ProcessorAction<CallInProcessorAction>> {
         self.actions.pop_front()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use rsip::headers::Contact;
+
+    use crate::{
+        processor::{Processor, ProcessorAction},
+        sip::data::sip_pkt::{ACK_REQ, BYE_RES, INVITE_REQ},
+        sip_request::SipRequest,
+        sip_response::SipResponse,
+    };
+
+    use super::{CallInProcessor, T1};
+
+    macro_rules! cast2 {
+        ($target: expr, $pat: path) => {{
+            let v = $target;
+            match v {
+                $pat(a, b) => (a, b),
+                _ => panic!("mismatch variant when cast to {} got {:?}", stringify!($pat), v),
+            }
+        }};
+    }
+
+    #[test]
+    fn normal_call() {
+        let local_contact = Contact::try_from("sip:127.0.0.1:5060").expect("Should ok");
+        let init_req = SipRequest::from(rsip::Request::try_from(INVITE_REQ).expect("Should work")).expect("Should parse");
+        let mut processor = CallInProcessor::new(0, local_contact.try_into().expect("Should ok"), init_req);
+
+        processor.start(0).expect("Should ok");
+
+        assert_eq!(processor.pop_action(), None);
+
+        //after timeout T1 without any action should send 100 Trying
+        processor.on_tick(T1).expect("Should ok");
+
+        let (_, res) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendResponse);
+        assert_eq!(res.raw.status_code, rsip::StatusCode::Trying);
+        assert_eq!(processor.pop_action(), None);
+
+        //after call ringing shoudl send Ringing
+        processor.ringing(T1 + 1000).expect("Should ok");
+        let (_, res) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendResponse);
+        assert_eq!(res.raw.status_code, rsip::StatusCode::Ringing);
+        assert_eq!(processor.pop_action(), None);
+
+        //after call accept should send 200 OK
+        processor.accept(T1 + 2000, None).expect("Should ok");
+        let (_, res) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendResponse);
+        assert_eq!(res.raw.status_code, rsip::StatusCode::OK);
+        assert_eq!(processor.pop_action(), None);
+
+        //after call end should send BYE
+        processor.end(T1 + 3000).expect("Should ok");
+        let (_, req) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendRequest);
+        assert_eq!(req.method(), &rsip::Method::Bye);
+        assert_eq!(processor.pop_action(), None);
+
+        //after received bye response 200 should finish the call
+        processor
+            .on_res(T1 + 4000, SipResponse::from(rsip::Response::try_from(BYE_RES).expect("Should ok")).expect("Should parse"))
+            .expect("Should ok");
+        assert_eq!(processor.pop_action(), Some(ProcessorAction::Finished(Ok(()))));
+        assert_eq!(processor.pop_action(), None);
+    }
+
+    #[test]
+    fn reject_call() {
+        let local_contact = Contact::try_from("sip:127.0.0.1:5060").expect("Should ok");
+        let init_req = SipRequest::from(rsip::Request::try_from(INVITE_REQ).expect("Should work")).expect("Should parse");
+        let mut processor = CallInProcessor::new(0, local_contact.try_into().expect("Should ok"), init_req);
+
+        processor.start(0).expect("Should ok");
+
+        assert_eq!(processor.pop_action(), None);
+
+        //after timeout T1 without any action should send 100 Trying
+        processor.on_tick(T1).expect("Should ok");
+
+        let (_, res) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendResponse);
+        assert_eq!(res.raw.status_code, rsip::StatusCode::Trying);
+        assert_eq!(processor.pop_action(), None);
+
+        //after call ringing shoudl send Ringing
+        processor.ringing(T1 + 1000).expect("Should ok");
+        let (_, res) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendResponse);
+        assert_eq!(res.raw.status_code, rsip::StatusCode::Ringing);
+        assert_eq!(processor.pop_action(), None);
+
+        //after call reject should send 486 BusyHere
+        processor.reject(T1 + 2000).expect("Should ok");
+        let (_, res) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendResponse);
+        assert_eq!(res.raw.status_code, rsip::StatusCode::BusyHere);
+
+        let ack_req = SipRequest::from(rsip::Request::try_from(ACK_REQ).expect("Should parse")).expect("Should parse");
+        processor.on_req(T1 + 3000, ack_req).expect("Should ok");
+
+        //after timeout T1 Should finish
+        processor.on_tick(T1 + 3000 + T1).expect("Should ok");
+
+        assert_eq!(processor.pop_action(), Some(ProcessorAction::Finished(Ok(()))));
+        assert_eq!(processor.pop_action(), None);
     }
 }

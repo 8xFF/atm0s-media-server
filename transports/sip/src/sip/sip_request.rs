@@ -23,7 +23,7 @@ pub enum SipRequestError {
     Missing(RequiredHeader),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SipRequest {
     pub raw: rsip::Request,
     pub call_id: rsip::headers::CallId,
