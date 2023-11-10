@@ -15,8 +15,18 @@ use sdp_rs::{
     },
     MediaDescription, SessionDescription, Time,
 };
+use transport::MediaPacket;
 
-pub type Packet = Vec<u8>;
+use self::rtp::is_rtp;
+
+mod audio_frame;
+mod g711;
+mod g711_decoder;
+mod g711_encoder;
+mod opus_decoder;
+mod opus_encoder;
+mod resample;
+mod rtp;
 
 #[derive(Debug)]
 pub enum RtpEngineError {
@@ -26,14 +36,31 @@ pub enum RtpEngineError {
 }
 
 pub struct RtpEngine {
+    buf: [u8; 2048],
+    buf2: [u8; 2048],
     socket: UdpSocket,
+    opus_frame: audio_frame::AudioFrameMono<960, 48000>,
+    g711_frame: audio_frame::AudioFrameMono<160, 8000>,
+    resampler: resample::Resampler,
+    opus_encoder: opus_encoder::OpusEncoder,
+    opus_decoder: opus_decoder::OpusDecoder,
+    g711_encoder: g711_encoder::G711Encoder,
+    g711_decoder: g711_decoder::G711Decoder,
 }
 
 impl RtpEngine {
     pub async fn new(bind_ip: IpAddr) -> Self {
         Self {
-            //TODO use config
+            buf: [0; 2048],
+            buf2: [0; 2048],
+            g711_frame: Default::default(),
+            opus_frame: Default::default(),
             socket: UdpSocket::bind(SocketAddr::new(bind_ip, 0)).await.expect("Should open port"),
+            opus_encoder: opus_encoder::OpusEncoder::new(),
+            opus_decoder: opus_decoder::OpusDecoder::new(),
+            g711_encoder: g711_encoder::G711Encoder::new(g711::G711Codec::Alaw),
+            g711_decoder: g711_decoder::G711Decoder::new(g711::G711Codec::Alaw),
+            resampler: resample::Resampler::new(),
         }
     }
 
@@ -124,13 +151,38 @@ impl RtpEngine {
         sdp.to_string()
     }
 
-    pub async fn send(&self, pkt: Packet) {
-        self.socket.send(&pkt).await.expect("Should send data");
+    pub async fn send(&mut self, pkt: MediaPacket) {
+        self.opus_decoder.decode(&pkt.payload, &mut self.opus_frame);
+        self.resampler.from_48k_to_8k(&self.opus_frame, &mut self.g711_frame);
+        let size = self.g711_encoder.encode(&self.g711_frame, &mut self.buf).expect("Should encode");
+
+        let rtp = rtp_rs::RtpPacketBuilder::new()
+            .payload_type(8)
+            .sequence(pkt.seq_no.into())
+            .timestamp(pkt.time.into())
+            .payload(&self.buf[0..size])
+            .build()
+            .expect("Should build rtp packet");
+
+        self.socket.send(&rtp).await.expect("Should send data");
     }
 
-    pub async fn recv(&self) -> Option<Packet> {
-        let mut buf = [0u8; 1500];
-        let len = self.socket.recv(&mut buf).await.ok()?;
-        Some(buf[..len].to_vec())
+    pub async fn recv(&mut self) -> Option<MediaPacket> {
+        loop {
+            let len = self.socket.recv(&mut self.buf).await.ok()?;
+            if is_rtp(&self.buf[0..len]) {
+                //Check is RTP packet for avoiding RTCP packet
+                if let Ok(rtp) = rtp_rs::RtpReader::new(&self.buf[0..len]) {
+                    if rtp.version() == 2 && rtp.payload_type() == 8 {
+                        self.g711_decoder.decode(rtp.payload(), &mut self.g711_frame);
+                        self.resampler.from_8k_to_48k(&self.g711_frame, &mut self.opus_frame);
+                        let size = self.opus_encoder.encode(&self.opus_frame, &mut self.buf2).expect("Should encode");
+
+                        let pkt = MediaPacket::simple_audio(rtp.sequence_number().into(), rtp.timestamp(), self.buf2[0..size].to_vec());
+                        break Some(pkt);
+                    }
+                }
+            }
+        }
     }
 }

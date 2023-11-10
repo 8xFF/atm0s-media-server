@@ -50,3 +50,39 @@ impl MediaPacket {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_audio_packet() {
+        let seq_no = 1;
+        let time = 1234;
+        let payload = vec![0x01, 0x02, 0x03];
+        let packet = MediaPacket::simple_audio(seq_no, time, payload.clone());
+
+        assert_eq!(packet.codec, PayloadCodec::Opus);
+        assert_eq!(packet.seq_no, seq_no);
+        assert_eq!(packet.time, time);
+        assert_eq!(packet.marker, false);
+        assert_eq!(packet.nackable, false);
+        assert_eq!(packet.payload, payload);
+    }
+
+    #[test]
+    fn test_simple_video_packet() {
+        let codec = PayloadCodec::Vp8(false, None);
+        let seq_no = 2;
+        let time = 5678;
+        let payload = vec![0x04, 0x05, 0x06];
+        let packet = MediaPacket::simple_video(codec.clone(), seq_no, time, payload.clone());
+
+        assert_eq!(packet.codec, codec);
+        assert_eq!(packet.seq_no, seq_no);
+        assert_eq!(packet.time, time);
+        assert_eq!(packet.marker, false);
+        assert_eq!(packet.nackable, false);
+        assert_eq!(packet.payload, payload);
+    }
+}

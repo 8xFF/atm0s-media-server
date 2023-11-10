@@ -9,7 +9,7 @@ use rsip::{
     typed::{Contact, ContentType, MediaType},
     Host, HostWithPort, Uri,
 };
-use transport::{Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError, TransportStateEvent};
+use transport::{MediaKind, MediaSampleRate, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError, TransportStateEvent};
 
 use crate::{
     processor::{call_in::CallInProcessor, Processor, ProcessorAction},
@@ -48,7 +48,7 @@ impl SipTransport {
             params: vec![],
         };
         let mut rtp_engine = RtpEngine::new(bind_addr.ip()).await;
-        log::debug!("create transport {}", req.body_str());
+        log::info!("Create transport {}", req.body_str());
         rtp_engine.process_remote_sdp(&req.body_str()).await?;
         Ok(Self {
             rtp_engine,
@@ -69,6 +69,16 @@ impl SipTransport {
         self.logic
             .accept(now_ms, Some((ContentType(MediaType::Sdp(vec![])).into(), local_sdp.as_bytes().to_vec())))
             .map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
+        self.actions.push_back(TransportIncomingEvent::State(TransportStateEvent::Connected));
+        self.actions.push_back(TransportIncomingEvent::RemoteTrackAdded(
+            "audio_main".to_string(),
+            0,
+            TrackMeta {
+                kind: MediaKind::Audio,
+                sample_rate: MediaSampleRate::Hz48000,
+                label: None,
+            },
+        ));
         Ok(())
     }
 

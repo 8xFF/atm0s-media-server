@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerError {
     pub code: String,
     pub message: String,
@@ -23,5 +24,17 @@ impl<D, E: Debug> ErrorDebugger for Result<D, E> {
         if let Err(e) = self {
             log::error!("{}: {:?}", msg, e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_server_error_build() {
+        let error = ServerError::build("404", "Not Found");
+        assert_eq!(error.code, "404");
+        assert_eq!(error.message, "Not Found");
     }
 }

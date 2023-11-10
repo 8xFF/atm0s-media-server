@@ -172,3 +172,86 @@ impl PayloadCodec {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_payload_codec_display() {
+        let vp8 = PayloadCodec::Vp8(true, None);
+        assert_eq!(format!("{}", vp8), "VP8(true)");
+
+        let vp9 = PayloadCodec::Vp9(false, Vp9Profile::P0, None);
+        assert_eq!(format!("{}", vp9), "VP9(false,P0)");
+
+        let h264 = PayloadCodec::H264(true, H264Profile::P42001fNonInterleaved, None);
+        assert_eq!(format!("{}", h264), "H264(true,P42001fNonInterleaved)");
+
+        let opus = PayloadCodec::Opus;
+        assert_eq!(format!("{}", opus), "OPUS");
+    }
+
+    #[test]
+    fn test_payload_codec_is_key() {
+        let vp8 = PayloadCodec::Vp8(true, None);
+        assert_eq!(vp8.is_key(), true);
+
+        let vp9 = PayloadCodec::Vp9(false, Vp9Profile::P0, None);
+        assert_eq!(vp9.is_key(), false);
+
+        let h264 = PayloadCodec::H264(true, H264Profile::P42001fNonInterleaved, None);
+        assert_eq!(h264.is_key(), true);
+
+        let opus = PayloadCodec::Opus;
+        assert_eq!(opus.is_key(), true);
+    }
+
+    #[test]
+    fn test_payload_codec_is_audio() {
+        let vp8 = PayloadCodec::Vp8(true, None);
+        assert_eq!(vp8.is_audio(), false);
+
+        let vp9 = PayloadCodec::Vp9(false, Vp9Profile::P0, None);
+        assert_eq!(vp9.is_audio(), false);
+
+        let h264 = PayloadCodec::H264(true, H264Profile::P42001fNonInterleaved, None);
+        assert_eq!(h264.is_audio(), false);
+
+        let opus = PayloadCodec::Opus;
+        assert_eq!(opus.is_audio(), true);
+    }
+
+    #[test]
+    fn test_payload_codec_is_video() {
+        let vp8 = PayloadCodec::Vp8(true, None);
+        assert_eq!(vp8.is_video(), true);
+
+        let vp9 = PayloadCodec::Vp9(false, Vp9Profile::P0, None);
+        assert_eq!(vp9.is_video(), true);
+
+        let h264 = PayloadCodec::H264(true, H264Profile::P42001fNonInterleaved, None);
+        assert_eq!(h264.is_video(), true);
+
+        let opus = PayloadCodec::Opus;
+        assert_eq!(opus.is_video(), false);
+    }
+
+    #[test]
+    fn test_vp8_simulcast_display() {
+        let simulcast = Vp8Simulcast::new(1, 2, true);
+        assert_eq!(format!("{}", simulcast), "(pid:None,tl0:None,s:1,t:2,ls:true)");
+    }
+
+    #[test]
+    fn test_vp9_svc_display() {
+        let svc = Vp9Svc::new(1, 2, true, false);
+        assert_eq!(format!("{}", svc), "(s:1,t:2,bf:false,ef:true,sl:None,pid:None,sp:false,pf:false)");
+    }
+
+    #[test]
+    fn test_h264_simulcast_display() {
+        let simulcast = H264Simulcast::new(1);
+        assert_eq!(format!("{}", simulcast), "(s:1)");
+    }
+}

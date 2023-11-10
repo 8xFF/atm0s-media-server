@@ -32,3 +32,26 @@ impl MockTimer {
         self.current_value.store(value, Ordering::Relaxed);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_system_timer() {
+        let timer = SystemTimer {};
+        let now = timer.now_ms();
+        assert!(now > 0);
+    }
+
+    #[test]
+    fn test_mock_timer() {
+        let timer = MockTimer::default();
+        let now = timer.now_ms();
+        assert_eq!(now, 0);
+
+        timer.fake(1000);
+        let now = timer.now_ms();
+        assert_eq!(now, 1000);
+    }
+}

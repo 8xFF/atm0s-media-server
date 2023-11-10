@@ -1709,6 +1709,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a08173bc88b7955d1b3145aa561539096c421ac8debde8cbc3612ec635fee29b"
 
 [[package]]
+name = "libsoxr"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a095d9d0be72aec1995f8b157c963ffea4efa6e9deba0bc9930288cd8cd60b15"
+dependencies = [
+ "bitflags 2.4.0",
+ "libc",
+ "libsoxr-sys",
+ "pkg-config",
+]
+
+[[package]]
+name = "libsoxr-sys"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cffdc8b3b64759d2e95e3236fa6bf85fef226bf57023fa9273ec60edea8fbce"
+dependencies = [
+ "pkg-config",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2597,6 +2618,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtp-rs"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4ed274a5b3d36c4434cff6a4de1b42f43e64ae326b1cfa72d13d9037a314355"
+
+[[package]]
 name = "runner"
 version = "0.1.0"
 source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
@@ -3254,10 +3281,13 @@ dependencies = [
  "bytes",
  "endpoint",
  "futures",
+ "libsoxr",
  "log",
  "media-utils",
+ "opus",
  "rand 0.8.5",
  "rsip",
+ "rtp-rs",
  "sdp-rs",
  "transport",
  "vec1",
