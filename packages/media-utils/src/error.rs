@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerError {
     pub code: String,
     pub message: String,

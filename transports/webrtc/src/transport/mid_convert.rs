@@ -71,12 +71,26 @@ pub fn track_to_mid(track_id: TrackId) -> Mid {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn test_mid() {
-        let mid = "100".into();
-        let track = super::mid_to_track(&mid);
+    fn test_mid_to_track() {
+        let mid = Mid::from("100");
+        let track = mid_to_track(&mid);
         assert_eq!(track, 100);
-        let mid = super::track_to_mid(track);
-        assert_eq!(mid, "100".into());
+    }
+
+    #[test]
+    fn test_rid_to_u16() {
+        let rid = Rid::from("100");
+        let value = rid_to_u16(&rid);
+        assert_eq!(value, 100);
+    }
+
+    #[test]
+    fn test_track_to_mid() {
+        let track_id = 100;
+        let mid = track_to_mid(track_id);
+        assert_eq!(mid, Mid::from("100"));
     }
 }

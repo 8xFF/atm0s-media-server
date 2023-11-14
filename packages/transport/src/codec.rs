@@ -134,6 +134,12 @@ pub enum PayloadCodec {
     Opus,
 }
 
+impl Default for PayloadCodec {
+    fn default() -> Self {
+        PayloadCodec::Opus
+    }
+}
+
 impl Display for PayloadCodec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -170,5 +176,69 @@ impl PayloadCodec {
             PayloadCodec::Opus => false,
             _ => true,
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_payload_codec_display() {
+        let vp8 = PayloadCodec::Vp8(true, None);
+        assert_eq!(format!("{}", vp8), "VP8(true)");
+
+        let vp9 = PayloadCodec::Vp9(false, Vp9Profile::P0, None);
+        assert_eq!(format!("{}", vp9), "VP9(false,P0)");
+
+        let h264 = PayloadCodec::H264(true, H264Profile::P42001fNonInterleaved, None);
+        assert_eq!(format!("{}", h264), "H264(true,P42001fNonInterleaved)");
+
+        let opus = PayloadCodec::Opus;
+        assert_eq!(format!("{}", opus), "OPUS");
+    }
+
+    #[test]
+    fn test_payload_codec_is_key() {
+        let vp8 = PayloadCodec::Vp8(true, None);
+        assert_eq!(vp8.is_key(), true);
+
+        let vp9 = PayloadCodec::Vp9(false, Vp9Profile::P0, None);
+        assert_eq!(vp9.is_key(), false);
+
+        let h264 = PayloadCodec::H264(true, H264Profile::P42001fNonInterleaved, None);
+        assert_eq!(h264.is_key(), true);
+
+        let opus = PayloadCodec::Opus;
+        assert_eq!(opus.is_key(), true);
+    }
+
+    #[test]
+    fn test_payload_codec_is_audio() {
+        let vp8 = PayloadCodec::Vp8(true, None);
+        assert_eq!(vp8.is_audio(), false);
+
+        let vp9 = PayloadCodec::Vp9(false, Vp9Profile::P0, None);
+        assert_eq!(vp9.is_audio(), false);
+
+        let h264 = PayloadCodec::H264(true, H264Profile::P42001fNonInterleaved, None);
+        assert_eq!(h264.is_audio(), false);
+
+        let opus = PayloadCodec::Opus;
+        assert_eq!(opus.is_audio(), true);
+    }
+
+    #[test]
+    fn test_payload_codec_is_video() {
+        let vp8 = PayloadCodec::Vp8(true, None);
+        assert_eq!(vp8.is_video(), true);
+
+        let vp9 = PayloadCodec::Vp9(false, Vp9Profile::P0, None);
+        assert_eq!(vp9.is_video(), true);
+
+        let h264 = PayloadCodec::H264(true, H264Profile::P42001fNonInterleaved, None);
+        assert_eq!(h264.is_video(), true);
+
+        let opus = PayloadCodec::Opus;
+        assert_eq!(opus.is_video(), false);
     }
 }
