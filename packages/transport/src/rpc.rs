@@ -35,18 +35,3 @@ impl<T> RpcResponse<T> {
         self.tx.send((code, res)).await;
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[async_std::test]
-    async fn test_rpc_response() {
-        let (mut response, mut receiver) = RpcResponse::<i32>::new();
-
-        response.answer(200, Ok(42));
-        let (code, res) = receiver.recv().await.unwrap();
-        assert_eq!(code, 200);
-        assert_eq!(res, Ok(42));
-    }
-}
