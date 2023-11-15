@@ -55,21 +55,25 @@ pub enum SipServerEvent {
     OnInCallStarted(GroupId, SipRequest),
     OnInCallRequest(GroupId, SipRequest),
     OnInCallResponse(GroupId, SipResponse),
+    OnOutCallRequest(GroupId, SipRequest),
+    OnOutCallResponse(GroupId, SipResponse),
     SendRes(SocketAddr, SipResponse),
     SendReq(SocketAddr, SipRequest),
 }
 
-pub struct SipServer {
+pub struct SipCore {
     register_processors: HashMap<GroupId, RegisterProcessor>,
-    invite_groups: HashMap<GroupId, ()>,
+    invite_in_groups: HashMap<GroupId, ()>,
+    invite_out_groups: HashMap<GroupId, ()>,
     actions: Vec<SipServerEvent>,
 }
 
-impl SipServer {
+impl SipCore {
     pub fn new() -> Self {
         Self {
             register_processors: HashMap::new(),
-            invite_groups: HashMap::new(),
+            invite_in_groups: HashMap::new(),
+            invite_out_groups: HashMap::new(),
             actions: Vec::new(),
         }
     }
@@ -83,8 +87,16 @@ impl SipServer {
         }
     }
 
+    pub fn open_out_call(&mut self, group_id: &GroupId) {
+        self.invite_out_groups.insert(group_id.clone(), ());
+    }
+
+    pub fn close_out_call(&mut self, group_id: &GroupId) {
+        self.invite_out_groups.remove(group_id);
+    }
+
     pub fn close_in_call(&mut self, group_id: &GroupId) {
-        self.invite_groups.remove(group_id);
+        self.invite_in_groups.remove(group_id);
     }
 
     pub fn on_req(&mut self, now_ms: u64, from: SocketAddr, req: SipRequest) -> Result<(), SipServerError> {
@@ -106,19 +118,22 @@ impl SipServer {
             }
             Method::Invite => {
                 let group_id: (SocketAddr, CallId) = (from, req.call_id.clone());
-                if let Some(_) = self.invite_groups.get(&group_id) {
+                if let Some(_) = self.invite_in_groups.get(&group_id) {
                     self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
                     Ok(())
                 } else {
-                    self.invite_groups.insert(group_id.clone(), ());
+                    self.invite_in_groups.insert(group_id.clone(), ());
                     self.actions.push(SipServerEvent::OnInCallStarted(group_id, req));
                     Ok(())
                 }
             }
             _ => {
                 let group_id: (SocketAddr, CallId) = (from, req.call_id.clone());
-                if let Some(_) = self.invite_groups.get(&group_id) {
+                if let Some(_) = self.invite_in_groups.get(&group_id) {
                     self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
+                    Ok(())
+                } else if let Some(_) = self.invite_out_groups.get(&group_id) {
+                    self.actions.push(SipServerEvent::OnOutCallRequest(group_id, req));
                     Ok(())
                 } else {
                     Err(SipServerError::ProcessorNotFound)
@@ -129,8 +144,11 @@ impl SipServer {
 
     pub fn on_res(&mut self, _now_ms: u64, from: SocketAddr, res: SipResponse) -> Result<(), SipServerError> {
         let group_id: (SocketAddr, CallId) = (from, res.call_id.clone());
-        if let Some(_) = self.invite_groups.get(&group_id) {
+        if let Some(_) = self.invite_in_groups.get(&group_id) {
             self.actions.push(SipServerEvent::OnInCallResponse(group_id, res));
+            Ok(())
+        } else if let Some(_) = self.invite_out_groups.get(&group_id) {
+            self.actions.push(SipServerEvent::OnOutCallResponse(group_id, res));
             Ok(())
         } else {
             Err(SipServerError::ProcessorNotFound)

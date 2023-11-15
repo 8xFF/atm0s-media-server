@@ -229,7 +229,16 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
 
         match &mut self.state {
             State::Connecting { transaction } => {
-                transaction.on_event(now_ms, ServerInviteTransactionEvent::Req(req));
+                match req.method() {
+                    Method::Cancel => {
+                        let res = req.build_response(StatusCode::OK, None);
+                        self.actions.push_back(ProcessorAction::SendResponse(self.remote_contact_addr, res));
+                        transaction.on_event(now_ms, ServerInviteTransactionEvent::Status(StatusCode::RequestTerminated, None));
+                    }
+                    _ => {
+                        transaction.on_event(now_ms, ServerInviteTransactionEvent::Req(req));
+                    }
+                }
                 self.process_transaction(now_ms);
             }
             State::InCall { timer_resend_res } => match req.method() {
@@ -371,4 +380,6 @@ mod test {
         assert_eq!(processor.pop_action(), Some(ProcessorAction::Finished(Ok(()))));
         assert_eq!(processor.pop_action(), None);
     }
+
+    //TODO test CANCEL_REQ
 }

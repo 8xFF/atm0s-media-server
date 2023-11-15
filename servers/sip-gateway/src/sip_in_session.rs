@@ -1,21 +1,23 @@
+use std::time::Duration;
+
 use cluster::{Cluster, ClusterEndpoint};
 use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use media_utils::EndpointSubscribeScope;
-use transport_sip::SipTransport;
+use transport_sip::SipTransportIn;
 
 #[derive(Debug)]
-pub enum SipSessionError {
+pub enum SipInSessionError {
     PreconditionError,
 }
 
-pub struct SipSession<E: ClusterEndpoint> {
-    endpoint: MediaEndpoint<SipTransport, (), E>,
+pub struct SipInSession<E: ClusterEndpoint> {
+    endpoint: MediaEndpoint<SipTransportIn, (), E>,
 }
 
-impl<E: ClusterEndpoint> SipSession<E> {
-    pub async fn new<C: Cluster<E>>(room: &str, peer: &str, cluster: &mut C, transport: SipTransport) -> Result<Self, SipSessionError> {
+impl<E: ClusterEndpoint> SipInSession<E> {
+    pub async fn new<C: Cluster<E>>(room: &str, peer: &str, cluster: &mut C, transport: SipTransportIn) -> Result<Self, SipInSessionError> {
         let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, EndpointSubscribeScope::RoomManual);
-        endpoint_pre.check().map_err(|_e| SipSessionError::PreconditionError)?;
+        endpoint_pre.check().map_err(|_e| SipInSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let endpoint = endpoint_pre.build(transport, room);
 

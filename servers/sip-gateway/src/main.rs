@@ -4,7 +4,8 @@ use cluster_local::ServerLocal;
 use std::net::SocketAddr;
 
 mod server;
-mod sip_session;
+mod sip_in_session;
+mod sip_out_session;
 
 /// Media Server node
 #[derive(Parser, Debug)]

@@ -10,7 +10,7 @@ use crate::{
     sip_request::SipRequest,
     sip_response::SipResponse,
     virtual_socket::{VirtualSocket, VirtualSocketPlane},
-    GroupId, SipMessage, SipServer, SipServerEvent,
+    GroupId, SipCore, SipMessage, SipServerEvent,
 };
 
 #[derive(Debug)]
@@ -28,7 +28,7 @@ pub enum SipServerSocketMessage {
 pub struct SipServerSocket {
     main_socket: UdpSocket,
     buf: [u8; 2048],
-    sip_server: SipServer,
+    sip_core: SipCore,
     timer: SystemTimer,
     interval: Interval,
     virtual_socket_plane: VirtualSocketPlane<GroupId, SipMessage>,
@@ -42,7 +42,7 @@ impl SipServerSocket {
             bind_addr,
             main_socket: UdpSocket::bind(bind_addr).await.expect("Should bind udp socket"),
             buf: [0u8; 2048],
-            sip_server: SipServer::new(),
+            sip_core: SipCore::new(),
             timer: SystemTimer(),
             interval: async_std::stream::interval(Duration::from_millis(100)),
             virtual_socket_plane: Default::default(),
@@ -50,11 +50,17 @@ impl SipServerSocket {
     }
 
     pub fn accept_register(&mut self, session: GroupId, accept: bool) {
-        self.sip_server.reply_register_validate(session, accept);
+        self.sip_core.reply_register_validate(session, accept);
+    }
+
+    pub fn create_call(&mut self, call_id: &str, dest: SocketAddr) -> Result<VirtualSocket<GroupId, SipMessage>, SipServerSocketError> {
+        let group_id: GroupId = (dest, call_id.to_string().into());
+        self.sip_core.open_out_call(&group_id);
+        Ok(self.virtual_socket_plane.new_socket(group_id))
     }
 
     pub async fn recv(&mut self) -> Result<SipServerSocketMessage, SipServerSocketError> {
-        while let Some(output) = self.sip_server.pop_action() {
+        while let Some(output) = self.sip_core.pop_action() {
             match output {
                 SipServerEvent::OnRegisterValidate(group, username) => {
                     return Ok(SipServerSocketMessage::RegisterValidate(group, username));
@@ -66,6 +72,12 @@ impl SipServerSocket {
                 }
                 SipServerEvent::OnInCallRequest(group_id, req) => {
                     self.virtual_socket_plane.forward(&group_id, SipMessage::Request(req));
+                }
+                SipServerEvent::OnOutCallRequest(group_id, req) => {
+                    self.virtual_socket_plane.forward(&group_id, SipMessage::Request(req));
+                }
+                SipServerEvent::OnOutCallResponse(group_id, res) => {
+                    self.virtual_socket_plane.forward(&group_id, SipMessage::Response(res));
                 }
                 SipServerEvent::SendRes(dest, res) => {
                     log::debug!("Send res to {} {}", dest, res.raw.status_code());
@@ -86,7 +98,7 @@ impl SipServerSocket {
         let mut out_msgs = VecDeque::new();
         select! {
             _ = self.interval.next().fuse() => {
-                self.sip_server.on_tick(self.timer.now_ms());
+                self.sip_core.on_tick(self.timer.now_ms());
             },
             e = self.virtual_socket_plane.recv().fuse() => {
                 match e {
@@ -98,8 +110,10 @@ impl SipServerSocket {
                                 out_msgs.push_back((dest, msg));
                             },
                             None => {
+                                log::info!("Close socket {:?}", group_id);
                                 self.virtual_socket_plane.close_socket(&group_id);
-                                self.sip_server.close_in_call(&group_id);
+                                self.sip_core.close_in_call(&group_id);
+                                self.sip_core.close_out_call(&group_id);
                             }
                         }
                     },
@@ -126,7 +140,7 @@ impl SipServerSocket {
                                 match SipRequest::from(req) {
                                     Ok(req) => {
                                         log::debug!("on req from {} {}", addr, req.method());
-                                        if let Err(e) = self.sip_server.on_req(self.timer.now_ms(), addr, req) {
+                                        if let Err(e) = self.sip_core.on_req(self.timer.now_ms(), addr, req) {
                                             log::error!("Process sip request error {:?}", e);
                                         }
                                     },
@@ -140,7 +154,7 @@ impl SipServerSocket {
                                 match SipResponse::from(res) {
                                     Ok(res) => {
                                         log::info!("on res from {} {}", addr, res.raw.status_code());
-                                        if let Err(e) = self.sip_server.on_res(self.timer.now_ms(), addr, res) {
+                                        if let Err(e) = self.sip_core.on_res(self.timer.now_ms(), addr, res) {
                                             log::error!("Process sip response error {:?}", e);
                                         }
                                     },

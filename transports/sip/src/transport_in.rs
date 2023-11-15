@@ -26,14 +26,14 @@ type RmOut = EndpointRpcOut;
 type RrOut = RemoteTrackRpcOut;
 type RlOut = LocalTrackRpcOut;
 
-pub struct SipTransport {
+pub struct SipTransportIn {
     rtp_engine: RtpEngine,
     socket: VirtualSocket<GroupId, SipMessage>,
     logic: CallInProcessor,
     actions: VecDeque<TransportIncomingEvent<RmIn, RrIn, RlIn>>,
 }
 
-impl SipTransport {
+impl SipTransportIn {
     pub async fn new(now_ms: u64, bind_addr: SocketAddr, socket: VirtualSocket<GroupId, SipMessage>, req: SipRequest) -> Result<Self, RtpEngineError> {
         let local_contact = Contact {
             uri: Uri {
@@ -94,7 +94,7 @@ impl SipTransport {
 }
 
 #[async_trait::async_trait]
-impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransport {
+impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportIn {
     fn on_tick(&mut self, now_ms: u64) -> Result<(), TransportError> {
         self.logic.on_tick(now_ms).map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
         Ok(())
@@ -130,7 +130,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransport {
             return Ok(event);
         }
 
-        select! {
+        let rtp_out = select! {
             event = self.socket.recv().fuse() => {
                 let msg = event.map_err(|_e| TransportError::NetworkError)?;
                 match msg {
@@ -141,12 +141,19 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransport {
                         self.logic.on_res(now_ms, res).map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
                     }
                 }
+                None
             }
             event = self.rtp_engine.recv().fuse() => {
                 let rtp = event.ok_or_else(|| TransportError::NetworkError)?;
-                self.rtp_engine.send(rtp).await;
+                //TODO send to cluster insteand of echoback
+                Some(rtp)
             }
         };
+
+        //TODO don't echoback
+        if let Some(rtp) = rtp_out {
+            self.rtp_engine.send(rtp).await;
+        }
 
         Ok(TransportIncomingEvent::Continue)
     }

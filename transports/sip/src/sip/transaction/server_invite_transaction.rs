@@ -195,20 +195,7 @@ impl ServerInviteTransaction {
                     }
                 }
             }
-            ServerInviteTransactionEvent::Req(req) => {
-                if req.method().eq(&Method::Cancel) {
-                    log::info!("[ServerInviteTransacstion:on_proceeding] received Cancel => send 200, RequestTerminated and switch to Completed");
-                    self.state = State::Completed(Completed {
-                        code: StatusCode::RequestTerminated,
-                        timer_g: now_ms + T1,
-                        timer_g_duration: T1,
-                        timer_h: now_ms + T2,
-                    });
-                    let cancel_res = req.build_response(StatusCode::OK, None);
-                    self.actions.push_back(ServerInviteTransactionAction::Res(None, cancel_res));
-                    self.response(StatusCode::RequestTerminated, None);
-                }
-            }
+            ServerInviteTransactionEvent::Req(_req) => {}
             ServerInviteTransactionEvent::Status(status, body) => {
                 if matches!(status.kind(), StatusCodeKind::Provisional) {
                     state.tu_100_timer = None;
@@ -281,11 +268,11 @@ impl ServerInviteTransaction {
 
 #[cfg(test)]
 mod test {
-    use rsip::{headers::Contact, prelude::HeadersExt, StatusCode};
+    use rsip::{headers::Contact, StatusCode};
 
     use crate::{
         sip::{
-            data::sip_pkt::{ACK_REQ, CANCEL_REQ, INVITE_REQ},
+            data::sip_pkt::{ACK_REQ, INVITE_REQ},
             transaction::server_invite_transaction::{ServerInviteTransactionAction, ServerInviteTransactionEvent, Terminated},
         },
         sip_request::SipRequest,
@@ -367,30 +354,6 @@ mod test {
         transaction.on_event(3 * T1 + 30 + T1, ServerInviteTransactionEvent::Timer);
 
         assert_eq!(transaction.pop_action(), Some(ServerInviteTransactionAction::Terminated(Terminated::Rejected { success: true })));
-        assert_eq!(transaction.pop_action(), None);
-    }
-
-    #[test]
-    fn simple_cancel() {
-        let local_contact = Contact::try_from("sip:127.0.0.1:5060").expect("Should ok");
-        let init_req = SipRequest::from(rsip::Request::try_from(INVITE_REQ).expect("Should work")).expect("Should parse");
-        let mut transaction = ServerInviteTransaction::new(0, local_contact.try_into().expect("Should ok"), init_req);
-
-        assert_eq!(transaction.pop_action(), None);
-
-        let cancel_req = SipRequest::from(rsip::Request::try_from(CANCEL_REQ).expect("Should parse")).expect("Should parse");
-        transaction.on_event(20, ServerInviteTransactionEvent::Req(cancel_req));
-
-        let (dest, res) = cast2!(transaction.pop_action().expect("Should have action"), ServerInviteTransactionAction::Res);
-        assert_eq!(dest, None);
-        assert_eq!(res.raw.status_code, StatusCode::OK);
-        assert_eq!(res.raw.cseq_header(), Ok(&rsip::headers::CSeq::from("1 CANCEL")));
-
-        let (dest, res) = cast2!(transaction.pop_action().expect("Should have action"), ServerInviteTransactionAction::Res);
-        assert_eq!(dest, None);
-        assert_eq!(res.raw.status_code, StatusCode::RequestTerminated);
-        assert_eq!(res.raw.cseq_header(), Ok(&rsip::headers::CSeq::from("1 INVITE")));
-
         assert_eq!(transaction.pop_action(), None);
     }
 }

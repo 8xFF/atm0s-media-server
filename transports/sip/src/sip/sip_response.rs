@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use rsip::prelude::ToTypedHeader;
+use rsip::{prelude::ToTypedHeader, typed::Contact};
 
 #[derive(Debug)]
 pub enum RequiredHeader {
@@ -16,7 +16,7 @@ pub enum SipResponseError {
     Missing(RequiredHeader),
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct SipResponse {
     pub raw: rsip::Response,
     pub call_id: rsip::headers::CallId,
@@ -99,6 +99,26 @@ impl SipResponse {
             via: via.expect("Must some"),
             timestamp,
         })
+    }
+
+    pub fn content_type(&self) -> Option<&rsip::headers::ContentType> {
+        for header in self.raw.headers.iter() {
+            match header {
+                rsip::Header::ContentType(content_type) => return Some(content_type),
+                _ => {}
+            }
+        }
+        None
+    }
+
+    pub fn header_contact(&self) -> Option<Contact> {
+        for header in self.raw.headers.iter() {
+            match header {
+                rsip::Header::Contact(contact) => return Some(contact.typed().ok()?),
+                _ => {}
+            }
+        }
+        None
     }
 
     pub fn to_bytes(self) -> bytes::Bytes {
