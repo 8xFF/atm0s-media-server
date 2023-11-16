@@ -12,7 +12,7 @@ async-std = { workspace = true }
 async-trait = { workspace = true }
 media-utils = { workspace = true }
 poem-openapi = { version = "*", features = ["swagger-ui"] }
-str0m = { git = "https://github.com/algesten/str0m.git", hash = "937fe774deab8c9da9fbcc677bf3878007780ece"}
+str0m = { git = "https://github.com/8xff/str0m.git", rev = "cb88b4b4394a9513e1f5added457f2d724c61421"}
 futures = { workspace = true }
 log = { workpsace = true }
 serde = { workspace = true }
@@ -20,8 +20,7 @@ serde_json = { workspace = true }
 lz4_flex = { version = "0.11.1" }
 flate2 = { version = "1.0.28" }
 local-ip-address = "0.5.6"
-udp_sas = { commit = "e6a3f657d03fc3c7198522e6904dbbacd6db37fd", git = "https://github.com/bluesea-network/udp_sas.git", features = ["async_std"] }
-combine = "*"
+udp_sas = { rev = "e6a3f657d03fc3c7198522e6904dbbacd6db37fd", git = "https://github.com/bluesea-network/udp_sas.git", features = ["async_std"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

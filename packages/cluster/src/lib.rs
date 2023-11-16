@@ -14,6 +14,16 @@ pub enum ClusterTrackStats {
     Svc { bitrate: u32, layers: [[u32; 3]; 3] },
 }
 
+impl ClusterTrackStats {
+    pub fn consumer_bitrate_scale(&self) -> f32 {
+        match self {
+            ClusterTrackStats::Single { .. } => 1.0,
+            ClusterTrackStats::Simulcast { .. } => 1.5,
+            ClusterTrackStats::Svc { .. } => 1.0,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ClusterTrackStatus {
     #[serde(rename = "connecting")]

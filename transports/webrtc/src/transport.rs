@@ -1,7 +1,6 @@
 use std::time::{Duration, Instant};
 
 use async_std::prelude::FutureExt;
-use combine::Parser;
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, RpcResponse},
     EndpointRpcIn, EndpointRpcOut,
@@ -10,10 +9,7 @@ use media_utils::ServerError;
 use str0m::{bwe::Bitrate, change::SdpOffer, media::KeyframeRequestKind, net::Receive, rtp::ExtensionValues, Candidate, Input, Output, Rtc, RtcError};
 use transport::{RequestKeyframeKind, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
 
-use crate::{
-    rpc::{WebrtcConnectRequestSender, WebrtcRemoteIceRequest},
-    transport::ice_candidate_parse::candidate,
-};
+use crate::rpc::{WebrtcConnectRequestSender, WebrtcRemoteIceRequest};
 
 use self::{
     internal::{
@@ -27,7 +23,6 @@ use self::{
     str0m_event_convert::Str0mEventConvert,
 };
 
-mod ice_candidate_parse;
 pub(crate) mod internal;
 mod mid_convert;
 mod mid_history;
@@ -180,8 +175,16 @@ where
                     bwe.set_current_bitrate(Bitrate::bps(current as u64));
                     bwe.set_desired_bitrate(Bitrate::bps(desired as u64));
                 }
-                Str0mAction::RemoteIce(ice, mut res) => match candidate().parse(ice.candidate.as_str()) {
-                    Ok((can, _)) => {
+                Str0mAction::LimitIngressBitrate { mid, max } => {
+                    if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
+                        stream.request_remb(Bitrate::bps(max as u64));
+                    } else {
+                        log::warn!("[TransportWebrtc] missing track for mid {} when requesting REMB {}", mid, max);
+                        debug_assert!(false, "should not missing mid");
+                    }
+                }
+                Str0mAction::RemoteIce(ice, mut res) => match Candidate::from_sdp_string(ice.candidate.as_str()) {
+                    Ok(can) => {
                         log::info!("on remote ice {:?}", can);
                         self.rtc.add_remote_candidate(can);
                         res.answer(200, Ok(()));

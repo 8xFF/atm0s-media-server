@@ -30,6 +30,7 @@ pub struct RemoteTrack {
     out_actions: VecDeque<RemoteTrackOutput>,
     active: bool,
     bitrate_measure: Option<(BitrateMeasure, Option<ClusterTrackStats>)>,
+    consumers_limit: Option<u32>,
 }
 
 impl RemoteTrack {
@@ -46,6 +47,7 @@ impl RemoteTrack {
             track_meta,
             out_actions: Default::default(),
             active: false, //we need wait for first rtp packet
+            consumers_limit: None,
         }
     }
 
@@ -64,6 +66,10 @@ impl RemoteTrack {
         }
     }
 
+    pub fn consumers_limit(&self) -> Option<u32> {
+        self.consumers_limit
+    }
+
     pub fn on_tick(&mut self, _now_ms: u64) {}
 
     pub fn on_cluster_event(&mut self, event: ClusterRemoteTrackIncomingEvent) {
@@ -72,8 +78,13 @@ impl RemoteTrack {
                 log::info!("[RemoteTrack {}] request keyframe", self.track_name);
                 self.out_actions.push_back(RemoteTrackOutput::Transport(RemoteTrackOutgoingEvent::RequestKeyFrame(kind)));
             }
-            ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(_) => {
-                //TODO
+            ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(bitrate) => {
+                log::debug!("[RemoteTrack {}] request limit bitrate {bitrate}", self.track_name);
+                if let Some((_bitrate_measure, Some(previous_stats))) = &self.bitrate_measure {
+                    self.consumers_limit = Some((bitrate as f32 * previous_stats.consumer_bitrate_scale()) as u32);
+                } else {
+                    self.consumers_limit = Some(bitrate); //default 1x
+                }
             }
         }
     }

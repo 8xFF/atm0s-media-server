@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use cluster::Cluster;
 use runner::{
-    convert_enum, ChannelSourceHashmapReal, KeyValueBehavior, KeyValueBehaviorEvent, KeyValueHandlerEvent, KeyValueSdk, LayersSpreadRouterSyncBehavior, LayersSpreadRouterSyncBehaviorEvent,
+    convert_enum, KeyValueBehavior, KeyValueBehaviorEvent, KeyValueHandlerEvent, KeyValueSdk, KeyValueSdkEvent, LayersSpreadRouterSyncBehavior, LayersSpreadRouterSyncBehaviorEvent,
     LayersSpreadRouterSyncHandlerEvent, ManualBehavior, ManualBehaviorConf, ManualBehaviorEvent, ManualHandlerEvent, NetworkPlane, NetworkPlaneConfig, NodeAddr, NodeAddrBuilder, NodeId, Protocol,
     PubsubSdk, PubsubServiceBehaviour, PubsubServiceBehaviourEvent, PubsubServiceHandlerEvent, SharedRouter, SystemTimer, UdpTransport,
 };
@@ -23,6 +23,11 @@ pub(crate) enum NodeHandleEvent {
     LayersSpreadRouterSync(LayersSpreadRouterSyncHandlerEvent),
     KeyValue(KeyValueHandlerEvent),
     Pubsub(PubsubServiceHandlerEvent),
+}
+
+#[derive(convert_enum::From, convert_enum::TryInto)]
+pub(crate) enum NodeSdkEvent {
+    KeyValue(KeyValueSdkEvent),
 }
 
 pub struct ServerBlueseaConfig {
@@ -52,10 +57,11 @@ impl ServerBluesea {
         });
 
         let router_sync_behaviour = LayersSpreadRouterSyncBehavior::new(router.clone());
-        let (kv_behaviour, kv_sdk) = KeyValueBehavior::new(node_id, timer.clone(), 3000);
-        let (pubsub_behavior, pubsub_sdk) = PubsubServiceBehaviour::new(node_id, Box::new(ChannelSourceHashmapReal::new(kv_sdk.clone(), node_id)), timer.clone());
+        let kv_sdk = KeyValueSdk::new();
+        let kv_behaviour = KeyValueBehavior::new(node_id, 3000, Some(Box::new(kv_sdk.clone())));
+        let (pubsub_behavior, pubsub_sdk) = PubsubServiceBehaviour::new(node_id, timer.clone());
 
-        let mut plane = NetworkPlane::<NodeBehaviorEvent, NodeHandleEvent>::new(NetworkPlaneConfig {
+        let mut plane = NetworkPlane::<NodeBehaviorEvent, NodeHandleEvent, NodeSdkEvent>::new(NetworkPlaneConfig {
             node_id,
             tick_ms: 1000,
             behaviors: vec![Box::new(pubsub_behavior), Box::new(kv_behaviour), Box::new(router_sync_behaviour), Box::new(manual)],

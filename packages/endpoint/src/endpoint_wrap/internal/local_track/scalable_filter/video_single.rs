@@ -18,7 +18,7 @@ impl ScalableFilter for VideoSingleFilter {
     fn resume(&mut self) {}
 
     fn set_target_layer(&mut self, spatial: u8, temporal: u8, key_only: bool) -> bool {
-        false
+        self.wait_key
     }
 
     fn should_send(&mut self, pkt: &mut transport::MediaPacket) -> (FilterResult, bool) {

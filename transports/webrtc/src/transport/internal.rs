@@ -60,6 +60,7 @@ pub enum Str0mAction {
     Datachannel(usize, String),
     Rpc(TransportRpcIn),
     ConfigEgressBitrate { current: u32, desired: u32 },
+    LimitIngressBitrate { mid: Mid, max: u32 },
     RemoteIce(WebrtcRemoteIceRequest, transport::RpcResponse<()>),
 }
 
@@ -71,6 +72,8 @@ where
     track_info_queue: TrackInfoQueue,
     local_track_id_map: HashMapMultiKey<TrackId, String, bool>,
     remote_track_id_map: HashMapMultiKey<TrackId, String, bool>,
+    remote_audio_mids: Vec<Mid>,
+    remote_video_mids: Vec<Mid>,
     local_track_id_gen: LocalTrackIdGenerator,
     channel_id: Option<usize>,
     channel_pending_msgs: VecDeque<String>,
@@ -92,6 +95,8 @@ where
             local_track_id_map: Default::default(),
             remote_track_id_map: Default::default(),
             local_track_id_gen: Default::default(),
+            remote_audio_mids: Default::default(),
+            remote_video_mids: Default::default(),
             channel_id: None,
             channel_pending_msgs: Default::default(),
             endpoint_actions: Default::default(),
@@ -145,6 +150,7 @@ where
             TransportOutgoingEvent::RemoteTrackEvent(track_id, event) => match event {
                 RemoteTrackOutgoingEvent::RequestKeyFrame(kind) => {
                     let mid = track_to_mid(track_id);
+                    log::info!("[TransportWebrtc] request keyframe with video mid {}", mid);
                     self.str0m_actions.push_back(Str0mAction::RequestKeyFrame(mid, kind));
                 }
                 RemoteTrackOutgoingEvent::Rpc(rpc) => {
@@ -153,8 +159,13 @@ where
                     self.send_msg(msg);
                 }
             },
-            TransportOutgoingEvent::RequestIngressBitrate(_bitrate) => {
-                //TODO
+            TransportOutgoingEvent::LimitIngressBitrate(bitrate) => {
+                if let Some(mid) = self.remote_video_mids.first() {
+                    log::debug!("[TransportWebrtc] request ingress bitrate: {} with first video mid {}", bitrate, mid);
+                    self.str0m_actions.push_back(Str0mAction::LimitIngressBitrate { mid: mid.clone(), max: bitrate });
+                } else {
+                    log::warn!("[TransportWebrtc] request ingress bitrate: {} but no video mid", bitrate);
+                }
             }
             TransportOutgoingEvent::ConfigEgressBitrate { current, desired } => {
                 log::debug!("[TransportWebrtc] config egress bitrate: {} {}", current, desired);
@@ -260,6 +271,15 @@ where
             Str0mInput::MediaAdded(direction, mid, kind, _sim) => {
                 match direction {
                     Direction::RecvOnly => {
+                        match kind {
+                            MediaKind::Audio => {
+                                self.remote_audio_mids.push(mid);
+                            }
+                            MediaKind::Video => {
+                                self.remote_video_mids.push(mid);
+                            }
+                            _ => {}
+                        }
                         //remote stream
                         let track_id = mid_to_track(&mid);
                         if let Some(info) = self.track_info_queue.pop(kind) {
@@ -286,7 +306,8 @@ where
                         Ok(())
                     }
                     _ => {
-                        panic!("not supported")
+                        log::error!("[TransportWebrtcInternal] not support direction {:?} for track {}", direction, mid);
+                        Ok(())
                     }
                 }
             }
