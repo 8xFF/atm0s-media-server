@@ -12,6 +12,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       RUST_BACKTRACE: 1
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: '-C target-feature=+crt-static'
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: '-C target-feature=+crt-static'
     strategy:
       matrix:
         build:
@@ -68,7 +70,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew update
-          brew install libsoxr  
+          brew install libsoxr
         
       # Workaround for <https://github.com/actions/virtual-environments/issues/2557>
       - name: Switch Xcode SDK
