@@ -16,4 +16,24 @@ pub fn payload_parse(payload: &[u8], rid: Option<u16>) -> (bool, Option<H264Simu
     }
 }
 
-//TODO test this
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_payload_parse() {
+        // Test case 1: Payload length less than 4
+        let payload = [0u8; 3];
+        let (is_key, simulcast) = payload_parse(&payload, None);
+        assert_eq!(is_key, false);
+        assert_eq!(simulcast, None);
+
+        // TODO: Test case 2: SPS NAL unit
+
+        // Test case 3: Non-SPS NAL unit
+        let payload = [0x00, 0x00, 0x00, 0x01, 0x23];
+        let (is_key, simulcast) = payload_parse(&payload, Some(2));
+        assert_eq!(is_key, false);
+        assert_eq!(simulcast, Some(H264Simulcast { spatial: 2 }));
+    }
+}

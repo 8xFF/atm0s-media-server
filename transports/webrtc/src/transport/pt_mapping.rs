@@ -100,3 +100,23 @@ impl PtMapping {
         self.remote_to_local_map[remote_pt as usize]
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_local_payload_type_to_u8() {
+        assert_eq!(LocalPayloadType::Unknown.to_u8(), 0);
+        assert_eq!(LocalPayloadType::Opus.to_u8(), 1);
+        assert_eq!(LocalPayloadType::Vp8.to_u8(), 2);
+        assert_eq!(LocalPayloadType::Vp9P0.to_u8(), 3);
+        assert_eq!(LocalPayloadType::Vp9P2.to_u8(), 4);
+        assert_eq!(LocalPayloadType::H264_42001fNon.to_u8(), 5);
+        assert_eq!(LocalPayloadType::H264_42001fSingle.to_u8(), 6);
+        assert_eq!(LocalPayloadType::H264_42e01fNon.to_u8(), 7);
+        assert_eq!(LocalPayloadType::H264_42e01fSingle.to_u8(), 8);
+        assert_eq!(LocalPayloadType::H264_4d001fNon.to_u8(), 9);
+        assert_eq!(LocalPayloadType::H264_4d001fSingle.to_u8(), 10);
+        assert_eq!(LocalPayloadType::H264_64001fNon.to_u8(), 11);
+    }
+}

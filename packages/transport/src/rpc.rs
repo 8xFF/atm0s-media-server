@@ -35,3 +35,31 @@ impl<T> RpcResponse<T> {
         self.tx.send((code, res)).await;
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[async_std::test]
+    async fn test_rpc_response() {
+        let (mut rpc_response, rx) = RpcResponse::<i32>::new();
+        rpc_response.answer(200, Ok(42));
+        let (code, res) = rx.recv().await.unwrap();
+        assert_eq!(code, 200);
+        assert_eq!(res.unwrap(), 42);
+
+        rpc_response.answer(500, Err(ServerError::build(500, "Internal Server Error")));
+        let (code, res) = rx.recv().await.unwrap();
+        assert_eq!(code, 500);
+        assert_eq!(
+            res.unwrap_err(),
+            ServerError {
+                code: "500".to_string(),
+                message: "Internal Server Error".to_string()
+            }
+        );
+
+        rpc_response.answer_async(200, Ok(42)).await;
+        let (code, _) = rx.recv().await.unwrap();
+        assert_eq!(code, 200);
+    }
+}

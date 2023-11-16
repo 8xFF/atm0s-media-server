@@ -1,13 +1,13 @@
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 
 use combine::attempt;
 use combine::error::StreamError;
 use combine::{
     choice, many, many1, optional,
-    parser::char::{alpha_num, char, digit, string},
+    parser::char::{char, digit, string},
     satisfy,
-    stream::{position, StreamErrorFor},
-    token, ParseError, Parser, Stream,
+    stream::StreamErrorFor,
+    ParseError, Parser, Stream,
 };
 use str0m::{net::Protocol, Candidate, CandidateKind};
 
@@ -81,6 +81,7 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::net::Ipv4Addr;
     use super::*;
 
     #[test]

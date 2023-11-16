@@ -17,3 +17,19 @@ impl MediaKind {
         matches!(self, MediaKind::Video)
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_audio() {
+        assert!(MediaKind::Audio.is_audio());
+        assert!(!MediaKind::Video.is_audio());
+    }
+
+    #[test]
+    fn test_is_video() {
+        assert!(!MediaKind::Audio.is_video());
+        assert!(MediaKind::Video.is_video());
+    }
+}

@@ -35,3 +35,33 @@ impl BitRead for (&[u8], usize) {
         u16::from_be_bytes([self.get_u8(), self.get_u8()])
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remaining() {
+        let buf: &[u8] = &[0b1010_1010, 0b0101_0101];
+        let mut reader = (buf, 0);
+        assert_eq!(reader.remaining(), 16);
+        reader.get_u8();
+        assert_eq!(reader.remaining(), 8);
+        reader.get_u8();
+        assert_eq!(reader.remaining(), 0);
+    }
+
+    #[test]
+    fn test_get_u8() {
+        let buf: &[u8] = &[0b1010_1010, 0b0101_0101];
+        let mut reader = (buf, 0);
+        assert_eq!(reader.get_u8(), 0b1010_1010);
+        assert_eq!(reader.get_u8(), 0b0101_0101);
+    }
+
+    #[test]
+    fn test_get_u16() {
+        let buf: &[u8] = &[0b1010_1010, 0b0101_0101];
+        let mut reader = (buf, 0);
+        assert_eq!(reader.get_u16(), 0b1010_1010_0101_0101);
+    }
+}
