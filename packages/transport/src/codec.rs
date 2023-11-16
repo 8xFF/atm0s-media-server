@@ -126,18 +126,13 @@ impl Display for Vp9Profile {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub enum PayloadCodec {
     Vp8(bool, Option<Vp8Simulcast>),
     Vp9(bool, Vp9Profile, Option<Vp9Svc>),
     H264(bool, H264Profile, Option<H264Simulcast>),
+    #[default]
     Opus,
-}
-
-impl Default for PayloadCodec {
-    fn default() -> Self {
-        PayloadCodec::Opus
-    }
 }
 
 impl Display for PayloadCodec {
