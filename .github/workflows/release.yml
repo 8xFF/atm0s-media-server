@@ -77,6 +77,10 @@ jobs:
           command: build
           args: --verbose --release --package media-server --target ${{ matrix.target }}
 
+      - name: Show files
+        run: |
+          ls -la ./target/${{ matrix.target }}/release
+
       - name: Create checksum
         id: make-checksum
         working-directory: ./target/${{ matrix.target }}/release
@@ -129,6 +133,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && '' || github.ref }}
-          release_name: Release ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          release_name: ${{ github.event_name == 'workflow_dispatch' && 'Development build' || format('Release {}, github.ref)' }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: true  
