@@ -148,9 +148,9 @@ dependencies = [
 
 [[package]]
 name = "async-bincode"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0688a53af69da2208017b6d68ea675f073fbbc2488e71cc9b40af48ad9404fc2"
+checksum = "21849a990d47109757e820904d7c0b569a8013f6595bf14d911884634d58795f"
 dependencies = [
  "bincode",
  "byteorder",
@@ -429,7 +429,7 @@ dependencies = [
 [[package]]
 name = "bluesea-identity"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "multiaddr",
  "parking_lot",
@@ -440,7 +440,7 @@ dependencies = [
 [[package]]
 name = "bluesea-router"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "bluesea-identity",
 ]
@@ -1641,7 +1641,7 @@ dependencies = [
 [[package]]
 name = "key-value"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-std",
  "bluesea-identity",
@@ -1666,7 +1666,7 @@ dependencies = [
 [[package]]
 name = "layers-spread-router"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "bluesea-identity",
  "bluesea-router",
@@ -1679,7 +1679,7 @@ dependencies = [
 [[package]]
 name = "layers-spread-router-sync"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1781,7 +1781,7 @@ dependencies = [
 [[package]]
 name = "manual-discovery"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-trait",
  "bluesea-identity",
@@ -1915,7 +1915,7 @@ dependencies = [
 [[package]]
 name = "multiaddr"
 version = "0.18.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "arrayref",
  "byteorder",
@@ -1967,7 +1967,7 @@ dependencies = [
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2361,7 +2361,7 @@ dependencies = [
 [[package]]
 name = "pub-sub"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-std",
  "async-trait",
@@ -2617,7 +2617,7 @@ checksum = "d4ed274a5b3d36c4434cff6a4de1b42f43e64ae326b1cfa72d13d9037a314355"
 [[package]]
 name = "runner"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-std",
  "bluesea-identity",
@@ -2731,18 +2731,18 @@ checksum = "836fa6a3e1e547f9a2c4040802ec865b5d85f4014efe00555d7090a3dcaa1090"
 
 [[package]]
 name = "serde"
-version = "1.0.191"
+version = "1.0.192"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a834c4821019838224821468552240d4d95d14e751986442c816572d39a080c9"
+checksum = "bca2a08484b285dcb282d0f67b26cadc0df8b19f8c12502c13d966bf9482f001"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.191"
+version = "1.0.192"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46fa52d5646bce91b680189fe5b1c049d2ea38dabb4e2e7c8d00ca12cfbfbcfd"
+checksum = "d6c7207fbec9faa48073f3e3074cbe553af6ea512d7c21ba46e434e70ea9fbc1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2900,9 +2900,9 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.4"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4031e820eb552adee9295814c0ced9e5cf38ddf1e8b7d566d6de8e2538ea989e"
+checksum = "7b5fac59a5cb5dd637972e5fca70daf0523c9067fcdc4842f053dae04a18f8e9"
 dependencies = [
  "libc",
  "windows-sys",
@@ -2994,7 +2994,7 @@ dependencies = [
 [[package]]
 name = "tcp"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-bincode",
  "async-std",
@@ -3118,7 +3118,7 @@ dependencies = [
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.5.4",
+ "socket2 0.5.5",
  "tokio-macros",
  "windows-sys",
 ]
@@ -3326,7 +3326,7 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 [[package]]
 name = "udp"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-notify",
  "async-std",
@@ -3338,7 +3338,7 @@ dependencies = [
  "network",
  "parking_lot",
  "serde",
- "socket2 0.5.4",
+ "socket2 0.5.5",
  "utils",
 ]
 
@@ -3408,9 +3408,9 @@ checksum = "f28467d3e1d3c6586d8f25fa243f544f5800fec42d97032474e17222c2b75cfa"
 
 [[package]]
 name = "unsigned-varint"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6889a77d49f1f013504cec6bf97a2c730394adedaeb1deb5ea08949a50541105"
+checksum = "eb066959b24b5196ae73cb057f45598450d2c5f71460e98c49b738086eff9c06"
 
 [[package]]
 name = "url"
@@ -3432,7 +3432,7 @@ checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 [[package]]
 name = "utils"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git#6dd98f5149acab6e37a698f4be8f2bbb6c1cdfdc"
+source = "git+https://github.com/8xFF/decentralized-sdn.git#707c76c098580ccda5b14364ada3f20c9a6b61cd"
 dependencies = [
  "async-notify",
  "async-std",
