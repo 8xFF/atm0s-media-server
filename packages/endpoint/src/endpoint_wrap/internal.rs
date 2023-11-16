@@ -12,7 +12,8 @@ use self::{
     remote_track::{RemoteTrack, RemoteTrackOutput},
 };
 
-const DEFAULT_BITRATE_OUT_BPS: u32 = 3_000_000;
+const DEFAULT_BITRATE_OUT_BPS: u32 = 3_000_000; //3Mbps
+const IDLE_BITRATE_RECV_LIMIT: u32 = 100_000; //100kbps
 
 mod bitrate_allocator;
 mod local_track;
@@ -88,9 +89,18 @@ impl MediaEndpointInteral {
             track.on_tick(now_ms);
         }
 
+        let mut sum_consumers_limit = 0;
         for (_, track) in self.remote_tracks.iter_mut() {
             track.on_tick(now_ms);
+            sum_consumers_limit += track.consumers_limit().unwrap_or(0);
         }
+
+        if sum_consumers_limit == 0 {
+            sum_consumers_limit = IDLE_BITRATE_RECV_LIMIT;
+        }
+
+        self.output_actions
+            .push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(sum_consumers_limit)));
 
         self.bitrate_allocator.tick();
         self.pop_internal(now_ms);
@@ -417,7 +427,7 @@ mod tests {
     };
 
     use crate::{
-        endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS},
+        endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS, IDLE_BITRATE_RECV_LIMIT},
         rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverSwitch, RemoteStream, TrackInfo},
         EndpointRpcOut, RpcRequest, RpcResponse,
     };
@@ -595,6 +605,11 @@ mod tests {
                 1,
                 LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::SwitchRes(RpcResponse::success(1, true)))
             )))
+        );
+
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(IDLE_BITRATE_RECV_LIMIT)))
         );
 
         assert_eq!(

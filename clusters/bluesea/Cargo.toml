@@ -10,7 +10,7 @@ log = { workspace = true }
 cluster = { workspace = true }
 transport = { workspace = true }
 media-utils = { workspace = true }
-runner = { git = "https://github.com/8xFF/decentralized-sdn.git" }
+runner = { git = "https://github.com/8xFF/decentralized-sdn.git", rev = "b95a66c148a09324b30de335b76f952630fa9106" }
 serde = { workspace = true }
 bincode = { version = "1" }
 futures = { workspace = true }
