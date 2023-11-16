@@ -22,15 +22,15 @@
  </a>
 </p>
 
-# 8xFF Media Server: Distributed Ultra-Low Latency Streaming Server
+# Decentralized Ultra-Low Latency Streaming Server
 
-A distributed media server designed to handle media streaming at a global-scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
+A decentralized media server designed to handle media streaming at a global-scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
 
 TODO: image about endpoints + connections
 
 ## Features
   - 🚀 Powered by Rust with memory safety and performance.
-  - High availability by being fully distributed, with no central controller.
+  - High availability by being fully decentralized, with no central controller.
   - 🛰️ Multi-zone support, high scalability.
   - Support encodings: H264, Vp8, Vp9, H265 (Coming soon), AV1 (Coming soon)
   - Cross platform: Linux, MacOs, Windows.
