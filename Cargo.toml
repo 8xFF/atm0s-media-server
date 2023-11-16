@@ -8,7 +8,9 @@ members = [
     "clusters/bluesea",
     "transports/webrtc",
     "transports/rtmp",
+    "transports/sip",
     "servers/media",
+    "servers/sip-gateway",
 ]
 
 [workspace.dependencies]
@@ -17,6 +19,7 @@ endpoint = { path = "packages/endpoint" }
 transport = { path = "packages/transport" }
 transport-webrtc = { path = "transports/webrtc" }
 transport-rtmp = { path = "transports/rtmp" }
+transport-sip = { path = "transports/sip" }
 cluster-local = { path = "clusters/local" }
 cluster-bluesea = { path = "clusters/bluesea" }
 media-utils = { path = "packages/media-utils" }
