@@ -12,24 +12,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       RUST_BACKTRACE: 1
-      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: '-C target-feature=+crt-static'
-      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS: '-C target-feature=+crt-static'
     strategy:
       matrix:
         build:
-          - linux musl x64
-          - linux musl aarch64
+          - linux gnu x64
+          - linux gnu aarch64
           - macos x64
           - macos aarch64
         include:
-          - build: linux musl x64
+          - build: linux gnu x64
             os: ubuntu-latest
             rust: stable
-            target: x86_64-unknown-linux-musl
-          - build: linux musl aarch64
+            target: x86_64-unknown-linux-gnu
+          - build: linux gnu aarch64
             os: ubuntu-latest
             rust: stable
-            target: aarch64-unknown-linux-musl
+            target: aarch64-unknown-linux-gnu
           - build: macos x64
             os: macos-latest
             rust: stable
@@ -58,9 +56,9 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
-      - name: Install musl-tools
+      - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends build-essential musl-tools
+        run: sudo apt-get install -y --no-install-recommends build-essential
 
       - name: Install libsoxr-dev (ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -71,14 +69,6 @@ jobs:
         run: |
           brew update
           brew install libsoxr
-        
-      # Workaround for <https://github.com/actions/virtual-environments/issues/2557>
-      - name: Switch Xcode SDK
-        if: runner.os == 'macos'
-        run: |
-          cat <<EOF >> "$GITHUB_ENV"
-          SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-          EOF
 
       - name: Build
         uses: actions-rs/cargo@v1
@@ -86,11 +76,6 @@ jobs:
           use-cross: true
           command: build
           args: --verbose --release --package media-server --target ${{ matrix.target }}
-
-      # this breaks on aarch64 and this if conditional isn't working for some reason: TODO: investigate
-      #- name: Strip release binary
-      #  if: runner.target != 'aarch64-unknown-linux-musl' && runner.target != 'aarch64-apple-darwin'
-      #  run: strip "target/${{ matrix.target }}/release/media-server"
 
       - name: Create checksum
         id: make-checksum
@@ -146,4 +131,4 @@ jobs:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && '' || github.ref }}
           release_name: Release ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
-          prerelease: false  
+          prerelease: true  
