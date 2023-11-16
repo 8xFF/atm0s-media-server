@@ -16,7 +16,9 @@ jobs:
       matrix:
         build:
           - linux gnu x64
+          - linux musl x64
           - linux gnu aarch64
+          - linux musl aarch64
           - macos x64
           - macos aarch64
         include:
@@ -24,10 +26,18 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
+          - build: linux musl x64
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-musl  
           - build: linux gnu aarch64
             os: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
+          - build: linux musl aarch64
+            os: ubuntu-latest
+            rust: stable
+            target: aarch64-unknown-linux-musl  
           - build: macos x64
             os: macos-latest
             rust: stable
@@ -58,13 +68,13 @@ jobs:
 
       - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends build-essential
+        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
 
-      - name: Install libsoxr-dev (ubuntu)
+      - name: Install deps (ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends libsoxr-dev
+        run: sudo apt-get install -y --no-install-recommends libssl-dev libsoxr-dev libopus-dev
 
-      - name: Install libsoxr-dev (macos)
+      - name: Install deps (macos)
         if: matrix.os == 'macos-latest'
         run: |
           brew update
