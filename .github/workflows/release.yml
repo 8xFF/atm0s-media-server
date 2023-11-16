@@ -133,6 +133,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && '' || github.ref }}
-          release_name: ${{ github.event_name == 'workflow_dispatch' && 'Development build' || format('Release {}, github.ref)' }}
+          release_name: Build ${{ github.event_name == 'workflow_dispatch' && 'development' || github.ref }}
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: true  
