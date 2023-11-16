@@ -147,14 +147,12 @@ For more information, you can join our [Discord channel](https://discord.gg/tJ6d
 
 
 ## Roadmap
-
-First version will be released together with [our SDN](https://github.com/8xFF/decentralized-sdn) at end of 2023.
-
+The first version will be released together with [our SDN](https://github.com/8xFF/decentralized-sdn) at the end of 2023.
 Details on our roadmap can be seen [TBA]().
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
