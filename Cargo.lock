@@ -366,6 +366,223 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm0s-sdn"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8a64145b93a3d5cf88989714d938cadc2c61446863a3254c326295fdf3661e7"
+dependencies = [
+ "async-std",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-key-value",
+ "atm0s-sdn-layers-spread-router",
+ "atm0s-sdn-layers-spread-router-sync",
+ "atm0s-sdn-manual-discovery",
+ "atm0s-sdn-network",
+ "atm0s-sdn-pub-sub",
+ "atm0s-sdn-router",
+ "atm0s-sdn-transport-tcp",
+ "atm0s-sdn-transport-udp",
+ "atm0s-sdn-utils",
+ "thiserror",
+]
+
+[[package]]
+name = "atm0s-sdn-identity"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79d03c2e9be8b3c74c193cd94317fba8ce7417786b6ed4370760e8b6bf25dc4e"
+dependencies = [
+ "atm0s-sdn-multiaddr",
+ "parking_lot",
+ "rand 0.8.5",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-sdn-key-value"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2941ad9bfe24d36ac3e7a1da8d9af2263ce290d2b874474080be87f0bb8ce00"
+dependencies = [
+ "async-std",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-network",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "log",
+ "mockall",
+ "parking_lot",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "atm0s-sdn-layers-spread-router"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f42df33c56066ae449dce58904b91dba6fafde4d780d065d4f4b843893fe767e"
+dependencies = [
+ "atm0s-sdn-identity",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "log",
+ "parking_lot",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-sdn-layers-spread-router-sync"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25e29309d995874f3575186f4a7e9202be9f34ee10c138e319212a845103bacc"
+dependencies = [
+ "async-trait",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-layers-spread-router",
+ "atm0s-sdn-network",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "bincode",
+ "log",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "atm0s-sdn-manual-discovery"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2766ba771e3d21c2442f5bae0e2862c58258b051a87d092c70649509240c08fb"
+dependencies = [
+ "async-trait",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-network",
+ "atm0s-sdn-utils",
+ "log",
+ "parking_lot",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "atm0s-sdn-multiaddr"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff777078a97e7ff3585a5a43c86cd7c130f54d2de99aa690790d7dbf953aec4a"
+dependencies = [
+ "arrayref",
+ "byteorder",
+ "data-encoding",
+ "multibase",
+ "percent-encoding",
+ "serde",
+ "static_assertions",
+ "unsigned-varint",
+ "url",
+]
+
+[[package]]
+name = "atm0s-sdn-network"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1e53f12fac8160489cd75ea73b8924bc435ab4118367197366a29052a1d9a27"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "bincode",
+ "bytes",
+ "convert-enum",
+ "futures",
+ "log",
+ "parking_lot",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "atm0s-sdn-pub-sub"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86725f2a6a775443e36064495be90292da337c0c1f0d8053e57ab6cfbce2061a"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-key-value",
+ "atm0s-sdn-network",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "bytes",
+ "log",
+ "parking_lot",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-sdn-router"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c8afd089faa4ca489470ca1b6b8c8c686c7036f510c7c722473f736ceee10f7"
+dependencies = [
+ "atm0s-sdn-identity",
+]
+
+[[package]]
+name = "atm0s-sdn-transport-tcp"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49cfecddaeb6f6468836b6a0f32fc51961cf854ed262525786c72edfaf279471"
+dependencies = [
+ "async-bincode",
+ "async-std",
+ "async-trait",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-network",
+ "atm0s-sdn-utils",
+ "bincode",
+ "futures-util",
+ "log",
+ "parking_lot",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-sdn-transport-udp"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23cfbb5d319a22242748f4da9522e85ac14b6432288fdea7858d0c1093b9ee37"
+dependencies = [
+ "async-notify",
+ "async-std",
+ "async-trait",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-network",
+ "atm0s-sdn-utils",
+ "bincode",
+ "futures-util",
+ "log",
+ "parking_lot",
+ "serde",
+ "socket2 0.5.5",
+]
+
+[[package]]
+name = "atm0s-sdn-utils"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2601a3aa91db2d7fa70d2cf409fbbdd05d0a28ff91c3d94a134ca576bafabff"
+dependencies = [
+ "async-notify",
+ "async-std",
+ "async-trait",
+ "log",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -468,25 +685,6 @@ dependencies = [
  "futures-lite 2.0.1",
  "piper",
  "tracing",
-]
-
-[[package]]
-name = "bluesea-identity"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "multiaddr",
- "parking_lot",
- "rand 0.8.5",
- "serde",
-]
-
-[[package]]
-name = "bluesea-router"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "bluesea-identity",
 ]
 
 [[package]]
@@ -659,23 +857,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cluster-bluesea"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "bincode",
- "bytes",
- "cluster",
- "futures",
- "log",
- "media-utils",
- "runner",
- "serde",
- "transport",
-]
-
-[[package]]
 name = "cluster-local"
 version = "0.1.0"
 dependencies = [
@@ -685,6 +866,23 @@ dependencies = [
  "log",
  "media-utils",
  "parking_lot",
+ "transport",
+]
+
+[[package]]
+name = "cluster-sdn"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-sdn",
+ "bincode",
+ "bytes",
+ "cluster",
+ "futures",
+ "log",
+ "media-utils",
+ "serde",
  "transport",
 ]
 
@@ -1717,59 +1915,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "key-value"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "async-std",
- "bluesea-identity",
- "bluesea-router",
- "log",
- "mockall",
- "network",
- "parking_lot",
- "serde",
- "thiserror",
- "utils",
-]
-
-[[package]]
 name = "kv-log-macro"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0de8b303297635ad57c9f5059fd9cee7a47f8e8daa09df0fcd07dd39fb22977f"
 dependencies = [
  "log",
-]
-
-[[package]]
-name = "layers-spread-router"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "bluesea-identity",
- "bluesea-router",
- "log",
- "parking_lot",
- "serde",
- "utils",
-]
-
-[[package]]
-name = "layers-spread-router-sync"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "async-trait",
- "bincode",
- "bluesea-identity",
- "bluesea-router",
- "layers-spread-router",
- "log",
- "network",
- "serde",
- "thiserror",
- "utils",
 ]
 
 [[package]]
@@ -1858,21 +2009,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "manual-discovery"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "async-trait",
- "bluesea-identity",
- "log",
- "network",
- "parking_lot",
- "serde",
- "thiserror",
- "utils",
-]
-
-[[package]]
 name = "md-5"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1890,8 +2026,8 @@ dependencies = [
  "async-std",
  "clap",
  "cluster",
- "cluster-bluesea",
  "cluster-local",
+ "cluster-sdn",
  "endpoint",
  "env_logger",
  "futures",
@@ -2019,22 +2155,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "multiaddr"
-version = "0.18.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "arrayref",
- "byteorder",
- "data-encoding",
- "multibase",
- "percent-encoding",
- "serde",
- "static_assertions",
- "unsigned-varint",
- "url",
-]
-
-[[package]]
 name = "multibase"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2068,26 +2188,6 @@ dependencies = [
  "quote",
  "serde",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "network"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "async-std",
- "async-trait",
- "bincode",
- "bluesea-identity",
- "bluesea-router",
- "bytes",
- "convert-enum",
- "futures",
- "log",
- "parking_lot",
- "serde",
- "thiserror",
- "utils",
 ]
 
 [[package]]
@@ -2521,24 +2621,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pub-sub"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "async-std",
- "async-trait",
- "bluesea-identity",
- "bluesea-router",
- "bytes",
- "key-value",
- "log",
- "network",
- "parking_lot",
- "serde",
- "utils",
-]
-
-[[package]]
 name = "quick-xml"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2777,26 +2859,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4ed274a5b3d36c4434cff6a4de1b42f43e64ae326b1cfa72d13d9037a314355"
 
 [[package]]
-name = "runner"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "async-std",
- "bluesea-identity",
- "bluesea-router",
- "key-value",
- "layers-spread-router",
- "layers-spread-router-sync",
- "manual-discovery",
- "network",
- "pub-sub",
- "tcp",
- "thiserror",
- "udp",
- "utils",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3019,8 +3081,8 @@ dependencies = [
  "async-std",
  "clap",
  "cluster",
- "cluster-bluesea",
  "cluster-local",
+ "cluster-sdn",
  "endpoint",
  "env_logger",
  "futures",
@@ -3151,24 +3213,6 @@ dependencies = [
  "quote",
  "syn 1.0.109",
  "unicode-xid",
-]
-
-[[package]]
-name = "tcp"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "async-bincode",
- "async-std",
- "async-trait",
- "bincode",
- "bluesea-identity",
- "futures-util",
- "log",
- "network",
- "parking_lot",
- "serde",
- "utils",
 ]
 
 [[package]]
@@ -3465,7 +3509,7 @@ dependencies = [
  "serde_json",
  "str0m",
  "transport",
- "udp_sas",
+ "udp_sas_async",
 ]
 
 [[package]]
@@ -3491,30 +3535,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 
 [[package]]
-name = "udp"
+name = "udp_sas_async"
 version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c44bd6558e4aeb7621938600636b2828fd45d2468d6819e31989205dffa82fed"
 dependencies = [
- "async-notify",
- "async-std",
- "async-trait",
- "bincode",
- "bluesea-identity",
- "futures-util",
- "log",
- "network",
- "parking_lot",
- "serde",
- "socket2 0.5.5",
- "utils",
-]
-
-[[package]]
-name = "udp_sas"
-version = "0.1.5"
-source = "git+https://github.com/bluesea-network/udp_sas.git?rev=e6a3f657d03fc3c7198522e6904dbbacd6db37fd#e6a3f657d03fc3c7198522e6904dbbacd6db37fd"
-dependencies = [
- "async-io 1.13.0",
+ "async-io 2.2.0",
  "async-std",
  "cc",
  "libc",
@@ -3595,18 +3621,6 @@ name = "utf8parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
-
-[[package]]
-name = "utils"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/decentralized-sdn.git?rev=b95a66c148a09324b30de335b76f952630fa9106#b95a66c148a09324b30de335b76f952630fa9106"
-dependencies = [
- "async-notify",
- "async-std",
- "async-trait",
- "log",
- "rand 0.8.5",
-]
 
 [[package]]
 name = "uuid"
@@ -3898,7 +3912,3 @@ dependencies = [
  "log",
  "serde",
 ]
-
-[[patch.unused]]
-name = "str0m"
-version = "0.4.0"

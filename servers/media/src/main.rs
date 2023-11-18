@@ -6,8 +6,8 @@ mod rpc;
 mod server;
 
 use cluster::{Cluster, ClusterEndpoint};
-use cluster_bluesea::{NodeAddr, NodeId, ServerBluesea, ServerBlueseaConfig};
 use cluster_local::ServerLocal;
+use cluster_sdn::{NodeAddr, NodeId, ServerAtm0s, ServerAtm0sConfig};
 use server::MediaServer;
 use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
 use transport_rtmp::RtmpTransport;
@@ -112,7 +112,7 @@ async fn main() {
 
     match args.node_id {
         Some(node_id) => {
-            let cluster = ServerBluesea::new(node_id, ServerBlueseaConfig { neighbours: args.neighbours }).await;
+            let cluster = ServerAtm0s::new(node_id, ServerAtm0sConfig { neighbours: args.neighbours }).await;
             start_server(cluster, args.http_port, args.rtmp_port).await;
         }
         None => {

@@ -96,7 +96,7 @@ impl RtpEngine {
                 addrtype: Addrtype::Ip4,
                 unicast_address: addr.ip(),
             },
-            session_name: lines::SessionName::new("bluesea".to_string()),
+            session_name: lines::SessionName::new("atm0s".to_string()),
             session_info: None,
             uri: None,
             emails: vec![],

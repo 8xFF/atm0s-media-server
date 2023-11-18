@@ -1,6 +1,6 @@
 use clap::Parser;
-use cluster_bluesea::{NodeAddr, NodeId, ServerBluesea, ServerBlueseaConfig};
 use cluster_local::ServerLocal;
+use cluster_sdn::{NodeAddr, NodeId, ServerAtm0s, ServerAtm0sConfig};
 use std::net::SocketAddr;
 
 mod server;
@@ -30,7 +30,7 @@ async fn main() {
     env_logger::builder().format_module_path(false).format_timestamp_millis().init();
     match args.node_id {
         Some(node_id) => {
-            let cluster = ServerBluesea::new(node_id, ServerBlueseaConfig { neighbours: args.neighbours }).await;
+            let cluster = ServerAtm0s::new(node_id, ServerAtm0sConfig { neighbours: args.neighbours }).await;
             server::start_server(cluster, args.sip_addr).await;
         }
         None => {

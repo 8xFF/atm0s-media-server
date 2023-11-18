@@ -1,5 +1,5 @@
 use std::net::SocketAddr;
-use udp_sas::async_std::UdpSocketSas;
+use udp_sas_async::async_std::UdpSocketSas;
 
 pub struct WebrtcUdpSocket {
     local_addr: SocketAddr,
