@@ -1,13 +1,2 @@
 [net]
 git-fetch-with-cli = true
-
-# overwrite str0m library to local
-# [patch."https://github.com/8xFF/decentralized-sdn.git"]
-# runner = { path = "/Users/giangminh/Workspace/8xff/dev/decentralized-sdn/packages/runner" }
-
-# overwrite str0m library to local
-# [patch."https://github.com/algesten/str0m.git"]
-# str0m = { path = "/Users/giangminh/Workspace/atm0s/research/str0m" }
-
-# [patch."https://github.com/atm0s-network/udp_sas.git"]
-# udp_sas = { path = "/Users/giangminh/Workspace/atm0s/research/udp_sas" }
