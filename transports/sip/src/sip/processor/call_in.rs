@@ -161,7 +161,7 @@ impl CallInProcessor {
                 scheme: Some(Scheme::Sip),
                 auth: None,
                 host_with_port: HostWithPort {
-                    host: "proxy.bluesea.live".into(),
+                    host: "proxy.atm0s.live".into(),
                     port: None,
                 },
                 params: vec![],

@@ -1,9 +1,2 @@
 [net]
 git-fetch-with-cli = true
-
-# overwrite str0m library to local
-# [patch."https://github.com/algesten/str0m.git"]
-# str0m = { path = "/Users/giangminh/Workspace/bluesea/research/str0m" }
-
-# [patch."https://github.com/bluesea-network/udp_sas.git"]
-# udp_sas = { path = "/Users/giangminh/Workspace/bluesea/research/udp_sas" }

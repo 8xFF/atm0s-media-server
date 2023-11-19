@@ -1,7 +1,8 @@
 [package]
-name = "cluster-bluesea"
+name = "cluster-sdn"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 [dependencies]
 async-std = { workspace = true }
@@ -10,7 +11,7 @@ log = { workspace = true }
 cluster = { workspace = true }
 transport = { workspace = true }
 media-utils = { workspace = true }
-runner = { git = "https://github.com/8xFF/decentralized-sdn.git", rev = "b95a66c148a09324b30de335b76f952630fa9106" }
+atm0s-sdn = { version = "0.1.0", features = ["all"]}
 serde = { workspace = true }
 bincode = { version = "1" }
 futures = { workspace = true }

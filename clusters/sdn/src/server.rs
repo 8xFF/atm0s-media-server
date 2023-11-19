@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use cluster::Cluster;
-use runner::{
+use atm0s_sdn::{
     convert_enum, KeyValueBehavior, KeyValueBehaviorEvent, KeyValueHandlerEvent, KeyValueSdk, KeyValueSdkEvent, LayersSpreadRouterSyncBehavior, LayersSpreadRouterSyncBehaviorEvent,
     LayersSpreadRouterSyncHandlerEvent, ManualBehavior, ManualBehaviorConf, ManualBehaviorEvent, ManualHandlerEvent, NetworkPlane, NetworkPlaneConfig, NodeAddr, NodeAddrBuilder, NodeId, Protocol,
     PubsubSdk, PubsubServiceBehaviour, PubsubServiceBehaviourEvent, PubsubServiceHandlerEvent, SharedRouter, SystemTimer, UdpTransport,
 };
+use cluster::Cluster;
 
 use crate::endpoint;
 
@@ -30,24 +30,24 @@ pub(crate) enum NodeSdkEvent {
     KeyValue(KeyValueSdkEvent),
 }
 
-pub struct ServerBlueseaConfig {
+pub struct ServerAtm0sConfig {
     pub neighbours: Vec<NodeAddr>,
 }
 
-pub struct ServerBluesea {
+pub struct ServerAtm0s {
     join_handler: Option<async_std::task::JoinHandle<()>>,
     pubsub_sdk: PubsubSdk,
     kv_sdk: KeyValueSdk,
 }
 
-impl ServerBluesea {
-    pub async fn new(node_id: NodeId, config: ServerBlueseaConfig) -> Self {
+impl ServerAtm0s {
+    pub async fn new(node_id: NodeId, config: ServerAtm0sConfig) -> Self {
         let node_addr_builder = Arc::new(NodeAddrBuilder::default());
         node_addr_builder.add_protocol(Protocol::P2p(node_id));
         let transport = Box::new(UdpTransport::new(node_id, 50000 + node_id as u16, node_addr_builder.clone()).await);
         let timer = Arc::new(SystemTimer());
 
-        log::info!("[ServerBluesea] node addr: {}", node_addr_builder.addr());
+        log::info!("[ServerAtm0s] node addr: {}", node_addr_builder.addr());
 
         let router = SharedRouter::new(node_id);
         let manual = ManualBehavior::new(ManualBehaviorConf {
@@ -84,13 +84,13 @@ impl ServerBluesea {
     }
 }
 
-impl Cluster<endpoint::BlueseaClusterEndpoint> for ServerBluesea {
-    fn build(&mut self, room_id: &str, peer_id: &str) -> endpoint::BlueseaClusterEndpoint {
-        endpoint::BlueseaClusterEndpoint::new(room_id, peer_id, self.pubsub_sdk.clone(), self.kv_sdk.clone())
+impl Cluster<endpoint::Atm0sClusterEndpoint> for ServerAtm0s {
+    fn build(&mut self, room_id: &str, peer_id: &str) -> endpoint::Atm0sClusterEndpoint {
+        endpoint::Atm0sClusterEndpoint::new(room_id, peer_id, self.pubsub_sdk.clone(), self.kv_sdk.clone())
     }
 }
 
-impl Drop for ServerBluesea {
+impl Drop for ServerAtm0s {
     fn drop(&mut self) {
         if let Some(join_handler) = self.join_handler.take() {
             async_std::task::spawn(async move {
