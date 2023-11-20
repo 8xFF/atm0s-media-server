@@ -1,8 +1,10 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use transport_webrtc::SdpBox;
+use transport_webrtc::{SdpBox, SdpBoxRewriteScope};
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let mut sdp_rewrite = SdpBox::default();
+    let mut sdp_rewrite = SdpBox {
+        scope: SdpBoxRewriteScope::StreamAndTrack,
+    };
     let sdp_answer = include_str!("./sample.sdp");
 
     let mut group = c.benchmark_group("sdp_rewrite");

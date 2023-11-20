@@ -9,7 +9,7 @@ use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
 use media_utils::{EndpointSubscribeScope, ServerError};
 use parking_lot::RwLock;
-use transport_webrtc::{TransportLifeCycle, WebrtcConnectRequestSender, WebrtcTransport, WebrtcTransportEvent};
+use transport_webrtc::{SdpBoxRewriteScope, TransportLifeCycle, WebrtcConnectRequestSender, WebrtcTransport, WebrtcTransportEvent};
 
 use super::{InternalControl, PeerIdentity};
 
@@ -34,7 +34,7 @@ impl<E: ClusterEndpoint, L: TransportLifeCycle> WebrtcSession<E, L> {
         cluster: &mut C,
         sdp: &str,
         senders: Vec<WebrtcConnectRequestSender>,
-        sdp_rewrite: bool,
+        sdp_rewrite: Option<SdpBoxRewriteScope>,
     ) -> Result<(Self, Sender<InternalControl>, String), WebrtcSessionError> {
         let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, sub_scope);
         endpoint_pre.check().map_err(|_e| WebrtcSessionError::PreconditionError)?;
@@ -105,7 +105,7 @@ pub(crate) async fn run_webrtc_endpoint<C, CE, L>(
     peer: &str,
     offer_sdp: &str,
     senders: Vec<WebrtcConnectRequestSender>,
-    sdp_rewrite: bool,
+    sdp_rewrite: Option<SdpBoxRewriteScope>,
 ) -> Result<(String, String), ServerError>
 where
     C: Cluster<CE> + 'static,

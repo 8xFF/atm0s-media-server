@@ -9,7 +9,8 @@ use media_utils::{EndpointSubscribeScope, ErrorDebugger, ServerError, Timer};
 use parking_lot::RwLock;
 use transport::RpcResponse;
 use transport_webrtc::{
-    SdkTransportLifeCycle, WebrtcConnectRequestSender, WebrtcConnectResponse, WebrtcRemoteIceRequest, WhepConnectResponse, WhepTransportLifeCycle, WhipConnectResponse, WhipTransportLifeCycle,
+    SdkTransportLifeCycle, SdpBoxRewriteScope, WebrtcConnectRequestSender, WebrtcConnectResponse, WebrtcRemoteIceRequest, WhepConnectResponse, WhepTransportLifeCycle, WhipConnectResponse,
+    WhipTransportLifeCycle,
 };
 
 mod rtmp_session;
@@ -95,7 +96,7 @@ where
                     peer,
                     &sdp,
                     senders,
-                    false,
+                    None,
                 )
                 .await
                 {
@@ -149,7 +150,7 @@ where
                     &peer,
                     &sdp,
                     vec![],
-                    false,
+                    Some(SdpBoxRewriteScope::OnlyTrack),
                 )
                 .await
                 {
@@ -191,7 +192,17 @@ where
                 let sub_scope = req.sub_scope.unwrap_or(EndpointSubscribeScope::RoomAuto);
                 let life_cycle = SdkTransportLifeCycle::new(self.timer.now_ms());
                 match run_webrtc_endpoint(
-                    &mut self.counter, conns, peers, &mut self.cluster, life_cycle, sub_scope, &req.room, &req.peer, &req.sdp, req.senders, true,
+                    &mut self.counter,
+                    conns,
+                    peers,
+                    &mut self.cluster,
+                    life_cycle,
+                    sub_scope,
+                    &req.room,
+                    &req.peer,
+                    &req.sdp,
+                    req.senders,
+                    Some(SdpBoxRewriteScope::StreamAndTrack),
                 )
                 .await
                 {

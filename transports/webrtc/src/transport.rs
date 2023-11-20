@@ -19,7 +19,7 @@ use self::{
     life_cycle::TransportLifeCycle,
     net::ComposeSocket,
     rtp_packet_convert::MediaPacketConvert,
-    sdp_box::SdpBox,
+    sdp_box::{SdpBox, SdpBoxRewriteScope},
     str0m_event_convert::Str0mEventConvert,
 };
 
@@ -61,8 +61,9 @@ where
     ///   - Whip
     ///   - Whep
     ///
-    /// Next param is sdp_rewrite, which is only require in SDK type
-    pub async fn new(life_cycle: L, sdp_rewrite: bool) -> Result<Self, std::io::Error> {
+    /// Next param is sdp_rewrite_scope, which is use to determine if we need to rewrite sdp or not.
+    /// If rewrite has 2 types: SdpBoxRewriteScope::TrackOnly and SdpBoxRewriteScope::StreamAndTrack
+    pub async fn new(life_cycle: L, sdp_rewrite: Option<SdpBoxRewriteScope>) -> Result<Self, std::io::Error> {
         let mut rtc = Rtc::builder()
             .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
             .set_ice_lite(false)
@@ -83,11 +84,7 @@ where
 
         Ok(Self {
             socket,
-            sdp_box: if sdp_rewrite {
-                Some(Default::default())
-            } else {
-                None
-            },
+            sdp_box: sdp_rewrite.map(|scope| SdpBox { scope }),
             rtc,
             internal: WebrtcTransportInternal::new(life_cycle),
             buf: vec![0; 2000],
