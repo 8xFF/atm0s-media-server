@@ -5,7 +5,8 @@ use crate::{rpc::RpcEvent, server::webrtc_session::run_webrtc_endpoint};
 use self::rtmp_session::RtmpSession;
 use async_std::{channel::Sender, prelude::FutureExt};
 use cluster::{Cluster, ClusterEndpoint};
-use media_utils::{EndpointSubscribeScope, ErrorDebugger, ServerError, Timer};
+use endpoint::BitrateLimiterType;
+use media_utils::{EndpointSubscribeScope, ErrorDebugger, RemoteBitrateControlMode, ServerError, Timer};
 use parking_lot::RwLock;
 use transport::RpcResponse;
 use transport_webrtc::{
@@ -92,6 +93,7 @@ where
                     &mut self.cluster,
                     life_cycle,
                     EndpointSubscribeScope::RoomManual,
+                    BitrateLimiterType::MaxBitrateOnly,
                     &room,
                     peer,
                     &sdp,
@@ -146,6 +148,7 @@ where
                     &mut self.cluster,
                     life_cycle,
                     EndpointSubscribeScope::RoomAuto,
+                    BitrateLimiterType::MaxBitrateOnly,
                     &room,
                     &peer,
                     &sdp,
@@ -198,6 +201,10 @@ where
                     &mut self.cluster,
                     life_cycle,
                     sub_scope,
+                    match req.remote_bitrate_control_mode {
+                        Some(RemoteBitrateControlMode::MaxBitrateOnly) => BitrateLimiterType::MaxBitrateOnly,
+                        _ => BitrateLimiterType::DynamicWithConsumers,
+                    },
                     &req.room,
                     &req.peer,
                     &req.sdp,

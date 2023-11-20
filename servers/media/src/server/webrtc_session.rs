@@ -5,7 +5,7 @@ use async_std::{
     prelude::FutureExt as _,
 };
 use cluster::{Cluster, ClusterEndpoint};
-use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
+use endpoint::{BitrateLimiterType, MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
 use media_utils::{EndpointSubscribeScope, ServerError};
 use parking_lot::RwLock;
@@ -30,13 +30,14 @@ impl<E: ClusterEndpoint, L: TransportLifeCycle> WebrtcSession<E, L> {
         room: &str,
         peer: &str,
         sub_scope: EndpointSubscribeScope,
+        bitrate_type: BitrateLimiterType,
         life_cycle: L,
         cluster: &mut C,
         sdp: &str,
         senders: Vec<WebrtcConnectRequestSender>,
         sdp_rewrite: Option<SdpBoxRewriteScope>,
     ) -> Result<(Self, Sender<InternalControl>, String), WebrtcSessionError> {
-        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, sub_scope);
+        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, sub_scope, bitrate_type);
         endpoint_pre.check().map_err(|_e| WebrtcSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let mut transport = WebrtcTransport::new(life_cycle, sdp_rewrite).await.map_err(|_| WebrtcSessionError::NetworkError)?;
@@ -101,6 +102,7 @@ pub(crate) async fn run_webrtc_endpoint<C, CE, L>(
     cluster: &mut C,
     life_cycle: L,
     sub_scope: EndpointSubscribeScope,
+    bitrate_type: BitrateLimiterType,
     room: &str,
     peer: &str,
     offer_sdp: &str,
@@ -112,7 +114,7 @@ where
     CE: ClusterEndpoint + 'static,
     L: TransportLifeCycle + 'static,
 {
-    let (mut session, tx, answer_sdp) = match WebrtcSession::new(room, peer, sub_scope, life_cycle, cluster, offer_sdp, senders, sdp_rewrite).await {
+    let (mut session, tx, answer_sdp) = match WebrtcSession::new(room, peer, sub_scope, bitrate_type, life_cycle, cluster, offer_sdp, senders, sdp_rewrite).await {
         Ok(res) => res,
         Err(e) => {
             log::error!("Error on create webrtc session: {:?}", e);

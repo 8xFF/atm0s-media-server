@@ -270,7 +270,7 @@ impl BitrateAllocator {
 
         self.out_actions.push_back(BitrateAllocationAction::ConfigEgressBitrate {
             current: current_bitrate,
-            desired: desired_bitrate,
+            desired: desired_bitrate * 6 / 5,
         });
     }
 
@@ -366,14 +366,17 @@ mod tests {
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(1, LocalTrackTarget::WaitStart))),
                 Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
                     current: 0,
-                    desired: SINGLE_STREAM_BASED_BITRATE,
+                    desired: SINGLE_STREAM_BASED_BITRATE * 6 / 5,
                 })),
                 Data::Output(None),
                 Data::UpdateSourceBitrate(1, ClusterTrackStats::Single { bitrate: 100_000 }),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, DEFAULT_BITRATE_OUT_BPS))),
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(1, LocalTrackTarget::Single { key_only: false }))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 100_000, desired: 120_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 100_000,
+                    desired: 120_000 * 6 / 5,
+                })),
                 Data::Output(None),
                 Data::RemoveLocalTrack(1),
                 Data::Tick,
@@ -403,7 +406,7 @@ mod tests {
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(2, LocalTrackTarget::WaitStart))),
                 Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
                     current: 0,
-                    desired: SINGLE_STREAM_BASED_BITRATE * 2,
+                    desired: SINGLE_STREAM_BASED_BITRATE * 2 * 6 / 5,
                 })),
                 Data::Output(None),
                 Data::UpdateLocalTrack(1, create_receiver_limit(300, 2, 2)),
@@ -419,7 +422,7 @@ mod tests {
                 ))),
                 Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
                     current: 0,
-                    desired: SINGLE_STREAM_BASED_BITRATE * 2,
+                    desired: SINGLE_STREAM_BASED_BITRATE * 2 * 6 / 5,
                 })),
                 Data::Output(None),
             ],
@@ -449,13 +452,19 @@ mod tests {
                         key_only: false,
                     },
                 ))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 800_000, desired: 880_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 800_000,
+                    desired: 880_000 * 6 / 5,
+                })),
                 Data::Output(None),
                 // update for using min_spatial
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 2, 1, 1)),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, DEFAULT_BITRATE_OUT_BPS))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 800_000, desired: 880_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 800_000,
+                    desired: 880_000 * 6 / 5,
+                })),
                 Data::Output(None),
                 Data::SetEstBitrate(100_000),
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, 100_000))),
@@ -467,7 +476,10 @@ mod tests {
                         key_only: false,
                     },
                 ))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 300_000, desired: 400_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 300_000,
+                    desired: 400_000 * 6 / 5,
+                })),
                 Data::Output(None),
                 // update for using limit max_spatial
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 0, 0, 0, 0)),
@@ -481,7 +493,10 @@ mod tests {
                         key_only: false,
                     },
                 ))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 100_000, desired: 110_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 100_000,
+                    desired: 110_000 * 6 / 5,
+                })),
                 Data::Output(None),
                 Data::RemoveLocalTrack(1),
                 Data::Tick,
@@ -515,7 +530,10 @@ mod tests {
                         key_only: false,
                     },
                 ))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 400_000, desired: 440_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 400_000,
+                    desired: 440_000 * 6 / 5,
+                })),
                 Data::Output(None),
                 // limit to temporal 0
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 0, 2, 0)),
@@ -529,7 +547,10 @@ mod tests {
                         key_only: false,
                     },
                 ))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 200_000, desired: 220_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 200_000,
+                    desired: 220_000 * 6 / 5,
+                })),
                 Data::Output(None),
             ],
         );
@@ -559,7 +580,10 @@ mod tests {
                         key_only: false,
                     },
                 ))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 400_000, desired: 440_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 400_000,
+                    desired: 440_000 * 6 / 5,
+                })),
                 Data::Output(None),
                 Data::UpdateLocalTrack(1, create_receiver_limit_full(100, 2, 0, 2, 0)),
                 Data::Tick,
@@ -572,7 +596,10 @@ mod tests {
                         key_only: false,
                     },
                 ))),
-                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate { current: 200_000, desired: 220_000 })),
+                Data::Output(Some(BitrateAllocationAction::ConfigEgressBitrate {
+                    current: 200_000,
+                    desired: 220_000 * 6 / 5,
+                })),
                 Data::Output(None),
             ],
         );

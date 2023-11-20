@@ -14,6 +14,7 @@ use crate::{
 use self::internal::MediaEndpointInteral;
 
 mod internal;
+pub use internal::BitrateLimiterType;
 
 pub enum MediaEndpointOutput {
     Continue,
@@ -40,7 +41,7 @@ where
     T: Transport<E, EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn, EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>,
     C: ClusterEndpoint,
 {
-    pub fn new(transport: T, mut cluster: C, room: &str, peer: &str, sub_scope: EndpointSubscribeScope) -> Self {
+    pub fn new(transport: T, mut cluster: C, room: &str, peer: &str, sub_scope: EndpointSubscribeScope, bitrate_type: BitrateLimiterType) -> Self {
         log::info!("[EndpointWrap] create");
         //TODO handle error of cluster sub room
         if matches!(sub_scope, EndpointSubscribeScope::RoomAuto) {
@@ -50,7 +51,7 @@ where
         }
         Self {
             _tmp_e: std::marker::PhantomData,
-            internal: MediaEndpointInteral::new(room, peer),
+            internal: MediaEndpointInteral::new(room, peer, bitrate_type),
             transport,
             cluster,
             tick: async_std::stream::interval(std::time::Duration::from_millis(100)),

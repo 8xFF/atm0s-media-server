@@ -192,11 +192,12 @@ where
                     bwe.set_desired_bitrate(Bitrate::bps(desired as u64));
                 }
                 Str0mAction::LimitIngressBitrate { mid, max } => {
-                    // if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
-                    //     stream.request_remb(Bitrate::bps(max as u64));
-                    // } else {
-                    //     log::warn!("[TransportWebrtc] missing track for mid {} when requesting REMB {}", mid, max);
-                    // }
+                    if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
+                        log::debug!("[TransportWebrtc] on limit ingress bitrate mid {} max {}", mid, max);
+                        stream.request_remb(Bitrate::bps(max as u64));
+                    } else {
+                        log::warn!("[TransportWebrtc] missing track for mid {} when requesting REMB {}", mid, max);
+                    }
                 }
                 Str0mAction::RemoteIce(ice, mut res) => match Candidate::from_sdp_string(ice.candidate.as_str()) {
                     Ok(can) => {

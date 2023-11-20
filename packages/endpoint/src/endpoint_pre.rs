@@ -3,6 +3,7 @@ use media_utils::{EndpointSubscribeScope, ServerError};
 use transport::Transport;
 
 use crate::{
+    endpoint_wrap::BitrateLimiterType,
     rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     MediaEndpoint,
 };
@@ -11,14 +12,16 @@ pub struct MediaEndpointPreconditional {
     room: String,
     peer: String,
     subscribe_scope: EndpointSubscribeScope,
+    bitrate_type: BitrateLimiterType,
 }
 
 impl MediaEndpointPreconditional {
-    pub fn new(room: &str, peer: &str, subscribe_scope: EndpointSubscribeScope) -> Self {
+    pub fn new(room: &str, peer: &str, subscribe_scope: EndpointSubscribeScope, bitrate_type: BitrateLimiterType) -> Self {
         Self {
             room: room.into(),
             peer: peer.into(),
             subscribe_scope,
+            bitrate_type,
         }
     }
 
@@ -31,6 +34,6 @@ impl MediaEndpointPreconditional {
         transport: T,
         cluster: C,
     ) -> MediaEndpoint<T, E, C> {
-        MediaEndpoint::new(transport, cluster, &self.room, &self.peer, self.subscribe_scope)
+        MediaEndpoint::new(transport, cluster, &self.room, &self.peer, self.subscribe_scope, self.bitrate_type)
     }
 }
