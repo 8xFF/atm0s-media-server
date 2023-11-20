@@ -21,6 +21,6 @@ parking_lot = { workspace = true }
 futures = { workspace = true }
 log = { workpsace = true }
 poem = "*"
-poem-openapi = { version = "*", features = ["swagger-ui"] }
+poem-openapi = { version = "*", features = ["swagger-ui", "static-files"] }
 env_logger = { workspace = true }
 serde = { workspace = true }

@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use poem::{FromRequest, IntoResponse, Request, RequestBody, Response, Result};
+use poem::{http::HeaderValue, FromRequest, IntoResponse, Request, RequestBody, Response, Result};
 
 use poem_openapi::{
     impl_apirequest_for_payload,
@@ -65,6 +65,41 @@ impl<T: Into<String> + Send> ApiResponse for ApplicationSdp<T> {
                 content: vec![MetaMediaType {
                     content_type: Self::CONTENT_TYPE,
                     schema: Self::schema_ref(),
+                }],
+                headers: vec![],
+            }],
+        }
+    }
+
+    fn register(_registry: &mut Registry) {}
+}
+
+pub struct HttpResponse<T: IntoResponse> {
+    pub res: T,
+    pub headers: Vec<(&'static str, String)>,
+}
+
+impl<T: IntoResponse> IntoResponse for HttpResponse<T> {
+    fn into_response(self) -> Response {
+        let mut res = self.res.into_response();
+        for (k, v) in self.headers {
+            if let Ok(v) = HeaderValue::from_str(&v) {
+                res.headers_mut().insert(k, v);
+            }
+        }
+        res
+    }
+}
+
+impl<T: Payload + IntoResponse> ApiResponse for HttpResponse<T> {
+    fn meta() -> MetaResponses {
+        MetaResponses {
+            responses: vec![MetaResponse {
+                description: "",
+                status: Some(200),
+                content: vec![MetaMediaType {
+                    content_type: T::CONTENT_TYPE,
+                    schema: T::schema_ref(),
                 }],
                 headers: vec![],
             }],

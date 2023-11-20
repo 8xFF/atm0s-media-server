@@ -40,8 +40,8 @@ async fn main() {
 
     async fn start_server<C, CR>(cluster: C, http_port: u16, rtmp_port: Option<u16>)
     where
-        C: Cluster<CR>,
-        CR: ClusterEndpoint + 'static,
+        C: Cluster<CR> + Send + Sync + 'static,
+        CR: ClusterEndpoint + Send + Sync + 'static,
     {
         let (tx, rx) = async_std::channel::bounded(10);
 

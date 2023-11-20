@@ -89,18 +89,20 @@ impl MediaEndpointInteral {
             track.on_tick(now_ms);
         }
 
-        let mut sum_consumers_limit = 0;
-        for (_, track) in self.remote_tracks.iter_mut() {
-            track.on_tick(now_ms);
-            sum_consumers_limit += track.consumers_limit().unwrap_or(0);
-        }
+        if self.remote_tracks.len() > 0 {
+            let mut sum_consumers_limit = 0;
+            for (_, track) in self.remote_tracks.iter_mut() {
+                track.on_tick(now_ms);
+                sum_consumers_limit += track.consumers_limit().unwrap_or(0);
+            }
 
-        if sum_consumers_limit == 0 {
-            sum_consumers_limit = IDLE_BITRATE_RECV_LIMIT;
-        }
+            if sum_consumers_limit == 0 {
+                sum_consumers_limit = IDLE_BITRATE_RECV_LIMIT;
+            }
 
-        self.output_actions
-            .push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(sum_consumers_limit)));
+            self.output_actions
+                .push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(sum_consumers_limit)));
+        }
 
         self.bitrate_allocator.tick();
         self.pop_internal(now_ms);

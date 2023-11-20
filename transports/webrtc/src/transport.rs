@@ -13,10 +13,10 @@ use crate::rpc::{WebrtcConnectRequestSender, WebrtcRemoteIceRequest};
 
 use self::{
     internal::{
-        life_cycle::TransportLifeCycle,
         rpc::{TransportRpcIn, TransportRpcOut, UpdateSdpResponse},
         Str0mAction, WebrtcTransportInternal,
     },
+    life_cycle::TransportLifeCycle,
     net::ComposeSocket,
     rtp_packet_convert::MediaPacketConvert,
     sdp_box::SdpBox,
@@ -24,6 +24,7 @@ use self::{
 };
 
 pub(crate) mod internal;
+pub mod life_cycle;
 mod mid_convert;
 mod mid_history;
 mod net;
@@ -43,7 +44,7 @@ where
     L: TransportLifeCycle,
 {
     socket: ComposeSocket,
-    sdp_box: SdpBox,
+    sdp_box: Option<SdpBox>,
     rtc: Rtc,
     internal: WebrtcTransportInternal<L>,
     buf: Vec<u8>,
@@ -55,7 +56,13 @@ impl<L> WebrtcTransport<L>
 where
     L: TransportLifeCycle,
 {
-    pub async fn new(life_cycle: L) -> Result<Self, std::io::Error> {
+    /// Create new transport with provided life_cycle. In current version we have 3 types:
+    ///   - SDK
+    ///   - Whip
+    ///   - Whep
+    ///
+    /// Next param is sdp_rewrite, which is only require in SDK type
+    pub async fn new(life_cycle: L, sdp_rewrite: bool) -> Result<Self, std::io::Error> {
         let mut rtc = Rtc::builder()
             .enable_bwe(Some(Bitrate::kbps(INIT_BWE_BITRATE_KBPS)))
             .set_ice_lite(false)
@@ -76,7 +83,11 @@ where
 
         Ok(Self {
             socket,
-            sdp_box: Default::default(),
+            sdp_box: if sdp_rewrite {
+                Some(Default::default())
+            } else {
+                None
+            },
             rtc,
             internal: WebrtcTransportInternal::new(life_cycle),
             buf: vec![0; 2000],
@@ -97,7 +108,11 @@ where
         self.event_convert.str0m_sync_codec_config(self.rtc.codec_config());
         self.pkt_convert.str0m_sync_codec_config(self.rtc.codec_config());
 
-        Ok(self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string()))
+        if let Some(sdp_box) = &mut self.sdp_box {
+            Ok(sdp_box.rewrite_answer(&sdp_answer.to_sdp_string()))
+        } else {
+            Ok(sdp_answer.to_string())
+        }
     }
 
     fn pop_internal_str0m_actions(&mut self, now_ms: u64) {
@@ -111,7 +126,11 @@ where
                             }
                             match self.rtc.sdp_api().accept_offer(sdp_offer) {
                                 Ok(sdp_answer) => {
-                                    let sdp = self.sdp_box.rewrite_answer(&sdp_answer.to_sdp_string());
+                                    let sdp = if let Some(sdp_box) = &mut self.sdp_box {
+                                        sdp_box.rewrite_answer(&sdp_answer.to_sdp_string())
+                                    } else {
+                                        sdp_answer.to_sdp_string()
+                                    };
                                     let res = RpcResponse::success(req.req_id, UpdateSdpResponse { sdp });
                                     self.internal.on_transport_rpc(now_ms, TransportRpcOut::UpdateSdpRes(res));
                                 }
@@ -176,12 +195,11 @@ where
                     bwe.set_desired_bitrate(Bitrate::bps(desired as u64));
                 }
                 Str0mAction::LimitIngressBitrate { mid, max } => {
-                    if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
-                        stream.request_remb(Bitrate::bps(max as u64));
-                    } else {
-                        log::warn!("[TransportWebrtc] missing track for mid {} when requesting REMB {}", mid, max);
-                        debug_assert!(false, "should not missing mid");
-                    }
+                    // if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
+                    //     stream.request_remb(Bitrate::bps(max as u64));
+                    // } else {
+                    //     log::warn!("[TransportWebrtc] missing track for mid {} when requesting REMB {}", mid, max);
+                    // }
                 }
                 Str0mAction::RemoteIce(ice, mut res) => match Candidate::from_sdp_string(ice.candidate.as_str()) {
                     Ok(can) => {

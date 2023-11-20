@@ -1,5 +1,5 @@
 use async_std::channel::{bounded, Receiver, Sender};
-use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
+use poem::{endpoint::StaticFilesEndpoint, listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 use poem_openapi::OpenApiService;
 
 use self::apis::HttpApis;
@@ -27,8 +27,9 @@ impl HttpRpcServer {
         let spec = api_service.spec();
         let route = Route::new()
             .nest("/", api_service)
-            .nest("/ui", ui)
-            .at("/spec", poem::endpoint::make_sync(move |_| spec.clone()))
+            .nest("/samples/", StaticFilesEndpoint::new("./servers/media/public").show_files_listing().index_file("index.html"))
+            .nest("/ui/", ui)
+            .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()))
             .with(Cors::new())
             .data(self.tx.clone());
         let socket = TcpListener::bind(format!("0.0.0.0:{}", self.port));

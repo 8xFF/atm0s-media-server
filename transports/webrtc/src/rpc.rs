@@ -12,6 +12,7 @@ pub struct WebrtcConnectRequestReceivers {
 
 #[derive(Serialize, Deserialize, Debug, Object, PartialEq, Eq)]
 pub struct WebrtcConnectRequestSender {
+    //TODO switch to enum
     pub kind: String,
     pub name: String,
     pub uuid: String,
@@ -54,6 +55,11 @@ pub struct WebrtcRemoteIceRequest {
 pub type WebrtcRemoteIceResponse = String;
 
 pub struct WhipConnectResponse {
+    pub location: String,
+    pub sdp: String,
+}
+
+pub struct WhepConnectResponse {
     pub location: String,
     pub sdp: String,
 }
