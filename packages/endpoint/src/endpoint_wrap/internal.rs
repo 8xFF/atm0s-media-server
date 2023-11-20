@@ -167,7 +167,7 @@ impl MediaEndpointInteral {
                 if let Some(track) = self.local_tracks.get_mut(&track_id) {
                     track.on_transport_event(event);
                 } else {
-                    log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
+                    log::warn!("[EndpointInternal] local track not found {:?}", track_id);
                 }
             }
             TransportIncomingEvent::LocalTrackRemoved(track_name, track_id) => {
@@ -609,10 +609,11 @@ mod tests {
             )))
         );
 
-        assert_eq!(
-            endpoint.pop_action(),
-            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(IDLE_BITRATE_RECV_LIMIT)))
-        );
+        // dont fire this event without remote tracks
+        // assert_eq!(
+        //     endpoint.pop_action(),
+        //     Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(IDLE_BITRATE_RECV_LIMIT)))
+        // );
 
         assert_eq!(
             endpoint.pop_action(),

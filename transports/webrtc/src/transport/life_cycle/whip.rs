@@ -11,7 +11,7 @@ const CONNECT_TIMEOUT: u64 = 10000;
 const RECONNECT_TIMEOUT: u64 = 30000;
 
 #[derive(Debug)]
-pub enum State {
+enum State {
     New { at_ms: u64 },
     Connected,
     Reconnecting { at_ms: u64 },

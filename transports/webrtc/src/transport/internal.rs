@@ -271,7 +271,6 @@ where
                             MediaKind::Video => {
                                 self.remote_video_mids.push(mid);
                             }
-                            _ => {}
                         }
                         //remote stream
                         let track_id = mid_to_track(&mid);
@@ -339,7 +338,7 @@ where
                 Ok(())
             }
             Str0mInput::EgressBitrateEstimate(bitrate) => {
-                log::info!("[TransportWebrtcInternal] on egress bitrate estimate {} bps", bitrate);
+                log::debug!("[TransportWebrtcInternal] on egress bitrate estimate {} bps", bitrate);
                 self.endpoint_actions.push_back(Ok(TransportIncomingEvent::EgressBitrateEstimate(bitrate)));
                 Ok(())
             }

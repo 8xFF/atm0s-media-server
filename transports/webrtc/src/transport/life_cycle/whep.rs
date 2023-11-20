@@ -4,25 +4,21 @@ use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverDisconnect, ReceiverSwitch, RemoteStream, RemoteTrackRpcOut},
     EndpointRpcOut, RpcRequest,
 };
-use str0m::IceConnectionState;
+use str0m::{
+    media::{Direction, Mid},
+    IceConnectionState,
+};
 use transport::{ConnectErrorReason, ConnectionErrorReason, LocalTrackIncomingEvent, MediaKind, TransportError, TransportIncomingEvent as TransIn, TransportOutgoingEvent, TransportStateEvent};
 
-use crate::transport::internal::Str0mInput;
+use crate::transport::{
+    internal::{utils::to_transport_kind, Str0mInput},
+    mid_convert::mid_to_track,
+};
 
 use super::{TransportLifeCycle, TransportLifeCycleAction as Out};
 
-const AUDIO_TRACK: u16 = 0;
-const VIDEO_TRACK: u16 = 1;
-
 const CONNECT_TIMEOUT: u64 = 10000;
 const RECONNECT_TIMEOUT: u64 = 30000;
-
-fn kind_track_id(kind: MediaKind) -> u16 {
-    match kind {
-        MediaKind::Audio => AUDIO_TRACK,
-        MediaKind::Video => VIDEO_TRACK,
-    }
-}
 
 fn kind_track_name(kind: MediaKind) -> String {
     match kind {
@@ -32,17 +28,23 @@ fn kind_track_name(kind: MediaKind) -> String {
 }
 
 #[derive(Debug)]
-pub enum State {
+enum State {
     New { at_ms: u64 },
     Connected,
     Reconnecting { at_ms: u64 },
     Failed,
 }
 
+struct LocalTrack {
+    mid: Mid,
+    viewing: Option<(String, String)>,
+}
+
 pub struct WhepTransportLifeCycle {
     state: State,
     outputs: VecDeque<Out>,
-    viewing: HashMap<MediaKind, (String, String)>,
+    remote_tracks: HashMap<MediaKind, Vec<(String, String)>>,
+    local_tracks: HashMap<MediaKind, LocalTrack>,
 }
 
 impl WhepTransportLifeCycle {
@@ -51,31 +53,41 @@ impl WhepTransportLifeCycle {
         Self {
             state: State::New { at_ms: now_ms },
             outputs: VecDeque::new(),
-            viewing: HashMap::new(),
+            remote_tracks: HashMap::from([(MediaKind::Audio, vec![]), (MediaKind::Video, vec![])]),
+            local_tracks: HashMap::new(),
         }
     }
 
-    fn on_connected(&mut self) {
-        for (kind, (peer, track)) in &self.viewing {
-            let req = LocalTrackRpcIn::Switch(RpcRequest {
-                req_id: 0,
-                data: ReceiverSwitch {
-                    id: kind_track_name(*kind),
-                    priority: 1000,
-                    remote: RemoteStream {
-                        peer: peer.clone(),
-                        stream: track.clone(),
+    fn connect_waiting_tracks(&mut self) {
+        for (kind, slot) in &mut self.local_tracks {
+            if slot.viewing.is_some() {
+                continue;
+            }
+            if let Some((peer, track)) = self.remote_tracks.get(kind).expect("Should has").first() {
+                log::info!("[WhepTransportLifeCycle] auto switch view this remote stream ({}/{})", peer, track);
+                let req = LocalTrackRpcIn::Switch(RpcRequest {
+                    req_id: 0,
+                    data: ReceiverSwitch {
+                        id: kind_track_name(*kind),
+                        priority: 1000,
+                        remote: RemoteStream {
+                            peer: peer.clone(),
+                            stream: track.clone(),
+                        },
                     },
-                },
-            });
-            self.outputs
-                .push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(kind_track_id(*kind), LocalTrackIncomingEvent::Rpc(req))))
+                });
+                slot.viewing = Some((peer.clone(), track.clone()));
+                self.outputs
+                    .push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(mid_to_track(&slot.mid), LocalTrackIncomingEvent::Rpc(req))))
+            }
         }
     }
 }
 
 impl TransportLifeCycle for WhepTransportLifeCycle {
     fn on_tick(&mut self, now_ms: u64) {
+        self.connect_waiting_tracks();
+
         match &self.state {
             State::New { at_ms } => {
                 if at_ms + CONNECT_TIMEOUT <= now_ms {
@@ -101,7 +113,7 @@ impl TransportLifeCycle for WhepTransportLifeCycle {
                 self.state = State::Connected;
                 log::info!("[WhepTransportLifeCycle] on webrtc connected => switched to {:?}", self.state);
                 self.outputs.push_back(Out::ToEndpoint(TransIn::State(TransportStateEvent::Connected)));
-                self.on_connected();
+                self.connect_waiting_tracks();
             }
             Str0mInput::IceConnectionStateChange(ice) => match (&self.state, ice) {
                 (State::Connected, IceConnectionState::Disconnected) => {
@@ -121,6 +133,16 @@ impl TransportLifeCycle for WhepTransportLifeCycle {
                 }
                 _ => {}
             },
+            Str0mInput::MediaAdded(direction, mid, kind, _) => {
+                let kind = to_transport_kind(*kind);
+                log::info!("[WhepTransportLifeCycle] added media {kind:?} {direction}");
+                if direction.eq(&Direction::SendOnly) {
+                    if !self.local_tracks.contains_key(&kind) {
+                        self.local_tracks.insert(kind, LocalTrack { mid: *mid, viewing: None });
+                        //dont call self.connect_waiting_tracks(); here because is if before internal logic => will view request before LocalTrack added
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -129,40 +151,30 @@ impl TransportLifeCycle for WhepTransportLifeCycle {
         match event {
             TransportOutgoingEvent::Rpc(rpc) => match rpc {
                 EndpointRpcOut::TrackAdded(info) => {
-                    if !self.viewing.contains_key(&info.kind) {
-                        log::info!(
-                            "[WhepTransportLifeCycle] on endpoint rpc TrackAdded({}/{}) => auto switch view this remote stream",
-                            info.peer,
-                            info.track
-                        );
-                        self.viewing.insert(info.kind, (info.peer.clone(), info.track.clone()));
-                        let req = LocalTrackRpcIn::Switch(RpcRequest {
-                            req_id: 0,
-                            data: ReceiverSwitch {
-                                id: kind_track_name(info.kind),
-                                priority: 1000,
-                                remote: RemoteStream {
-                                    peer: info.peer.clone(),
-                                    stream: info.track.clone(),
-                                },
-                            },
-                        });
-                        if matches!(self.state, State::Connected) {
-                            self.outputs
-                                .push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(kind_track_id(info.kind), LocalTrackIncomingEvent::Rpc(req))))
-                        }
-                    }
+                    let tracks = self.remote_tracks.get_mut(&info.kind).expect("Must has");
+                    tracks.push((info.peer.clone(), info.track.clone()));
+                    log::info!("[WhepTransportLifeCycle] on endpoint rpc TrackAdded({}/{}) => remotes {:?}", info.peer, info.track, tracks);
+                    self.connect_waiting_tracks();
                 }
                 EndpointRpcOut::TrackRemoved(info) => {
-                    if let Some((peer, track)) = self.viewing.remove(&info.kind) {
-                        log::info!("[WhepTransportLifeCycle] on endpoint rpc TrackRemoved({}/{}) => auto disconnect view this remote stream", peer, track);
-                        let req = LocalTrackRpcIn::Disconnect(RpcRequest {
-                            req_id: 0,
-                            data: ReceiverDisconnect { id: kind_track_name(info.kind) },
-                        });
-                        if matches!(self.state, State::Connected) {
-                            self.outputs
-                                .push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(kind_track_id(info.kind), LocalTrackIncomingEvent::Rpc(req))))
+                    let tracks = self.remote_tracks.get_mut(&info.kind).expect("Must has");
+                    tracks.retain(|(peer, track)| !peer.eq(&info.peer) || !track.eq(&info.track));
+                    log::info!("[WhepTransportLifeCycle] on endpoint rpc TrackRemoved({}/{}) => remotes {:?}", info.peer, info.track, tracks);
+
+                    if let Some(slot) = self.local_tracks.get_mut(&info.kind) {
+                        if let Some((peer, track)) = &slot.viewing {
+                            if peer.eq(&info.peer) && track.eq(&info.track) {
+                                log::info!("[WhepTransportLifeCycle] on endpoint rpc TrackRemoved({}/{}) => auto disconnect view this remote stream", peer, track);
+                                slot.viewing = None;
+                                let req = LocalTrackRpcIn::Disconnect(RpcRequest {
+                                    req_id: 0,
+                                    data: ReceiverDisconnect { id: kind_track_name(info.kind) },
+                                });
+                                self.outputs
+                                    .push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(mid_to_track(&slot.mid), LocalTrackIncomingEvent::Rpc(req))));
+
+                                self.connect_waiting_tracks();
+                            }
                         }
                     }
                 }
@@ -179,6 +191,8 @@ impl TransportLifeCycle for WhepTransportLifeCycle {
 
 #[cfg(test)]
 mod tests {
+    use crate::transport::mid_convert::track_to_mid;
+
     use super::*;
     use endpoint::rpc::TrackInfo;
     use str0m::IceConnectionState;
@@ -248,27 +262,41 @@ mod tests {
         assert_eq!(life_cycle.pop_action(), None);
 
         // on endpoint RemoteAdded rpc => should request connect
+        life_cycle.on_transport_event(100, &Str0mInput::MediaAdded(Direction::SendOnly, track_to_mid(0), str0m::media::MediaKind::Audio, None));
+        assert_eq!(life_cycle.pop_action(), None);
+
         life_cycle.on_endpoint_event(
             1000,
             &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
                 kind: MediaKind::Audio,
-                peer: "peer_id".to_string(),
+                peer: "peer1".to_string(),
                 peer_hash: 0,
-                track: "track_id".to_string(),
+                track: "track_audio".to_string(),
+                state: None,
+            })),
+        );
+
+        life_cycle.on_endpoint_event(
+            1000,
+            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
+                kind: MediaKind::Audio,
+                peer: "peer2".to_string(),
+                peer_hash: 0,
+                track: "track_audio".to_string(),
                 state: None,
             })),
         );
 
         let event = TransIn::LocalTrackEvent(
-            AUDIO_TRACK,
+            0,
             LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Switch(RpcRequest {
                 req_id: 0,
                 data: ReceiverSwitch {
                     id: kind_track_name(MediaKind::Audio),
                     priority: 1000,
                     remote: RemoteStream {
-                        peer: "peer_id".to_string(),
-                        stream: "track_id".to_string(),
+                        peer: "peer1".to_string(),
+                        stream: "track_audio".to_string(),
                     },
                 },
             })),
@@ -281,15 +309,15 @@ mod tests {
             1000,
             &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
                 kind: MediaKind::Audio,
-                peer: "peer_id".to_string(),
+                peer: "peer1".to_string(),
                 peer_hash: 0,
-                track: "track_id".to_string(),
+                track: "track_audio".to_string(),
                 state: None,
             })),
         );
 
         let event = TransIn::LocalTrackEvent(
-            AUDIO_TRACK,
+            0,
             LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Disconnect(RpcRequest {
                 req_id: 0,
                 data: ReceiverDisconnect {
@@ -298,6 +326,24 @@ mod tests {
             })),
         );
         assert_eq!(life_cycle.pop_action(), Some(Out::ToEndpoint(event)));
+
+        // after disconnect must switch to remain remotes
+        let event = TransIn::LocalTrackEvent(
+            0,
+            LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Switch(RpcRequest {
+                req_id: 0,
+                data: ReceiverSwitch {
+                    id: kind_track_name(MediaKind::Audio),
+                    priority: 1000,
+                    remote: RemoteStream {
+                        peer: "peer2".to_string(),
+                        stream: "track_audio".to_string(),
+                    },
+                },
+            })),
+        );
+        assert_eq!(life_cycle.pop_action(), Some(Out::ToEndpoint(event)));
+
         assert_eq!(life_cycle.pop_action(), None);
     }
 }
