@@ -25,9 +25,9 @@ window.start = async () => {
             direction: "sendonly",
             streams:  [stream],
             sendEncodings: [
-                { rid: "0", active: true, maxBitrate: 300000, scaleResolutionDownBy: 2},
-                { rid: "1", active: true, maxBitrate: 1000000, scaleResolutionDownBy: 2},
-                { rid: "2", active: true, maxBitrate: 2000000 },
+                { rid: "0", active: true, scaleResolutionDownBy: 2},
+                { rid: "1", active: true, scaleResolutionDownBy: 2},
+                { rid: "2", active: true },
             ],
         });
     }
@@ -36,7 +36,7 @@ window.start = async () => {
     const whip = new WHIPClient();
 
     const url = "/api/whip/endpoint";
-    const token = "room-demo";
+    const token = document.getElementById("room-id").value;
 
     //Start publishing
     whip.publish(pc, url, token);

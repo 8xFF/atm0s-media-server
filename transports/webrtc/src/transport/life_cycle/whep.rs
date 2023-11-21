@@ -346,4 +346,101 @@ mod tests {
 
         assert_eq!(life_cycle.pop_action(), None);
     }
+
+    #[test]
+    fn auto_view_unview_lazy() {
+        let mut life_cycle = WhepTransportLifeCycle::new(0);
+
+        // webrtc connected should not switch
+        life_cycle.on_transport_event(100, &Str0mInput::Connected);
+        assert_eq!(life_cycle.pop_action(), Some(Out::ToEndpoint(TransIn::State(TransportStateEvent::Connected))));
+        assert_eq!(life_cycle.pop_action(), None);
+
+        // on endpoint RemoteAdded rpc but dont have local track => should not request switch
+        life_cycle.on_endpoint_event(
+            1000,
+            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
+                kind: MediaKind::Audio,
+                peer: "peer1".to_string(),
+                peer_hash: 0,
+                track: "track_audio".to_string(),
+                state: None,
+            })),
+        );
+
+        life_cycle.on_endpoint_event(
+            1000,
+            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
+                kind: MediaKind::Audio,
+                peer: "peer2".to_string(),
+                peer_hash: 0,
+                track: "track_audio".to_string(),
+                state: None,
+            })),
+        );
+
+        // after has local track still not switch, need to wait for next tick
+        life_cycle.on_transport_event(100, &Str0mInput::MediaAdded(Direction::SendOnly, track_to_mid(0), str0m::media::MediaKind::Audio, None));
+        assert_eq!(life_cycle.pop_action(), None);
+
+        life_cycle.on_tick(200);
+        let event = TransIn::LocalTrackEvent(
+            0,
+            LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Switch(RpcRequest {
+                req_id: 0,
+                data: ReceiverSwitch {
+                    id: kind_track_name(MediaKind::Audio),
+                    priority: 1000,
+                    remote: RemoteStream {
+                        peer: "peer1".to_string(),
+                        stream: "track_audio".to_string(),
+                    },
+                },
+            })),
+        );
+        assert_eq!(life_cycle.pop_action(), Some(Out::ToEndpoint(event)));
+        assert_eq!(life_cycle.pop_action(), None);
+
+        // on endpint RemoteRemoved => should request disconnected
+        life_cycle.on_endpoint_event(
+            1000,
+            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
+                kind: MediaKind::Audio,
+                peer: "peer1".to_string(),
+                peer_hash: 0,
+                track: "track_audio".to_string(),
+                state: None,
+            })),
+        );
+
+        let event = TransIn::LocalTrackEvent(
+            0,
+            LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Disconnect(RpcRequest {
+                req_id: 0,
+                data: ReceiverDisconnect {
+                    id: kind_track_name(MediaKind::Audio),
+                },
+            })),
+        );
+        assert_eq!(life_cycle.pop_action(), Some(Out::ToEndpoint(event)));
+
+        // after disconnect must switch to remain remotes
+        let event = TransIn::LocalTrackEvent(
+            0,
+            LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Switch(RpcRequest {
+                req_id: 0,
+                data: ReceiverSwitch {
+                    id: kind_track_name(MediaKind::Audio),
+                    priority: 1000,
+                    remote: RemoteStream {
+                        peer: "peer2".to_string(),
+                        stream: "track_audio".to_string(),
+                    },
+                },
+            })),
+        );
+        assert_eq!(life_cycle.pop_action(), Some(Out::ToEndpoint(event)));
+
+        assert_eq!(life_cycle.pop_action(), None);
+    }
 }

@@ -20,7 +20,7 @@ window.start = async () => {
 	const whep = new WHEPClient();
 
 	const url = "/api/whep/endpoint";
-	const token = "room-demo"
+	const token = document.getElementById("room-id").value;
 
 	//Start viewing
 	whep.view(pc, url, token);
