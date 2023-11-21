@@ -9,6 +9,7 @@ use cluster::{Cluster, ClusterEndpoint};
 use cluster_local::ServerLocal;
 use cluster_sdn::{NodeAddr, NodeId, ServerAtm0s, ServerAtm0sConfig};
 use server::MediaServer;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
 use transport_rtmp::RtmpTransport;
 
@@ -36,7 +37,7 @@ struct Args {
 #[async_std::main]
 async fn main() {
     let args: Args = Args::parse();
-    env_logger::builder().format_module_path(false).format_timestamp_millis().init();
+    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
     async fn start_server<C, CR>(cluster: C, http_port: u16, rtmp_port: Option<u16>)
     where

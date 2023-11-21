@@ -22,5 +22,5 @@ futures = { workspace = true }
 log = { workpsace = true }
 poem = "*"
 poem-openapi = { version = "*", features = ["swagger-ui", "static-files"] }
-env_logger = { workspace = true }
 serde = { workspace = true }
+tracing-subscriber = { version = "0.3.16", features = ["env-filter", "std"] }
