@@ -71,13 +71,18 @@ impl Str0mEventConvert {
                 KeyframeRequestKind::Pli => Ok(Some(Str0mInput::KeyframeRequest(req.mid, RequestKeyframeKind::Pli))),
                 KeyframeRequestKind::Fir => Ok(Some(Str0mInput::KeyframeRequest(req.mid, RequestKeyframeKind::Fir))),
             },
-            str0m::Event::StreamPaused(_) => Ok(None),
+            str0m::Event::StreamPaused(status) => {
+                let track_id = mid_to_track(&status.mid);
+                self.mid_history.get(Some(track_id), *(&status.ssrc as &u32));
+                log::info!("[Str0mEventConvert] map between track {} and ssrc {}", track_id, status.ssrc);
+                Ok(None)
+            }
             str0m::Event::RtpPacket(rtp) => {
                 let track_id = rtp.header.ext_vals.mid.map(|mid| mid_to_track(&mid));
                 let ssrc: &u32 = &rtp.header.ssrc;
                 if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
                     if let Some(pkt) = self.rtp_convert.to_pkt(rtp) {
-                        log::trace!("on media {}, {}, {}", pkt.codec, pkt.seq_no, pkt.time);
+                        log::trace!("[Str0mEventConvert] on media {}, {}, {}", pkt.codec, pkt.seq_no, pkt.time);
                         Ok(Some(Str0mInput::MediaPacket(track_id, pkt)))
                     } else {
                         Err(Str0mEventConvertError::RtpInvalid)
