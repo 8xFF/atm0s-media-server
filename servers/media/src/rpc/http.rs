@@ -1,6 +1,14 @@
 use async_std::channel::{bounded, Receiver, Sender};
-use poem::{endpoint::StaticFilesEndpoint, listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
+use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 use poem_openapi::OpenApiService;
+
+#[cfg(feature = "embed-samples")]
+use poem::endpoint::EmbeddedFilesEndpoint;
+#[cfg(feature = "embed-samples")]
+use rust_embed::RustEmbed;
+
+#[cfg(not(feature = "embed-samples"))]
+use poem::endpoint::StaticFilesEndpoint;
 
 use self::apis::HttpApis;
 
@@ -8,6 +16,11 @@ use super::RpcEvent;
 
 mod apis;
 mod payload_sdp;
+
+#[cfg(feature = "embed-samples")]
+#[derive(RustEmbed)]
+#[folder = "public"]
+pub struct Files;
 
 pub struct HttpRpcServer {
     port: u16,
@@ -25,9 +38,14 @@ impl HttpRpcServer {
         let api_service = OpenApiService::new(HttpApis, "Webrtc Server", "1.0.0").server("http://localhost:3000");
         let ui = api_service.swagger_ui();
         let spec = api_service.spec();
+        #[cfg(feature = "embed-samples")]
+        let samples = EmbeddedFilesEndpoint::<Files>::new();
+        #[cfg(not(feature = "embed-samples"))]
+        let samples = StaticFilesEndpoint::new("./servers/media/public").show_files_listing().index_file("index.html");
+
         let route = Route::new()
             .nest("/", api_service)
-            .nest("/samples/", StaticFilesEndpoint::new("./servers/media/public").show_files_listing().index_file("index.html"))
+            .nest("/samples/", samples)
             .nest("/ui/", ui)
             .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()))
             .with(Cors::new())

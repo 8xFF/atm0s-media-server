@@ -1695,6 +1695,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d77f7ec81a6d05a3abb01ab6eb7590f6083d08449fe5a1c8b1e620283546ccb7"
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "hkdf"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2044,6 +2050,7 @@ dependencies = [
  "parking_lot",
  "poem",
  "poem-openapi",
+ "rust-embed",
  "serde",
  "tracing-subscriber",
  "transport",
@@ -2472,6 +2479,7 @@ dependencies = [
  "cookie",
  "futures-util",
  "headers",
+ "hex",
  "http",
  "httpdate",
  "hyper",
@@ -2485,6 +2493,7 @@ dependencies = [
  "quick-xml",
  "regex",
  "rfc7239",
+ "rust-embed",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -2903,6 +2912,40 @@ name = "rtp-rs"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4ed274a5b3d36c4434cff6a4de1b42f43e64ae326b1cfa72d13d9037a314355"
+
+[[package]]
+name = "rust-embed"
+version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1e7d90385b59f0a6bf3d3b757f3ca4ece2048265d70db20a2016043d4509a40"
+dependencies = [
+ "rust-embed-impl",
+ "rust-embed-utils",
+ "walkdir",
+]
+
+[[package]]
+name = "rust-embed-impl"
+version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c3d8c6fd84090ae348e63a84336b112b5c3918b3bf0493a581f7bd8ee623c29"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rust-embed-utils",
+ "syn 2.0.39",
+ "walkdir",
+]
+
+[[package]]
+name = "rust-embed-utils"
+version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "873feff8cb7bf86fdf0a71bb21c95159f4e4a37dd7a4bd1855a940909b583ada"
+dependencies = [
+ "sha2 0.10.8",
+ "walkdir",
+]
 
 [[package]]
 name = "rustc-demangle"
