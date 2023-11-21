@@ -4,9 +4,10 @@ use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     EndpointRpcIn, EndpointRpcOut,
 };
-use media_utils::HashMapMultiKey;
+use media_utils::{HashMapMultiKey, RtpSeqExtend};
 use str0m::{
     media::{Direction, MediaKind, Mid, Simulcast},
+    rtp::SeqNo,
     IceConnectionState,
 };
 use transport::{
@@ -38,6 +39,12 @@ mod string_compression;
 mod track_info_queue;
 pub(crate) mod utils;
 
+#[derive(Default)]
+struct LocalTrack {
+    active: bool,
+    req_extender: RtpSeqExtend,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Str0mInput {
     Connected,
@@ -54,7 +61,7 @@ pub enum Str0mInput {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Str0mAction {
-    Media(Mid, MediaPacket),
+    Media(Mid, SeqNo, MediaPacket),
     RequestKeyFrame(Mid, RequestKeyframeKind),
     Datachannel(usize, String),
     Rpc(TransportRpcIn),
@@ -69,7 +76,7 @@ where
 {
     life_cycle: L,
     track_info_queue: TrackInfoQueue,
-    local_track_id_map: HashMapMultiKey<TrackId, String, bool>,
+    local_track_id_map: HashMapMultiKey<TrackId, String, LocalTrack>,
     remote_track_id_map: HashMapMultiKey<TrackId, String, bool>,
     remote_audio_mids: Vec<Mid>,
     remote_video_mids: Vec<Mid>,
@@ -138,8 +145,12 @@ where
         match event {
             TransportOutgoingEvent::LocalTrackEvent(track_id, event) => match event {
                 LocalTrackOutgoingEvent::MediaPacket(pkt) => {
-                    let mid = track_to_mid(track_id);
-                    self.str0m_actions.push_back(Str0mAction::Media(mid, pkt));
+                    if let Some((slot, _)) = self.local_track_id_map.get_mut_by_k1(&track_id) {
+                        if let Some(ext_seq) = slot.req_extender.generate(pkt.seq_no) {
+                            let mid = track_to_mid(track_id);
+                            self.str0m_actions.push_back(Str0mAction::Media(mid, ext_seq.into(), pkt));
+                        }
+                    }
                 }
                 LocalTrackOutgoingEvent::Rpc(rpc) => {
                     let msg = rpc_local_track_to_string(rpc);
@@ -292,7 +303,7 @@ where
                         let track_id = mid_to_track(&mid);
                         let track_name = self.local_track_id_gen.generate(kind, mid);
                         log::info!("[TransportWebrtcInternal] added local track {} => {} ", track_name, track_id);
-                        self.local_track_id_map.insert(track_id, track_name.clone(), true);
+                        self.local_track_id_map.insert(track_id, track_name.clone(), LocalTrack { active: true, ..Default::default() });
                         self.endpoint_actions
                             .push_back(Ok(TransportIncomingEvent::LocalTrackAdded(track_name, track_id, TrackMeta::from_kind(to_transport_kind(kind), None))));
                         Ok(())
@@ -311,9 +322,9 @@ where
                             log::info!("[TransportWebrtcInternal] switched remote to inactive {}", mid);
                             *active = false;
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackRemoved(name.clone(), track_id)));
-                        } else if let Some((active, name)) = self.local_track_id_map.get_mut_by_k1(&track_id) {
+                        } else if let Some((slot, name)) = self.local_track_id_map.get_mut_by_k1(&track_id) {
                             log::info!("[TransportWebrtcInternal] switched local to inactive {}", mid);
-                            *active = false;
+                            slot.active = false;
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::LocalTrackRemoved(name.clone(), track_id)));
                         } else {
                             log::warn!("[TransportWebrtcInternal] switch track to inactive {} but cannot determine remote or local", mid);

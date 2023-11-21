@@ -140,13 +140,13 @@ where
                         }
                     }
                 },
-                Str0mAction::Media(mid, mut pkt) => {
+                Str0mAction::Media(mid, seq_no, mut pkt) => {
                     if let Some(stream) = self.rtc.direct_api().stream_tx_by_mid(mid, None) {
                         self.pkt_convert.rewrite_codec(&mut pkt);
                         stream
                             .write_rtp(
                                 self.pkt_convert.to_pt(&pkt),
-                                (pkt.seq_no as u64).into(),
+                                seq_no,
                                 pkt.time,
                                 Instant::now(),
                                 pkt.marker,
