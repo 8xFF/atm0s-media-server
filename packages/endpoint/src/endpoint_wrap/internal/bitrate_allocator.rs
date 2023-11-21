@@ -247,10 +247,10 @@ impl BitrateAllocator {
         }
 
         if sum_priority > 0 && self.send_bps > used_bitrate {
-            let remain_bitrate = self.send_bps - used_bitrate;
+            let remain_bitrate = (self.send_bps - used_bitrate) as u64;
             for track in &self.tracks {
                 if let Some(bitrate) = track_bitrates.get_mut(&track.track_id) {
-                    *bitrate += remain_bitrate * (track.priority() as u32) / sum_priority;
+                    *bitrate += (remain_bitrate * (track.priority() as u64) / sum_priority as u64) as u32;
                 }
             }
         }
@@ -310,7 +310,9 @@ mod tests {
 
     enum Data {
         Tick,
+        /// bps
         SetEstBitrate(u32),
+        /// track, priority
         AddLocalTrack(TrackId, u16),
         UpdateLocalTrack(TrackId, ReceiverLayerLimit),
         RemoveLocalTrack(TrackId),
@@ -360,7 +362,7 @@ mod tests {
         test(
             DEFAULT_BITRATE_OUT_BPS,
             vec![
-                Data::AddLocalTrack(1, 100),
+                Data::AddLocalTrack(1, 10000),
                 Data::Tick,
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrackBitrate(1, DEFAULT_BITRATE_OUT_BPS))),
                 Data::Output(Some(BitrateAllocationAction::LimitLocalTrack(1, LocalTrackTarget::WaitStart))),
