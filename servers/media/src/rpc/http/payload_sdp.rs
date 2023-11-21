@@ -1,6 +1,9 @@
 use std::ops::{Deref, DerefMut};
 
-use poem::{http::HeaderValue, FromRequest, IntoResponse, Request, RequestBody, Response, Result};
+use poem::{
+    http::{HeaderValue, StatusCode},
+    FromRequest, IntoResponse, Request, RequestBody, Response, Result,
+};
 
 use poem_openapi::{
     impl_apirequest_for_payload,
@@ -75,6 +78,7 @@ impl<T: Into<String> + Send> ApiResponse for ApplicationSdp<T> {
 }
 
 pub struct HttpResponse<T: IntoResponse> {
+    pub code: StatusCode,
     pub res: T,
     pub headers: Vec<(&'static str, String)>,
 }
@@ -87,6 +91,7 @@ impl<T: IntoResponse> IntoResponse for HttpResponse<T> {
                 res.headers_mut().insert(k, v);
             }
         }
+        res.set_status(self.code);
         res
     }
 }

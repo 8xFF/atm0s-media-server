@@ -45,6 +45,7 @@ impl HttpApis {
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Whip endpoint created with location {} and sdp {}", res.location, res.sdp);
         Ok(HttpResponse {
+            code: StatusCode::CREATED,
             res: ApplicationSdp(res.sdp),
             headers: vec![("location", res.location)],
         })
@@ -103,6 +104,7 @@ impl HttpApis {
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Whep endpoint created with location {} and sdp {}", res.location, res.sdp);
         Ok(HttpResponse {
+            code: StatusCode::CREATED,
             res: ApplicationSdp(res.sdp),
             headers: vec![("location", res.location)],
         })
