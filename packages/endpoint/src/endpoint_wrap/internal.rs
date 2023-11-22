@@ -94,7 +94,7 @@ impl MediaEndpointInteral {
             track.on_tick(now_ms);
         }
 
-        if self.remote_tracks.len() > 0 {
+        if !self.remote_tracks.is_empty() {
             self.bitrate_limiter.reset();
             for (_, track) in self.remote_tracks.iter_mut() {
                 track.on_tick(now_ms);

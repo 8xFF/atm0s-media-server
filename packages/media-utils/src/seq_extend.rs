@@ -55,10 +55,10 @@ impl RtpSeqExtend {
             }
             self.last_seq = Some(value);
 
-            return Some(value as u64 + self.seq_delta);
+            Some(value as u64 + self.seq_delta)
         } else {
             self.last_seq = Some(value);
-            return Some(value as u64);
+            Some(value as u64)
         }
     }
 }
