@@ -2,8 +2,8 @@
  <a href="https://github.com/8xFF/decentralized-media-server/actions">
   <img src="https://github.com/8xFF/decentralized-media-server/actions/workflows/rust.yml/badge.svg?branch=master">
  </a>
- <a href="https://codecov.io/gh/8xff/decentralized-media-server">
-  <img src="https://codecov.io/gh/8xff/decentralized-media-server/branch/master/graph/badge.svg">
+ <a href='https://coveralls.io/github/8xFF/atm0s-media-server?branch=master'>
+  <img src='https://coveralls.io/repos/github/giangndm/8xFF-decentralized-media-server/badge.svg?branch=master' alt='Coverage Status' />
  </a>
  <a href="https://deps.rs/repo/github/8xff/decentralized-sdn">
   <img src="https://deps.rs/repo/github/8xff/decentralized-sdn/status.svg">
