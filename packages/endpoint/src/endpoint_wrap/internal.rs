@@ -13,7 +13,7 @@ use self::{
 };
 
 const DEFAULT_BITRATE_OUT_BPS: u32 = 3_000_000; //3Mbps
-const DEFAULT_BITRATE_IN_BPS: u32 = 3_000_000; //3Mbps
+const MAX_BITRATE_IN_BPS: u32 = 3_000_000; //3Mbps
 
 mod bitrate_allocator;
 mod bitrate_limiter;
@@ -61,7 +61,7 @@ impl MediaEndpointInteral {
             local_tracks: HashMap::new(),
             remote_tracks: HashMap::new(),
             bitrate_allocator: bitrate_allocator::BitrateAllocator::new(DEFAULT_BITRATE_OUT_BPS),
-            bitrate_limiter: bitrate_limiter::BitrateLimiter::new(bitrate_limiter, DEFAULT_BITRATE_IN_BPS),
+            bitrate_limiter: bitrate_limiter::BitrateLimiter::new(bitrate_limiter, MAX_BITRATE_IN_BPS),
         }
     }
 
