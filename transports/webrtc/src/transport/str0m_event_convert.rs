@@ -1,4 +1,4 @@
-use str0m::{channel::ChannelId, format::CodecConfig, media::KeyframeRequestKind};
+use str0m::{bwe::BweKind, channel::ChannelId, format::CodecConfig, media::KeyframeRequestKind};
 use transport::RequestKeyframeKind;
 
 use super::{internal::Str0mInput, mid_convert::mid_to_track, mid_history::MidHistory, rtp_packet_convert::RtpPacketConverter};
@@ -14,9 +14,24 @@ pub struct Str0mEventConvert {
     channels: Vec<ChannelId>,
     mid_history: MidHistory,
     rtp_convert: RtpPacketConverter,
+    twcc_bitrate: Option<u64>,
+    remb_bitrate: Option<u64>,
 }
 
 impl Str0mEventConvert {
+    fn process_bitrate(&mut self, kind: BweKind) -> u64 {
+        match kind {
+            BweKind::Remb(_, bitrate) => {
+                self.remb_bitrate = Some(bitrate.as_u64());
+                bitrate.as_u64().min(self.twcc_bitrate.unwrap_or(u64::MAX))
+            }
+            BweKind::Twcc(bitrate) => {
+                self.twcc_bitrate = Some(bitrate.as_u64());
+                bitrate.as_u64().min(self.remb_bitrate.unwrap_or(u64::MAX))
+            }
+        }
+    }
+
     pub fn channel_id(&self, index: usize) -> Option<ChannelId> {
         self.channels.get(index).copied()
     }
@@ -51,18 +66,23 @@ impl Str0mEventConvert {
             str0m::Event::PeerStats(_) => Ok(None),
             str0m::Event::MediaIngressStats(_) => Ok(None),
             str0m::Event::MediaEgressStats(_) => Ok(None),
-            str0m::Event::EgressBitrateEstimate(bitrate) => Ok(Some(Str0mInput::EgressBitrateEstimate(bitrate.as_u64()))),
+            str0m::Event::EgressBitrateEstimate(kind) => Ok(Some(Str0mInput::EgressBitrateEstimate(self.process_bitrate(kind)))),
             str0m::Event::KeyframeRequest(req) => match req.kind {
                 KeyframeRequestKind::Pli => Ok(Some(Str0mInput::KeyframeRequest(req.mid, RequestKeyframeKind::Pli))),
                 KeyframeRequestKind::Fir => Ok(Some(Str0mInput::KeyframeRequest(req.mid, RequestKeyframeKind::Fir))),
             },
-            str0m::Event::StreamPaused(_) => Ok(None),
+            str0m::Event::StreamPaused(status) => {
+                let track_id = mid_to_track(&status.mid);
+                self.mid_history.get(Some(track_id), *(&status.ssrc as &u32));
+                log::info!("[Str0mEventConvert] map between track {} and ssrc {}", track_id, status.ssrc);
+                Ok(None)
+            }
             str0m::Event::RtpPacket(rtp) => {
                 let track_id = rtp.header.ext_vals.mid.map(|mid| mid_to_track(&mid));
                 let ssrc: &u32 = &rtp.header.ssrc;
                 if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
                     if let Some(pkt) = self.rtp_convert.to_pkt(rtp) {
-                        log::trace!("on media {}, {}, {}", pkt.codec, pkt.seq_no, pkt.time);
+                        log::trace!("[Str0mEventConvert] on media {}, {}, {}", pkt.codec, pkt.seq_no, pkt.time);
                         Ok(Some(Str0mInput::MediaPacket(track_id, pkt)))
                     } else {
                         Err(Str0mEventConvertError::RtpInvalid)
@@ -74,5 +94,24 @@ impl Str0mEventConvert {
             }
             _ => Ok(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use str0m::{bwe::BweKind, media::Mid};
+
+    #[test]
+    fn bitrate_statefull() {
+        let mut converter = super::Str0mEventConvert::default();
+
+        assert_eq!(converter.process_bitrate(BweKind::Twcc(1000.into())), 1000);
+        assert_eq!(converter.process_bitrate(BweKind::Twcc(2000.into())), 2000);
+
+        assert_eq!(converter.process_bitrate(BweKind::Remb(Mid::default(), 5000.into())), 2000);
+        assert_eq!(converter.process_bitrate(BweKind::Remb(Mid::default(), 1500.into())), 1500);
+        assert_eq!(converter.process_bitrate(BweKind::Remb(Mid::default(), 5000.into())), 2000);
+
+        assert_eq!(converter.process_bitrate(BweKind::Twcc(8000.into())), 5000);
     }
 }

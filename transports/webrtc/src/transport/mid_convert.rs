@@ -1,4 +1,4 @@
-use str0m::media::{MediaKind, Mid, Rid};
+use str0m::media::{Mid, Rid};
 use transport::TrackId;
 
 const ZERO_CHAR: u8 = 48;

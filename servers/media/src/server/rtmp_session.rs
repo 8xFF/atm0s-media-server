@@ -1,7 +1,7 @@
 use cluster::{Cluster, ClusterEndpoint};
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
-    EndpointRpcIn, EndpointRpcOut, MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional,
+    BitrateLimiterType, EndpointRpcIn, EndpointRpcOut, MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional,
 };
 use media_utils::EndpointSubscribeScope;
 use transport_rtmp::RtmpTransport;
@@ -25,7 +25,7 @@ pub struct RtmpSession<E: ClusterEndpoint> {
 
 impl<E: ClusterEndpoint> RtmpSession<E> {
     pub async fn new<C: Cluster<E>>(room: &str, peer: &str, cluster: &mut C, transport: RtmpTransport<RmIn, RrIn, RlIn>) -> Result<Self, WebrtcSessionError> {
-        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, EndpointSubscribeScope::RoomManual);
+        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, EndpointSubscribeScope::RoomManual, BitrateLimiterType::MaxBitrateOnly);
         endpoint_pre.check().map_err(|_e| WebrtcSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let endpoint = endpoint_pre.build(transport, room);

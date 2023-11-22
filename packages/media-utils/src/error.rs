@@ -15,7 +15,7 @@ impl ServerError {
     }
 }
 
-trait ErrorDebugger {
+pub trait ErrorDebugger {
     fn log_error(&self, msg: &str);
 }
 

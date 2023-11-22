@@ -13,11 +13,14 @@ use self::{
 };
 
 const DEFAULT_BITRATE_OUT_BPS: u32 = 3_000_000; //3Mbps
-const IDLE_BITRATE_RECV_LIMIT: u32 = 100_000; //100kbps
+const MAX_BITRATE_IN_BPS: u32 = 3_000_000; //3Mbps
 
 mod bitrate_allocator;
+mod bitrate_limiter;
 mod local_track;
 mod remote_track;
+
+pub use bitrate_limiter::BitrateLimiterType;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MediaEndpointInteralEvent {
@@ -43,10 +46,11 @@ pub struct MediaEndpointInteral {
     local_tracks: HashMap<TrackId, LocalTrack>,
     remote_tracks: HashMap<TrackId, RemoteTrack>,
     bitrate_allocator: bitrate_allocator::BitrateAllocator,
+    bitrate_limiter: bitrate_limiter::BitrateLimiter,
 }
 
 impl MediaEndpointInteral {
-    pub fn new(room_id: &str, peer_id: &str) -> Self {
+    pub fn new(room_id: &str, peer_id: &str, bitrate_limiter: BitrateLimiterType) -> Self {
         log::info!("[MediaEndpointInteral {}/{}] create", room_id, peer_id);
         Self {
             room_id: room_id.into(),
@@ -57,6 +61,7 @@ impl MediaEndpointInteral {
             local_tracks: HashMap::new(),
             remote_tracks: HashMap::new(),
             bitrate_allocator: bitrate_allocator::BitrateAllocator::new(DEFAULT_BITRATE_OUT_BPS),
+            bitrate_limiter: bitrate_limiter::BitrateLimiter::new(bitrate_limiter, MAX_BITRATE_IN_BPS),
         }
     }
 
@@ -89,18 +94,16 @@ impl MediaEndpointInteral {
             track.on_tick(now_ms);
         }
 
-        let mut sum_consumers_limit = 0;
-        for (_, track) in self.remote_tracks.iter_mut() {
-            track.on_tick(now_ms);
-            sum_consumers_limit += track.consumers_limit().unwrap_or(0);
-        }
+        if !self.remote_tracks.is_empty() {
+            self.bitrate_limiter.reset();
+            for (_, track) in self.remote_tracks.iter_mut() {
+                track.on_tick(now_ms);
+                self.bitrate_limiter.add_remote(track.consumers_limit());
+            }
 
-        if sum_consumers_limit == 0 {
-            sum_consumers_limit = IDLE_BITRATE_RECV_LIMIT;
+            self.output_actions
+                .push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(self.bitrate_limiter.final_bitrate())));
         }
-
-        self.output_actions
-            .push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(sum_consumers_limit)));
 
         self.bitrate_allocator.tick();
         self.pop_internal(now_ms);
@@ -165,7 +168,7 @@ impl MediaEndpointInteral {
                 if let Some(track) = self.local_tracks.get_mut(&track_id) {
                     track.on_transport_event(event);
                 } else {
-                    log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
+                    log::warn!("[EndpointInternal] local track not found {:?}", track_id);
                 }
             }
             TransportIncomingEvent::LocalTrackRemoved(track_name, track_id) => {
@@ -427,7 +430,7 @@ mod tests {
     };
 
     use crate::{
-        endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS, IDLE_BITRATE_RECV_LIMIT},
+        endpoint_wrap::internal::{bitrate_limiter::BitrateLimiterType, MediaEndpointInteralEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS},
         rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverSwitch, RemoteStream, TrackInfo},
         EndpointRpcOut, RpcRequest, RpcResponse,
     };
@@ -436,7 +439,7 @@ mod tests {
 
     #[test]
     fn should_fire_cluster_when_remote_track_added_then_close() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
@@ -480,7 +483,7 @@ mod tests {
 
     #[test]
     fn should_fire_cluster_when_remote_track_added_then_removed() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
@@ -523,7 +526,7 @@ mod tests {
 
     #[test]
     fn should_fire_rpc_when_cluster_track_added() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         endpoint.on_cluster(
             0,
@@ -555,7 +558,7 @@ mod tests {
 
     #[test]
     fn should_fire_disconnect_when_transport_disconnect() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         endpoint.on_transport(0, TransportIncomingEvent::State(TransportStateEvent::Disconnected));
 
@@ -566,7 +569,7 @@ mod tests {
 
     #[test]
     fn should_fire_answer_rpc() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1");
+        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         endpoint.on_transport(0, TransportIncomingEvent::LocalTrackAdded("video_0".to_string(), 1, TrackMeta::new_video(None)));
 
@@ -607,16 +610,17 @@ mod tests {
             )))
         );
 
-        assert_eq!(
-            endpoint.pop_action(),
-            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(IDLE_BITRATE_RECV_LIMIT)))
-        );
+        // dont fire this event without remote tracks
+        // assert_eq!(
+        //     endpoint.pop_action(),
+        //     Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::LimitIngressBitrate(IDLE_BITRATE_RECV_LIMIT)))
+        // );
 
         assert_eq!(
             endpoint.pop_action(),
             Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::ConfigEgressBitrate {
                 current: 0,
-                desired: 80_000 //Default of single stream
+                desired: 80_000 * 6 / 5 //Default of single stream
             }))
         );
 

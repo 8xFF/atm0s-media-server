@@ -12,7 +12,7 @@ async-std = { workspace = true }
 async-trait = { workspace = true }
 media-utils = { workspace = true }
 poem-openapi = { version = "*", features = ["swagger-ui"] }
-str0m = { git = "https://github.com/8xff/str0m.git", rev = "cb88b4b4394a9513e1f5added457f2d724c61421"}
+str0m = { git = "https://github.com/8xff/str0m.git", rev = "fe2c7a13b8d4314a40494039a20d06cb49d92c57"}
 futures = { workspace = true }
 log = { workpsace = true }
 serde = { workspace = true }
