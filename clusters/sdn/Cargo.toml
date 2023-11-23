@@ -12,8 +12,8 @@ log = { workspace = true }
 cluster = { workspace = true }
 transport = { workspace = true }
 media-utils = { workspace = true }
-atm0s-sdn = { version = "0.1.0", features = ["all"]}
+atm0s-sdn = { version = "0.1.1", features = ["all"]}
 serde = { workspace = true }
 bincode = { version = "1" }
 futures = { workspace = true }
-bytes = { version = "*" }
+bytes = { version = "1.5" }

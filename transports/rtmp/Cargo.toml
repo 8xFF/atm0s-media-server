@@ -13,7 +13,7 @@ transport = { workspace = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }
 media-utils = { workspace = true }
-rml_rtmp = "*"
+rml_rtmp = "0.8"
 log = { workspace = true }
 futures = { workspace = true }
 rtp = "0.9.0"
