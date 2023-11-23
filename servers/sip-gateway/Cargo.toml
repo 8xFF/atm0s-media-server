@@ -21,8 +21,8 @@ async-std = { workspace = true }
 parking_lot = { workspace = true }
 futures = { workspace = true }
 log = { workpsace = true }
-poem = "*"
-poem-openapi = { version = "*", features = ["swagger-ui"] }
+poem = "1.3"
+poem-openapi = { version = "3.0", features = ["swagger-ui"] }
 env_logger = { workspace = true }
 serde = { workspace = true }
 rsip = "0.4.0"

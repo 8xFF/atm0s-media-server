@@ -568,9 +568,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8a64145b93a3d5cf88989714d938cadc2c61446863a3254c326295fdf3661e7"
+checksum = "89e7d1800e807cde9f9fb10e38e7825355225268518146c7caecb82062143e39"
 dependencies = [
  "async-std",
  "atm0s-sdn-identity",

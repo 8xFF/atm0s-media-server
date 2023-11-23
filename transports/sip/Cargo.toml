@@ -15,7 +15,7 @@ async-trait = { workspace = true }
 media-utils = { workspace = true }
 log = { workspace = true }
 futures = { workspace = true }
-bytes = "*"
+bytes = "1.5"
 rsip = "0.4.0"
 rand = "0.8"
 sdp-rs = "0.2.1"

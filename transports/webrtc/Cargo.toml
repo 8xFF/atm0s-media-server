@@ -13,7 +13,7 @@ transport = { workspace = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }
 media-utils = { workspace = true }
-poem-openapi = { version = "*", features = ["swagger-ui"] }
+poem-openapi = { version = "3.0", features = ["swagger-ui"] }
 str0m = { version = "0.1.0", package = "atm0s-custom-str0m" }
 futures = { workspace = true }
 log = { workpsace = true }
