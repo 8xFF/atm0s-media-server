@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APP_NAME: media-server
+  APP_NAME: atm0s-media-server
   ARTIFACT_DIR: release-builds
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}

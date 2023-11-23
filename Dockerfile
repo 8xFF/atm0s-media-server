@@ -11,11 +11,11 @@ RUN case $TARGETPLATFORM in \
         "linux/arm64")  BUILD=aarch64-unknown-linux-gnu  ;; \
         *) exit 1 ;; \
     esac; \
-    mv /tmp/$BUILD/media-server-$BUILD /media-server; \
-    chmod +x /media-server
+    mv /tmp/$BUILD/atm0s-media-server-$BUILD /atm0s-media-server; \
+    chmod +x /atm0s-media-server
 
 FROM ubuntu:22.04
 
-COPY --from=base /media-server /media-server
+COPY --from=base /atm0s-media-server /atm0s-media-server
 
-ENTRYPOINT ["/media-server"]
+ENTRYPOINT ["/atm0s-media-server"]
