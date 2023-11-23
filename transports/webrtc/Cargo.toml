@@ -1,7 +1,9 @@
 [package]
-name = "transport-webrtc"
+name = "atm0s-media-server-transport-webrtc"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Webrtc Transport for atm0s-media-server"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,7 +14,7 @@ async-std = { workspace = true }
 async-trait = { workspace = true }
 media-utils = { workspace = true }
 poem-openapi = { version = "*", features = ["swagger-ui"] }
-str0m = { git = "https://github.com/8xff/str0m.git", rev = "fe2c7a13b8d4314a40494039a20d06cb49d92c57"}
+str0m = { version = "0.1.0", package = "atm0s-custom-str0m" }
 futures = { workspace = true }
 log = { workpsace = true }
 serde = { workspace = true }

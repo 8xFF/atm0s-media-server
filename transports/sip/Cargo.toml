@@ -1,7 +1,9 @@
 [package]
-name = "transport-sip"
+name = "atm0s-media-server-transport-sip"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "SIP transport for atm0s-media-server"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,7 +16,7 @@ media-utils = { workspace = true }
 log = { workspace = true }
 futures = { workspace = true }
 bytes = "*"
-rsip = { git = "https://github.com/8xFF/rsip.git" }
+rsip = "0.4.0"
 rand = "0.8"
 sdp-rs = "0.2.1"
 vec1 = "1"

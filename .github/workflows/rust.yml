@@ -2,25 +2,24 @@ name: Rust
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  code-coverage:
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4
-      - name: Install ffmpeg
+      - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt install -y libsoxr-dev
+          sudo apt install -y libsoxr-dev libopus-dev libssl-dev libfdk-aac-dev
       - name: Install Rust
         run: rustup update stable
       - name: Install cargo-llvm-cov
@@ -32,4 +31,35 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
           files: lcov.info
-          fail_ci_if_error: true
+          fail_ci_if_error: false
+  cargo-deny:
+    name: cargo-deny
+
+    # TODO: remove this matrix when https://github.com/EmbarkStudios/cargo-deny/issues/324 is resolved
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - x86_64-unknown-linux-gnu
+          # - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-gnu
+          # - arm-unknown-linux-gnueabihf
+          # - armv7-unknown-linux-gnueabihf
+          # - mips-unknown-linux-gnu
+          # - mips64-unknown-linux-gnuabi64
+          # - mips64el-unknown-linux-gnuabi64
+          # - mipsel-unknown-linux-gnu
+          # - aarch64-unknown-linux-musl
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          # - x86_64-pc-windows-gnu
+          # - x86_64-pc-windows-msvc
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check
+          log-level: error
+          arguments: --all-features --target ${{ matrix.platform }}

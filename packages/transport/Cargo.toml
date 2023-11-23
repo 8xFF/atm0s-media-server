@@ -1,5 +1,5 @@
 [package]
-name = "transport"
+name = "atm0s-media-server-transport"
 version = "0.1.0"
 edition = "2021"
 description = "Transport Interface for atm0s-media-server"
