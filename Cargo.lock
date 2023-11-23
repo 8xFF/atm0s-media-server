@@ -366,6 +366,187 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm0s-media-server"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "atm0s-media-server-cluster",
+ "atm0s-media-server-cluster-local",
+ "atm0s-media-server-cluster-sdn",
+ "atm0s-media-server-endpoint",
+ "atm0s-media-server-transport",
+ "atm0s-media-server-transport-rtmp",
+ "atm0s-media-server-transport-webrtc",
+ "atm0s-media-server-utils",
+ "clap",
+ "futures",
+ "log",
+ "parking_lot",
+ "poem",
+ "poem-openapi",
+ "rust-embed",
+ "serde",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "atm0s-media-server-cluster"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "atm0s-media-server-transport",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-media-server-cluster-local"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-media-server-cluster",
+ "atm0s-media-server-transport",
+ "atm0s-media-server-utils",
+ "log",
+ "parking_lot",
+]
+
+[[package]]
+name = "atm0s-media-server-cluster-sdn"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-media-server-cluster",
+ "atm0s-media-server-transport",
+ "atm0s-media-server-utils",
+ "atm0s-sdn",
+ "bincode",
+ "bytes",
+ "futures",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-media-server-endpoint"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "atm0s-media-server-cluster",
+ "atm0s-media-server-transport",
+ "atm0s-media-server-utils",
+ "futures",
+ "log",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-media-server-sip-gateway"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "atm0s-media-server-cluster",
+ "atm0s-media-server-cluster-local",
+ "atm0s-media-server-cluster-sdn",
+ "atm0s-media-server-endpoint",
+ "atm0s-media-server-transport",
+ "atm0s-media-server-transport-sip",
+ "atm0s-media-server-utils",
+ "clap",
+ "env_logger",
+ "futures",
+ "log",
+ "parking_lot",
+ "poem",
+ "poem-openapi",
+ "rsip",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-media-server-transport"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-media-server-utils",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-media-server-transport-rtmp"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-media-server-endpoint",
+ "atm0s-media-server-transport",
+ "atm0s-media-server-utils",
+ "bytes",
+ "fdk-aac",
+ "futures",
+ "log",
+ "opus",
+ "rml_rtmp",
+ "rtp",
+ "xflv",
+]
+
+[[package]]
+name = "atm0s-media-server-transport-sip"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-media-server-endpoint",
+ "atm0s-media-server-transport",
+ "atm0s-media-server-utils",
+ "bytes",
+ "futures",
+ "libsoxr",
+ "log",
+ "opus",
+ "rand 0.8.5",
+ "rsip",
+ "rtp-rs",
+ "sdp-rs",
+ "vec1",
+]
+
+[[package]]
+name = "atm0s-media-server-transport-webrtc"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-media-server-endpoint",
+ "atm0s-media-server-transport",
+ "atm0s-media-server-utils",
+ "criterion",
+ "flate2",
+ "futures",
+ "local-ip-address",
+ "log",
+ "lz4_flex",
+ "poem-openapi",
+ "serde",
+ "serde_json",
+ "str0m",
+ "udp_sas_async",
+]
+
+[[package]]
+name = "atm0s-media-server-utils"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "poem-openapi",
+ "serde",
+ "sorted-vec",
+]
+
+[[package]]
 name = "atm0s-sdn"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -848,45 +1029,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
 
 [[package]]
-name = "cluster"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "serde",
- "transport",
-]
-
-[[package]]
-name = "cluster-local"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "cluster",
- "log",
- "media-utils",
- "parking_lot",
- "transport",
-]
-
-[[package]]
-name = "cluster-sdn"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "atm0s-sdn",
- "bincode",
- "bytes",
- "cluster",
- "futures",
- "log",
- "media-utils",
- "serde",
- "transport",
-]
-
-[[package]]
 name = "cmake"
 version = "0.1.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1255,19 +1397,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7268b386296a025e474d5140678f75d6de9493ae55a5d709eeb9dd08149945e1"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "endpoint"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "cluster",
- "futures",
- "log",
- "media-utils",
- "serde",
- "transport",
 ]
 
 [[package]]
@@ -2032,40 +2161,6 @@ dependencies = [
  "block-buffer 0.9.0",
  "digest 0.9.0",
  "opaque-debug",
-]
-
-[[package]]
-name = "media-server"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "clap",
- "cluster",
- "cluster-local",
- "cluster-sdn",
- "endpoint",
- "futures",
- "log",
- "media-utils",
- "parking_lot",
- "poem",
- "poem-openapi",
- "rust-embed",
- "serde",
- "tracing-subscriber",
- "transport",
- "transport-rtmp",
- "transport-webrtc",
-]
-
-[[package]]
-name = "media-utils"
-version = "0.1.0"
-dependencies = [
- "log",
- "poem-openapi",
- "serde",
- "sorted-vec",
 ]
 
 [[package]]
@@ -3173,29 +3268,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sip-gateway-server"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "clap",
- "cluster",
- "cluster-local",
- "cluster-sdn",
- "endpoint",
- "env_logger",
- "futures",
- "log",
- "media-utils",
- "parking_lot",
- "poem",
- "poem-openapi",
- "rsip",
- "serde",
- "transport",
- "transport-sip",
-]
-
-[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3576,78 +3648,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "transport"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "media-utils",
- "serde",
-]
-
-[[package]]
-name = "transport-rtmp"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "bytes",
- "endpoint",
- "fdk-aac",
- "futures",
- "log",
- "media-utils",
- "opus",
- "rml_rtmp",
- "rtp",
- "transport",
- "xflv",
-]
-
-[[package]]
-name = "transport-sip"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "bytes",
- "endpoint",
- "futures",
- "libsoxr",
- "log",
- "media-utils",
- "opus",
- "rand 0.8.5",
- "rsip",
- "rtp-rs",
- "sdp-rs",
- "transport",
- "vec1",
-]
-
-[[package]]
-name = "transport-webrtc"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "criterion",
- "endpoint",
- "flate2",
- "futures",
- "local-ip-address",
- "log",
- "lz4_flex",
- "media-utils",
- "poem-openapi",
- "serde",
- "serde_json",
- "str0m",
- "transport",
- "udp_sas_async",
 ]
 
 [[package]]

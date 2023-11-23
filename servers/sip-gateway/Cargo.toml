@@ -1,8 +1,10 @@
 [package]
-name = "sip-gateway-server"
+name = "atm0s-media-server-sip-gateway"
 version = "0.1.0"
 edition = "2021"
 publish = false
+license = "MIT"
+description = "Sip gateway for atm0s-media-server, support a part of SIP protocol"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

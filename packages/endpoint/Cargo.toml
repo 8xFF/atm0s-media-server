@@ -1,5 +1,5 @@
 [package]
-name = "endpoint"
+name = "atm0s-media-server-endpoint"
 version = "0.1.0"
 edition = "2021"
 

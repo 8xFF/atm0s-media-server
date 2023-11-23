@@ -1,13 +1,23 @@
 name: Release
 on:
   push:
+    branches: [master]
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_NAME: media-server
+  ARTIFACT_DIR: release-builds
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-release:
-    needs: create-release
     name: build-release
     runs-on: ${{ matrix.os }}
     env:
@@ -19,42 +29,88 @@ jobs:
           # - linux musl x64
           - linux gnu aarch64
           # - linux musl aarch64
+          # - linux gnueabihf arm
+          # - linux gnueabihf armv7
+          # - linux gnu mips
+          # - linux gnuabi64 mips64
+          # - linux gnuabi64 mips64el
+          # - linux gnu mipsel
           - macos x64
           - macos aarch64
+          # - windows gnu x64
+          # - windows msvc x64
         include:
           - build: linux gnu x64
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
+            extension: ""
           # - build: linux musl x64
           #   os: ubuntu-latest
           #   rust: stable
-          #   target: x86_64-unknown-linux-musl  
+          #   target: x86_64-unknown-linux-musl
+          #   extension: ""
           - build: linux gnu aarch64
             os: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
+            extension: ""
+          # - build: linux gnueabihf arm
+          #   os: ubuntu-latest
+          #   rust: stable
+          #   target: arm-unknown-linux-gnueabihf
+          #   extension: ""
+          # - build: linux gnueabihf armv7
+          #   os: ubuntu-latest
+          #   rust: stable
+          #   target: armv7-unknown-linux-gnueabihf
+          #   extension: ""
+          # - build: linux gnu mips
+          #   os: ubuntu-latest
+          #   rust: 1.71.1
+          #   target: mips-unknown-linux-gnu
+          #   extension: ""
+          # - build: linux gnuabi64 mips64
+          #   os: ubuntu-latest
+          #   rust: 1.71.1
+          #   target: mips64-unknown-linux-gnuabi64
+          #   extension: ""
+          # - build: linux gnuabi64 mips64el
+          #   os: ubuntu-latest
+          #   rust: 1.71.1
+          #   target: mips64el-unknown-linux-gnuabi64
+          #   extension: ""
+          # - build: linux gnu mipsel
+          #   os: ubuntu-latest
+          #   rust: 1.71.1
+          #   target: mipsel-unknown-linux-gnu
+          #   extension: ""
           # - build: linux musl aarch64
           #   os: ubuntu-latest
           #   rust: stable
-          #   target: aarch64-unknown-linux-musl  
+          #   target: aarch64-unknown-linux-musl
+          #   extension: ""
           - build: macos x64
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
+            extension: ""
           - build: macos aarch64
             os: macos-latest
             rust: stable
             target: aarch64-apple-darwin
+            extension: ""
+          # - build: windows gnu x64
+          #   os: ubuntu-latest
+          #   rust: stable
+          #   target: x86_64-pc-windows-gnu
+          #   extension: ".exe"
+          # - build: windows msvc x64
+          #   os: windows-latest
+          #   rust: stable
+          #   target: x86_64-pc-windows-msvc
+          #   extension: ".exe"
     steps:
-      - name: Set release tag
-        run: |
-          if [ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]; then
-            echo "RELEASE_TAG=main" >> "$GITHUB_ENV"
-          else
-            echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}"  >> "$GITHUB_ENV"
-          fi
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -66,83 +122,86 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
-      - name: Install dev-tools
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
-
-      - name: Install deps (ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends libssl-dev libsoxr-dev libopus-dev
-
-      - name: Install deps (macos)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew update
-          brew install libsoxr
-
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: build
-          args: --verbose --release --package media-server --target ${{ matrix.target }}
+          args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }}
 
-      - name: Show files
-        run: |
-          ls -la ./target/${{ matrix.target }}/release
+      - name: Rename file
+        if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
+        run: mv ./target/${{ matrix.target }}/release/${{ env.APP_NAME }}${{ matrix.extension }} ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
 
-      - name: Create checksum
-        id: make-checksum
-        working-directory: ./target/${{ matrix.target }}/release
-        run: |
-          name="media-server-${{ matrix.target }}.sha256sum"
-          if [[ "$RUNNER_OS" != "macOS" ]]; then
-            sha256sum "media-server" > "${name}"
-          else
-            shasum -a 256 "media-server" > "${name}"
-          fi
-          echo "::set-output name=name::${name}"
-
-      - name: Tar release
-        id: make-artifact
-        working-directory: ./target/${{ matrix.target }}/release
-        run: |
-          name="media-server-${{ matrix.target }}.tar.gz"
-          tar cvzf "${name}" "media-server"
-          echo "::set-output name=name::${name}"
-
-      - name: Upload release archive
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Artifact to Summary
+        if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
+        uses: actions/upload-artifact@v3
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }} 
-          asset_path: ./target/${{ matrix.target }}/release/${{ steps.make-artifact.outputs.name }}
-          asset_name: media-server-${{matrix.target}}.tar.gz
-          asset_content_type: application/octet-stream
+          name: ${{ matrix.target }}
+          path: ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
 
-      - name: Upload checksum
-        uses: actions/upload-release-asset@v1.0.2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload binaries to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: svenstaro/upload-release-action@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }} 
-          asset_path: ./target/${{ matrix.target }}/release/${{ steps.make-checksum.outputs.name }}
-          asset_name: media-server-${{matrix.target}}.sha256sum
-          asset_content_type: text/plain
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
+          asset_name: ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
+          tag: ${{ github.ref }}
+          overwrite: true
 
   create-release:
+    # only run if not a tags build
+    if: startsWith(github.ref, 'refs/tags/') == false
+    needs: build-release
     runs-on: ubuntu-latest
-    outputs: 
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      - name: create_release 
+      - uses: actions/download-artifact@v3
+      - name: Display structure of downloaded files
+        run: ls -R
+      - name: create_release
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: marvinpinto/action-automatic-releases@latest
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && '' || github.ref }}
-          release_name: Build ${{ github.event_name == 'workflow_dispatch' && 'development' || github.ref }}
-          draft: ${{ github.event_name == 'workflow_dispatch' }}
-          prerelease: true  
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: ${{ github.event_name == 'workflow_dispatch' && 'latest' || (github.ref == 'refs/heads/master' && 'latest') || github.ref }}
+          title: Build ${{ github.event_name == 'workflow_dispatch' && 'development' || github.ref }}
+          files: |
+            */*
+          prerelease: true
+
+  deploy-docker:
+    needs: build-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v3
+      # Uses the `docker/login-action` action to log in to the Container registry registry using the account and password that will publish the packages. Once published, the packages are scoped to the account defined here.
+      - name: Log in to the Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # This step uses [docker/metadata-action](https://github.com/docker/metadata-action#about) to extract tags and labels that will be applied to the specified image. The `id` "meta" allows the output of this step to be referenced in a subsequent step. The `images` value provides the base name for the tags and labels.
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
+      # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
+      # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
+      - name: Build and push Docker image
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

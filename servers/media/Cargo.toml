@@ -1,7 +1,9 @@
 [package]
-name = "media-server"
+name = "atm0s-media-server"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Decentralized media-server with WebRTC/RTMP/Whip/Whep support"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

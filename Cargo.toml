@@ -14,15 +14,15 @@ members = [
 ]
 
 [workspace.dependencies]
-cluster = { path = "packages/cluster", version = "0.1.0" }
-endpoint = { path = "packages/endpoint", version = "0.1.0" }
-transport = { path = "packages/transport", version = "0.1.0" }
-transport-webrtc = { path = "transports/webrtc", version = "0.1.0" }
-transport-rtmp = { path = "transports/rtmp", version = "0.1.0" }
-transport-sip = { path = "transports/sip", version = "0.1.0" }
-cluster-local = { path = "clusters/local", version = "0.1.0" }
-cluster-sdn = { path = "clusters/sdn", version = "0.1.0" }
-media-utils = { path = "packages/media-utils", version = "0.1.0" }
+cluster = { path = "packages/cluster", package = "atm0s-media-server-cluster", version = "0.1.0" }
+endpoint = { path = "packages/endpoint", package = "atm0s-media-server-endpoint", version = "0.1.0" }
+transport = { path = "packages/transport", package = "atm0s-media-server-transport", version = "0.1.0" }
+transport-webrtc = { path = "transports/webrtc", package = "atm0s-media-server-transport-webrtc", version = "0.1.0" }
+transport-rtmp = { path = "transports/rtmp", package = "atm0s-media-server-transport-rtmp", version = "0.1.0" }
+transport-sip = { path = "transports/sip", package = "atm0s-media-server-transport-sip", version = "0.1.0" }
+cluster-local = { path = "clusters/local", package = "atm0s-media-server-cluster-local", version = "0.1.0" }
+cluster-sdn = { path = "clusters/sdn", package = "atm0s-media-server-cluster-sdn", version = "0.1.0" }
+media-utils = { path = "packages/media-utils", package = "atm0s-media-server-utils", version = "0.1.0" }
 futures = "0.3"
 async-trait = "0.1"
 async-std = { version = "1.12", features = ["tokio1", "unstable", "attributes"] }

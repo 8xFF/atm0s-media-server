@@ -1,7 +1,9 @@
 [package]
-name = "cluster-sdn"
+name = "atm0s-media-server-cluster-sdn"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Sdn cluster for atm0s-media-server"
 
 [dependencies]
 async-std = { workspace = true }
