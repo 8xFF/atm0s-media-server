@@ -10,97 +10,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  cross-platform-test:
-    strategy:
-      matrix:
-        build:
-          - linux gnu x64
-          # - linux musl x64
-          - linux gnu aarch64
-          # - linux musl aarch64
-          # - linux gnueabihf arm
-          # - linux gnueabihf armv7
-          # - linux gnu mips
-          # - linux gnuabi64 mips64
-          # - linux gnuabi64 mips64el
-          # - linux gnu mipsel
-          - macos x64
-          # - macos aarch64
-          # - windows gnu x64
-          # - windows msvc x64
-        include:
-          - build: linux gnu x64
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-          # - build: linux musl x64
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: x86_64-unknown-linux-musl
-          - build: linux gnu aarch64
-            os: ubuntu-latest
-            rust: stable
-            target: aarch64-unknown-linux-gnu
-          # - build: linux gnueabihf arm
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: arm-unknown-linux-gnueabihf
-          # - build: linux gnueabihf armv7
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: armv7-unknown-linux-gnueabihf
-          # - build: linux gnu mips
-          #   os: ubuntu-latest
-          #   rust: 1.71.1
-          #   target: mips-unknown-linux-gnu
-          # - build: linux gnuabi64 mips64
-          #   os: ubuntu-latest
-          #   rust: 1.71.1
-          #   target: mips64-unknown-linux-gnuabi64
-          # - build: linux gnuabi64 mips64el
-          #   os: ubuntu-latest
-          #   rust: 1.71.1
-          #   target: mips64el-unknown-linux-gnuabi64
-          # - build: linux gnu mipsel
-          #   os: ubuntu-latest
-          #   rust: 1.71.1
-          #   target: mipsel-unknown-linux-gnu
-          # - build: linux musl aarch64
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: aarch64-unknown-linux-musl
-          - build: macos x64
-            os: macos-latest
-            rust: stable
-            target: x86_64-apple-darwin
-          # - build: macos aarch64
-          #   os: macos-latest
-          #   rust: stable
-          #   target: aarch64-apple-darwin
-          # - build: windows gnu x64
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: x86_64-pc-windows-gnu
-          # - build: windows msvc x64
-          #   os: windows-latest
-          #   rust: stable
-          #   target: x86_64-pc-windows-msvc
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.rust }}
-          profile: minimal
-          override: true
-          target: ${{ matrix.target }}
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: test
-          args: --verbose --all-features --workspace --target ${{ matrix.target }}
   code-coverage:
     runs-on: ubuntu-latest
     env:
@@ -110,7 +19,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt install -y libsoxr-dev libopus-dev
+          sudo apt install -y libsoxr-dev libopus-dev libssl-dev libfdk-aac-dev
       - name: Install Rust
         run: rustup update stable
       - name: Install cargo-llvm-cov

@@ -3,7 +3,7 @@ on:
   push:
     branches: [master]
     tags:
-      - "v*.*.*"
+      - "atm0s-media-server-v*.*.*"
   workflow_dispatch:
 
 concurrency:
@@ -45,71 +45,91 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             extension: ""
+            cross: false
           # - build: linux musl x64
           #   os: ubuntu-latest
           #   rust: stable
           #   target: x86_64-unknown-linux-musl
           #   extension: ""
+          #   cross: false
           - build: linux gnu aarch64
             os: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
             extension: ""
-          # - build: linux gnueabihf arm
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: arm-unknown-linux-gnueabihf
-          #   extension: ""
-          # - build: linux gnueabihf armv7
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: armv7-unknown-linux-gnueabihf
-          #   extension: ""
-          # - build: linux gnu mips
-          #   os: ubuntu-latest
-          #   rust: 1.71.1
-          #   target: mips-unknown-linux-gnu
-          #   extension: ""
-          # - build: linux gnuabi64 mips64
-          #   os: ubuntu-latest
-          #   rust: 1.71.1
-          #   target: mips64-unknown-linux-gnuabi64
-          #   extension: ""
-          # - build: linux gnuabi64 mips64el
-          #   os: ubuntu-latest
-          #   rust: 1.71.1
-          #   target: mips64el-unknown-linux-gnuabi64
-          #   extension: ""
-          # - build: linux gnu mipsel
-          #   os: ubuntu-latest
-          #   rust: 1.71.1
-          #   target: mipsel-unknown-linux-gnu
-          #   extension: ""
+            cross: true
           # - build: linux musl aarch64
           #   os: ubuntu-latest
           #   rust: stable
           #   target: aarch64-unknown-linux-musl
           #   extension: ""
+          #   cross: true
+          # - build: linux gnueabihf arm
+          #   os: ubuntu-latest
+          #   rust: stable
+          #   target: arm-unknown-linux-gnueabihf
+          #   extension: ""
+          #   cross: true
+          # - build: linux gnueabihf armv7
+          #   os: ubuntu-latest
+          #   rust: stable
+          #   target: armv7-unknown-linux-gnueabihf
+          #   extension: ""
+          #   cross: true
+          # - build: linux gnu mips
+          #   os: ubuntu-latest
+          #   rust: 1.71.1
+          #   target: mips-unknown-linux-gnu
+          #   extension: ""
+          #   cross: true
+          # - build: linux gnuabi64 mips64
+          #   os: ubuntu-latest
+          #   rust: 1.71.1
+          #   target: mips64-unknown-linux-gnuabi64
+          #   extension: ""
+          #   cross: true
+          # - build: linux gnuabi64 mips64el
+          #   os: ubuntu-latest
+          #   rust: 1.71.1
+          #   target: mips64el-unknown-linux-gnuabi64
+          #   extension: ""
+          #   cross: true
+          # - build: linux gnu mipsel
+          #   os: ubuntu-latest
+          #   rust: 1.71.1
+          #   target: mipsel-unknown-linux-gnu
+          #   extension: ""
+          #   cross: true
+          # - build: linux musl aarch64
+          #   os: ubuntu-latest
+          #   rust: stable
+          #   target: aarch64-unknown-linux-musl
+          #   extension: ""
+          #   cross: true
           - build: macos x64
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
             extension: ""
+            cross: false
           - build: macos aarch64
             os: macos-latest
             rust: stable
             target: aarch64-apple-darwin
             extension: ""
+            cross: false
           # - build: windows gnu x64
           #   os: ubuntu-latest
           #   rust: stable
           #   target: x86_64-pc-windows-gnu
           #   extension: ".exe"
+          #   cross: false
           # - build: windows msvc x64
           #   os: windows-latest
           #   rust: stable
           #   target: x86_64-pc-windows-msvc
           #   extension: ".exe"
+          #   cross: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -122,10 +142,24 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
+      - name: Install dev-tools
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
+
+      - name: Install deps (ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install -y --no-install-recommends libssl-dev libopus-dev libfdk-aac-dev
+
+      - name: Install deps (macos)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew update
+          brew install openssl opus fdk-aac
+
       - name: Build
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: ${{ matrix.cross }}
           command: build
           args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }}
 
