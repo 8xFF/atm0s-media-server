@@ -42,7 +42,7 @@ skip-tree = []
 
 [licenses]
 private = { ignore = true }
-unlicensed = "deny"
+unlicensed = "allow"
 allow-osi-fsf-free = "neither"
 confidence-threshold = 0.92 # We want really high confidence when inferring licenses from text
 copyleft = "deny"

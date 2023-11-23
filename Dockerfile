@@ -16,6 +16,10 @@ RUN case $TARGETPLATFORM in \
 
 FROM ubuntu:22.04
 
+RUN apt-get update \
+    && apt-get install -y libssl-dev libopus-dev libfdk-aac-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=base /atm0s-media-server /atm0s-media-server
 
 ENTRYPOINT ["/atm0s-media-server"]
