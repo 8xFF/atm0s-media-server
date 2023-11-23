@@ -8,7 +8,7 @@ use crate::processor::Processor;
 use self::{
     processor::{register::RegisterProcessor, ProcessorAction, ProcessorError},
     sip_request::SipRequest,
-    sip_response::SipResponse,
+    sip_response::SipResponse, utils::CallId2,
 };
 
 mod data;
@@ -18,7 +18,7 @@ pub mod sip_response;
 mod transaction;
 mod utils;
 
-pub type GroupId = (SocketAddr, CallId);
+pub type GroupId = (SocketAddr, CallId2);
 
 pub enum SipMessage {
     Request(SipRequest),
@@ -102,7 +102,7 @@ impl SipCore {
     pub fn on_req(&mut self, now_ms: u64, from: SocketAddr, req: SipRequest) -> Result<(), SipServerError> {
         match req.method() {
             Method::Register => {
-                let group_id: (SocketAddr, CallId) = (from, req.call_id.clone());
+                let group_id: (SocketAddr, CallId2) = (from, req.call_id.clone().into());
                 match self.register_processors.entry(group_id.clone()) {
                     std::collections::hash_map::Entry::Occupied(mut entry) => {
                         entry.get_mut().on_req(now_ms, req).map_err(|e| SipServerError::ProcessorError(e))?;
@@ -117,7 +117,7 @@ impl SipCore {
                 Ok(())
             }
             Method::Invite => {
-                let group_id: (SocketAddr, CallId) = (from, req.call_id.clone());
+                let group_id: (SocketAddr, CallId2) = (from, req.call_id.clone().into());
                 if let Some(_) = self.invite_in_groups.get(&group_id) {
                     self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
                     Ok(())
@@ -128,7 +128,7 @@ impl SipCore {
                 }
             }
             _ => {
-                let group_id: (SocketAddr, CallId) = (from, req.call_id.clone());
+                let group_id: (SocketAddr, CallId2) = (from, req.call_id.clone().into());
                 if let Some(_) = self.invite_in_groups.get(&group_id) {
                     self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
                     Ok(())
@@ -143,7 +143,7 @@ impl SipCore {
     }
 
     pub fn on_res(&mut self, _now_ms: u64, from: SocketAddr, res: SipResponse) -> Result<(), SipServerError> {
-        let group_id: (SocketAddr, CallId) = (from, res.call_id.clone());
+        let group_id: (SocketAddr, CallId2) = (from, res.call_id.clone().into());
         if let Some(_) = self.invite_in_groups.get(&group_id) {
             self.actions.push(SipServerEvent::OnInCallResponse(group_id, res));
             Ok(())
@@ -159,7 +159,7 @@ impl SipCore {
         self.actions.pop()
     }
 
-    fn process_register_processor(&mut self, group_id: &(SocketAddr, CallId)) -> Option<()> {
+    fn process_register_processor(&mut self, group_id: &(SocketAddr, CallId2)) -> Option<()> {
         let processor = self.register_processors.get_mut(group_id)?;
         while let Some(action) = processor.pop_action() {
             match action {

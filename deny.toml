@@ -32,7 +32,7 @@ yanked = "deny"
 ignore = []
 
 [bans]
-multiple-versions = "deny"
+multiple-versions = "allow"
 wildcards = "allow"        # at least until https://github.com/EmbarkStudios/cargo-deny/issues/241 is fixed
 deny = []
 

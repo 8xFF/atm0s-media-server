@@ -25,4 +25,4 @@ poem = "*"
 poem-openapi = { version = "*", features = ["swagger-ui"] }
 env_logger = { workspace = true }
 serde = { workspace = true }
-rsip = { git = "https://github.com/8xFF/rsip.git" }
+rsip = "0.4.0"
