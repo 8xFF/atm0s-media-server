@@ -7,11 +7,11 @@ use media_utils::{EndpointSubscribeScope, Timer};
 use transport::{Transport, TransportError};
 
 use crate::{
-    endpoint_wrap::internal::{MediaEndpointInteralEvent, MediaInternalAction},
+    endpoint_wrap::internal::{MediaEndpointInternalEvent, MediaInternalAction},
     rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
 };
 
-use self::internal::MediaEndpointInteral;
+use self::internal::MediaEndpointInternal;
 
 mod internal;
 pub use internal::BitrateLimiterType;
@@ -27,7 +27,7 @@ where
     C: ClusterEndpoint,
 {
     _tmp_e: std::marker::PhantomData<E>,
-    internal: MediaEndpointInteral,
+    internal: MediaEndpointInternal,
     transport: T,
     cluster: C,
     tick: async_std::stream::Interval,
@@ -51,7 +51,7 @@ where
         }
         Self {
             _tmp_e: std::marker::PhantomData,
-            internal: MediaEndpointInteral::new(room, peer, bitrate_type),
+            internal: MediaEndpointInternal::new(room, peer, bitrate_type),
             transport,
             cluster,
             tick: async_std::stream::interval(std::time::Duration::from_millis(100)),
@@ -69,13 +69,13 @@ where
         while let Some(out) = self.internal.pop_action() {
             match out {
                 MediaInternalAction::Internal(e) => match e {
-                    MediaEndpointInteralEvent::ConnectionClosed => {
+                    MediaEndpointInternalEvent::ConnectionClosed => {
                         return Ok(MediaEndpointOutput::ConnectionClosed);
                     }
-                    MediaEndpointInteralEvent::ConnectionCloseRequest => {
+                    MediaEndpointInternalEvent::ConnectionCloseRequest => {
                         return Ok(MediaEndpointOutput::ConnectionCloseRequest);
                     }
-                    MediaEndpointInteralEvent::SubscribePeer(peer) => {
+                    MediaEndpointInternalEvent::SubscribePeer(peer) => {
                         if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
                             self.peer_subscribe.insert(peer.clone(), ());
                             if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribePeer(peer)) {
@@ -83,7 +83,7 @@ where
                             }
                         }
                     }
-                    MediaEndpointInteralEvent::UnsubscribePeer(peer) => {
+                    MediaEndpointInternalEvent::UnsubscribePeer(peer) => {
                         if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
                             self.peer_subscribe.remove(&peer);
                             if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribePeer(peer)) {

@@ -172,7 +172,7 @@ mod test {
                 Input::SetTarget(spatial, temporal, key_only, need_key) => {
                     assert_eq!(filter.set_target_layer(spatial, temporal, key_only), need_key, "index: {}", index);
                 }
-                Input::Packet(is_key, spatial, temporal, pic_id, tl01, layer_sync, seq, time, (result, swiched, exp_pic_id, exp_tl01)) => {
+                Input::Packet(is_key, spatial, temporal, pic_id, tl01, layer_sync, seq, time, (result, switched, exp_pic_id, exp_tl01)) => {
                     let mut pkt = MediaPacket::simple_video(
                         PayloadCodec::Vp8(
                             is_key,
@@ -189,7 +189,7 @@ mod test {
                         vec![1, 2, 3],
                     );
                     let res = filter.should_send(&mut pkt);
-                    assert_eq!(res, (result, swiched), "index: {}", index);
+                    assert_eq!(res, (result, switched), "index: {}", index);
                     if matches!(res.0, FilterResult::Send) {
                         match &pkt.codec {
                             PayloadCodec::Vp8(_, Some(sim)) => {
@@ -238,7 +238,7 @@ mod test {
     }
 
     #[test]
-    fn rewrite_pic_id_tl01_spatial_switch_stream_remain_continuos() {
+    fn rewrite_pic_id_tl01_spatial_switch_stream_remain_continuous() {
         test(vec![
             Input::SetTarget(0, 1, false, true),
             Input::Packet(false, 0, 0, Some(1), Some(1), false, 0, 100, (FilterResult::Reject, false, None, None)),

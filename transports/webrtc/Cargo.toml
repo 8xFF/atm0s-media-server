@@ -16,7 +16,7 @@ media-utils = { workspace = true }
 poem-openapi = { version = "3.0", features = ["swagger-ui"] }
 str0m = { version = "0.1.0", package = "atm0s-custom-str0m" }
 futures = { workspace = true }
-log = { workpsace = true }
+log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 lz4_flex = { version = "0.11.1" }

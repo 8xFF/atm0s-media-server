@@ -23,7 +23,7 @@ mod remote_track;
 pub use bitrate_limiter::BitrateLimiterType;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum MediaEndpointInteralEvent {
+pub enum MediaEndpointInternalEvent {
     ConnectionClosed,
     ConnectionCloseRequest,
     SubscribePeer(String),
@@ -32,12 +32,12 @@ pub enum MediaEndpointInteralEvent {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MediaInternalAction {
-    Internal(MediaEndpointInteralEvent),
+    Internal(MediaEndpointInternalEvent),
     Endpoint(TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>),
     Cluster(ClusterEndpointOutgoingEvent),
 }
 
-pub struct MediaEndpointInteral {
+pub struct MediaEndpointInternal {
     room_id: String,
     peer_id: String,
     cluster_track_map: HashMap<(String, String), MediaKind>,
@@ -49,9 +49,9 @@ pub struct MediaEndpointInteral {
     bitrate_limiter: bitrate_limiter::BitrateLimiter,
 }
 
-impl MediaEndpointInteral {
+impl MediaEndpointInternal {
     pub fn new(room_id: &str, peer_id: &str, bitrate_limiter: BitrateLimiterType) -> Self {
-        log::info!("[MediaEndpointInteral {}/{}] create", room_id, peer_id);
+        log::info!("[MediaEndpointInternal {}/{}] create", room_id, peer_id);
         Self {
             room_id: room_id.into(),
             peer_id: peer_id.into(),
@@ -73,7 +73,7 @@ impl MediaEndpointInteral {
         self.output_actions.push_back(MediaInternalAction::Cluster(event));
     }
 
-    fn push_internal(&mut self, event: MediaEndpointInteralEvent) {
+    fn push_internal(&mut self, event: MediaEndpointInternalEvent) {
         self.output_actions.push_back(MediaInternalAction::Internal(event));
     }
 
@@ -122,7 +122,7 @@ impl MediaEndpointInteral {
                     TransportStateEvent::Reconnecting => {}
                     TransportStateEvent::Reconnected => {}
                     TransportStateEvent::Disconnected => {
-                        self.push_internal(MediaEndpointInteralEvent::ConnectionClosed);
+                        self.push_internal(MediaEndpointInternalEvent::ConnectionClosed);
                     }
                 }
             }
@@ -244,7 +244,7 @@ impl MediaEndpointInteral {
     fn process_rpc(&mut self, rpc: EndpointRpcIn) {
         match rpc {
             EndpointRpcIn::PeerClose => {
-                self.push_internal(MediaEndpointInteralEvent::ConnectionCloseRequest);
+                self.push_internal(MediaEndpointInternalEvent::ConnectionCloseRequest);
             }
             EndpointRpcIn::SubscribePeer(peer) => {}
             EndpointRpcIn::UnsubscribePeer(peer) => {}
@@ -400,23 +400,23 @@ impl MediaEndpointInteral {
     pub fn before_drop(&mut self, now_ms: u64) {
         let local_tracks = std::mem::take(&mut self.local_tracks);
         for (track_id, mut track) in local_tracks {
-            log::info!("[MediaEndpointInteral {}/{}] close local track {}", self.room_id, self.peer_id, track_id);
+            log::info!("[MediaEndpointInternal {}/{}] close local track {}", self.room_id, self.peer_id, track_id);
             track.close();
             self.pop_local_track_actions(now_ms, track_id, &mut track);
         }
 
         let remote_tracks = std::mem::take(&mut self.remote_tracks);
         for (track_id, mut track) in remote_tracks {
-            log::info!("[MediaEndpointInteral {}/{}] close remote track {}", self.room_id, self.peer_id, track_id);
+            log::info!("[MediaEndpointInternal {}/{}] close remote track {}", self.room_id, self.peer_id, track_id);
             track.close();
             self.pop_remote_track_actions(track_id, &mut track);
         }
     }
 }
 
-impl Drop for MediaEndpointInteral {
+impl Drop for MediaEndpointInternal {
     fn drop(&mut self) {
-        log::info!("[MediaEndpointInteral {}/{}] drop", self.room_id, self.peer_id);
+        log::info!("[MediaEndpointInternal {}/{}] drop", self.room_id, self.peer_id);
         assert!(self.local_tracks.is_empty());
         assert!(self.remote_tracks.is_empty());
     }
@@ -430,16 +430,16 @@ mod tests {
     };
 
     use crate::{
-        endpoint_wrap::internal::{bitrate_limiter::BitrateLimiterType, MediaEndpointInteralEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS},
+        endpoint_wrap::internal::{bitrate_limiter::BitrateLimiterType, MediaEndpointInternalEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS},
         rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverSwitch, RemoteStream, TrackInfo},
         EndpointRpcOut, RpcRequest, RpcResponse,
     };
 
-    use super::MediaEndpointInteral;
+    use super::MediaEndpointInternal;
 
     #[test]
     fn should_fire_cluster_when_remote_track_added_then_close() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn should_fire_cluster_when_remote_track_added_then_removed() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn should_fire_rpc_when_cluster_track_added() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         endpoint.on_cluster(
             0,
@@ -558,18 +558,18 @@ mod tests {
 
     #[test]
     fn should_fire_disconnect_when_transport_disconnect() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         endpoint.on_transport(0, TransportIncomingEvent::State(TransportStateEvent::Disconnected));
 
         // should output internal event
-        assert_eq!(endpoint.pop_action(), Some(MediaInternalAction::Internal(MediaEndpointInteralEvent::ConnectionClosed)));
+        assert_eq!(endpoint.pop_action(), Some(MediaInternalAction::Internal(MediaEndpointInternalEvent::ConnectionClosed)));
         assert_eq!(endpoint.pop_action(), None);
     }
 
     #[test]
     fn should_fire_answer_rpc() {
-        let mut endpoint = MediaEndpointInteral::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
 
         endpoint.on_transport(0, TransportIncomingEvent::LocalTrackAdded("video_0".to_string(), 1, TrackMeta::new_video(None)));
 

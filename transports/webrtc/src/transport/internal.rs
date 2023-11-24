@@ -212,8 +212,8 @@ where
 
         match event {
             Str0mInput::Connected => Ok(()),
-            Str0mInput::ChannelOpen(chanel_id, _name) => {
-                self.channel_id = Some(chanel_id);
+            Str0mInput::ChannelOpen(channel_id, _name) => {
+                self.channel_id = Some(channel_id);
                 self.restore_msgs();
                 Ok(())
             }
@@ -265,7 +265,7 @@ where
                     Err(TransportError::RuntimeError(TransportRuntimeError::RpcInvalid))
                 }
             }
-            Str0mInput::ChannelClosed(_chanel_id) => Ok(()),
+            Str0mInput::ChannelClosed(_channel_id) => Ok(()),
             Str0mInput::IceConnectionStateChange(_state) => Ok(()),
             Str0mInput::MediaPacket(track_id, pkt) => {
                 self.endpoint_actions

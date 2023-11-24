@@ -1,4 +1,4 @@
-# Cluster intergration interface
+# Cluster integration interface
 
-This package define intergration interface for cluster mode, which support multi-servers, multi-zones
+This package define integration interface for cluster mode, which support multi-servers, multi-zones
 

@@ -33,7 +33,7 @@ Process request in order: authentication -> method -> header -> others
 
 For authentication, read rfc for more info.
 
-If not support -> Must generate 405 response with allow types in Alow header (how to generate response in https://www.rfceditor.org/rfc/rfc3261.html#section-8.2.6)
+If not support -> Must generate 405 response with allow types in Allow header (how to generate response in https://www.rfceditor.org/rfc/rfc3261.html#section-8.2.6)
 
 If support -> continue
 

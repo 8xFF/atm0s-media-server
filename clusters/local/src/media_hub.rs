@@ -42,7 +42,7 @@ impl LocalMediaHub {
     }
 
     pub fn forward(&self, consumer_id: ConsumerId, event: ClusterRemoteTrackIncomingEvent) {
-        //TODO optimize this by create map beetween consumer_id and track_uuid
+        //TODO optimize this by create map between consumer_id and track_uuid
         for (_, channel) in &self.channels {
             if channel.consumers.contains_key(&consumer_id) {
                 if let Some((track_id, tx)) = &channel.track {

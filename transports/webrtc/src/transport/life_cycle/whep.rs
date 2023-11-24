@@ -304,7 +304,7 @@ mod tests {
         assert_eq!(life_cycle.pop_action(), Some(Out::ToEndpoint(event)));
         assert_eq!(life_cycle.pop_action(), None);
 
-        // on endpint RemoteRemoved => should request disconnected
+        // on endpoint RemoteRemoved => should request disconnected
         life_cycle.on_endpoint_event(
             1000,
             &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
@@ -401,7 +401,7 @@ mod tests {
         assert_eq!(life_cycle.pop_action(), Some(Out::ToEndpoint(event)));
         assert_eq!(life_cycle.pop_action(), None);
 
-        // on endpint RemoteRemoved => should request disconnected
+        // on endpoint RemoteRemoved => should request disconnected
         life_cycle.on_endpoint_event(
             1000,
             &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
