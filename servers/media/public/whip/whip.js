@@ -142,7 +142,7 @@ export class WHIPClient
 		//Get current config
 		const config = pc.getConfiguration();
 
-		//If it has ice server info and it is not overriden by the client
+		//If it has ice server info and it is not overridden by the client
 		if ((!config.iceServer || !config.iceServer.length) && links.hasOwnProperty("ice-server"))
 		{
 			//ICe server config

@@ -59,7 +59,7 @@ where
         }
     }
 
-    pub async fn on_incomming(&mut self, event: RpcEvent) {
+    pub async fn on_incoming(&mut self, event: RpcEvent) {
         let peers = self.peers.clone();
         let conns = self.conns.clone();
 
@@ -132,7 +132,7 @@ where
                         }
                     });
                 } else {
-                    res.answer(404, Err(ServerError::build("NOT_FOUND", "Connnection not found")));
+                    res.answer(404, Err(ServerError::build("NOT_FOUND", "Connection not found")));
                 }
             }
             RpcEvent::WhepConnect(token, sdp, mut res) => {
@@ -187,7 +187,7 @@ where
                         }
                     });
                 } else {
-                    res.answer(404, Err(ServerError::build("NOT_FOUND", "Connnection not found")));
+                    res.answer(404, Err(ServerError::build("NOT_FOUND", "Connection not found")));
                 }
             }
             RpcEvent::WebrtcConnect(req, mut res) => {

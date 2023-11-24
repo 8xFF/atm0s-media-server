@@ -21,9 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - update few simple unit tests ([#60](https://github.com/8xFF/atm0s-media-server/pull/60))
 - Bump criterion from 0.4.0 to 0.5.1 ([#28](https://github.com/8xFF/atm0s-media-server/pull/28))
 - Bump lz4_flex from 0.9.5 to 0.11.1 ([#27](https://github.com/8xFF/atm0s-media-server/pull/27))
-- Update Rust crate flate2 to 1.0.28 ([#22](https://github.com/8xFF/atm0s-media-server/pull/22))
+- Update Rust crate flat2 to 1.0.28 ([#22](https://github.com/8xFF/atm0s-media-server/pull/22))
 - update with newest sdn ([#21](https://github.com/8xFF/atm0s-media-server/pull/21))
-- 17 intergrate with bluesea sdn v4 ([#18](https://github.com/8xFF/atm0s-media-server/pull/18))
+- 17 integrate with bluesea sdn v4 ([#18](https://github.com/8xFF/atm0s-media-server/pull/18))
 - cargo fmt
 - dynamic payload type from remote ([#16](https://github.com/8xFF/atm0s-media-server/pull/16))
 - update udp_sas for fixing unstable ([#14](https://github.com/8xFF/atm0s-media-server/pull/14))

@@ -107,7 +107,7 @@ async fn main() {
         let mut server = MediaServer::<C, CR>::new(cluster);
 
         while let Ok(event) = rx.recv().await {
-            server.on_incomming(event).await;
+            server.on_incoming(event).await;
         }
     }
 

@@ -313,7 +313,7 @@ where
                 )
             }
             Ok(Err(e)) => {
-                log::error!("[TransportWebrtc] network eror {:?}", e);
+                log::error!("[TransportWebrtc] network error {:?}", e);
                 return Err(TransportError::NetworkError);
             }
             Err(_e) => {

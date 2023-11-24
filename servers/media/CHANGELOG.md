@@ -20,6 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update Rust crate clap to 4.4.8 ([#53](https://github.com/8xFF/atm0s-media-server/pull/53))
 - Update Rust crate clap to 4.4.7 ([#23](https://github.com/8xFF/atm0s-media-server/pull/23))
 - simple rtmp server with SAN I/O style ([#40](https://github.com/8xFF/atm0s-media-server/pull/40))
-- 17 intergrate with bluesea sdn v4 ([#18](https://github.com/8xFF/atm0s-media-server/pull/18))
+- 17 integrate with bluesea sdn v4 ([#18](https://github.com/8xFF/atm0s-media-server/pull/18))
 - cargo fmt
 - break between media-server and transports ([#12](https://github.com/8xFF/atm0s-media-server/pull/12))

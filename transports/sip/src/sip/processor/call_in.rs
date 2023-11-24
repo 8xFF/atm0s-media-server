@@ -317,7 +317,7 @@ mod test {
         assert_eq!(res.raw.status_code, rsip::StatusCode::Trying);
         assert_eq!(processor.pop_action(), None);
 
-        //after call ringing shoudl send Ringing
+        //after call ringing should send Ringing
         processor.ringing(T1 + 1000).expect("Should ok");
         let (_, res) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendResponse);
         assert_eq!(res.raw.status_code, rsip::StatusCode::Ringing);
@@ -360,7 +360,7 @@ mod test {
         assert_eq!(res.raw.status_code, rsip::StatusCode::Trying);
         assert_eq!(processor.pop_action(), None);
 
-        //after call ringing shoudl send Ringing
+        //after call ringing should send Ringing
         processor.ringing(T1 + 1000).expect("Should ok");
         let (_, res) = cast2!(processor.pop_action().expect("Should have action"), ProcessorAction::SendResponse);
         assert_eq!(res.raw.status_code, rsip::StatusCode::Ringing);

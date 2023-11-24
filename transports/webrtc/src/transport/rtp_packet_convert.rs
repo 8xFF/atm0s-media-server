@@ -81,7 +81,7 @@ impl RtpPacketConverter {
             time: rtp.header.timestamp,
             marker: rtp.header.marker,
             // ext_vals: MediaPacketExtensions {
-            //     abs_send_time: rtp.header.ext_vals.abs_send_time.map(|t| (t.numer(), t.denom())),
+            //     abs_send_time: rtp.header.ext_vals.abs_send_time.map(|t| (t.number(), t.denom())),
             //     transport_cc: rtp.header.ext_vals.transport_cc,
             // },
             nackable: nackable,
