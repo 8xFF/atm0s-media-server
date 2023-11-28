@@ -153,6 +153,7 @@ pub fn payload_parse(payload: &[u8], rid: Option<u16>) -> (bool, Option<Vp8Simul
     vp8_header.parse_from(payload, rid)
 }
 
+#[allow(unused_assignments)]
 pub fn payload_rewrite(payload: &mut [u8], codec: &Vp8Simulcast) {
     let mut payload_index = 0;
 

@@ -32,14 +32,12 @@ pub struct SipServerSocket {
     timer: SystemTimer,
     interval: Interval,
     virtual_socket_plane: VirtualSocketPlane<GroupId, SipMessage>,
-    bind_addr: SocketAddr,
 }
 
 impl SipServerSocket {
     pub async fn new(bind_addr: SocketAddr) -> Self {
         log::info!("Listerning on port 5060 for UDP");
         Self {
-            bind_addr,
             main_socket: UdpSocket::bind(bind_addr).await.expect("Should bind udp socket"),
             buf: [0u8; 2048],
             sip_core: SipCore::new(),

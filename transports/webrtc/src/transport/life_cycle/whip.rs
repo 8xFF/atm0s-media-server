@@ -80,7 +80,7 @@ impl TransportLifeCycle for WhipTransportLifeCycle {
         }
     }
 
-    fn on_endpoint_event(&mut self, now_ms: u64, _event: &TransportOutgoingEvent<endpoint::EndpointRpcOut, endpoint::rpc::RemoteTrackRpcOut, endpoint::rpc::LocalTrackRpcOut>) {}
+    fn on_endpoint_event(&mut self, _now_ms: u64, _event: &TransportOutgoingEvent<endpoint::EndpointRpcOut, endpoint::rpc::RemoteTrackRpcOut, endpoint::rpc::LocalTrackRpcOut>) {}
 
     fn pop_action(&mut self) -> Option<Out> {
         self.outputs.pop_front()

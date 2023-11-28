@@ -1,4 +1,4 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 
 use async_std::net::TcpStream;
 use futures::{AsyncReadExt, AsyncWriteExt};
