@@ -76,10 +76,11 @@ impl ClusterEndpoint for PeerLocal {
                 }
                 ClusterLocalTrackOutgoingEvent::RequestKeyFrame(kind) => {
                     let consumer_id = self.peer_id_hash | track_id as u64;
-                    self.media_hub.read().forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame(kind));
+                    self.media_hub.write().forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame(kind));
                 }
                 ClusterLocalTrackOutgoingEvent::LimitBitrate(bitrate) => {
-                    //TODO aggerate all consumers bitrate
+                    let consumer_id = self.peer_id_hash | track_id as u64;
+                    self.media_hub.write().forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(bitrate));
                 }
             },
             ClusterEndpointOutgoingEvent::RemoteTrackEvent(track_id, cluster_track_uuid, event) => match event {

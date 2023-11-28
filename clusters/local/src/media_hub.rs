@@ -6,23 +6,43 @@ use transport::{MediaPacket, TrackId};
 
 pub type ConsumerId = u64;
 
-pub struct LocalChannel {
+struct LocalConsumer {
+    tx: Sender<ClusterEndpointIncomingEvent>,
+    bitrate: Option<u32>,
+}
+
+struct LocalChannel {
     track: Option<(TrackId, Sender<ClusterEndpointIncomingEvent>)>,
-    consumers: HashMap<ConsumerId, Sender<ClusterEndpointIncomingEvent>>,
+    consumers: HashMap<ConsumerId, LocalConsumer>,
+}
+
+impl LocalChannel {
+    fn bitrate(&self) -> u32 {
+        let mut max_bitrate = 0;
+        for (_, consumer) in &self.consumers {
+            if let Some(bitrate) = consumer.bitrate {
+                if max_bitrate < bitrate {
+                    max_bitrate = bitrate;
+                }
+            }
+        }
+        max_bitrate
+    }
 }
 
 #[derive(Default)]
 pub struct LocalMediaHub {
     channels: HashMap<ClusterTrackUuid, LocalChannel>,
+    consumers: HashMap<ConsumerId, ClusterTrackUuid>,
 }
 
 impl LocalMediaHub {
     pub fn relay(&self, track_uuid: ClusterTrackUuid, pkt: MediaPacket) {
         if let Some(channel) = self.channels.get(&track_uuid) {
-            for (consumer_id, tx) in channel.consumers.iter() {
+            for (consumer_id, consumer) in channel.consumers.iter() {
                 let local_track_id = (consumer_id & 0xffff) as u16;
                 let event = ClusterEndpointIncomingEvent::LocalTrackEvent(local_track_id, ClusterLocalTrackIncomingEvent::MediaPacket(pkt.clone()));
-                if let Err(_e) = tx.try_send(event) {
+                if let Err(_e) = consumer.tx.try_send(event) {
                     todo!("handle this {}", _e)
                 }
             }
@@ -31,20 +51,30 @@ impl LocalMediaHub {
 
     pub fn relay_stats(&self, track_uuid: ClusterTrackUuid, stats: ClusterTrackStats) {
         if let Some(channel) = self.channels.get(&track_uuid) {
-            for (consumer_id, tx) in channel.consumers.iter() {
+            for (consumer_id, consumer) in channel.consumers.iter() {
                 let local_track_id = (consumer_id & 0xffff) as u16;
                 let event = ClusterEndpointIncomingEvent::LocalTrackEvent(local_track_id, ClusterLocalTrackIncomingEvent::MediaStats(stats.clone()));
-                if let Err(_e) = tx.try_send(event) {
+                if let Err(_e) = consumer.tx.try_send(event) {
                     todo!("handle this {}", _e)
                 }
             }
         }
     }
 
-    pub fn forward(&self, consumer_id: ConsumerId, event: ClusterRemoteTrackIncomingEvent) {
-        //TODO optimize this by create map between consumer_id and track_uuid
-        for (_, channel) in &self.channels {
-            if channel.consumers.contains_key(&consumer_id) {
+    pub fn forward(&mut self, consumer_id: ConsumerId, event: ClusterRemoteTrackIncomingEvent) {
+        if let Some(track_uuid) = self.consumers.get(&consumer_id) {
+            if let Some(channel) = self.channels.get_mut(track_uuid) {
+                //TODO optimize this by create map between consumer_id and track_uuid
+                let event = match event {
+                    ClusterRemoteTrackIncomingEvent::RequestKeyFrame(kind) => ClusterRemoteTrackIncomingEvent::RequestKeyFrame(kind),
+                    ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(bitrate) => {
+                        if let Some(consumer) = channel.consumers.get_mut(&consumer_id) {
+                            consumer.bitrate = Some(bitrate);
+                        }
+                        ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(channel.bitrate())
+                    }
+                };
+
                 if let Some((track_id, tx)) = &channel.track {
                     let event = ClusterEndpointIncomingEvent::RemoteTrackEvent(*track_id, event.clone());
                     if let Err(_e) = tx.try_send(event) {
@@ -77,7 +107,8 @@ impl LocalMediaHub {
             consumers: HashMap::new(),
             track: None,
         });
-        channel.consumers.insert(consumer_id, tx);
+        channel.consumers.insert(consumer_id, LocalConsumer { tx, bitrate: None });
+        self.consumers.insert(consumer_id, track_uuid);
     }
 
     pub fn unsubscribe(&mut self, track_uuid: ClusterTrackUuid, consumer_id: ConsumerId) {
@@ -87,6 +118,7 @@ impl LocalMediaHub {
                 self.channels.remove(&track_uuid);
             }
         }
+        self.consumers.remove(&consumer_id);
     }
 }
 
@@ -137,5 +169,39 @@ mod test {
         media_hub.remove_track(track_uuid);
         media_hub.forward(consumer_id, ClusterRemoteTrackIncomingEvent::RequestKeyFrame(RequestKeyframeKind::Pli));
         assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn test_forward_bitrate() {
+        let mut media_hub = LocalMediaHub::default();
+        let track_uuid = generate_cluster_track_uuid("room", "peer", "track");
+        let track_id = 1;
+
+        let (tx, rx) = async_std::channel::bounded(100);
+        media_hub.add_track(track_uuid, track_id, tx);
+
+        let (tx2, _rx2) = async_std::channel::bounded(100);
+        media_hub.subscribe(track_uuid, 1002, tx2);
+
+        let (tx3, _rx3) = async_std::channel::bounded(100);
+        media_hub.subscribe(track_uuid, 1003, tx3);
+
+        media_hub.forward(1002, ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(100000));
+        assert_eq!(
+            rx.try_recv(),
+            Ok(ClusterEndpointIncomingEvent::RemoteTrackEvent(track_id, ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(100000)))
+        );
+
+        media_hub.forward(1003, ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(90000));
+        assert_eq!(
+            rx.try_recv(),
+            Ok(ClusterEndpointIncomingEvent::RemoteTrackEvent(track_id, ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(100000)))
+        );
+
+        media_hub.forward(1003, ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(200000));
+        assert_eq!(
+            rx.try_recv(),
+            Ok(ClusterEndpointIncomingEvent::RemoteTrackEvent(track_id, ClusterRemoteTrackIncomingEvent::RequestLimitBitrate(200000)))
+        );
     }
 }

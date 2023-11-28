@@ -8,7 +8,8 @@ use crate::processor::Processor;
 use self::{
     processor::{register::RegisterProcessor, ProcessorAction, ProcessorError},
     sip_request::SipRequest,
-    sip_response::SipResponse, utils::CallId2,
+    sip_response::SipResponse,
+    utils::CallId2,
 };
 
 mod data;

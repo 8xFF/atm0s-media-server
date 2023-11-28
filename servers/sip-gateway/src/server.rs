@@ -7,7 +7,7 @@ use endpoint::{
     EndpointRpcIn, EndpointRpcOut,
 };
 use futures::{select, FutureExt};
-use media_utils::{SystemTimer, Timer};
+use media_utils::{ErrorDebugger, SystemTimer, Timer};
 use rsip::{
     typed::{From, To},
     Auth, Host, HostWithPort, Param, Uri,
@@ -177,12 +177,12 @@ where
                     async_std::task::spawn(async move {
                         if let Some(transport_out) = transport_out {
                             log::info!("[SipInCall] joined to {room_id} {from_user}");
-                            transport_in.accept(timer.now_ms());
-                            tx.send((SipTransport::In(transport_in), room_id.clone(), from_user)).await;
-                            tx.send((SipTransport::Out(transport_out), room_id, to_user)).await;
+                            transport_in.accept(timer.now_ms()).log_error("should accept");
+                            tx.send((SipTransport::In(transport_in), room_id.clone(), from_user)).await.log_error("should send");
+                            tx.send((SipTransport::Out(transport_out), room_id, to_user)).await.log_error("should send");
                         } else {
                             log::info!("[SipInCall] rejected");
-                            transport_in.reject(timer.now_ms());
+                            transport_in.reject(timer.now_ms()).log_error("should reject");
                             run_transport(&mut transport_in, timer).await;
                             log::info!("[SipInCall] ended after rejected");
                         }
