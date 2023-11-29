@@ -1,14 +1,15 @@
 use std::{collections::HashMap, fmt::Display, net::SocketAddr};
 
 use bytes::Bytes;
-use rsip::{headers::CallId, Method};
+use rsip::Method;
 
 use crate::processor::Processor;
 
 use self::{
     processor::{register::RegisterProcessor, ProcessorAction, ProcessorError},
     sip_request::SipRequest,
-    sip_response::SipResponse, utils::CallId2,
+    sip_response::SipResponse,
+    utils::CallId2,
 };
 
 mod data;

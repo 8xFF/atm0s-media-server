@@ -84,7 +84,7 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
                 log::info!("[SdkTransportLifeCycle] on webrtc connected => switched to {:?}", self.state);
             }
             Str0mInput::ChannelOpen(_, _) => match &self.state {
-                State::Connected { datachannel, at_ms } => {
+                State::Connected { datachannel: _, at_ms: _ } => {
                     self.state = State::Connected { datachannel: true, at_ms: now_ms };
                     self.outputs.push_back(Out::ToEndpoint(TransIn::State(TransportStateEvent::Connected)));
                 }
@@ -98,7 +98,7 @@ impl TransportLifeCycle for SdkTransportLifeCycle {
         }
     }
 
-    fn on_endpoint_event(&mut self, now_ms: u64, event: &TransportOutgoingEvent<endpoint::EndpointRpcOut, endpoint::rpc::RemoteTrackRpcOut, endpoint::rpc::LocalTrackRpcOut>) {}
+    fn on_endpoint_event(&mut self, _now_ms: u64, _event: &TransportOutgoingEvent<endpoint::EndpointRpcOut, endpoint::rpc::RemoteTrackRpcOut, endpoint::rpc::LocalTrackRpcOut>) {}
 
     fn pop_action(&mut self) -> Option<Out> {
         self.outputs.pop_front()

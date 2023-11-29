@@ -7,6 +7,7 @@ use endpoint::{
     EndpointRpcIn, EndpointRpcOut,
 };
 use futures::{AsyncReadExt, AsyncWriteExt};
+use media_utils::ErrorDebugger;
 use rml_rtmp::sessions::ServerSessionError;
 use transport::{
     MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError, TransportStateEvent,
@@ -144,6 +145,6 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport<RmIn
     }
 
     async fn close(&mut self) {
-        self.socket.close().await;
+        self.socket.close().await.log_error("need close");
     }
 }

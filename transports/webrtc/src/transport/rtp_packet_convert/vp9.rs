@@ -73,6 +73,7 @@ struct Vp9Header {
 }
 
 impl Vp9Header {
+    #[allow(unused_assignments)]
     pub fn parse_from(&mut self, packet: &[u8], _rid: Option<u16>) -> Result<(bool, Option<Vp9Svc>), PacketError> {
         if packet.is_empty() {
             return Err(PacketError::ErrShortPacket);
@@ -337,6 +338,7 @@ pub fn payload_parse(payload: &[u8], rid: Option<u16>) -> (bool, Option<Vp9Svc>)
     }
 }
 
+#[allow(unused_assignments)]
 pub fn payload_rewrite(payload: &mut [u8], codec: &Vp9Svc) {
     let mut payload_index = 0;
 

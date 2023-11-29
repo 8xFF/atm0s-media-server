@@ -1,4 +1,4 @@
-use atm0s_media_server_transport_webrtc::{SdpBoxRewriteScope, SdpBox};
+use atm0s_media_server_transport_webrtc::{SdpBox, SdpBoxRewriteScope};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
 fn criterion_benchmark(c: &mut Criterion) {

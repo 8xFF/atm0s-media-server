@@ -63,8 +63,7 @@ impl LocalEventHub {
 
 #[cfg(test)]
 mod tests {
-    use cluster::{ClusterEndpointIncomingEvent, ClusterTrackMeta, ClusterTrackStatus};
-    use transport::MediaKind;
+    use cluster::{ClusterEndpointIncomingEvent, ClusterTrackMeta};
 
     #[test]
     fn local_hub_sub_pre() {

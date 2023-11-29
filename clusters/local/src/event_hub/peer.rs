@@ -63,8 +63,7 @@ impl PeerHub {
 
 #[cfg(test)]
 mod tests {
-    use cluster::{ClusterEndpointIncomingEvent, ClusterTrackMeta, ClusterTrackStatus};
-    use transport::MediaKind;
+    use cluster::{ClusterEndpointIncomingEvent, ClusterTrackMeta};
 
     use super::PeerHub;
 

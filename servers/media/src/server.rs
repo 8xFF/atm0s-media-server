@@ -116,7 +116,7 @@ where
                     }
                 }
             }
-            RpcEvent::WhipPatch(_conn_id, sdp, mut res) => {
+            RpcEvent::WhipPatch(_conn_id, _sdp, mut res) => {
                 res.answer(200, Err(ServerError::build("NOT_IMPLEMENTED", "Not implemented")));
             }
             RpcEvent::WhipClose(conn_id, mut res) => {

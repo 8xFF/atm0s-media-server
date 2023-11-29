@@ -8,6 +8,7 @@ mod server;
 use cluster::{Cluster, ClusterEndpoint};
 use cluster_local::ServerLocal;
 use cluster_sdn::{NodeAddr, NodeId, ServerAtm0s, ServerAtm0sConfig};
+use media_utils::ErrorDebugger;
 use server::MediaServer;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
@@ -52,7 +53,7 @@ async fn main() {
         async_std::task::spawn(async move {
             log::info!("Start http server on {}", http_port);
             while let Some(event) = http_server.recv().await {
-                tx_c.send(event).await;
+                tx_c.send(event).await.log_error("need send");
             }
         });
 
@@ -95,7 +96,7 @@ async fn main() {
 
                         match (transport.room(), transport.peer()) {
                             (Some(r), Some(p)) => {
-                                tx_c.send(rpc::RpcEvent::RtmpConnect(transport, r, p)).await;
+                                tx_c.send(rpc::RpcEvent::RtmpConnect(transport, r, p)).await.log_error("need send");
                             }
                             _ => {}
                         }

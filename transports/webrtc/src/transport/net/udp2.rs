@@ -1,11 +1,13 @@
 use async_std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
+#[allow(unused)]
 pub struct WebrtcUdpSocket {
     local_addr: SocketAddr,
     socket: UdpSocket,
 }
 
+#[allow(unused)]
 impl WebrtcUdpSocket {
     pub async fn new(port: u16) -> Result<Self, std::io::Error> {
         let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().expect("Should parse ip address");
