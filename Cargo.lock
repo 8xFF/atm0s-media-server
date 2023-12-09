@@ -409,11 +409,10 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "atm0s-media-server-cluster",
- "atm0s-media-server-cluster-local",
- "atm0s-media-server-cluster-sdn",
  "atm0s-media-server-endpoint",
  "atm0s-media-server-transport",
  "atm0s-media-server-transport-rtmp",
+ "atm0s-media-server-transport-sip",
  "atm0s-media-server-transport-webrtc",
  "atm0s-media-server-utils",
  "clap",
@@ -422,6 +421,7 @@ dependencies = [
  "parking_lot",
  "poem",
  "poem-openapi",
+ "rsip",
  "rust-embed",
  "serde",
  "tracing-subscriber",
@@ -431,31 +431,9 @@ dependencies = [
 name = "atm0s-media-server-cluster"
 version = "0.1.0"
 dependencies = [
- "async-trait",
- "atm0s-media-server-transport",
- "serde",
-]
-
-[[package]]
-name = "atm0s-media-server-cluster-local"
-version = "0.1.0"
-dependencies = [
  "async-std",
  "async-trait",
- "atm0s-media-server-cluster",
- "atm0s-media-server-transport",
- "atm0s-media-server-utils",
- "log",
- "parking_lot",
-]
-
-[[package]]
-name = "atm0s-media-server-cluster-sdn"
-version = "0.1.0"
-dependencies = [
- "async-std",
- "async-trait",
- "atm0s-media-server-cluster",
+ "atm0s-media-server-proc-macro",
  "atm0s-media-server-transport",
  "atm0s-media-server-utils",
  "atm0s-sdn",
@@ -463,6 +441,7 @@ dependencies = [
  "bytes",
  "futures",
  "log",
+ "poem-openapi",
  "serde",
 ]
 
@@ -480,26 +459,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "atm0s-media-server-sip-gateway"
+name = "atm0s-media-server-proc-macro"
 version = "0.1.0"
 dependencies = [
- "async-std",
- "atm0s-media-server-cluster",
- "atm0s-media-server-cluster-local",
- "atm0s-media-server-cluster-sdn",
- "atm0s-media-server-endpoint",
- "atm0s-media-server-transport",
- "atm0s-media-server-transport-sip",
- "atm0s-media-server-utils",
- "clap",
- "env_logger",
- "futures",
- "log",
- "parking_lot",
- "poem",
- "poem-openapi",
- "rsip",
- "serde",
+ "quote",
+ "syn 2.0.39",
 ]
 
 [[package]]
@@ -559,6 +523,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "atm0s-custom-str0m",
+ "atm0s-media-server-cluster",
  "atm0s-media-server-endpoint",
  "atm0s-media-server-transport",
  "atm0s-media-server-utils",
@@ -568,7 +533,6 @@ dependencies = [
  "local-ip-address",
  "log",
  "lz4_flex",
- "poem-openapi",
  "serde",
  "serde_json",
  "udp_sas_async",
@@ -578,6 +542,7 @@ dependencies = [
 name = "atm0s-media-server-utils"
 version = "0.1.0"
 dependencies = [
+ "async-std",
  "log",
  "poem-openapi",
  "serde",
@@ -587,8 +552,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e7d1800e807cde9f9fb10e38e7825355225268518146c7caecb82062143e39"
 dependencies = [
  "async-std",
  "atm0s-sdn-identity",
@@ -599,6 +562,7 @@ dependencies = [
  "atm0s-sdn-network",
  "atm0s-sdn-pub-sub",
  "atm0s-sdn-router",
+ "atm0s-sdn-rpc",
  "atm0s-sdn-transport-tcp",
  "atm0s-sdn-transport-udp",
  "atm0s-sdn-utils",
@@ -608,8 +572,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79d03c2e9be8b3c74c193cd94317fba8ce7417786b6ed4370760e8b6bf25dc4e"
 dependencies = [
  "atm0s-sdn-multiaddr",
  "parking_lot",
@@ -620,8 +582,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-key-value"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47a8220c56c7bd77c7cdd2de2d7540fdccdeb5d585f8a38b0dc399838b2dc875"
 dependencies = [
  "async-std",
  "atm0s-sdn-identity",
@@ -639,8 +599,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-layers-spread-router"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f42df33c56066ae449dce58904b91dba6fafde4d780d065d4f4b843893fe767e"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-router",
@@ -653,8 +611,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-layers-spread-router-sync"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25e29309d995874f3575186f4a7e9202be9f34ee10c138e319212a845103bacc"
 dependencies = [
  "async-trait",
  "atm0s-sdn-identity",
@@ -671,11 +627,10 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-manual-discovery"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2766ba771e3d21c2442f5bae0e2862c58258b051a87d092c70649509240c08fb"
 dependencies = [
  "async-trait",
  "atm0s-sdn-identity",
+ "atm0s-sdn-key-value",
  "atm0s-sdn-network",
  "atm0s-sdn-utils",
  "log",
@@ -687,8 +642,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-multiaddr"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93a67ba9962579701bc208e5fe0ff3e026494a75f5877678e1dc16ff3546b7d1"
 dependencies = [
  "arrayref",
  "byteorder",
@@ -704,8 +657,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-network"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1e53f12fac8160489cd75ea73b8924bc435ab4118367197366a29052a1d9a27"
 dependencies = [
  "async-std",
  "async-trait",
@@ -725,8 +676,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-pub-sub"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86725f2a6a775443e36064495be90292da337c0c1f0d8053e57ab6cfbce2061a"
 dependencies = [
  "async-std",
  "async-trait",
@@ -744,17 +693,28 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-router"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c8afd089faa4ca489470ca1b6b8c8c686c7036f510c7c722473f736ceee10f7"
 dependencies = [
  "atm0s-sdn-identity",
 ]
 
 [[package]]
+name = "atm0s-sdn-rpc"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-network",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "bincode",
+ "log",
+ "parking_lot",
+ "serde",
+]
+
+[[package]]
 name = "atm0s-sdn-transport-tcp"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49cfecddaeb6f6468836b6a0f32fc51961cf854ed262525786c72edfaf279471"
 dependencies = [
  "async-bincode",
  "async-std",
@@ -772,8 +732,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-transport-udp"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23cfbb5d319a22242748f4da9522e85ac14b6432288fdea7858d0c1093b9ee37"
 dependencies = [
  "async-notify",
  "async-std",
@@ -792,8 +750,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2601a3aa91db2d7fa70d2cf409fbbdd05d0a28ff91c3d94a134ca576bafabff"
 dependencies = [
  "async-notify",
  "async-std",
@@ -1439,19 +1395,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95b3f3e67048839cb0d0781f445682a35113da7121f7c949db0e2be96a4fbece"
-dependencies = [
- "humantime",
- "is-terminal",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1936,12 +1879,6 @@ name = "httpdate"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
-
-[[package]]
-name = "humantime"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
@@ -3454,15 +3391,6 @@ dependencies = [
  "redox_syscall",
  "rustix 0.38.25",
  "windows-sys",
-]
-
-[[package]]
-name = "termcolor"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff1bc3d3f05aff0403e8ac0d92ced918ec05b666a43f83297ccef5bea8a3d449"
-dependencies = [
- "winapi-util",
 ]
 
 [[package]]

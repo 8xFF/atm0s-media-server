@@ -1,2 +1,5 @@
 [net]
 git-fetch-with-cli = true
+
+[patch.crates-io]
+atm0s-sdn = { path = "../atm0s-sdn/packages/runner" }

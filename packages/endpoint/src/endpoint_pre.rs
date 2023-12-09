@@ -1,5 +1,5 @@
-use cluster::ClusterEndpoint;
-use media_utils::{EndpointSubscribeScope, ServerError};
+use cluster::{ClusterEndpoint, EndpointSubscribeScope};
+use media_utils::ServerError;
 use transport::Transport;
 
 use crate::{

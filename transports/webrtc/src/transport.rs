@@ -1,15 +1,17 @@
 use std::time::{Duration, Instant};
 
 use async_std::prelude::FutureExt;
+use cluster::rpc::{
+    webrtc::{WebrtcConnectRequestSender, WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
+    RpcReqRes,
+};
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, RpcResponse},
     EndpointRpcIn, EndpointRpcOut,
 };
-use media_utils::ServerError;
+
 use str0m::{bwe::Bitrate, change::SdpOffer, media::KeyframeRequestKind, net::Receive, rtp::ExtensionValues, Candidate, Input, Output, Rtc, RtcError};
 use transport::{RequestKeyframeKind, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
-
-use crate::rpc::{WebrtcConnectRequestSender, WebrtcRemoteIceRequest};
 
 use self::{
     internal::{
@@ -36,7 +38,8 @@ mod str0m_event_convert;
 const INIT_BWE_BITRATE_KBPS: u64 = 1500; //1500kbps
 
 pub enum WebrtcTransportEvent {
-    RemoteIce(WebrtcRemoteIceRequest, transport::RpcResponse<()>),
+    RemoteIce(Box<dyn RpcReqRes<WebrtcRemoteIceRequest, WebrtcRemoteIceResponse>>),
+    SdpPatch(Box<dyn RpcReqRes<WebrtcPatchRequest, WebrtcPatchResponse>>),
 }
 
 pub struct WebrtcTransport<L>
@@ -199,15 +202,13 @@ where
                         log::warn!("[TransportWebrtc] missing track for mid {} when requesting REMB {}", mid, max);
                     }
                 }
-                Str0mAction::RemoteIce(ice, mut res) => match Candidate::from_sdp_string(ice.candidate.as_str()) {
+                Str0mAction::RemoteIce(candidate) => match Candidate::from_sdp_string(&candidate) {
                     Ok(can) => {
                         log::info!("on remote ice {:?}", can);
                         self.rtc.add_remote_candidate(can);
-                        res.answer(200, Ok(()));
                     }
                     Err(e) => {
                         log::error!("error on parse ice candidate {:?}", e);
-                        res.answer(200, Err(ServerError::build("ICE_CANDIDATE_PARSE_ERROR", format!("{:?}", e))));
                     }
                 },
             }

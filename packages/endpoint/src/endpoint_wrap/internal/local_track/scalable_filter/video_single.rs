@@ -17,7 +17,7 @@ impl ScalableFilter for VideoSingleFilter {
 
     fn resume(&mut self) {}
 
-    fn set_target_layer(&mut self, spatial: u8, temporal: u8, key_only: bool) -> bool {
+    fn set_target_layer(&mut self, _spatial: u8, _temporal: u8, _key_only: bool) -> bool {
         self.wait_key
     }
 

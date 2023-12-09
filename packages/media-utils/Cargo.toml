@@ -12,3 +12,4 @@ serde = { workspace = true }
 sorted-vec = "0.8"
 poem-openapi = { version = "3.0" }
 log = { workspace = true }
+async-std = { workspace = true }

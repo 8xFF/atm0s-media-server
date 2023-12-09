@@ -10,10 +10,10 @@ description = "Webrtc Transport for atm0s-media-server"
 [dependencies]
 endpoint = { workspace = true }
 transport = { workspace = true }
+cluster = { workspace = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }
 media-utils = { workspace = true }
-poem-openapi = { version = "3.0", features = ["swagger-ui"] }
 str0m = { version = "0.1.0", package = "atm0s-custom-str0m" }
 futures = { workspace = true }
 log = { workspace = true }

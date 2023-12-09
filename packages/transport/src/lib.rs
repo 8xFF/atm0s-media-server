@@ -2,14 +2,12 @@ mod codec;
 mod event;
 mod kind;
 mod packet;
-mod rpc;
 mod samplerate;
 
 pub use codec::*;
 pub use event::*;
 pub use kind::*;
 pub use packet::*;
-pub use rpc::*;
 pub use samplerate::*;
 
 pub type TrackId = u16;

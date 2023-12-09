@@ -144,7 +144,7 @@ impl MediaEndpointInternal {
                 if let Some(track) = self.remote_tracks.get_mut(&track_id) {
                     track.on_transport_event(now_ms, event);
                 } else {
-                    log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
+                    log::warn!("[EndpointInternal] remote track not found {:?} for event", track_id);
                 }
             }
             TransportIncomingEvent::RemoteTrackRemoved(_track_name, track_id) => {
@@ -152,7 +152,7 @@ impl MediaEndpointInternal {
                     track.close();
                     self.pop_remote_track_actions(track_id, &mut track);
                 } else {
-                    log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
+                    log::warn!("[EndpointInternal] remote track not found {:?} for removed", track_id);
                 }
             }
             TransportIncomingEvent::LocalTrackAdded(track_name, track_id, meta) => {
@@ -229,7 +229,7 @@ impl MediaEndpointInternal {
                 if let Some(track) = self.remote_tracks.get_mut(&track_id) {
                     track.on_cluster_event(event);
                 } else {
-                    log::warn!("[EndpointInternal] remote track not found {:?}", track_id);
+                    log::warn!("[EndpointInternal] remote track not found {:?} for handle cluster event", track_id);
                 }
             }
         }
