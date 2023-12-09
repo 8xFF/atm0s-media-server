@@ -32,7 +32,7 @@ pub struct WebrtcConnectRequest {
     pub join_now: Option<bool>,
     pub codecs: Option<Vec<PayloadType>>,
     pub receivers: WebrtcConnectRequestReceivers,
-    pub sdp: String,
+    pub sdp: Option<String>,
     pub compressed_sdp: Option<Vec<u8>>,
     pub senders: Vec<WebrtcConnectRequestSender>,
     pub remote_bitrate_control_mode: Option<RemoteBitrateControlMode>,
@@ -40,7 +40,8 @@ pub struct WebrtcConnectRequest {
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8)]
 pub struct WebrtcConnectResponse {
-    pub sdp: String,
+    pub sdp: Option<String>,
+    pub compressed_sdp: Option<Vec<u8>>,
     pub conn_id: String,
 }
 

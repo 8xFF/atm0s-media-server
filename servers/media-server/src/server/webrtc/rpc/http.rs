@@ -5,6 +5,7 @@ use cluster::rpc::webrtc::*;
 use cluster::rpc::whep::*;
 use cluster::rpc::whip::*;
 use media_utils::Response;
+use media_utils::StringCompression;
 use poem::{
     http::StatusCode,
     web::{Data, Path},
@@ -37,7 +38,8 @@ impl WebrtcHttpApis {
         log::info!("[HttpApis] create whip endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WhipConnectRequest, WhipConnectResponse>::new(WhipConnectRequest {
             token: "token".to_string(),
-            sdp: body.0,
+            sdp: Some(body.0),
+            compressed_sdp: None,
         });
         ctx.0
             .send(RpcEvent::WhipConnect(Box::new(req)))
@@ -45,10 +47,17 @@ impl WebrtcHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whip endpoint created with conn_id {} and sdp {}", res.conn_id, res.sdp);
+        let sdp = match (res.sdp, res.compressed_sdp) {
+            (Some(sdp), _) => Ok(sdp),
+            (_, Some(compressed_sdp)) => StringCompression::default()
+                .uncompress(&compressed_sdp)
+                .ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+            _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+        }?;
+        log::info!("[HttpApis] Whip endpoint created with conn_id {} and sdp {}", res.conn_id, sdp);
         Ok(HttpResponse {
             code: StatusCode::CREATED,
-            res: ApplicationSdp(res.sdp),
+            res: ApplicationSdp(sdp),
             headers: vec![("location", format!("/whip/conn/{}", res.conn_id))],
         })
     }
@@ -99,7 +108,8 @@ impl WebrtcHttpApis {
         log::info!("[HttpApis] create whep endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WhepConnectRequest, WhepConnectResponse>::new(WhepConnectRequest {
             token: "token".to_string(),
-            sdp: body.0,
+            sdp: Some(body.0),
+            compressed_sdp: None,
         });
         ctx.0
             .send(RpcEvent::WhepConnect(Box::new(req)))
@@ -107,10 +117,17 @@ impl WebrtcHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whep endpoint created with conn_id {} and sdp {}", res.conn_id, res.sdp);
+        let sdp = match (res.sdp, res.compressed_sdp) {
+            (Some(sdp), _) => Ok(sdp),
+            (_, Some(compressed_sdp)) => StringCompression::default()
+                .uncompress(&compressed_sdp)
+                .ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+            _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+        }?;
+        log::info!("[HttpApis] Whep endpoint created with conn_id {} and sdp {}", res.conn_id, sdp);
         Ok(HttpResponse {
             code: StatusCode::CREATED,
-            res: ApplicationSdp(res.sdp),
+            res: ApplicationSdp(sdp),
             headers: vec![("location", format!("/whep/conn/{}", res.conn_id))],
         })
     }
@@ -166,6 +183,13 @@ impl WebrtcHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let sdp = match (res.sdp, res.compressed_sdp) {
+            (Some(sdp), _) => Ok(sdp),
+            (_, Some(compressed_sdp)) => StringCompression::default()
+                .uncompress(&compressed_sdp)
+                .ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+            _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+        }?;
         log::info!("[HttpApis] Webrtc endpoint created with conn_id {}", res.conn_id);
         Ok(Json(Response {
             status: true,
@@ -173,7 +197,7 @@ impl WebrtcHttpApis {
             data: Some(WebrtcSdp {
                 node_id: 0,
                 conn_id: res.conn_id,
-                sdp: res.sdp,
+                sdp,
                 service_token: None,
             }),
         }))

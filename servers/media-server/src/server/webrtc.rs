@@ -15,7 +15,7 @@ use cluster::{
 };
 use endpoint::BitrateLimiterType;
 use futures::{select, FutureExt};
-use media_utils::{AutoCancelTask, ErrorDebugger, SystemTimer, Timer};
+use media_utils::{AutoCancelTask, ErrorDebugger, StringCompression, SystemTimer, Timer};
 use poem::Route;
 use poem_openapi::OpenApiService;
 use transport_webrtc::{SdkTransportLifeCycle, SdpBoxRewriteScope, WhepTransportLifeCycle, WhipTransportLifeCycle};
@@ -135,6 +135,21 @@ where
                 //TODO validate token to get room
                 let room = req.param().token.as_str();
                 let peer = "publisher";
+                let (sdp, is_compress) = match (&req.param().sdp, &req.param().compressed_sdp) {
+                    (Some(sdp), _) => (sdp.clone(), false),
+                    (_, Some(compressed_sdp)) => {
+                        if let Some(sdp) = StringCompression::default().uncompress(&compressed_sdp) {
+                            (sdp, true)
+                        } else {
+                            req.answer(Err("DECOMPRESS_SDP_ERROR"));
+                            continue;
+                        }
+                    }
+                    _ => {
+                        req.answer(Err("MISSING_SDP"));
+                        continue;
+                    }
+                };
                 log::info!("[MediaServer] on whip connection from {} {}", room, peer);
                 let life_cycle = WhipTransportLifeCycle::new(timer.now_ms());
                 match run_webrtc_endpoint(
@@ -145,7 +160,7 @@ where
                     BitrateLimiterType::MaxBitrateOnly,
                     &room,
                     peer,
-                    &req.param().sdp,
+                    &sdp,
                     vec![
                         WebrtcConnectRequestSender {
                             kind: "audio".to_string(),
@@ -167,7 +182,19 @@ where
                 .await
                 {
                     Ok((sdp, conn_id)) => {
-                        req.answer(Ok(WhipConnectResponse { conn_id, sdp }));
+                        if is_compress {
+                            req.answer(Ok(WhipConnectResponse {
+                                conn_id,
+                                sdp: None,
+                                compressed_sdp: Some(StringCompression::default().compress(&sdp)),
+                            }));
+                        } else {
+                            req.answer(Ok(WhipConnectResponse {
+                                conn_id,
+                                sdp: Some(sdp),
+                                compressed_sdp: None,
+                            }));
+                        }
                     }
                     Err(err) => {
                         req.answer(Err(&err.code));
@@ -178,6 +205,21 @@ where
                 //TODO validate token to get room
                 let room = req.param().token.as_str();
                 let peer = format!("whep-{}", whep_counter);
+                let (sdp, is_compress) = match (&req.param().sdp, &req.param().compressed_sdp) {
+                    (Some(sdp), _) => (sdp.clone(), false),
+                    (_, Some(compressed_sdp)) => {
+                        if let Some(sdp) = StringCompression::default().uncompress(&compressed_sdp) {
+                            (sdp, true)
+                        } else {
+                            req.answer(Err("DECOMPRESS_SDP_ERROR"));
+                            continue;
+                        }
+                    }
+                    _ => {
+                        req.answer(Err("MISSING_SDP"));
+                        continue;
+                    }
+                };
                 whep_counter += 1;
 
                 log::info!("[MediaServer] on whep connection from {} {}", room, peer);
@@ -190,14 +232,26 @@ where
                     BitrateLimiterType::MaxBitrateOnly,
                     &room,
                     &peer,
-                    &req.param().sdp,
+                    &sdp,
                     vec![],
                     Some(SdpBoxRewriteScope::OnlyTrack),
                 )
                 .await
                 {
                     Ok((sdp, conn_id)) => {
-                        req.answer(Ok(WhepConnectResponse { conn_id, sdp }));
+                        if is_compress {
+                            req.answer(Ok(WhepConnectResponse {
+                                conn_id,
+                                sdp: None,
+                                compressed_sdp: Some(StringCompression::default().compress(&sdp)),
+                            }));
+                        } else {
+                            req.answer(Ok(WhepConnectResponse {
+                                conn_id,
+                                sdp: Some(sdp),
+                                compressed_sdp: None,
+                            }));
+                        }
                     }
                     Err(err) => {
                         req.answer(Err(&err.code));
@@ -205,6 +259,21 @@ where
                 }
             }
             RpcEvent::WebrtcConnect(req) => {
+                let (sdp, is_compress) = match (&req.param().sdp, &req.param().compressed_sdp) {
+                    (Some(sdp), _) => (sdp.clone(), false),
+                    (_, Some(compressed_sdp)) => {
+                        if let Some(sdp) = StringCompression::default().uncompress(&compressed_sdp) {
+                            (sdp, true)
+                        } else {
+                            req.answer(Err("DECOMPRESS_SDP_ERROR"));
+                            continue;
+                        }
+                    }
+                    _ => {
+                        req.answer(Err("MISSING_SDP"));
+                        continue;
+                    }
+                };
                 let param = req.param();
                 log::info!("[MediaServer] on webrtc connection from {} {}", param.room, param.peer);
                 let sub_scope = param.sub_scope.unwrap_or(EndpointSubscribeScope::RoomAuto);
@@ -220,14 +289,26 @@ where
                     },
                     &param.room,
                     &param.peer,
-                    &param.sdp,
+                    &sdp,
                     param.senders.clone(),
                     Some(SdpBoxRewriteScope::StreamAndTrack),
                 )
                 .await
                 {
                     Ok((sdp, conn_id)) => {
-                        req.answer(Ok(WebrtcConnectResponse { conn_id, sdp }));
+                        if is_compress {
+                            req.answer(Ok(WebrtcConnectResponse {
+                                conn_id,
+                                sdp: None,
+                                compressed_sdp: Some(StringCompression::default().compress(&sdp)),
+                            }));
+                        } else {
+                            req.answer(Ok(WebrtcConnectResponse {
+                                conn_id,
+                                sdp: Some(sdp),
+                                compressed_sdp: None,
+                            }));
+                        }
                     }
                     Err(err) => {
                         req.answer(Err(&err.code));

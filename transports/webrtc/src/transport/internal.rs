@@ -5,7 +5,7 @@ use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     EndpointRpcIn, EndpointRpcOut,
 };
-use media_utils::{HashMapMultiKey, RtpSeqExtend};
+use media_utils::{HashMapMultiKey, RtpSeqExtend, StringCompression};
 use str0m::{
     media::{Direction, MediaKind, Mid, Simulcast},
     rtp::SeqNo,
@@ -19,7 +19,6 @@ use transport::{
 use self::{
     local_track_id_generator::LocalTrackIdGenerator,
     rpc::{rpc_from_string, rpc_local_track_to_string, rpc_remote_track_to_string, rpc_to_string, IncomingRpc, TransportRpcIn, TransportRpcOut},
-    string_compression::StringCompression,
     track_info_queue::TrackInfoQueue,
     utils::to_transport_kind,
 };
@@ -35,7 +34,6 @@ use super::{
 
 mod local_track_id_generator;
 pub(crate) mod rpc;
-mod string_compression;
 mod track_info_queue;
 pub(crate) mod utils;
 

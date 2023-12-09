@@ -528,11 +528,9 @@ dependencies = [
  "atm0s-media-server-transport",
  "atm0s-media-server-utils",
  "criterion",
- "flate2",
  "futures",
  "local-ip-address",
  "log",
- "lz4_flex",
  "serde",
  "serde_json",
  "udp_sas_async",
@@ -543,7 +541,9 @@ name = "atm0s-media-server-utils"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "flate2",
  "log",
+ "lz4_flex",
  "poem-openapi",
  "serde",
  "sorted-vec",

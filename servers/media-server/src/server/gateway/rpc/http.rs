@@ -5,6 +5,7 @@ use cluster::rpc::webrtc::*;
 use cluster::rpc::whep::*;
 use cluster::rpc::whip::*;
 use media_utils::Response;
+use media_utils::StringCompression;
 use poem::{
     http::StatusCode,
     web::{Data, Path},
@@ -34,10 +35,12 @@ impl GatewayHttpApis {
     /// connect whip endpoint
     #[oai(path = "/whip/endpoint", method = "post")]
     async fn create_whip(&self, ctx: Data<&Sender<RpcEvent>>, body: ApplicationSdp<String>) -> Result<HttpResponse<ApplicationSdp<String>>> {
+        let string_zip = StringCompression::default();
         log::info!("[HttpApis] create whip endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WhipConnectRequest, WhipConnectResponse>::new(WhipConnectRequest {
             token: "token".to_string(),
-            sdp: body.0,
+            sdp: None,
+            compressed_sdp: Some(string_zip.compress(&body.0)),
         });
         ctx.0
             .send(RpcEvent::WhipConnect(Box::new(req)))
@@ -45,10 +48,15 @@ impl GatewayHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whip endpoint created with conn_id {} and sdp {}", res.conn_id, res.sdp);
+        let sdp = match (res.sdp, res.compressed_sdp) {
+            (Some(sdp), _) => Ok(sdp),
+            (_, Some(compressed_sdp)) => string_zip.uncompress(&compressed_sdp).ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+            _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+        }?;
+        log::info!("[HttpApis] Whip endpoint created with conn_id {} and sdp {}", res.conn_id, sdp);
         Ok(HttpResponse {
             code: StatusCode::CREATED,
-            res: ApplicationSdp(res.sdp),
+            res: ApplicationSdp(sdp),
             headers: vec![("location", format!("/whip/conn/{}", res.conn_id))],
         })
     }
@@ -96,10 +104,12 @@ impl GatewayHttpApis {
     /// connect whep endpoint
     #[oai(path = "/whep/endpoint", method = "post")]
     async fn create_whep(&self, ctx: Data<&Sender<RpcEvent>>, body: ApplicationSdp<String>) -> Result<HttpResponse<ApplicationSdp<String>>> {
+        let string_zip = StringCompression::default();
         log::info!("[HttpApis] create whep endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WhepConnectRequest, WhepConnectResponse>::new(WhepConnectRequest {
             token: "token".to_string(),
-            sdp: body.0,
+            sdp: None,
+            compressed_sdp: Some(string_zip.compress(&body.0)),
         });
         ctx.0
             .send(RpcEvent::WhepConnect(Box::new(req)))
@@ -107,10 +117,15 @@ impl GatewayHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whep endpoint created with conn_id {} and sdp {}", res.conn_id, res.sdp);
+        let sdp = match (res.sdp, res.compressed_sdp) {
+            (Some(sdp), _) => Ok(sdp),
+            (_, Some(compressed_sdp)) => string_zip.uncompress(&compressed_sdp).ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+            _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+        }?;
+        log::info!("[HttpApis] Whep endpoint created with conn_id {} and sdp {}", res.conn_id, sdp);
         Ok(HttpResponse {
             code: StatusCode::CREATED,
-            res: ApplicationSdp(res.sdp),
+            res: ApplicationSdp(sdp),
             headers: vec![("location", format!("/whep/conn/{}", res.conn_id))],
         })
     }
@@ -157,8 +172,12 @@ impl GatewayHttpApis {
 
     /// connect webrtc endpoint
     #[oai(path = "/webrtc/connect", method = "post")]
-    async fn create_webrtc(&self, ctx: Data<&Sender<RpcEvent>>, body: Json<WebrtcConnectRequest>) -> Result<Json<Response<WebrtcSdp>>> {
+    async fn create_webrtc(&self, ctx: Data<&Sender<RpcEvent>>, mut body: Json<WebrtcConnectRequest>) -> Result<Json<Response<WebrtcSdp>>> {
+        let string_zip = StringCompression::default();
         log::info!("[HttpApis] create Webrtc endpoint {}/{}", body.0.room, body.0.peer);
+        if let Some(sdp) = body.0.sdp.take() {
+            body.0.compressed_sdp = Some(string_zip.compress(&sdp));
+        }
         let (req, rx) = RpcReqResHttp::<WebrtcConnectRequest, WebrtcConnectResponse>::new(body.0);
         ctx.0
             .send(RpcEvent::WebrtcConnect(Box::new(req)))
@@ -166,6 +185,11 @@ impl GatewayHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let sdp = match (res.sdp, res.compressed_sdp) {
+            (Some(sdp), _) => Ok(sdp),
+            (_, Some(compressed_sdp)) => string_zip.uncompress(&compressed_sdp).ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+            _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+        }?;
         log::info!("[HttpApis] Webrtc endpoint created with conn_id {}", res.conn_id);
         Ok(Json(Response {
             status: true,
@@ -173,7 +197,7 @@ impl GatewayHttpApis {
             data: Some(WebrtcSdp {
                 node_id: 0,
                 conn_id: res.conn_id,
-                sdp: res.sdp,
+                sdp,
                 service_token: None,
             }),
         }))
