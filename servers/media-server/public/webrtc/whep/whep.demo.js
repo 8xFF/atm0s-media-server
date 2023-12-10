@@ -19,7 +19,7 @@ window.start = async () => {
 	//Create whep client
 	const whep = new WHEPClient();
 
-	const url = "/api/whep/endpoint";
+	const url = "/whep/endpoint";
 	const token = document.getElementById("room-id").value;
 
 	//Start viewing

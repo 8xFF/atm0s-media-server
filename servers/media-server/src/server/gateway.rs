@@ -9,7 +9,7 @@ use cluster::{
         webrtc::{WebrtcConnectRequest, WebrtcConnectResponse, WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         whep::{WhepConnectRequest, WhepConnectResponse},
         whip::{WhipConnectRequest, WhipConnectResponse},
-        RpcEmitter, RpcEndpoint, RpcRequest, RPC_WEBRTC_ICE,
+        RpcEmitter, RpcEndpoint, RpcRequest, RPC_WEBRTC_ICE, RPC_WHIP_CONNECT, RPC_WHEP_CONNECT, RPC_WEBRTC_CONNECT, RPC_WEBRTC_PATCH, RPC_MEDIA_ENDPOINT_CLOSE,
     },
     Cluster, ClusterEndpoint, MEDIA_SERVER_SERVICE,
 };
@@ -97,44 +97,54 @@ where
                 req.answer(Ok(gateway_logic.on_ping(timer.now_ms(), req.param())));
             }
             RpcEvent::WhipConnect(req) => {
+                log::info!("[Gateway] whip connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
                 let mut nodes = gateway_logic.best_nodes(ServiceType::Webrtc, 60, 80, 1);
                 if let Some(node_id) = nodes.pop() {
+                    log::info!("[Gateway] whip connect to node {}", node_id);
                     let rpc_emitter = rpc_emitter.clone();
                     async_std::task::spawn_local(async move {
                         let res = rpc_emitter
-                            .request::<WhipConnectRequest, WhipConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WEBRTC_ICE, req.param().clone(), 5000)
+                            .request::<WhipConnectRequest, WhipConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WHIP_CONNECT, req.param().clone(), 5000)
                             .await;
+                        log::info!("[Gateway] whip connect res from media-server {:?}", res.as_ref().map(|_| ()));
                         req.answer(res.map_err(|_e| "INTERNAL_ERROR"));
                     });
                 } else {
+                    log::warn!("[Gateway] whip connect but media-server pool empty");
                     req.answer(Err("NODE_POOL_EMPTY"));
                 }
             }
             RpcEvent::WhepConnect(req) => {
+                log::info!("[Gateway] whep connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
                 let mut nodes = gateway_logic.best_nodes(ServiceType::Webrtc, 60, 80, 1);
                 if let Some(node_id) = nodes.pop() {
                     let rpc_emitter = rpc_emitter.clone();
                     async_std::task::spawn_local(async move {
                         let res = rpc_emitter
-                            .request::<WhepConnectRequest, WhepConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WEBRTC_ICE, req.param().clone(), 5000)
+                            .request::<WhepConnectRequest, WhepConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WHEP_CONNECT, req.param().clone(), 5000)
                             .await;
+                        log::info!("[Gateway] whep connect res from media-server {:?}", res.as_ref().map(|_| ()));
                         req.answer(res.map_err(|_e| "INTERNAL_ERROR"));
                     });
                 } else {
+                    log::warn!("[Gateway] whep connect but media-server pool empty");
                     req.answer(Err("NODE_POOL_EMPTY"));
                 }
             }
             RpcEvent::WebrtcConnect(req) => {
+                log::info!("[Gateway] webrtc connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
                 let mut nodes = gateway_logic.best_nodes(ServiceType::Webrtc, 60, 80, 1);
                 if let Some(node_id) = nodes.pop() {
                     let rpc_emitter = rpc_emitter.clone();
                     async_std::task::spawn_local(async move {
                         let res = rpc_emitter
-                            .request::<WebrtcConnectRequest, WebrtcConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WEBRTC_ICE, req.param().clone(), 5000)
+                            .request::<WebrtcConnectRequest, WebrtcConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WEBRTC_CONNECT, req.param().clone(), 5000)
                             .await;
+                        log::info!("[Gateway] webrtc connect res from media-server {:?}", res.as_ref().map(|_| ()));
                         req.answer(res.map_err(|_e| "INTERNAL_ERROR"));
                     });
                 } else {
+                    log::warn!("[Gateway] webrtc connect but media-server pool empty");
                     req.answer(Err("NODE_POOL_EMPTY"));
                 }
             }
@@ -156,7 +166,7 @@ where
                     let rpc_emitter = rpc_emitter.clone();
                     async_std::task::spawn_local(async move {
                         let res = rpc_emitter
-                            .request::<WebrtcPatchRequest, WebrtcPatchResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WEBRTC_ICE, req.param().clone(), 5000)
+                            .request::<WebrtcPatchRequest, WebrtcPatchResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WEBRTC_PATCH, req.param().clone(), 5000)
                             .await;
                         req.answer(res.map_err(|_e| "INTERNAL_ERROR"));
                     });
@@ -169,7 +179,7 @@ where
                     let rpc_emitter = rpc_emitter.clone();
                     async_std::task::spawn_local(async move {
                         let res = rpc_emitter
-                            .request::<MediaEndpointCloseRequest, MediaEndpointCloseResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WEBRTC_ICE, req.param().clone(), 5000)
+                            .request::<MediaEndpointCloseRequest, MediaEndpointCloseResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_MEDIA_ENDPOINT_CLOSE, req.param().clone(), 5000)
                             .await;
                         req.answer(res.map_err(|_e| "INTERNAL_ERROR"));
                     });

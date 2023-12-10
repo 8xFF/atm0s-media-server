@@ -35,7 +35,7 @@ window.start = async () => {
     //Create whip client
     const whip = new WHIPClient();
 
-    const url = "/api/whip/endpoint";
+    const url = "/whip/endpoint";
     const token = document.getElementById("room-id").value;
 
     //Start publishing

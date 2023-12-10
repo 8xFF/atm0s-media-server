@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use cluster::rpc::{RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT};
+use cluster::rpc::{RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT, RPC_NODE_HEALTHCHECK};
 
 use super::RpcEvent;
 
@@ -21,7 +21,13 @@ impl<RPC: RpcEndpoint<Req, Emitter>, Req: RpcRequest, Emitter: RpcEmitter> Webrt
     pub async fn recv(&mut self) -> Option<RpcEvent> {
         loop {
             let event = self.rpc.recv().await?;
+            log::info!("[MediaServer][Webrtc] on request {}", event.cmd());
             match event.cmd() {
+                RPC_NODE_HEALTHCHECK => {
+                    if let Some(req) = event.parse() {
+                        return Some(RpcEvent::NodeHeathcheck(req));
+                    }
+                }
                 RPC_WEBRTC_CONNECT => {
                     if let Some(req) = event.parse() {
                         return Some(RpcEvent::WebrtcConnect(req));
@@ -43,11 +49,13 @@ impl<RPC: RpcEndpoint<Req, Emitter>, Req: RpcRequest, Emitter: RpcEmitter> Webrt
                     }
                 }
                 RPC_WHIP_CONNECT => {
+                    log::info!("[MediaServer][Webrtc] on whip connect request");
                     if let Some(req) = event.parse() {
                         return Some(RpcEvent::WhipConnect(req));
                     }
                 }
                 RPC_WHEP_CONNECT => {
+                    log::info!("[MediaServer][Webrtc] on whep connect request");
                     if let Some(req) = event.parse() {
                         return Some(RpcEvent::WhepConnect(req));
                     }
