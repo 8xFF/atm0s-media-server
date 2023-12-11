@@ -9,7 +9,7 @@ use cluster::{
         webrtc::{WebrtcConnectRequest, WebrtcConnectResponse, WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         whep::{WhepConnectRequest, WhepConnectResponse},
         whip::{WhipConnectRequest, WhipConnectResponse},
-        RpcEmitter, RpcEndpoint, RpcRequest, RPC_WEBRTC_ICE, RPC_WHIP_CONNECT, RPC_WHEP_CONNECT, RPC_WEBRTC_CONNECT, RPC_WEBRTC_PATCH, RPC_MEDIA_ENDPOINT_CLOSE,
+        RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT,
     },
     Cluster, ClusterEndpoint, MEDIA_SERVER_SERVICE,
 };
@@ -21,7 +21,7 @@ use poem_openapi::OpenApiService;
 use crate::rpc::http::HttpRpcServer;
 
 #[cfg(feature = "embed-samples")]
-use poem::endpoint::EmbeddedFilesEndpoint;
+use crate::rpc::http::EmbeddedFilesEndpoint;
 #[cfg(feature = "embed-samples")]
 use rust_embed::RustEmbed;
 
@@ -30,7 +30,7 @@ use poem::endpoint::StaticFilesEndpoint;
 
 #[cfg(feature = "embed-samples")]
 #[derive(RustEmbed)]
-#[folder = "public/webrtc"]
+#[folder = "public"]
 pub struct Files;
 
 use self::{
@@ -63,9 +63,9 @@ where
     let spec = api_service.spec();
 
     #[cfg(feature = "embed-samples")]
-    let samples = EmbeddedFilesEndpoint::<Files>::new();
+    let samples = EmbeddedFilesEndpoint::<Files>::new(Some("index.html".to_string()));
     #[cfg(not(feature = "embed-samples"))]
-    let samples = StaticFilesEndpoint::new("./servers/media/public/").show_files_listing().index_file("index.html");
+    let samples = StaticFilesEndpoint::new("./servers/media-server/public/").index_file("index.html");
     let route = Route::new()
         .nest("/", api_service)
         .nest("/ui/", ui)

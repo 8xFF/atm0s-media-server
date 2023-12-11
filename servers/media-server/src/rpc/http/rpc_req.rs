@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use async_std::channel::{bounded, Receiver, Sender};
-use cluster::{rpc::RpcReqRes, atm0s_sdn::ErrorUtils};
+use cluster::{atm0s_sdn::ErrorUtils, rpc::RpcReqRes};
 
 #[derive(Debug)]
 pub struct RpcReqResHttp<P, R> {

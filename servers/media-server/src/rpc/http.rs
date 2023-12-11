@@ -1,9 +1,11 @@
 use async_std::channel::{bounded, Receiver, Sender};
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 
+mod embeded_endpoint;
 mod payload_sdp;
 mod rpc_req;
 
+pub use embeded_endpoint::EmbeddedFilesEndpoint;
 pub use payload_sdp::{ApplicationSdp, HttpResponse};
 pub use rpc_req::RpcReqResHttp;
 
