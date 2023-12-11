@@ -78,9 +78,11 @@ impl ServiceRegistry {
         if res.len() < size {
             for slot in self.nodes.iter().rev() {
                 if slot.usage <= max_usage_fallback {
-                    res.push(slot.node_id);
-                    if res.len() == size {
-                        break;
+                    if !res.contains(&slot.node_id) {
+                        res.push(slot.node_id);
+                        if res.len() == size {
+                            break;
+                        }
                     }
                 }
             }
@@ -171,7 +173,7 @@ mod tests {
         let max1 = 100;
         registry.on_ping(now_ms, node_id1, usage1, max1);
 
-        let node_id2 = 1;
+        let node_id2 = 2;
         let usage2 = 75;
         let max2 = 150;
         registry.on_ping(now_ms, node_id2, usage2, max2);
@@ -204,10 +206,10 @@ mod tests {
         let max_usage_fallback = 80;
         let size = 2;
 
-        let result = registry.best_nodes(max_usage_fallback, max_usage, size);
+        let mut result = registry.best_nodes(max_usage_fallback, max_usage, size);
 
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0], node_id1);
-        assert_eq!(result[1], node_id2);
+        result.sort();
+        assert_eq!(result, [node_id1, node_id2]);
     }
 }
