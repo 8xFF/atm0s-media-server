@@ -586,9 +586,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.1.1"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e7d1800e807cde9f9fb10e38e7825355225268518146c7caecb82062143e39"
+checksum = "8d2c2f04d10b0f3f9ada07d36fb683f3d1bdf7116d8babfa3988c4c18ccd014c"
 dependencies = [
  "async-std",
  "atm0s-sdn-identity",
@@ -599,6 +599,7 @@ dependencies = [
  "atm0s-sdn-network",
  "atm0s-sdn-pub-sub",
  "atm0s-sdn-router",
+ "atm0s-sdn-rpc",
  "atm0s-sdn-transport-tcp",
  "atm0s-sdn-transport-udp",
  "atm0s-sdn-utils",
@@ -607,9 +608,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-identity"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79d03c2e9be8b3c74c193cd94317fba8ce7417786b6ed4370760e8b6bf25dc4e"
+checksum = "d868c5023326acb1c8a259e1bd7089b80f0d93941fabcb652189b8e4b98404ca"
 dependencies = [
  "atm0s-sdn-multiaddr",
  "parking_lot",
@@ -619,9 +620,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-key-value"
-version = "0.1.2"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47a8220c56c7bd77c7cdd2de2d7540fdccdeb5d585f8a38b0dc399838b2dc875"
+checksum = "e7e3fa3e8d5ff1a9114c1cb590439d8a9fb739872b4c031f5de12f5d6ccee996"
 dependencies = [
  "async-std",
  "atm0s-sdn-identity",
@@ -638,9 +639,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-layers-spread-router"
-version = "0.1.1"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f42df33c56066ae449dce58904b91dba6fafde4d780d065d4f4b843893fe767e"
+checksum = "0a383120fe48f2a430ee58713ae6523aead606e95846b3d720f251760951edec"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-router",
@@ -652,9 +653,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-layers-spread-router-sync"
-version = "0.1.1"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25e29309d995874f3575186f4a7e9202be9f34ee10c138e319212a845103bacc"
+checksum = "a272bb953a3d65f9910c760051a15e702a678d8692159d725af6b7b69fc76bda"
 dependencies = [
  "async-trait",
  "atm0s-sdn-identity",
@@ -670,13 +671,15 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-manual-discovery"
-version = "0.1.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2766ba771e3d21c2442f5bae0e2862c58258b051a87d092c70649509240c08fb"
+checksum = "de5e107a83a59e7434917157633fa17d59a5f848597634b6021fcaf02b44822d"
 dependencies = [
  "async-trait",
  "atm0s-sdn-identity",
+ "atm0s-sdn-key-value",
  "atm0s-sdn-network",
+ "atm0s-sdn-router",
  "atm0s-sdn-utils",
  "log",
  "parking_lot",
@@ -686,9 +689,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-multiaddr"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93a67ba9962579701bc208e5fe0ff3e026494a75f5877678e1dc16ff3546b7d1"
+checksum = "a2419dbb11291313c7d3cf48d9fe854624a8bd7c80c59d6d41a905d8e2b0ae83"
 dependencies = [
  "arrayref",
  "byteorder",
@@ -703,9 +706,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-network"
-version = "0.1.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1e53f12fac8160489cd75ea73b8924bc435ab4118367197366a29052a1d9a27"
+checksum = "c16bcaf197cd12063599e7273fb145c793fcd5d8af3a26e375be820015fc7e95"
 dependencies = [
  "async-std",
  "async-trait",
@@ -724,9 +727,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-pub-sub"
-version = "0.1.1"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86725f2a6a775443e36064495be90292da337c0c1f0d8053e57ab6cfbce2061a"
+checksum = "2f7ba969e635a3a2e8547610f8565249eb815bea691ffc0d9af04f618ebb7fcc"
 dependencies = [
  "async-std",
  "async-trait",
@@ -743,18 +746,35 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-router"
-version = "0.1.0"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c8afd089faa4ca489470ca1b6b8c8c686c7036f510c7c722473f736ceee10f7"
+checksum = "b2e80753cc2ea000badee9b24ad488583a42620a0a94120fb18ecc7065e40178"
 dependencies = [
  "atm0s-sdn-identity",
 ]
 
 [[package]]
-name = "atm0s-sdn-transport-tcp"
-version = "0.1.1"
+name = "atm0s-sdn-rpc"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49cfecddaeb6f6468836b6a0f32fc51961cf854ed262525786c72edfaf279471"
+checksum = "39ccb06777c3672132f5c1479615cc0c96ca557b22acf4ee94c93451069b7b6e"
+dependencies = [
+ "async-std",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-network",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "bincode",
+ "log",
+ "parking_lot",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-sdn-transport-tcp"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3db115509119f858cf02c685a937cb0b00c204c0a77e16f1a753e3054850ce4e"
 dependencies = [
  "async-bincode",
  "async-std",
@@ -771,9 +791,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-transport-udp"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23cfbb5d319a22242748f4da9522e85ac14b6432288fdea7858d0c1093b9ee37"
+checksum = "f5d5ffd84ee70c9ff20694efb0bc2dd14cff7b6b135bc08d9d15de1b4f8cbce4"
 dependencies = [
  "async-notify",
  "async-std",
@@ -791,9 +811,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-utils"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2601a3aa91db2d7fa70d2cf409fbbdd05d0a28ff91c3d94a134ca576bafabff"
+checksum = "2e648fecc372185b13c6da558d7675e90d6326229ed5af53ac4d4ed65685b5b0"
 dependencies = [
  "async-notify",
  "async-std",
@@ -1186,7 +1206,7 @@ dependencies = [
  "clap",
  "criterion-plot",
  "is-terminal",
- "itertools",
+ "itertools 0.10.5",
  "num-traits",
  "once_cell",
  "oorandom",
@@ -1207,7 +1227,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -1392,12 +1412,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "difflib"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
-
-[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1557,15 +1571,6 @@ checksum = "46303f565772937ffe1d394a4fac6f411c6013172fadde9dcdb1e147a086940e"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
-]
-
-[[package]]
-name = "float-cmp"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -2072,6 +2077,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2277,9 +2291,9 @@ dependencies = [
 
 [[package]]
 name = "mockall"
-version = "0.11.4"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c84490118f2ee2d74570d114f3d0493cbf02790df303d2707606c3e14e07c96"
+checksum = "1a978c8292954bcb9347a4e28772c0a0621166a1598fc1be28ac0076a4bb810e"
 dependencies = [
  "cfg-if",
  "downcast",
@@ -2292,14 +2306,14 @@ dependencies = [
 
 [[package]]
 name = "mockall_derive"
-version = "0.11.4"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22ce75669015c4f47b289fd4d4f56e894e4c96003ffdf3ac51313126f94c6cbb"
+checksum = "ad2765371d0978ba4ace4ebef047baa62fc068b431e468444b5610dd441c639b"
 dependencies = [
  "cfg-if",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.39",
 ]
 
 [[package]]
@@ -2390,12 +2404,6 @@ dependencies = [
  "memchr",
  "minimal-lexical",
 ]
-
-[[package]]
-name = "normalize-line-endings"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
 name = "nu-ansi-term"
@@ -2773,16 +2781,13 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "predicates"
-version = "2.1.5"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
+checksum = "6dfc28575c2e3f19cb3c73b93af36460ae898d426eba6fc15b9bd2a5220758a0"
 dependencies = [
- "difflib",
- "float-cmp",
- "itertools",
- "normalize-line-endings",
+ "anstyle",
+ "itertools 0.11.0",
  "predicates-core",
- "regex",
 ]
 
 [[package]]
