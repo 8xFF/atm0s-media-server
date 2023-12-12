@@ -44,11 +44,7 @@ mod rpc;
 /// Media Server Webrtc
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-pub struct GatewayArgs {
-    /// Rtmp port
-    #[arg(env, long)]
-    port: u16,
-}
+pub struct GatewayArgs {}
 
 pub async fn run_gateway_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: GatewayArgs, _cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where

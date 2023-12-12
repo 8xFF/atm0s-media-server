@@ -31,6 +31,10 @@ struct Args {
     #[arg(env, long, default_value_t = 1)]
     node_id: NodeId,
 
+    /// Current Node ID
+    #[arg(env, long, default_value_t = 100)]
+    max_conn: u64,
+
     /// Neighbors
     #[arg(env, long)]
     seeds: Vec<NodeAddr>,
@@ -67,7 +71,7 @@ async fn main() {
         #[cfg(feature = "webrtc")]
         Servers::Webrtc(opts) => {
             use server::MediaServerContext;
-            let ctx = MediaServerContext::new(args.node_id);
+            let ctx = MediaServerContext::new(args.node_id, args.max_conn);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
             if let Err(e) = run_webrtc_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[WebrtcServer] error {}", e);
@@ -76,7 +80,7 @@ async fn main() {
         #[cfg(feature = "rtmp")]
         Servers::Rtmp(opts) => {
             use server::MediaServerContext;
-            let ctx = MediaServerContext::new(args.node_id);
+            let ctx = MediaServerContext::new(args.node_id, args.max_conn);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
             if let Err(e) = run_rtmp_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[RtmpServer] error {}", e);
@@ -85,7 +89,7 @@ async fn main() {
         #[cfg(feature = "sip")]
         Servers::Sip(opts) => {
             use server::MediaServerContext;
-            let ctx = MediaServerContext::new(args.node_id);
+            let ctx = MediaServerContext::new(args.node_id, args.max_conn);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
             if let Err(e) = run_sip_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[RtmpServer] error {}", e);

@@ -79,7 +79,13 @@ where
     let (rx, conn_id, old_tx) = context.create_peer(room, peer);
     log::info!("[MediaServer] on rtmp connection from {} {}", room, peer);
 
-    let mut session = RtmpSession::new(&peer, &peer, cluster, conn, rx).await?;
+    let mut session = match RtmpSession::new(&peer, &peer, cluster, conn, rx).await {
+        Ok(session) => session,
+        Err(e) => {
+            context.close_conn(&conn_id);
+            return Err(e);
+        }
+    };
 
     if let Some(old_tx) = old_tx {
         let (tx, rx) = async_std::channel::bounded(1);

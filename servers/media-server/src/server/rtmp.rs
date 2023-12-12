@@ -15,6 +15,7 @@ use cluster::{
 };
 use futures::{select, FutureExt};
 use media_utils::{AutoCancelTask, ErrorDebugger};
+use metrics_dashboard::build_dashboard_route;
 use poem::Route;
 use poem_openapi::OpenApiService;
 
@@ -26,7 +27,7 @@ use super::MediaServerContext;
 use session::run_rtmp_endpoint;
 
 #[cfg(feature = "embed-samples")]
-use poem::endpoint::EmbeddedFilesEndpoint;
+use crate::rpc::http::EmbeddedFilesEndpoint;
 #[cfg(feature = "embed-samples")]
 use rust_embed::RustEmbed;
 
@@ -72,20 +73,25 @@ where
     let spec = api_service.spec();
 
     #[cfg(feature = "embed-samples")]
-    let samples = EmbeddedFilesEndpoint::<Files>::new();
+    let samples = EmbeddedFilesEndpoint::<Files>::new(Some("index.html".to_string()));
     #[cfg(not(feature = "embed-samples"))]
     let samples = StaticFilesEndpoint::new("./servers/media/public/rtmp").show_files_listing().index_file("index.html");
     let route = Route::new()
         .nest("/", api_service)
+        .nest("/dashboard/", build_dashboard_route())
         .nest("/ui/", ui)
         .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()))
         .nest("/samples", samples);
+
+    // Init media-server related metrics
+    ctx.init_metrics();
 
     http_server.start(route).await;
 
     let rtmp_port = opts.port;
     let node_id = cluster.node_id();
     let rpc_emitter = rpc_endpoint.emitter();
+    let ctx_c = ctx.clone();
     let _ping_task: AutoCancelTask<_> = async_std::task::spawn_local(async move {
         async_std::task::sleep(Duration::from_secs(10)).await;
         loop {
@@ -98,8 +104,8 @@ where
                         node_id,
                         rtmp: None,
                         sip: Some(ServiceInfo {
-                            usage: 0, //TODO implement real info
-                            max: 100,
+                            usage: ((ctx_c.conns_live() * 100) / ctx_c.conns_max()) as u8, //TODO implement real info
+                            max: ctx_c.conns_max() as u32,
                             addr: Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rtmp_port)),
                             domain: None,
                         }),

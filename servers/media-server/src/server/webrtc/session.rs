@@ -117,6 +117,7 @@ where
         Ok(res) => res,
         Err(e) => {
             log::error!("Error on create webrtc session: {:?}", e);
+            context.close_conn(&conn_id);
             return Err(ServerError::build("CONNECT_ERROR", format!("{:?}", e)));
         }
     };
