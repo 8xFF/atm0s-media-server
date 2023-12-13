@@ -1,0 +1,5 @@
+[net]
+git-fetch-with-cli = true
+
+[patch.crates-io]
+libsoxr-sys = { git = "https://github.com/giangndm/libsoxr-sys.git", rev = "994fb732a4237d65d241fc83771dd24f4c25e8de" }

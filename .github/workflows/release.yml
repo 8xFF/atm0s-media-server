@@ -18,6 +18,9 @@ env:
   ARTIFACT_DIR: release-builds
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  LIBOPUS_STATIC: true
+  LIBSOXR_STATIC: true
+  OPENSSL_STATIC: true
 
 jobs:
   build-release:
@@ -29,7 +32,7 @@ jobs:
       matrix:
         build:
           - linux gnu x64
-          # - linux musl x64
+          - linux musl x64
           - linux gnu aarch64
           # - linux musl aarch64
           # - linux gnueabihf arm
@@ -49,12 +52,12 @@ jobs:
             target: x86_64-unknown-linux-gnu
             extension: ""
             cross: false
-          # - build: linux musl x64
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: x86_64-unknown-linux-musl
-          #   extension: ""
-          #   cross: false
+          - build: linux musl x64
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-musl
+            extension: ""
+            cross: false
           - build: linux gnu aarch64
             os: ubuntu-latest
             rust: stable
@@ -120,7 +123,7 @@ jobs:
             rust: stable
             target: aarch64-apple-darwin
             extension: ""
-            cross: false
+            cross: true
           # - build: windows gnu x64
           #   os: ubuntu-latest
           #   rust: stable
@@ -149,15 +152,9 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
 
-      - name: Install deps (ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends libssl-dev libopus-dev libfdk-aac-dev
-
-      - name: Install deps (macos)
-        if: matrix.os == 'macos-latest'
+      - name: Patch some libs
         run: |
-          brew update
-          brew install openssl opus fdk-aac
+          mv ./.cargo/config.toml.release-build .cargo/config.toml
 
       - name: Build
         uses: actions-rs/cargo@v1
