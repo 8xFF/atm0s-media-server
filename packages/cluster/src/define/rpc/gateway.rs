@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ServiceInfo {
     pub usage: u8,
+    pub live: u32,
     pub max: u32,
     pub addr: Option<SocketAddr>,
     pub domain: Option<String>,

@@ -1,4 +1,5 @@
 use async_std::channel::{bounded, Receiver, Sender};
+use metrics_dashboard::HttpMetricMiddleware;
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 
 mod embeded_endpoint;
@@ -27,7 +28,7 @@ impl<R: 'static + Send> HttpRpcServer<R> {
 
         log::info!("Listening http server on 0.0.0.0:{}", self.port);
         async_std::task::spawn(async move {
-            Server::new(socket).run(route).await.expect("Should run");
+            Server::new(socket).run(route.with(HttpMetricMiddleware)).await.expect("Should run");
         });
     }
 

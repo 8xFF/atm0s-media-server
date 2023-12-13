@@ -64,6 +64,7 @@ impl<InternalControl> MediaServerContext<InternalControl> {
     pub fn init_metrics(&self) {
         describe_counter!(METRIC_SESSIONS_COUNT, "Sum number of joined sessions");
         describe_gauge!(METRIC_SESSIONS_LIVE, "Current live sessions number");
+        describe_gauge!(METRIC_SESSIONS_MAX, "Max live sessions number");
 
         gauge!(METRIC_SESSIONS_MAX, self.conn_max as f64);
     }
@@ -103,12 +104,14 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         let peer = PeerIdentity::new(room, peer);
         let (tx, conn_id) = self.peers.write().remove(&peer)?;
         self.conns.write().remove(&conn_id);
+        gauge!(METRIC_SESSIONS_LIVE, self.peers.read().len() as f64);
         Some(tx)
     }
 
     pub fn close_conn(&self, conn_id: &str) -> Option<Sender<InternalControl>> {
         let (tx, peer_id) = self.conns.write().remove(conn_id)?;
         self.peers.write().remove(&peer_id);
+        gauge!(METRIC_SESSIONS_LIVE, self.peers.read().len() as f64);
         Some(tx)
     }
 

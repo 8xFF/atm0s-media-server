@@ -15,6 +15,8 @@ use cluster::{
 };
 use futures::{select, FutureExt};
 use media_utils::{SystemTimer, Timer};
+use metrics::{describe_counter, increment_counter};
+use metrics_dashboard::build_dashboard_route;
 use poem::Route;
 use poem_openapi::OpenApiService;
 
@@ -40,6 +42,9 @@ use self::{
 
 mod logic;
 mod rpc;
+
+const GATEWAY_SESSIONS_CONNECT_COUNT: &str = "gateway.sessions.connect.count";
+const GATEWAY_SESSIONS_CONNECT_ERROR: &str = "gateway.sessions.connect.error";
 
 async fn select_node<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, node_ids: &[u32]) -> Option<u32> {
     let mut futures = Vec::new();
@@ -101,9 +106,13 @@ where
     let samples = StaticFilesEndpoint::new("./servers/media-server/public/").index_file("index.html");
     let route = Route::new()
         .nest("/", api_service)
+        .nest("/dashboard/", build_dashboard_route())
         .nest("/ui/", ui)
         .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()))
         .nest("/samples", samples);
+
+    describe_counter!(GATEWAY_SESSIONS_CONNECT_COUNT, "Gateway sessions connect count");
+    describe_counter!(GATEWAY_SESSIONS_CONNECT_ERROR, "Gateway sessions connect error count");
 
     http_server.start(route).await;
     let mut tick = async_std::stream::interval(Duration::from_millis(100));
@@ -130,6 +139,8 @@ where
                 req.answer(Ok(gateway_logic.on_ping(timer.now_ms(), req.param())));
             }
             RpcEvent::WhipConnect(req) => {
+                increment_counter!(GATEWAY_SESSIONS_CONNECT_COUNT);
+
                 log::info!("[Gateway] whip connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
                 let nodes = gateway_logic.best_nodes(ServiceType::Webrtc, 60, 80, 3);
                 if !nodes.is_empty() {
@@ -143,18 +154,25 @@ where
                                 .request::<WhipConnectRequest, WhipConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WHIP_CONNECT, req.param().clone(), 5000)
                                 .await;
                             log::info!("[Gateway] whip connect res from media-server {:?}", res.as_ref().map(|_| ()));
+                            if res.is_err() {
+                                increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
+                            }
                             req.answer(res.map_err(|_e| "INTERNAL_ERROR"));
                         } else {
+                            increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
                             log::warn!("[Gateway] whep connect but ping nodes {:?} timeout", nodes);
                             req.answer(Err("NODE_POOL_EMPTY"));
                         }
                     });
                 } else {
+                    increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
                     log::warn!("[Gateway] whip connect but media-server pool empty");
                     req.answer(Err("NODE_POOL_EMPTY"));
                 }
             }
             RpcEvent::WhepConnect(req) => {
+                increment_counter!(GATEWAY_SESSIONS_CONNECT_COUNT);
+
                 log::info!("[Gateway] whep connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
                 let nodes = gateway_logic.best_nodes(ServiceType::Webrtc, 60, 80, 3);
                 if !nodes.is_empty() {
@@ -168,18 +186,25 @@ where
                                 .request::<WhepConnectRequest, WhepConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WHEP_CONNECT, req.param().clone(), 5000)
                                 .await;
                             log::info!("[Gateway] whep connect res from media-server {:?}", res.as_ref().map(|_| ()));
+                            if res.is_err() {
+                                increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
+                            }
                             req.answer(res.map_err(|_e| "INTERNAL_ERROR"));
                         } else {
+                            increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
                             log::warn!("[Gateway] whep connect but ping nodes {:?} timeout", nodes);
                             req.answer(Err("NODE_POOL_EMPTY"));
                         }
                     });
                 } else {
+                    increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
                     log::warn!("[Gateway] whep connect but media-server pool empty");
                     req.answer(Err("NODE_POOL_EMPTY"));
                 }
             }
             RpcEvent::WebrtcConnect(req) => {
+                increment_counter!(GATEWAY_SESSIONS_CONNECT_COUNT);
+
                 log::info!("[Gateway] webrtc connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
                 let nodes = gateway_logic.best_nodes(ServiceType::Webrtc, 60, 80, 3);
                 if !nodes.is_empty() {
@@ -193,13 +218,18 @@ where
                                 .request::<WebrtcConnectRequest, WebrtcConnectResponse>(MEDIA_SERVER_SERVICE, Some(node_id), RPC_WEBRTC_CONNECT, req.param().clone(), 5000)
                                 .await;
                             log::info!("[Gateway] webrtc connect res from media-server {:?}", res.as_ref().map(|_| ()));
+                            if res.is_err() {
+                                increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
+                            }
                             req.answer(res.map_err(|_e| "INTERNAL_ERROR"));
                         } else {
+                            increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
                             log::warn!("[Gateway] webrtc connect but ping nodes {:?} timeout", nodes);
                             req.answer(Err("NODE_POOL_EMPTY"));
                         }
                     });
                 } else {
+                    increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
                     log::warn!("[Gateway] webrtc connect but media-server pool empty");
                     req.answer(Err("NODE_POOL_EMPTY"));
                 }

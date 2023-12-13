@@ -10,7 +10,7 @@ use self::service::ServiceRegistry;
 mod service;
 
 /// Represents the type of service.
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum ServiceType {
     Webrtc,
     Rtmp,
@@ -47,13 +47,13 @@ impl GatewayLogic {
     /// A `NodePong` struct with a success flag indicating the success of the ping operation.
     pub fn on_ping(&mut self, now_ms: u64, ping: &NodePing) -> NodePong {
         if let Some(meta) = &ping.webrtc {
-            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Webrtc, meta.usage, meta.max);
+            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Webrtc, meta.usage, meta.live, meta.max);
         }
         if let Some(meta) = &ping.rtmp {
-            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Rtmp, meta.usage, meta.max);
+            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Rtmp, meta.usage, meta.live, meta.max);
         }
         if let Some(meta) = &ping.sip {
-            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Sip, meta.usage, meta.max);
+            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Sip, meta.usage, meta.live, meta.max);
         }
         NodePong { success: true }
     }
@@ -83,9 +83,9 @@ impl GatewayLogic {
     /// * `service` - The type of service.
     /// * `usage` - The usage value.
     /// * `max` - The maximum value.
-    fn on_node_ping_service(&mut self, now_ms: u64, node_id: NodeId, service: ServiceType, usage: u8, max: u32) {
-        let service = self.services.entry(service).or_insert_with(|| ServiceRegistry::default());
-        service.on_ping(now_ms, node_id, usage, max);
+    fn on_node_ping_service(&mut self, now_ms: u64, node_id: NodeId, service: ServiceType, usage: u8, live: u32, max: u32) {
+        let service = self.services.entry(service).or_insert_with(move || ServiceRegistry::new(service));
+        service.on_ping(now_ms, node_id, usage, live, max);
     }
 }
 
@@ -114,12 +114,14 @@ mod tests {
             node_id: 1,
             webrtc: Some(ServiceInfo {
                 usage: 50,
+                live: 50,
                 max: 100,
                 addr: None,
                 domain: None,
             }),
             rtmp: Some(ServiceInfo {
                 usage: 30,
+                live: 24,
                 max: 80,
                 addr: Some("127.0.0.1:1935".parse().expect("")),
                 domain: None,
