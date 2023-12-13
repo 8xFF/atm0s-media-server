@@ -103,7 +103,8 @@ where
                         rtmp: None,
                         sip: None,
                         webrtc: Some(ServiceInfo {
-                            usage: ((ctx_c.conns_live() * 100) / ctx_c.conns_max()) as u8, //TODO implement real info
+                            usage: ((ctx_c.conns_live() * 100) / ctx_c.conns_max()) as u8,
+                            live: ctx_c.conns_live() as u32,
                             max: ctx_c.conns_max() as u32,
                             addr: None,
                             domain: None,
