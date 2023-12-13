@@ -5,9 +5,9 @@ use cluster::{implement::NodeId, rpc::gateway::create_conn_id};
 use metrics::{describe_counter, describe_gauge, gauge, increment_counter};
 use parking_lot::RwLock;
 
-const METRIC_SESSIONS_COUNT: &'static str = "media_server.sessions.count";
-const METRIC_SESSIONS_LIVE: &'static str = "media_server.sessions.live";
-const METRIC_SESSIONS_MAX: &'static str = "media_server.sessions.max";
+const METRIC_SESSIONS_COUNT: &str = "media_server.sessions.count";
+const METRIC_SESSIONS_LIVE: &str = "media_server.sessions.live";
+const METRIC_SESSIONS_MAX: &str = "media_server.sessions.max";
 
 #[cfg(feature = "gateway")]
 pub mod gateway;

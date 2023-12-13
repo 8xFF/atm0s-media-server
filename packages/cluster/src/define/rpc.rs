@@ -48,12 +48,12 @@ pub trait RpcEmitter: Clone {
     async fn request<Req: Into<Vec<u8>> + Send, Res: for<'a> TryFrom<&'a [u8]> + Send>(&self, service: u8, node: Option<u32>, cmd: &str, req: Req, timeout_ms: u64) -> Result<Res, RpcError>;
 }
 
-pub const RPC_WEBRTC_CONNECT: &'static str = "RPC_WEBRTC_CONNECT";
-pub const RPC_WEBRTC_ICE: &'static str = "RPC_WEBRTC_ICE";
-pub const RPC_WEBRTC_PATCH: &'static str = "RPC_WEBRTC_PATCH";
-pub const RPC_MEDIA_ENDPOINT_CLOSE: &'static str = "RPC_MEDIA_ENDPOINT_CLOSE";
-pub const RPC_WHIP_CONNECT: &'static str = "RPC_WHIP_CONNECT";
-pub const RPC_WHEP_CONNECT: &'static str = "RPC_WHEP_CONNECT";
+pub const RPC_WEBRTC_CONNECT: &str = "RPC_WEBRTC_CONNECT";
+pub const RPC_WEBRTC_ICE: &str = "RPC_WEBRTC_ICE";
+pub const RPC_WEBRTC_PATCH: &str = "RPC_WEBRTC_PATCH";
+pub const RPC_MEDIA_ENDPOINT_CLOSE: &str = "RPC_MEDIA_ENDPOINT_CLOSE";
+pub const RPC_WHIP_CONNECT: &str = "RPC_WHIP_CONNECT";
+pub const RPC_WHEP_CONNECT: &str = "RPC_WHEP_CONNECT";
 
-pub const RPC_NODE_PING: &'static str = "RPC_NODE_PING";
-pub const RPC_NODE_HEALTHCHECK: &'static str = "RPC_NODE_HEALTHCHECK";
+pub const RPC_NODE_PING: &str = "RPC_NODE_PING";
+pub const RPC_NODE_HEALTHCHECK: &str = "RPC_NODE_HEALTHCHECK";
