@@ -26,3 +26,15 @@ impl<D, E: Debug> ErrorDebugger for Result<D, E> {
         }
     }
 }
+
+pub trait OptionDebugger {
+    fn log_option(&self, msg: &str);
+}
+
+impl<D> OptionDebugger for Option<D> {
+    fn log_option(&self, msg: &str) {
+        if self.is_none() {
+            log::error!("{}", msg);
+        }
+    }
+}

@@ -11,3 +11,17 @@ license = "MIT"
 transport = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
+poem-openapi = { version = "3.0" }
+media-utils = { workspace = true }
+proc-macro = { workspace = true }
+bincode = { version = "1" }
+
+async-std = { workspace = true, optional = true }
+log = { workspace = true, optional = true  }
+atm0s-sdn = { version = "0.1.4", features = ["all"], optional = true  }
+futures = { workspace = true, optional = true  }
+bytes = { version = "1.5", optional = true  }
+
+[features]
+default = ["impl"]
+impl = ["async-std", "log", "atm0s-sdn", "futures", "bytes"]

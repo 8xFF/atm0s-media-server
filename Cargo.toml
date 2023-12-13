@@ -4,13 +4,10 @@ members = [
     "packages/endpoint",
     "packages/transport",
     "packages/media-utils",
-    "clusters/local",
-    "clusters/sdn",
     "transports/webrtc",
     "transports/rtmp",
     "transports/sip",
-    "servers/media",
-    "servers/sip-gateway",
+    "servers/media-server"
 ]
 
 [workspace.dependencies]
@@ -20,9 +17,8 @@ transport = { path = "packages/transport", package = "atm0s-media-server-transpo
 transport-webrtc = { path = "transports/webrtc", package = "atm0s-media-server-transport-webrtc", version = "0.1.0" }
 transport-rtmp = { path = "transports/rtmp", package = "atm0s-media-server-transport-rtmp", version = "0.1.0" }
 transport-sip = { path = "transports/sip", package = "atm0s-media-server-transport-sip", version = "0.1.0" }
-cluster-local = { path = "clusters/local", package = "atm0s-media-server-cluster-local", version = "0.1.0" }
-cluster-sdn = { path = "clusters/sdn", package = "atm0s-media-server-cluster-sdn", version = "0.1.0" }
 media-utils = { path = "packages/media-utils", package = "atm0s-media-server-utils", version = "0.1.0" }
+proc-macro = { path = "packages/proc-macro", package = "atm0s-media-server-proc-macro", version = "0.1.0" }
 futures = "0.3"
 async-trait = "0.1"
 async-std = { version = "1.12", features = ["tokio1", "unstable", "attributes"] }

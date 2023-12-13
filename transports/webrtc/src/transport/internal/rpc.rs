@@ -1,10 +1,9 @@
+use cluster::rpc::webrtc::{WebrtcConnectRequestReceivers, WebrtcConnectRequestSender};
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle},
     EndpointRpcIn, EndpointRpcOut, RpcRequest, RpcResponse,
 };
 use serde::{Deserialize, Serialize};
-
-use crate::rpc::{WebrtcConnectRequestReceivers, WebrtcConnectRequestSender};
 
 fn request_to_json<R: Serialize>(req_id: u32, request: &str, req: RpcRequest<R>) -> String {
     serde_json::json!({

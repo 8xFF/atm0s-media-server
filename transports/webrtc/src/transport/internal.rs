@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
 
+use cluster::rpc::webrtc::{WebrtcConnectRequestSender, WebrtcRemoteIceResponse};
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     EndpointRpcIn, EndpointRpcOut,
 };
-use media_utils::{HashMapMultiKey, RtpSeqExtend};
+use media_utils::{HashMapMultiKey, RtpSeqExtend, StringCompression};
 use str0m::{
     media::{Direction, MediaKind, Mid, Simulcast},
     rtp::SeqNo,
@@ -18,12 +19,10 @@ use transport::{
 use self::{
     local_track_id_generator::LocalTrackIdGenerator,
     rpc::{rpc_from_string, rpc_local_track_to_string, rpc_remote_track_to_string, rpc_to_string, IncomingRpc, TransportRpcIn, TransportRpcOut},
-    string_compression::StringCompression,
     track_info_queue::TrackInfoQueue,
     utils::to_transport_kind,
 };
 use crate::{
-    rpc::{WebrtcConnectRequestSender, WebrtcRemoteIceRequest},
     transport::{internal::rpc::rpc_internal_to_string, life_cycle::TransportLifeCycleAction},
     TransportLifeCycle,
 };
@@ -35,7 +34,6 @@ use super::{
 
 mod local_track_id_generator;
 pub(crate) mod rpc;
-mod string_compression;
 mod track_info_queue;
 pub(crate) mod utils;
 
@@ -67,7 +65,7 @@ pub enum Str0mAction {
     Rpc(TransportRpcIn),
     ConfigEgressBitrate { current: u32, desired: u32 },
     LimitIngressBitrate { mid: Mid, max: u32 },
-    RemoteIce(WebrtcRemoteIceRequest, transport::RpcResponse<()>),
+    RemoteIce(String),
 }
 
 pub struct WebrtcTransportInternal<L>
@@ -193,9 +191,11 @@ where
 
     pub fn on_custom_event(&mut self, _now_ms: u64, event: WebrtcTransportEvent) -> Result<(), TransportError> {
         match event {
-            WebrtcTransportEvent::RemoteIce(ice, res) => {
-                self.str0m_actions.push_back(Str0mAction::RemoteIce(ice, res));
+            WebrtcTransportEvent::RemoteIce(req) => {
+                self.str0m_actions.push_back(Str0mAction::RemoteIce(req.param().candidate.clone()));
+                req.answer(Ok(WebrtcRemoteIceResponse { success: true }));
             }
+            WebrtcTransportEvent::SdpPatch(req) => req.answer(Err("NOT_IMPLEMENTED")),
         }
         Ok(())
     }
@@ -295,6 +295,7 @@ where
                             )));
                             Ok(())
                         } else {
+                            log::warn!("[TransportWebrtcInternal] added remote track {} mid {} but missing info", kind, mid);
                             Err(TransportError::RuntimeError(TransportRuntimeError::TrackIdNotFound))
                         }
                     }
@@ -386,12 +387,12 @@ impl<L: TransportLifeCycle> Drop for WebrtcTransportInternal<L> {
 
 #[cfg(test)]
 mod test {
+    use cluster::rpc::webrtc::WebrtcConnectRequestSender;
     use endpoint::{rpc::TrackInfo, EndpointRpcOut};
     use str0m::media::{Direction, MediaKind};
     use transport::{MediaPacket, TransportIncomingEvent};
 
     use crate::{
-        rpc::WebrtcConnectRequestSender,
         transport::{internal::Str0mInput, mid_convert::track_to_mid},
         SdkTransportLifeCycle,
     };

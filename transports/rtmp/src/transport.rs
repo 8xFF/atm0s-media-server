@@ -16,7 +16,14 @@ use transport::{
 const AUDIO_TRACK_ID: u16 = 0;
 const VIDEO_TRACK_ID: u16 = 1;
 
-pub struct RtmpTransport<RmIn, RrIn, RlIn> {
+type RmIn = EndpointRpcIn;
+type RrIn = RemoteTrackRpcIn;
+type RlIn = LocalTrackRpcIn;
+type RmOut = EndpointRpcOut;
+type RrOut = RemoteTrackRpcOut;
+type RlOut = LocalTrackRpcOut;
+
+pub struct RtmpTransport {
     socket: TcpStream,
     session: RtmpSession,
     buf: Vec<u8>,
@@ -27,7 +34,7 @@ pub struct RtmpTransport<RmIn, RrIn, RlIn> {
     video_convert: RtmpH264ToMediaPacketH264,
 }
 
-impl<RmIn, RrIn, RlIn> RtmpTransport<RmIn, RrIn, RlIn> {
+impl RtmpTransport {
     pub fn new(socket: TcpStream) -> Self {
         Self {
             socket,
@@ -50,15 +57,8 @@ impl<RmIn, RrIn, RlIn> RtmpTransport<RmIn, RrIn, RlIn> {
     }
 }
 
-type RmIn = EndpointRpcIn;
-type RrIn = RemoteTrackRpcIn;
-type RlIn = LocalTrackRpcIn;
-type RmOut = EndpointRpcOut;
-type RrOut = RemoteTrackRpcOut;
-type RlOut = LocalTrackRpcOut;
-
 #[async_trait::async_trait]
-impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport<RmIn, RrIn, RlIn> {
+impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport {
     fn on_tick(&mut self, _now_ms: u64) -> Result<(), TransportError> {
         Ok(())
     }
@@ -145,6 +145,6 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport<RmIn
     }
 
     async fn close(&mut self) {
-        self.socket.close().await.log_error("need close");
+        self.socket.close().await.log_error("Should close socket");
     }
 }

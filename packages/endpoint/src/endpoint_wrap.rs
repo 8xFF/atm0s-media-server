@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_std::stream::StreamExt;
-use cluster::ClusterEndpoint;
+use cluster::{ClusterEndpoint, EndpointSubscribeScope};
 use futures::{select, FutureExt};
-use media_utils::{EndpointSubscribeScope, Timer};
+use media_utils::Timer;
 use transport::{Transport, TransportError};
 
 use crate::{
