@@ -9,6 +9,8 @@ const METRIC_SESSIONS_COUNT: &str = "media_server.sessions.count";
 const METRIC_SESSIONS_LIVE: &str = "media_server.sessions.live";
 const METRIC_SESSIONS_MAX: &str = "media_server.sessions.max";
 
+#[cfg(feature = "connector")]
+pub mod connector;
 #[cfg(feature = "gateway")]
 pub mod gateway;
 #[cfg(feature = "rtmp")]

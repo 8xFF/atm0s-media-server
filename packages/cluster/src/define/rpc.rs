@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+pub mod connector;
 pub mod gateway;
 pub mod general;
 pub mod webrtc;
@@ -57,3 +58,5 @@ pub const RPC_WHEP_CONNECT: &str = "RPC_WHEP_CONNECT";
 
 pub const RPC_NODE_PING: &str = "RPC_NODE_PING";
 pub const RPC_NODE_HEALTHCHECK: &str = "RPC_NODE_HEALTHCHECK";
+
+pub const RPC_MEDIA_ENDPOINT_LOG: &str = "RPC_MEDIA_ENDPOINT_LOG";

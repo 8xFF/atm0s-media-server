@@ -5,9 +5,11 @@ mod server;
 
 use cluster::{
     implement::{NodeAddr, NodeId, ServerSdn, ServerSdnConfig},
-    INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    CONNECTOR_SERVICE, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
 };
 
+#[cfg(feature = "connector")]
+use server::connector::run_connector_server;
 #[cfg(feature = "gateway")]
 use server::gateway::run_gateway_server;
 #[cfg(feature = "rtmp")]
@@ -53,10 +55,15 @@ enum Servers {
     Rtmp(server::rtmp::RtmpArgs),
     #[cfg(feature = "sip")]
     Sip(server::sip::SipArgs),
+    #[cfg(feature = "connector")]
+    Connector(server::connector::ConnectorArgs),
 }
 
 #[async_std::main]
 async fn main() {
+    if std::env::var_os("RUST_LOG").is_none() {
+        std::env::set_var("RUST_LOG", "atm0s_media_server=info");
+    }
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
@@ -93,6 +100,13 @@ async fn main() {
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
             if let Err(e) = run_sip_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[RtmpServer] error {}", e);
+            }
+        }
+        #[cfg(feature = "connector")]
+        Servers::Connector(opts) => {
+            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, CONNECTOR_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
+            if let Err(e) = run_connector_server(args.http_port, opts, cluster, rpc_endpoint).await {
+                log::error!("[ConnectorServer] error {}", e);
             }
         }
     }

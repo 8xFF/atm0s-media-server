@@ -6,9 +6,9 @@ pub mod http;
 
 pub enum RpcEvent {
     NodePing(Box<dyn RpcReqRes<NodePing, NodePong>>),
-    WhipConnect(Box<dyn RpcReqRes<WhipConnectRequest, WhipConnectResponse>>),
-    WhepConnect(Box<dyn RpcReqRes<WhepConnectRequest, WhepConnectResponse>>),
-    WebrtcConnect(Box<dyn RpcReqRes<WebrtcConnectRequest, WebrtcConnectResponse>>),
+    WhipConnect(Box<dyn RpcReqRes<WhipConnectRequest, WhipConnectResponse> + Sync>),
+    WhepConnect(Box<dyn RpcReqRes<WhepConnectRequest, WhepConnectResponse> + Sync>),
+    WebrtcConnect(Box<dyn RpcReqRes<WebrtcConnectRequest, WebrtcConnectResponse> + Sync>),
     WebrtcRemoteIce(Box<dyn RpcReqRes<WebrtcRemoteIceRequest, WebrtcRemoteIceResponse>>),
     WebrtcSdpPatch(Box<dyn RpcReqRes<WebrtcPatchRequest, WebrtcPatchResponse>>),
     MediaEndpointClose(Box<dyn RpcReqRes<MediaEndpointCloseRequest, MediaEndpointCloseResponse>>),
