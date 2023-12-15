@@ -1,8 +1,8 @@
 use transport::TrackId;
 
 use crate::{
-    ClusterEndpointError, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterPeerId, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta,
-    ClusterTrackName, ClusterTrackUuid,
+    rpc::connector::MediaEndpointLogRequest, ClusterEndpointError, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterPeerId, ClusterRemoteTrackIncomingEvent,
+    ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackName, ClusterTrackUuid,
 };
 
 #[async_trait::async_trait]
@@ -19,6 +19,7 @@ pub enum ClusterEndpointOutgoingEvent {
     UnsubscribePeer(ClusterPeerId),
     LocalTrackEvent(TrackId, ClusterLocalTrackOutgoingEvent),
     RemoteTrackEvent(TrackId, ClusterTrackUuid, ClusterRemoteTrackOutgoingEvent),
+    MediaEndpointLog(MediaEndpointLogRequest),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

@@ -164,7 +164,7 @@ where
                 req.answer(Ok(NodeHealthcheckResponse { success: true }));
             }
             RpcEvent::MediaEndpointClose(req) => {
-                if let Some(old_tx) = ctx.close_conn(&req.param().conn_id) {
+                if let Some(old_tx) = ctx.get_conn(&req.param().conn_id) {
                     async_std::task::spawn(async move {
                         let (tx, rx) = async_std::channel::bounded(1);
                         old_tx.send(InternalControl::ForceClose(tx.clone())).await.log_error("need send");

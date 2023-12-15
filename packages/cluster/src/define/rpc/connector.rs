@@ -1,16 +1,17 @@
 use std::net::SocketAddr;
 
 use atm0s_sdn::NodeId;
+use media_utils::F32;
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
 use transport::MediaKind;
 
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum MediaStreamIssueType {
-    Connectivity { mos: f32, lost_percents: f32, jitter_ms: f32, rtt_ms: u32 },
+    Connectivity { mos: F32<2>, lost_percents: F32<2>, jitter_ms: F32<2>, rtt_ms: u32 },
 }
 
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum MediaEndpointEvent {
     Routing {
         user_agent: String,
@@ -49,7 +50,7 @@ pub enum MediaEndpointEvent {
         sent_bytes: u64,
         received_bytes: u64,
         duration_ms: u64,
-        rtt: f32,
+        rtt: F32<2>,
     },
     SessionStats {
         received_bytes: u64,
@@ -60,7 +61,7 @@ pub enum MediaEndpointEvent {
     },
 }
 
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum MediaReceiveStreamEvent {
     StreamStarted {
         name: String,
@@ -81,10 +82,10 @@ pub enum MediaReceiveStreamEvent {
         limit_bitrate: u32,
         received_bytes: u64,
         freeze: bool,
-        mos: Option<f32>,
+        mos: Option<F32<2>>,
         rtt: Option<u32>,
-        jitter: Option<f32>,
-        lost: Option<f32>,
+        jitter: Option<F32<2>>,
+        lost: Option<F32<2>>,
     },
     StreamEnded {
         name: String,
@@ -92,14 +93,14 @@ pub enum MediaReceiveStreamEvent {
         sent_bytes: u64,
         freeze_count: u32,
         duration_ms: u64,
-        mos: Option<(f32, f32, f32)>,
-        rtt: Option<(f32, f32, f32)>,
-        jitter: Option<(f32, f32, f32)>,
-        lost: Option<(f32, f32, f32)>,
+        mos: Option<(F32<2>, F32<2>, F32<2>)>,
+        rtt: Option<(F32<2>, F32<2>, F32<2>)>,
+        jitter: Option<(F32<2>, F32<2>, F32<2>)>,
+        lost: Option<(F32<2>, F32<2>, F32<2>)>,
     },
 }
 
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum MediaSendStreamEvent {
     StreamStarted {
         name: String,
@@ -117,10 +118,10 @@ pub enum MediaSendStreamEvent {
         kind: MediaKind,
         sent_bytes: u64,
         freeze: bool,
-        mos: Option<f32>,
+        mos: Option<F32<2>>,
         rtt: Option<u32>,
-        jitter: Option<f32>,
-        lost: Option<f32>,
+        jitter: Option<F32<2>>,
+        lost: Option<F32<2>>,
     },
     StreamEnded {
         name: String,
@@ -128,19 +129,19 @@ pub enum MediaSendStreamEvent {
         received_bytes: u64,
         duration_ms: u64,
         freeze_count: u32,
-        mos: Option<(f32, f32, f32)>,
-        rtt: Option<(f32, f32, f32)>,
-        jitter: Option<(f32, f32, f32)>,
-        lost: Option<(f32, f32, f32)>,
+        mos: Option<(F32<2>, F32<2>, F32<2>)>,
+        rtt: Option<(F32<2>, F32<2>, F32<2>)>,
+        jitter: Option<(F32<2>, F32<2>, F32<2>)>,
+        lost: Option<(F32<2>, F32<2>, F32<2>)>,
     },
 }
 
-#[derive(PartialEq, Clone, Debug, Serialize, Deserialize, IntoVecU8, TryFromSliceU8)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize, IntoVecU8, TryFromSliceU8)]
 pub enum MediaEndpointLogRequest {
     SessionEvent {
         ip: String,
         version: Option<String>,
-        location: Option<(f64, f64)>,
+        location: Option<(F32<2>, F32<2>)>,
         token: Vec<u8>,
         ts: u64,
         session_uuid: u64,

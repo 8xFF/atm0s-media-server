@@ -211,6 +211,13 @@ where
                         log::error!("error on parse ice candidate {:?}", e);
                     }
                 },
+                Str0mAction::Close => {
+                    if let Some(cid) = self.event_convert.channel_id(0) {
+                        log::info!("[TransportWebrtc] close request");
+                        self.rtc.direct_api().close_data_channel(cid);
+                        self.rtc.disconnect();
+                    }
+                }
             }
         }
     }
@@ -333,9 +340,7 @@ where
     }
 
     async fn close(&mut self) {
-        if let Some(cid) = self.event_convert.channel_id(0) {
-            self.rtc.direct_api().close_data_channel(cid);
-        }
+        self.internal.close();
     }
 }
 

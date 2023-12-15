@@ -4,7 +4,7 @@ use crate::Cluster;
 use atm0s_sdn::{
     convert_enum, KeyValueBehavior, KeyValueBehaviorEvent, KeyValueHandlerEvent, KeyValueSdk, KeyValueSdkEvent, LayersSpreadRouterSyncBehavior, LayersSpreadRouterSyncBehaviorEvent,
     LayersSpreadRouterSyncHandlerEvent, ManualBehavior, ManualBehaviorConf, ManualBehaviorEvent, ManualHandlerEvent, NetworkPlane, NetworkPlaneConfig, NodeAddr, NodeAddrBuilder, NodeId, Protocol,
-    PubsubSdk, PubsubServiceBehaviour, PubsubServiceBehaviourEvent, PubsubServiceHandlerEvent, RpcBox, SharedRouter, SystemTimer, UdpTransport,
+    PubsubSdk, PubsubServiceBehaviour, PubsubServiceBehaviourEvent, PubsubServiceHandlerEvent, RpcBox, RpcEmitter, SharedRouter, SystemTimer, UdpTransport,
 };
 
 use super::{endpoint, rpc::RpcEndpointSdn};
@@ -39,6 +39,7 @@ pub struct ServerSdn {
     join_handler: Option<async_std::task::JoinHandle<()>>,
     pubsub_sdk: PubsubSdk,
     kv_sdk: KeyValueSdk,
+    rpc_emitter: RpcEmitter,
 }
 
 impl ServerSdn {
@@ -92,6 +93,7 @@ impl ServerSdn {
                 pubsub_sdk,
                 kv_sdk,
                 join_handler: Some(join_handler),
+                rpc_emitter: rpc_box.emitter(),
             },
             RpcEndpointSdn { rpc_box },
         )
@@ -104,7 +106,7 @@ impl Cluster<endpoint::ClusterEndpointSdn> for ServerSdn {
     }
 
     fn build(&mut self, room_id: &str, peer_id: &str) -> endpoint::ClusterEndpointSdn {
-        endpoint::ClusterEndpointSdn::new(room_id, peer_id, self.pubsub_sdk.clone(), self.kv_sdk.clone())
+        endpoint::ClusterEndpointSdn::new(room_id, peer_id, self.pubsub_sdk.clone(), self.kv_sdk.clone(), self.rpc_emitter.clone())
     }
 }
 
