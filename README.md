@@ -17,7 +17,7 @@
  <a href="https://github.com/8xFF/decentralized-media-server/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
  </a>
- <a href="https://discord.gg/tJ6dxBRk">
+ <a href="https://discord.gg/qXr5zxsJWp">
   <img src="https://img.shields.io/discord/1173844241542287482?logo=discord" alt="Discord">
  </a>
 </p>
