@@ -55,6 +55,7 @@ where
         match rpc {
             RpcEvent::MediaEndpointLog(req) => {
                 log::info!("On media endpoint log {:?}", req.param());
+                //TODO emit event to external queue: NATS, Kafka, etc
                 req.answer(Ok(MediaEndpointLogResponse {}));
             }
         }
