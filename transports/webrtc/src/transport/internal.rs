@@ -66,6 +66,7 @@ pub enum Str0mAction {
     ConfigEgressBitrate { current: u32, desired: u32 },
     LimitIngressBitrate { mid: Mid, max: u32 },
     RemoteIce(String),
+    Close,
 }
 
 pub struct WebrtcTransportInternal<L>
@@ -355,6 +356,11 @@ where
                 Ok(())
             }
         }
+    }
+
+    pub fn close(&mut self) {
+        self.str0m_actions.push_back(Str0mAction::Close);
+        self.endpoint_actions.push_back(Ok(TransportIncomingEvent::State(transport::TransportStateEvent::Disconnected)));
     }
 
     pub fn endpoint_action(&mut self) -> Option<Result<TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>, TransportError>> {

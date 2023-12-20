@@ -31,9 +31,10 @@ metrics-dashboard = { version = "0.1.3", features = ["system"] }
 metrics = "0.21.1"
 
 [features]
-default = ["embed-samples", "gateway", "webrtc", "rtmp", "sip"]
+default = ["embed-samples", "gateway", "webrtc", "rtmp", "sip", "connector"]
 embed-samples = ["rust-embed"]
 webrtc = ["transport-webrtc"]
 rtmp = ["transport-rtmp"]
 sip = ["rsip", "transport-sip"]
 gateway = []
+connector = []

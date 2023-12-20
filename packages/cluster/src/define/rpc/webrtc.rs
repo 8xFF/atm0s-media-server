@@ -23,6 +23,9 @@ pub struct WebrtcConnectRequestSender {
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct WebrtcConnectRequest {
+    pub session_uuid: Option<u64>,
+    pub ip_addr: Option<String>,
+    pub user_agent: Option<String>,
     pub version: Option<String>,
     pub room: String,
     pub peer: String,

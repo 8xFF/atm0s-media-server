@@ -59,7 +59,7 @@ impl<E: ClusterEndpoint> RtmpSession<E> {
                 Ok(InternalControl::ForceClose(tx)) => {
                     self.endpoint.close().await;
                     tx.send(()).await.log_error("Should send");
-                    None
+                    Some(())
                 }
                 Err(e) => {
                     log::error!("Error on endpoint custom recv: {:?}", e);

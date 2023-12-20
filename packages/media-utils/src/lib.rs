@@ -1,4 +1,5 @@
 mod error;
+mod float;
 mod hash;
 mod map;
 mod req_res;
@@ -11,6 +12,7 @@ mod tracking;
 mod ts_rewriter;
 
 pub use error::*;
+pub use float::*;
 pub use hash::*;
 pub use map::*;
 pub use req_res::*;

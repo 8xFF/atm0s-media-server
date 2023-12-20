@@ -146,5 +146,6 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport {
 
     async fn close(&mut self) {
         self.socket.close().await.log_error("Should close socket");
+        self.actions.push_back(TransportIncomingEvent::State(TransportStateEvent::Disconnected));
     }
 }

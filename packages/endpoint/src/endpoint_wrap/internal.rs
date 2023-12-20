@@ -2,9 +2,13 @@ use std::collections::{HashMap, VecDeque};
 
 use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent};
 use media_utils::hash_str;
-use transport::{MediaKind, TrackId, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
+use transport::{MediaKind, TrackId, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
 
-use crate::rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, TrackInfo};
+use crate::{
+    middleware::MediaEndpointMiddleware,
+    rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, TrackInfo},
+    MediaEndpointMiddlewareOutput,
+};
 
 use self::{
     bitrate_allocator::BitrateAllocationAction,
@@ -26,6 +30,7 @@ pub use bitrate_limiter::BitrateLimiterType;
 pub enum MediaEndpointInternalEvent {
     ConnectionClosed,
     ConnectionCloseRequest,
+    ConnectionError(TransportError),
     SubscribePeer(String),
     UnsubscribePeer(String),
 }
@@ -47,10 +52,11 @@ pub struct MediaEndpointInternal {
     remote_tracks: HashMap<TrackId, RemoteTrack>,
     bitrate_allocator: bitrate_allocator::BitrateAllocator,
     bitrate_limiter: bitrate_limiter::BitrateLimiter,
+    middlewares: Vec<Box<dyn MediaEndpointMiddleware>>,
 }
 
 impl MediaEndpointInternal {
-    pub fn new(room_id: &str, peer_id: &str, bitrate_limiter: BitrateLimiterType) -> Self {
+    pub fn new(room_id: &str, peer_id: &str, bitrate_limiter: BitrateLimiterType, middlewares: Vec<Box<dyn MediaEndpointMiddleware>>) -> Self {
         log::info!("[MediaEndpointInternal {}/{}] create", room_id, peer_id);
         Self {
             room_id: room_id.into(),
@@ -62,6 +68,7 @@ impl MediaEndpointInternal {
             remote_tracks: HashMap::new(),
             bitrate_allocator: bitrate_allocator::BitrateAllocator::new(DEFAULT_BITRATE_OUT_BPS),
             bitrate_limiter: bitrate_limiter::BitrateLimiter::new(bitrate_limiter, MAX_BITRATE_IN_BPS),
+            middlewares,
         }
     }
 
@@ -85,11 +92,24 @@ impl MediaEndpointInternal {
             if self.pop_bitrate_allocation_action(now_ms) {
                 continue;
             }
+            if self.pop_middlewares_action(now_ms) {
+                continue;
+            }
             break;
         }
     }
 
+    pub fn on_start(&mut self, now_ms: u64) {
+        for middleware in self.middlewares.iter_mut() {
+            middleware.on_start(now_ms);
+        }
+    }
+
     pub fn on_tick(&mut self, now_ms: u64) {
+        for mildeware in self.middlewares.iter_mut() {
+            mildeware.on_tick(now_ms);
+        }
+
         for (_, track) in self.local_tracks.iter_mut() {
             track.on_tick(now_ms);
         }
@@ -110,6 +130,13 @@ impl MediaEndpointInternal {
     }
 
     pub fn on_transport(&mut self, now_ms: u64, event: TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>) {
+        for middleware in self.middlewares.iter_mut() {
+            if middleware.on_transport(now_ms, &event) {
+                self.pop_internal(now_ms);
+                return;
+            }
+        }
+
         match event {
             TransportIncomingEvent::EgressBitrateEstimate(bitrate) => {
                 self.bitrate_allocator.set_est_bitrate(bitrate as u32);
@@ -185,7 +212,36 @@ impl MediaEndpointInternal {
         self.pop_internal(now_ms);
     }
 
+    pub fn on_transport_error(&mut self, now_ms: u64, err: TransportError) {
+        for middleware in self.middlewares.iter_mut() {
+            if middleware.on_transport_error(now_ms, &err) {
+                self.pop_internal(now_ms);
+                return;
+            }
+        }
+
+        match err {
+            TransportError::ConnectError(_) => {
+                self.output_actions.push_back(MediaInternalAction::Internal(MediaEndpointInternalEvent::ConnectionError(err)));
+            }
+            TransportError::ConnectionError(_) => {
+                self.output_actions.push_back(MediaInternalAction::Internal(MediaEndpointInternalEvent::ConnectionError(err)));
+            }
+            TransportError::NetworkError => {}
+            TransportError::RuntimeError(_) => {}
+        };
+
+        self.pop_internal(now_ms);
+    }
+
     pub fn on_cluster(&mut self, now_ms: u64, event: ClusterEndpointIncomingEvent) {
+        for middleware in self.middlewares.iter_mut() {
+            if middleware.on_cluster(now_ms, &event) {
+                self.pop_internal(now_ms);
+                return;
+            }
+        }
+
         match event {
             ClusterEndpointIncomingEvent::PeerTrackAdded(peer, track, meta) => {
                 self.cluster_track_map.insert((peer.clone(), track.clone()), meta.kind);
@@ -394,6 +450,25 @@ impl MediaEndpointInternal {
         has_event
     }
 
+    fn pop_middlewares_action(&mut self, _now_ms: u64) -> bool {
+        let mut has_event = false;
+        for middleware in self.middlewares.iter_mut() {
+            while let Some(action) = middleware.pop_action() {
+                has_event = true;
+                match action {
+                    MediaEndpointMiddlewareOutput::Endpoint(event) => {
+                        self.output_actions.push_back(MediaInternalAction::Endpoint(event));
+                    }
+                    MediaEndpointMiddlewareOutput::Cluster(event) => {
+                        self.output_actions.push_back(MediaInternalAction::Cluster(event));
+                    }
+                }
+            }
+        }
+
+        has_event
+    }
+
     /// Close this and cleanup everything
     /// This should be called when the endpoint is closed
     /// - Close all tracks
@@ -439,7 +514,7 @@ mod tests {
 
     #[test]
     fn should_fire_cluster_when_remote_track_added_then_close() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
 
         let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
@@ -483,7 +558,7 @@ mod tests {
 
     #[test]
     fn should_fire_cluster_when_remote_track_added_then_removed() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
 
         let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
@@ -526,7 +601,7 @@ mod tests {
 
     #[test]
     fn should_fire_rpc_when_cluster_track_added() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
 
         endpoint.on_cluster(
             0,
@@ -558,7 +633,7 @@ mod tests {
 
     #[test]
     fn should_fire_disconnect_when_transport_disconnect() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
 
         endpoint.on_transport(0, TransportIncomingEvent::State(TransportStateEvent::Disconnected));
 
@@ -569,7 +644,7 @@ mod tests {
 
     #[test]
     fn should_fire_answer_rpc() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
 
         endpoint.on_transport(0, TransportIncomingEvent::LocalTrackAdded("video_0".to_string(), 1, TrackMeta::new_video(None)));
 
@@ -657,4 +732,6 @@ mod tests {
     fn should_forward_remote_track_stats() {
         //TODO
     }
+
+    //TODO test on_transport_error
 }

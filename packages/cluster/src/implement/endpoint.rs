@@ -1,14 +1,18 @@
 use std::collections::HashMap;
 
 use crate::{
-    generate_cluster_track_uuid, ClusterEndpoint, ClusterEndpointError, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent,
-    ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent,
+    generate_cluster_track_uuid,
+    rpc::{connector::MediaEndpointLogResponse, RPC_MEDIA_ENDPOINT_LOG},
+    ClusterEndpoint, ClusterEndpointError, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackIncomingEvent,
+    ClusterRemoteTrackOutgoingEvent, CONNECTOR_SERVICE,
 };
 use async_std::channel::{bounded, Receiver, Sender};
-use atm0s_sdn::{ChannelUuid, ConsumerRaw, Feedback, FeedbackType, KeyId, KeySource, KeyValueSdk, KeyVersion, LocalSubId, NodeId, NumberInfo, PublisherRaw, PubsubSdk, SubKeyId, ValueType};
+use atm0s_sdn::{
+    ChannelUuid, ConsumerRaw, Feedback, FeedbackType, KeyId, KeySource, KeyValueSdk, KeyVersion, LocalSubId, NodeId, NumberInfo, PublisherRaw, PubsubSdk, RouteRule, RpcEmitter, SubKeyId, ValueType,
+};
 use bytes::Bytes;
 use futures::{select, FutureExt};
-use media_utils::hash_str;
+use media_utils::{hash_str, ErrorDebugger};
 use transport::RequestKeyframeKind;
 
 use super::types::{from_room_value, to_room_key, to_room_value, TrackData};
@@ -50,10 +54,11 @@ pub struct ClusterEndpointSdn {
     peer_sub: HashMap<String, ()>,
     track_pub: HashMap<ChannelUuid, (u16, PublisherRaw)>,
     remote_track_cached: HashMap<u64, (String, String)>,
+    rpc_emitter: RpcEmitter,
 }
 
 impl ClusterEndpointSdn {
-    pub(crate) fn new(room_id: &str, peer_id: &str, pubsub_sdk: PubsubSdk, kv_sdk: KeyValueSdk) -> Self {
+    pub(crate) fn new(room_id: &str, peer_id: &str, pubsub_sdk: PubsubSdk, kv_sdk: KeyValueSdk, rpc_emitter: RpcEmitter) -> Self {
         let (kv_tx, kv_rx) = bounded(100);
         let (data_tx, data_rx) = bounded(1000);
         let (data_fb_tx, data_fb_rx) = bounded(100);
@@ -77,6 +82,7 @@ impl ClusterEndpointSdn {
             peer_sub: Default::default(),
             track_pub: Default::default(),
             remote_track_cached: Default::default(),
+            rpc_emitter,
         }
     }
 
@@ -248,6 +254,17 @@ impl ClusterEndpoint for ClusterEndpointSdn {
                         Ok(())
                     }
                 }
+            }
+            ClusterEndpointOutgoingEvent::MediaEndpointLog(event) => {
+                log::info!("[Atm0sClusterEndpoint] log event {:?}", event);
+                let emitter = self.rpc_emitter.clone();
+                async_std::task::spawn_local(async move {
+                    emitter
+                        .request::<_, MediaEndpointLogResponse>(CONNECTOR_SERVICE, RouteRule::ToService(0), RPC_MEDIA_ENDPOINT_LOG, event, 5000)
+                        .await
+                        .log_error("Should ok");
+                });
+                Ok(())
             }
         }
     }

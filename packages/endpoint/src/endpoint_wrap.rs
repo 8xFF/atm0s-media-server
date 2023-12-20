@@ -8,7 +8,9 @@ use transport::{Transport, TransportError};
 
 use crate::{
     endpoint_wrap::internal::{MediaEndpointInternalEvent, MediaInternalAction},
+    middleware,
     rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
+    MediaEndpointMiddleware,
 };
 
 use self::internal::MediaEndpointInternal;
@@ -49,13 +51,18 @@ where
                 todo!("handle error")
             }
         }
+        let timer = Arc::new(media_utils::SystemTimer());
+        let middlewares: Vec<Box<dyn MediaEndpointMiddleware>> = vec![Box::new(middleware::logger::MediaEndpointEventLogger::new())];
+        let mut internal = MediaEndpointInternal::new(room, peer, bitrate_type, middlewares);
+        internal.on_start(timer.now_ms());
+
         Self {
             _tmp_e: std::marker::PhantomData,
-            internal: MediaEndpointInternal::new(room, peer, bitrate_type),
+            internal,
             transport,
             cluster,
             tick: async_std::stream::interval(std::time::Duration::from_millis(100)),
-            timer: Arc::new(media_utils::SystemTimer()),
+            timer,
             sub_scope,
             peer_subscribe: HashMap::new(),
         }
@@ -74,6 +81,9 @@ where
                     }
                     MediaEndpointInternalEvent::ConnectionCloseRequest => {
                         return Ok(MediaEndpointOutput::ConnectionCloseRequest);
+                    }
+                    MediaEndpointInternalEvent::ConnectionError(e) => {
+                        return Err(e);
                     }
                     MediaEndpointInternalEvent::SubscribePeer(peer) => {
                         if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
@@ -116,12 +126,7 @@ where
                 match event {
                     Ok(event) => self.internal.on_transport(self.timer.now_ms(), event),
                     //only ending session if is critical error
-                    Err(e) => match &e {
-                        TransportError::ConnectError(_) => return Err(e),
-                        TransportError::ConnectionError(_) => return Err(e),
-                        TransportError::NetworkError => {},
-                        TransportError::RuntimeError(_) => {},
-                    }
+                    Err(e) => self.internal.on_transport_error(self.timer.now_ms(), e),
                 }
             },
             event = self.cluster.recv().fuse() => {
