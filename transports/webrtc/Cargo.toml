@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-transport-webrtc"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "Webrtc Transport for atm0s-media-server"

@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-transport"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Transport Interface for atm0s-media-server"
 license = "MIT"
