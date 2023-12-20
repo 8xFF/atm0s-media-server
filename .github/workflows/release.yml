@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload Artifact to Summary
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
