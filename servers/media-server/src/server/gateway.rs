@@ -107,15 +107,51 @@ where
             }
             RpcEvent::WhipConnect(req) => {
                 log::info!("[Gateway] whip connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
-                webrtc_route::route_to_node(rpc_emitter.clone(), timer.clone(), &mut gateway_logic, node_id, ServiceType::Webrtc, RPC_WHIP_CONNECT, req);
+                webrtc_route::route_to_node(
+                    rpc_emitter.clone(),
+                    timer.clone(),
+                    &mut gateway_logic,
+                    node_id,
+                    ServiceType::Webrtc,
+                    RPC_WHIP_CONNECT,
+                    &req.param().ip_addr.clone(),
+                    &None,
+                    &req.param().user_agent.clone(),
+                    req.param().session_uuid,
+                    req,
+                );
             }
             RpcEvent::WhepConnect(req) => {
                 log::info!("[Gateway] whep connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
-                webrtc_route::route_to_node(rpc_emitter.clone(), timer.clone(), &mut gateway_logic, node_id, ServiceType::Webrtc, RPC_WHEP_CONNECT, req);
+                webrtc_route::route_to_node(
+                    rpc_emitter.clone(),
+                    timer.clone(),
+                    &mut gateway_logic,
+                    node_id,
+                    ServiceType::Webrtc,
+                    RPC_WHEP_CONNECT,
+                    &req.param().ip_addr.clone(),
+                    &None,
+                    &req.param().user_agent.clone(),
+                    req.param().session_uuid,
+                    req,
+                );
             }
             RpcEvent::WebrtcConnect(req) => {
                 log::info!("[Gateway] webrtc connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
-                webrtc_route::route_to_node(rpc_emitter.clone(), timer.clone(), &mut gateway_logic, node_id, ServiceType::Webrtc, RPC_WEBRTC_CONNECT, req);
+                webrtc_route::route_to_node(
+                    rpc_emitter.clone(),
+                    timer.clone(),
+                    &mut gateway_logic,
+                    node_id,
+                    ServiceType::Webrtc,
+                    RPC_WEBRTC_CONNECT,
+                    &req.param().ip_addr.clone().expect(""),
+                    &req.param().version.clone(),
+                    &req.param().user_agent.clone().expect(""),
+                    req.param().session_uuid.expect(""),
+                    req,
+                );
             }
             RpcEvent::WebrtcRemoteIce(req) => {
                 if let Some((node_id, _)) = parse_conn_id(&req.param().conn_id) {

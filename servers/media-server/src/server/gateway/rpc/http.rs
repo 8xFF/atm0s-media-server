@@ -38,7 +38,10 @@ impl GatewayHttpApis {
         let string_zip = StringCompression::default();
         log::info!("[HttpApis] create whip endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WhipConnectRequest, WhipConnectResponse>::new(WhipConnectRequest {
-            token: "token".to_string(),
+            session_uuid: 0,                      //TODO
+            ip_addr: "127.0.0.1".to_string(),     //TODO
+            user_agent: "user_agent".to_string(), //TODO
+            token: "token".to_string(),           //TODO
             sdp: None,
             compressed_sdp: Some(string_zip.compress(&body.0)),
         });
@@ -107,7 +110,10 @@ impl GatewayHttpApis {
         let string_zip = StringCompression::default();
         log::info!("[HttpApis] create whep endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WhepConnectRequest, WhepConnectResponse>::new(WhepConnectRequest {
-            token: "token".to_string(),
+            session_uuid: 0,                      //TODO
+            ip_addr: "127.0.0.1".to_string(),     //TODO
+            user_agent: "user_agent".to_string(), //TODO
+            token: "token".to_string(),           //TODO
             sdp: None,
             compressed_sdp: Some(string_zip.compress(&body.0)),
         });
@@ -178,6 +184,10 @@ impl GatewayHttpApis {
         if let Some(sdp) = body.0.sdp.take() {
             body.0.compressed_sdp = Some(string_zip.compress(&sdp));
         }
+        body.0.session_uuid = Some(0); //TODO
+        body.0.ip_addr = Some("127.0.0.1".to_string()); //TODO
+        body.0.user_agent = Some("user_agent".to_string()); //TODO
+
         let (req, rx) = RpcReqResHttp::<WebrtcConnectRequest, WebrtcConnectResponse>::new(body.0);
         ctx.0
             .send(RpcEvent::WebrtcConnect(Box::new(req)))

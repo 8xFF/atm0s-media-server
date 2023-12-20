@@ -51,9 +51,11 @@ async fn select_node<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, no
 }
 
 // TODO running in queue and retry if failed. It should retry when connector service not accept
-fn emit_endpoint_event<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, timer: &Arc<dyn Timer>, session_uuid: u64, event: MediaEndpointEvent) {
+fn emit_endpoint_event<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, timer: &Arc<dyn Timer>, session_uuid: u64, ip: &str, version: &Option<String>, event: MediaEndpointEvent) {
     let emitter = emitter.clone();
     let ts = timer.now_ms();
+    let ip = ip.to_string();
+    let version = version.clone();
     async_std::task::spawn_local(async move {
         emitter
             .request::<_, MediaEndpointLogResponse>(
@@ -61,9 +63,9 @@ fn emit_endpoint_event<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, 
                 None,
                 RPC_MEDIA_ENDPOINT_LOG,
                 MediaEndpointLogRequest::SessionEvent {
-                    ip: "127.0.0.1".to_string(), //TODO get real ip
+                    ip,
                     location: None,
-                    version: None,
+                    version,
                     token: vec![],
                     ts,
                     session_uuid,
@@ -83,6 +85,10 @@ pub fn route_to_node<EMITTER, Req, Res>(
     gateway_node_id: NodeId,
     service: ServiceType,
     cmd: &'static str,
+    ip: &str,
+    version: &Option<String>,
+    user_agent: &str,
+    session_uuid: u64,
     req: Box<dyn RpcReqRes<Req, Res> + Sync>,
 ) where
     EMITTER: RpcEmitter + Send + Sync + 'static,
@@ -91,16 +97,17 @@ pub fn route_to_node<EMITTER, Req, Res>(
 {
     increment_counter!(GATEWAY_SESSIONS_CONNECT_COUNT);
     let started_ms = timer.now_ms();
-    let session_uuid = 0; //TODO
     let event = MediaEndpointEvent::Routing {
-        user_agent: "TODO".to_string(),
+        user_agent: user_agent.to_string(),
         gateway_node_id,
     };
-    emit_endpoint_event(&emitter, &timer, session_uuid, event);
+    emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
 
     let nodes = gateway_logic.best_nodes(service, 60, 80, 3);
     if !nodes.is_empty() {
         let rpc_emitter = emitter.clone();
+        let ip: String = ip.to_string();
+        let version = version.clone();
         async_std::task::spawn(async move {
             log::info!("[Gateway] connect => ping nodes {:?}", nodes);
             let node_id = select_node(&rpc_emitter, &nodes).await;
@@ -122,7 +129,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
                     }
                 };
 
-                emit_endpoint_event(&emitter, &timer, session_uuid, event);
+                emit_endpoint_event(&emitter, &timer, session_uuid, &ip, &version, event);
                 req.answer(res.map_err(|_e| "NODE_ANSWER_ERROR"));
             } else {
                 log::warn!("[Gateway] webrtc connect but ping nodes {:?} timeout", nodes);
@@ -132,7 +139,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
                     gateway_node_id,
                     media_node_ids: nodes,
                 };
-                emit_endpoint_event(&emitter, &timer, session_uuid, event);
+                emit_endpoint_event(&emitter, &timer, session_uuid, &ip, &version, event);
                 req.answer(Err("NODE_PING_TIMEOUT"));
             }
         });
@@ -143,7 +150,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
             gateway_node_id,
             media_node_ids: vec![],
         };
-        emit_endpoint_event(&emitter, &timer, session_uuid, event);
+        emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
 
         log::warn!("[Gateway] webrtc connect but media-server pool empty");
         req.answer(Err("NODE_POOL_EMPTY"));

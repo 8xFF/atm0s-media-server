@@ -37,6 +37,9 @@ impl WebrtcHttpApis {
     async fn create_whip(&self, ctx: Data<&Sender<RpcEvent>>, body: ApplicationSdp<String>) -> Result<HttpResponse<ApplicationSdp<String>>> {
         log::info!("[HttpApis] create whip endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WhipConnectRequest, WhipConnectResponse>::new(WhipConnectRequest {
+            session_uuid: 0,                      //TODO
+            ip_addr: "127.0.0.1".to_string(),     //TODO
+            user_agent: "user_agent".to_string(), //TODO
             token: "token".to_string(),
             sdp: Some(body.0),
             compressed_sdp: None,
@@ -107,6 +110,9 @@ impl WebrtcHttpApis {
     async fn create_whep(&self, ctx: Data<&Sender<RpcEvent>>, body: ApplicationSdp<String>) -> Result<HttpResponse<ApplicationSdp<String>>> {
         log::info!("[HttpApis] create whep endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WhepConnectRequest, WhepConnectResponse>::new(WhepConnectRequest {
+            session_uuid: 0,                      //TODO
+            ip_addr: "127.0.0.1".to_string(),     //TODO
+            user_agent: "user_agent".to_string(), //TODO
             token: "token".to_string(),
             sdp: Some(body.0),
             compressed_sdp: None,
@@ -174,8 +180,10 @@ impl WebrtcHttpApis {
 
     /// connect webrtc endpoint
     #[oai(path = "/webrtc/connect", method = "post")]
-    async fn create_webrtc(&self, ctx: Data<&Sender<RpcEvent>>, body: Json<WebrtcConnectRequest>) -> Result<Json<Response<WebrtcSdp>>> {
+    async fn create_webrtc(&self, ctx: Data<&Sender<RpcEvent>>, mut body: Json<WebrtcConnectRequest>) -> Result<Json<Response<WebrtcSdp>>> {
         log::info!("[HttpApis] create Webrtc endpoint {}/{}", body.0.room, body.0.peer);
+        body.0.session_uuid = Some(0); //TODO
+
         let (req, rx) = RpcReqResHttp::<WebrtcConnectRequest, WebrtcConnectResponse>::new(body.0);
         ctx.0
             .send(RpcEvent::WebrtcConnect(Box::new(req)))
