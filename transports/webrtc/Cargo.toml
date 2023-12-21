@@ -8,12 +8,13 @@ description = "Webrtc Transport for atm0s-media-server"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-endpoint = { workspace = true }
-transport = { workspace = true }
-cluster = { workspace = true }
+endpoint = { package = "atm0s-media-server-endpoint", path = "../../packages/endpoint", version = "0.1.0" }
+transport = { package = "atm0s-media-server-transport", path = "../../packages/transport", version = "0.1.0" }
+media-utils = { package = "atm0s-media-server-utils", path = "../../packages/media-utils", version = "0.1.0" }
+cluster = { package = "atm0s-media-server-cluster", path = "../../packages/cluster", version = "0.1.0" }
 async-std = { workspace = true }
 async-trait = { workspace = true }
-media-utils = { workspace = true }
+
 str0m = { version = "0.1.0", package = "atm0s-custom-str0m" }
 futures = { workspace = true }
 log = { workspace = true }

@@ -1,0 +1,16 @@
+[workspace]
+git_release_enable = false
+
+[[package]]
+name = "atm0s-media-server"
+git_release_enable = true
+changelog_include = [
+    "atm0s-media-server-cluster",
+    "atm0s-media-server-endpoint",
+    "atm0s-media-server-utils", 
+    "atm0s-media-server-proc-macro", 
+    "atm0s-media-server-transport", 
+    "atm0s-media-server-transport-webrtc",
+    "atm0s-media-server-transport-sip",
+    "atm0s-media-server-transport-rtmp",
+]
