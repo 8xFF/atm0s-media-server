@@ -8,7 +8,7 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+media-utils = { package = "atm0s-media-server-utils", path = "../media-utils", version = "0.1.0" }
 async-trait = { workspace = true }
 async-std = { workspace = true }
-media-utils = { workspace = true }
 serde = { workspace = true }

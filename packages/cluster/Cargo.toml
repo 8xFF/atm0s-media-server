@@ -8,17 +8,17 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-transport = { workspace = true }
+transport = { package = "atm0s-media-server-transport", path = "../transport", version = "0.1.0" }
+media-utils = { package = "atm0s-media-server-utils", path = "../media-utils", version = "0.1.0" }
+proc-macro = { package = "atm0s-media-server-proc-macro", path = "../proc-macro", version = "0.1.0" }
+atm0s-sdn = { version = "0.1.4", features = ["all"], optional = true  }
 async-trait = { workspace = true }
 serde = { workspace = true }
 poem-openapi = { version = "3.0" }
-media-utils = { workspace = true }
-proc-macro = { workspace = true }
 bincode = { version = "1" }
 
 async-std = { workspace = true, optional = true }
 log = { workspace = true, optional = true  }
-atm0s-sdn = { version = "0.1.4", features = ["all"], optional = true  }
 futures = { workspace = true, optional = true  }
 bytes = { version = "1.5", optional = true  }
 

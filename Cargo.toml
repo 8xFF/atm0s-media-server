@@ -11,14 +11,6 @@ members = [
 ]
 
 [workspace.dependencies]
-cluster = { path = "packages/cluster", package = "atm0s-media-server-cluster", version = "0.1.0" }
-endpoint = { path = "packages/endpoint", package = "atm0s-media-server-endpoint", version = "0.1.0" }
-transport = { path = "packages/transport", package = "atm0s-media-server-transport", version = "0.1.0" }
-transport-webrtc = { path = "transports/webrtc", package = "atm0s-media-server-transport-webrtc", version = "0.1.0" }
-transport-rtmp = { path = "transports/rtmp", package = "atm0s-media-server-transport-rtmp", version = "0.1.0" }
-transport-sip = { path = "transports/sip", package = "atm0s-media-server-transport-sip", version = "0.1.0" }
-media-utils = { path = "packages/media-utils", package = "atm0s-media-server-utils", version = "0.1.0" }
-proc-macro = { path = "packages/proc-macro", package = "atm0s-media-server-proc-macro", version = "0.1.0" }
 futures = "0.3"
 async-trait = "0.1"
 async-std = { version = "1.12", features = ["tokio1", "unstable", "attributes"] }
