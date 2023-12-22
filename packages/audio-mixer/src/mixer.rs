@@ -5,7 +5,7 @@ use std::{
 };
 
 const SILENT_LEVEL: i8 = -127;
-const SWITCH_AUDIO_THRESHOLD: i8 = 30;
+const SWITCH_AUDIO_THRESHOLD: i16 = 30;
 /// if no audio pkt received in AUDIO_SLOT_TIMEOUT_MS, set audio level to SILENT_LEVEL
 const AUDIO_SLOT_TIMEOUT_MS: u64 = 1000;
 
@@ -268,7 +268,7 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
                 *audio_level = level;
                 *last_changed_at = now_ms;
                 if let Some((lowest_index, lowest_source, lowest_audio_level, _lowest_last_changed_at)) = self.lowest_pinned_slot() {
-                    if lowest_source != source && level >= lowest_audio_level + SWITCH_AUDIO_THRESHOLD {
+                    if lowest_source != source && level > lowest_audio_level && level as i16 - lowest_audio_level as i16 >= SWITCH_AUDIO_THRESHOLD {
                         log::info!(
                             "[AudioMixer] switch slot {} from source {:?} to source {:?} with higher audio_level",
                             lowest_index,
@@ -360,6 +360,38 @@ mod tests {
 
         mixer.add_source(0, 100);
         assert_eq!(mixer.pop(), None);
+
+        //remove unpined source 100 should not fire any event
+        mixer.remove_source(0, 100);
+        assert_eq!(mixer.pop(), None);
+    }
+
+    #[test]
+    fn switch_highest_unpined_source_after_removed_pined_source() {
+        let mut mixer = AudioMixer::<Option<i8>, u32>::new(Box::new(|v| *v), AudioMixerConfig { outputs: 1 });
+
+        mixer.add_source(0, 100);
+        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(100, 0)));
+        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(100))));
+        assert_eq!(mixer.pop(), None);
+
+        mixer.add_source(0, 101);
+        mixer.add_source(0, 102);
+        mixer.add_source(0, 103);
+        assert_eq!(mixer.pop(), None);
+
+        mixer.push_pkt(0, 100, &Some(100));
+        mixer.push_pkt(0, 101, &Some(101));
+        mixer.push_pkt(0, 102, &Some(102));
+        mixer.push_pkt(0, 103, &Some(103));
+        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(100))));
+        assert_eq!(mixer.pop(), None);
+
+        mixer.remove_source(0, 100);
+        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotUnpinned(100, 0)));
+        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(103, 0)));
+        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(103))));
+        assert_eq!(mixer.pop(), None);
     }
 
     #[test]
@@ -409,15 +441,15 @@ mod tests {
         assert_eq!(mixer.pop(), None);
 
         //dont switch if dont higher than SWITCH_AUDIO_THRESHOLD
-        mixer.push_pkt(100, 101, &Some(first_level + super::SWITCH_AUDIO_THRESHOLD / 2));
+        mixer.push_pkt(100, 101, &Some(first_level + super::SWITCH_AUDIO_THRESHOLD as i8 / 2));
         assert_eq!(mixer.pop(), None);
 
         //now mixer will switch slot to source 101
-        mixer.push_pkt(100, 101, &Some(first_level + super::SWITCH_AUDIO_THRESHOLD));
+        mixer.push_pkt(100, 101, &Some(first_level + super::SWITCH_AUDIO_THRESHOLD as i8));
         assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotUnpinned(100, 0)));
         assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(101, 0)));
         assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(101))));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(first_level + super::SWITCH_AUDIO_THRESHOLD))));
+        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(first_level + super::SWITCH_AUDIO_THRESHOLD as i8))));
         assert_eq!(mixer.pop(), None);
     }
 }
