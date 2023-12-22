@@ -450,10 +450,10 @@ impl MediaEndpointInternal {
         has_event
     }
 
-    fn pop_middlewares_action(&mut self, _now_ms: u64) -> bool {
+    fn pop_middlewares_action(&mut self, now_ms: u64) -> bool {
         let mut has_event = false;
         for middleware in self.middlewares.iter_mut() {
-            while let Some(action) = middleware.pop_action() {
+            while let Some(action) = middleware.pop_action(now_ms) {
                 has_event = true;
                 match action {
                     MediaEndpointMiddlewareOutput::Endpoint(event) => {

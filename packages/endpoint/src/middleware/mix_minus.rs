@@ -2,6 +2,7 @@ use std::{collections::VecDeque, vec};
 
 use audio_mixer::{AudioMixer, AudioMixerOutput};
 use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterTrackUuid, MixMinusAudioMode};
+use media_utils::{SeqRewrite, TsRewrite};
 use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaPacket, TrackId, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
 
 use crate::{
@@ -9,7 +10,29 @@ use crate::{
     EndpointRpcIn, EndpointRpcOut, MediaEndpointMiddleware, MediaEndpointMiddlewareOutput, RpcResponse,
 };
 
-const SILENT_LEVEL: i8 = -127;
+const SEQ_MAX: u64 = 1 << 16;
+const TS_MAX: u64 = 1 << 32;
+const AUDIO_SAMPLE_RATE: u64 = 48000;
+
+pub type MediaSeqRewrite = SeqRewrite<SEQ_MAX, 1000>;
+pub type MediaTsRewrite = TsRewrite<TS_MAX, 10>;
+
+#[derive(Clone)]
+struct Slot {
+    track_id: Option<TrackId>,
+    ts_rewritter: MediaTsRewrite,
+    seq_rewriter: MediaSeqRewrite,
+}
+
+impl Default for Slot {
+    fn default() -> Self {
+        Self {
+            track_id: None,
+            ts_rewritter: MediaTsRewrite::new(AUDIO_SAMPLE_RATE),
+            seq_rewriter: MediaSeqRewrite::default(),
+        }
+    }
+}
 
 pub struct MixMinusEndpointMiddleware {
     virtual_track_id: u16,
@@ -17,7 +40,7 @@ pub struct MixMinusEndpointMiddleware {
     name: String,
     mode: MixMinusAudioMode,
     mixer: AudioMixer<MediaPacket, ClusterTrackUuid>,
-    output_slots: Vec<Option<TrackId>>,
+    output_slots: Vec<Slot>,
     outputs: VecDeque<MediaEndpointMiddlewareOutput>,
 }
 
@@ -29,7 +52,7 @@ impl MixMinusEndpointMiddleware {
             name: name.to_string(),
             mode,
             mixer: AudioMixer::new(Box::new(|pkt| pkt.ext_vals.audio_level), audio_mixer::AudioMixerConfig { outputs }),
-            output_slots: vec![None; outputs],
+            output_slots: vec![Default::default(); outputs],
             outputs: VecDeque::new(),
         }
     }
@@ -60,7 +83,7 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
                     //extract slot_index from mix_minus_{name}_slot_{index}
                     let res = if let Some(Ok(slot_index)) = req.data.remote.stream.split('_').last().map(|i| i.parse::<usize>()) {
                         if let Some(slot) = self.output_slots.get_mut(slot_index) {
-                            slot.replace(*track_id);
+                            slot.track_id.replace(*track_id);
                             RpcResponse::success(req.req_id, true)
                         } else {
                             RpcResponse::error(req.req_id)
@@ -81,8 +104,8 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
             }
             TransportIncomingEvent::LocalTrackEvent(track_id, LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Disconnect(req))) => {
                 let track_id = *track_id;
-                if let Some(found_slot) = self.output_slots.iter_mut().find(move |slot| Some(track_id).eq(slot)) {
-                    *found_slot = None;
+                if let Some(found_slot) = self.output_slots.iter_mut().find(move |slot| Some(track_id).eq(&slot.track_id)) {
+                    found_slot.track_id = None;
                     self.outputs.push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::LocalTrackEvent(
                         track_id,
                         LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::DisconnectRes(RpcResponse::success(req.req_id, true))),
@@ -162,7 +185,6 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
                 if *track == self.virtual_track_id {
                     if let ClusterLocalTrackIncomingEvent::MediaPacket(track_uuid, pkt) = event {
                         self.mixer.push_pkt(now_ms, *track_uuid, pkt);
-                        //TODO avid clone
                     }
                     true
                 } else {
@@ -173,7 +195,7 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
         }
     }
 
-    fn pop_action(&mut self) -> Option<MediaEndpointMiddlewareOutput> {
+    fn pop_action(&mut self, now_ms: u64) -> Option<MediaEndpointMiddlewareOutput> {
         while let Some(out) = self.mixer.pop() {
             match out {
                 AudioMixerOutput::SlotPinned(_, _) => {
@@ -182,16 +204,26 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
                 AudioMixerOutput::SlotUnpinned(_, _) => {
                     //TODO fire event to client
                 }
-                AudioMixerOutput::OutputSlotSrcChanged(_, _) => {
-                    //TODO fire event to client
+                AudioMixerOutput::OutputSlotSrcChanged(slot, _) => {
+                    if let Some(slot) = self.output_slots.get_mut(slot) {
+                        slot.ts_rewritter.reinit();
+                        slot.seq_rewriter.reinit();
+                    }
                 }
-                AudioMixerOutput::OutputSlotPkt(slot, pkt) => {
-                    if let Some(Some(track_id)) = self.output_slots.get(slot) {
-                        //TODO rewrite ts and seq
-                        self.outputs.push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::LocalTrackEvent(
-                            *track_id,
-                            LocalTrackOutgoingEvent::MediaPacket(pkt),
-                        )));
+                AudioMixerOutput::OutputSlotPkt(slot, mut pkt) => {
+                    if let Some(slot) = self.output_slots.get_mut(slot) {
+                        if let Some(track_id) = slot.track_id {
+                            if let Some(seq) = slot.seq_rewriter.generate(pkt.seq_no as u64) {
+                                let ts = slot.ts_rewritter.generate(now_ms, pkt.time as u64);
+                                pkt.time = ts as u32;
+                                pkt.seq_no = seq as u16;
+
+                                self.outputs.push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::LocalTrackEvent(
+                                    track_id,
+                                    LocalTrackOutgoingEvent::MediaPacket(pkt),
+                                )));
+                            }
+                        }
                     }
                 }
             }
@@ -200,3 +232,5 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
         self.outputs.pop_front()
     }
 }
+
+//TODO test

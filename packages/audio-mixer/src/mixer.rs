@@ -21,6 +21,7 @@ pub enum AudioMixerOutput<Pkt, Src> {
     OutputSlotPkt(usize, Pkt),
 }
 
+#[allow(unused)]
 enum SourceState {
     Unpinned { audio_level: i8, last_changed_at: u64 },
     Pinned { pinned_at: u64, audio_level: i8, slot: usize, last_changed_at: u64 },
@@ -66,6 +67,7 @@ impl SourceState {
     }
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 enum OutputSlotState<Src: Clone> {
     Empty,
@@ -73,10 +75,23 @@ enum OutputSlotState<Src: Clone> {
 }
 
 impl<Src: Clone> OutputSlotState<Src> {
+    #[allow(unused)]
     pub fn audio_level(&self) -> Option<i8> {
         match self {
             OutputSlotState::Empty => None,
             OutputSlotState::Pinned { audio_level, .. } => Some(*audio_level),
+        }
+    }
+
+    pub fn set_audio_level(&mut self, now_ms: u64, audio_level: i8) {
+        match self {
+            OutputSlotState::Empty => {}
+            OutputSlotState::Pinned {
+                audio_level: level, last_changed_at, ..
+            } => {
+                *level = audio_level;
+                *last_changed_at = now_ms;
+            }
         }
     }
 }
@@ -108,10 +123,7 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
                 log::debug!("[AudioMixer] set source {:?} audio level to SILENT_LEVEL after timeout", src);
                 state.set_audio_level(now_ms, SILENT_LEVEL);
                 if let Some(slot) = state.slot() {
-                    if let OutputSlotState::Pinned { audio_level, last_changed_at, .. } = &mut self.output_slots[slot] {
-                        *audio_level = SILENT_LEVEL;
-                        *last_changed_at = now_ms;
-                    }
+                    self.output_slots[slot].set_audio_level(now_ms, SILENT_LEVEL);
                 }
             }
         }
@@ -305,10 +317,7 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
             } => {
                 *audio_level = level;
                 *last_changed_at = now_ms;
-                if let OutputSlotState::Pinned { audio_level, last_changed_at, .. } = &mut self.output_slots[*slot] {
-                    *audio_level = level;
-                    *last_changed_at = now_ms;
-                }
+                self.output_slots[*slot].set_audio_level(now_ms, level);
                 Some(*slot)
             }
         }

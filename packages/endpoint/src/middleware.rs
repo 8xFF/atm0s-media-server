@@ -23,5 +23,5 @@ pub trait MediaEndpointMiddleware: Send + Sync {
     fn on_transport_error(&mut self, now_ms: u64, error: &TransportError) -> bool;
     /// return true if event is consumed
     fn on_cluster(&mut self, now_ms: u64, event: &ClusterEndpointIncomingEvent) -> bool;
-    fn pop_action(&mut self) -> Option<MediaEndpointMiddlewareOutput>;
+    fn pop_action(&mut self, now_ms: u64) -> Option<MediaEndpointMiddlewareOutput>;
 }
