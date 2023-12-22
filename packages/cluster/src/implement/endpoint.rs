@@ -182,7 +182,7 @@ impl ClusterEndpoint for ClusterEndpointSdn {
                     let consumer = self.pubsub_sdk.create_consumer_raw(*track_uuid as ChannelUuid, self.data_tx.clone());
                     log::info!("[Atm0sClusterEndpoint] sub track {peer_id} {track_name} => track_uuid {} consumer_id {}", *track_uuid, consumer.uuid());
                     self.consumer_map.insert(consumer.uuid(), track_id);
-                    let entry = self.track_sub_map.entry(track_id).or_insert_with(HashMap::new);
+                    let entry = self.track_sub_map.entry(track_id).or_insert_with(Default::default);
                     entry.insert(track_uuid, consumer);
                     Ok(())
                 }
