@@ -131,9 +131,10 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
 
     /// add source to mixer
     /// if mixer slot is not full, select a empty slot and pin the source to the slot
-    pub fn add_source(&mut self, now_ms: u64, source: Src) {
+    /// return None if source already exists, return Some(()) if source added
+    pub fn add_source(&mut self, now_ms: u64, source: Src) -> Option<()> {
         if self.sources.contains_key(&source) {
-            return;
+            return None;
         }
         if let Some(slot) = self.find_empty_slot() {
             log::info!("[AudioMixer] add source {:?} to slot {}", source, slot);
@@ -164,6 +165,7 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
                 },
             );
         }
+        Some(())
     }
 
     /// push pkt to mixer, if audio level is higher than lowest audio level + SWITCH_AUDIO_THRESHOLD, switch the slot to the source
@@ -177,14 +179,9 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
 
     /// remove source from mixer
     /// if removed source id pinned, find another source to fill the slot
-    pub fn remove_source(&mut self, now_ms: u64, source: Src) {
-        if let Some(SourceState::Pinned {
-            pinned_at: _,
-            audio_level: _,
-            slot,
-            last_changed_at: _,
-        }) = self.sources.remove(&source)
-        {
+    /// return None if source not found, return Some(()) if source removed
+    pub fn remove_source(&mut self, now_ms: u64, source: Src) -> Option<()> {
+        if let SourceState::Pinned { slot, .. } = self.sources.remove(&source)? {
             //find another source to fill the slot
             if let Some((src, state)) = self.highest_unpined_source() {
                 log::info!("[AudioMixer] remove source {:?} from slot {}, fill slot with source {:?}", source, slot, src);
@@ -209,6 +206,7 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
                 self.actions.push_back(AudioMixerOutput::OutputSlotSrcChanged(slot, None));
             }
         }
+        Some(())
     }
 
     pub fn pop(&mut self) -> Option<AudioMixerOutput<Pkt, Src>> {
@@ -327,6 +325,14 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
 #[cfg(test)]
 mod tests {
     use crate::{AudioMixer, AudioMixerConfig};
+
+    #[test]
+    fn add_remove_correct() {
+        let mut mixer = AudioMixer::<Option<i8>, u32>::new(Box::new(|v| *v), AudioMixerConfig { outputs: 2 });
+        assert_eq!(mixer.add_source(0, 100), Some(()));
+        assert_eq!(mixer.remove_source(0, 101), None);
+        assert_eq!(mixer.remove_source(0, 100), Some(()));
+    }
 
     #[test]
     fn auto_pin_unpin_some_first_sources() {
