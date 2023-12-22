@@ -119,8 +119,8 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
 
     pub fn on_tick(&mut self, now_ms: u64) {
         for (src, state) in &mut self.sources {
-            if state.last_changed_at() + AUDIO_SLOT_TIMEOUT_MS <= now_ms {
-                log::debug!("[AudioMixer] set source {:?} audio level to SILENT_LEVEL after timeout", src);
+            if state.last_changed_at() + AUDIO_SLOT_TIMEOUT_MS <= now_ms && state.audio_level() != SILENT_LEVEL {
+                log::info!("[AudioMixer] set source {:?} audio level to SILENT_LEVEL after timeout", src);
                 state.set_audio_level(now_ms, SILENT_LEVEL);
                 if let Some(slot) = state.slot() {
                     self.output_slots[slot].set_audio_level(now_ms, SILENT_LEVEL);
@@ -171,6 +171,9 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
     /// push pkt to mixer, if audio level is higher than lowest audio level + SWITCH_AUDIO_THRESHOLD, switch the slot to the source
     pub fn push_pkt(&mut self, now_ms: u64, source: Src, pkt: &Pkt) {
         let audio_level = (self.extractor)(pkt).unwrap_or(SILENT_LEVEL);
+        if audio_level == SILENT_LEVEL {
+            return;
+        }
         if let Some(index) = self.set_source_level(now_ms, source, audio_level) {
             log::trace!("[AudioMixer] push pkt to slot {}, audio level {}", index, audio_level);
             self.actions.push_back(AudioMixerOutput::OutputSlotPkt(index, pkt.clone()));
@@ -281,6 +284,13 @@ impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
                                 pinned_at: now_ms,
                                 audio_level: level,
                                 slot: lowest_index,
+                                last_changed_at: now_ms,
+                            },
+                        );
+                        self.sources.insert(
+                            lowest_source.clone(),
+                            SourceState::Unpinned {
+                                audio_level: lowest_audio_level,
                                 last_changed_at: now_ms,
                             },
                         );
@@ -450,6 +460,10 @@ mod tests {
         assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(101, 0)));
         assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(101))));
         assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(first_level + super::SWITCH_AUDIO_THRESHOLD as i8))));
+        assert_eq!(mixer.pop(), None);
+
+        //after switch should not fire event from source 100
+        mixer.push_pkt(100, 100, &Some(first_level));
         assert_eq!(mixer.pop(), None);
     }
 }

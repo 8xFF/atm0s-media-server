@@ -3,10 +3,10 @@ use std::{collections::VecDeque, vec};
 use audio_mixer::{AudioMixer, AudioMixerOutput};
 use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterTrackUuid, MixMinusAudioMode};
 use media_utils::{SeqRewrite, TsRewrite};
-use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaPacket, TrackId, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
+use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, TrackId, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
 
 use crate::{
-    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, TrackInfo},
+    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn},
     EndpointRpcIn, EndpointRpcOut, MediaEndpointMiddleware, MediaEndpointMiddlewareOutput, RpcResponse,
 };
 
@@ -60,16 +60,17 @@ impl MixMinusEndpointMiddleware {
 
 impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
     fn on_start(&mut self, _now_ms: u64) {
-        for i in 0..self.output_slots.len() {
-            self.outputs
-                .push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
-                    peer_hash: 0,
-                    peer: "".to_string(),
-                    kind: MediaKind::Audio,
-                    track: format!("mix_minus_{}_{}", self.name, i),
-                    state: None,
-                }))));
-        }
+        // current version sdk dont need to fire event, it auto subscribe to mix_minus_default_0,1,2
+        // for i in 0..self.output_slots.len() {
+        //     self.outputs
+        //         .push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
+        //             peer_hash: 0,
+        //             peer: "".to_string(),
+        //             kind: MediaKind::Audio,
+        //             track: format!("mix_minus_{}_{}", self.name, i),
+        //             state: None,
+        //         }))));
+        // }
     }
 
     fn on_tick(&mut self, now_ms: u64) {
@@ -206,7 +207,8 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
                 AudioMixerOutput::SlotUnpinned(_, _) => {
                     //TODO fire event to client
                 }
-                AudioMixerOutput::OutputSlotSrcChanged(slot, _) => {
+                AudioMixerOutput::OutputSlotSrcChanged(slot, src) => {
+                    log::info!("[AudioMixMinus] slot {} changed to {:?}", slot, src);
                     if let Some(slot) = self.output_slots.get_mut(slot) {
                         slot.ts_rewritter.reinit();
                         slot.seq_rewriter.reinit();
@@ -219,7 +221,6 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
                                 let ts = slot.ts_rewritter.generate(now_ms, pkt.time as u64);
                                 pkt.time = ts as u32;
                                 pkt.seq_no = seq as u16;
-
                                 self.outputs.push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::LocalTrackEvent(
                                     track_id,
                                     LocalTrackOutgoingEvent::MediaPacket(pkt),
@@ -244,7 +245,7 @@ mod tests {
     use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaPacket, TransportIncomingEvent, TransportOutgoingEvent};
 
     use crate::{
-        rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, ReceiverDisconnect, ReceiverSwitch, RemoteStream, TrackInfo},
+        rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, ReceiverDisconnect, ReceiverSwitch, RemoteStream},
         EndpointRpcIn, EndpointRpcOut, MediaEndpointMiddleware, MediaEndpointMiddlewareOutput, RpcRequest, RpcResponse,
     };
 
@@ -256,42 +257,42 @@ mod tests {
         mix_minus.on_start(0);
 
         //should pop 3 track added
-        assert_eq!(
-            mix_minus.pop_action(0),
-            Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
-                TrackInfo {
-                    peer_hash: 0,
-                    peer: "".to_string(),
-                    kind: MediaKind::Audio,
-                    track: "mix_minus_default_0".to_string(),
-                    state: None,
-                }
-            ))))
-        );
-        assert_eq!(
-            mix_minus.pop_action(0),
-            Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
-                TrackInfo {
-                    peer_hash: 0,
-                    peer: "".to_string(),
-                    kind: MediaKind::Audio,
-                    track: "mix_minus_default_1".to_string(),
-                    state: None,
-                }
-            ))))
-        );
-        assert_eq!(
-            mix_minus.pop_action(0),
-            Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
-                TrackInfo {
-                    peer_hash: 0,
-                    peer: "".to_string(),
-                    kind: MediaKind::Audio,
-                    track: "mix_minus_default_2".to_string(),
-                    state: None,
-                }
-            ))))
-        );
+        // assert_eq!(
+        //     mix_minus.pop_action(0),
+        //     Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
+        //         TrackInfo {
+        //             peer_hash: 0,
+        //             peer: "".to_string(),
+        //             kind: MediaKind::Audio,
+        //             track: "mix_minus_default_0".to_string(),
+        //             state: None,
+        //         }
+        //     ))))
+        // );
+        // assert_eq!(
+        //     mix_minus.pop_action(0),
+        //     Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
+        //         TrackInfo {
+        //             peer_hash: 0,
+        //             peer: "".to_string(),
+        //             kind: MediaKind::Audio,
+        //             track: "mix_minus_default_1".to_string(),
+        //             state: None,
+        //         }
+        //     ))))
+        // );
+        // assert_eq!(
+        //     mix_minus.pop_action(0),
+        //     Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
+        //         TrackInfo {
+        //             peer_hash: 0,
+        //             peer: "".to_string(),
+        //             kind: MediaKind::Audio,
+        //             track: "mix_minus_default_2".to_string(),
+        //             state: None,
+        //         }
+        //     ))))
+        // );
         assert_eq!(mix_minus.pop_action(0), None);
 
         //should auto subscribe if cluster audio track added
@@ -409,9 +410,9 @@ mod tests {
         let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "default", MixMinusAudioMode::ManualAudioStreams, 100, 3);
         mix_minus.on_start(0);
 
-        assert!(mix_minus.pop_action(0).is_some()); //track added
-        assert!(mix_minus.pop_action(0).is_some()); //track added
-        assert!(mix_minus.pop_action(0).is_some()); //track added
+        // assert!(mix_minus.pop_action(0).is_some()); //track added
+        // assert!(mix_minus.pop_action(0).is_some()); //track added
+        // assert!(mix_minus.pop_action(0).is_some()); //track added
         assert_eq!(mix_minus.pop_action(0), None);
 
         //should not auto subscribe if remote track added
@@ -505,7 +506,7 @@ mod tests {
         let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "default", MixMinusAudioMode::AllAudioStreams, 100, 1);
         mix_minus.on_start(0);
 
-        assert!(mix_minus.pop_action(0).is_some()); //track added
+        // assert!(mix_minus.pop_action(0).is_some()); //track added
         assert_eq!(mix_minus.pop_action(0), None);
 
         let meta = ClusterTrackMeta {
