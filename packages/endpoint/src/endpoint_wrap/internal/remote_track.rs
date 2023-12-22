@@ -1,6 +1,4 @@
-use cluster::{
-    generate_cluster_track_uuid, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackScalingType, ClusterTrackStats, ClusterTrackStatus, ClusterTrackUuid,
-};
+use cluster::{ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackScalingType, ClusterTrackStats, ClusterTrackStatus, ClusterTrackUuid};
 use std::collections::VecDeque;
 use transport::{RemoteTrackIncomingEvent, RemoteTrackOutgoingEvent, TrackId, TrackMeta};
 
@@ -36,7 +34,7 @@ pub struct RemoteTrack {
 impl RemoteTrack {
     pub fn new(room_id: &str, peer_id: &str, track_id: TrackId, track_name: &str, track_meta: TrackMeta) -> Self {
         Self {
-            cluster_track_uuid: generate_cluster_track_uuid(room_id, peer_id, track_name),
+            cluster_track_uuid: ClusterTrackUuid::from_info(room_id, peer_id, track_name),
             track_id,
             track_name: track_name.into(),
             bitrate_measure: if track_meta.kind.is_video() {

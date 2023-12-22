@@ -1,9 +1,11 @@
+#[derive(Clone)]
 enum State {
     FirstInit,
     Reinit,
     Rewriting,
 }
 
+#[derive(Clone)]
 pub struct TsRewrite<const TS_LIMIT: u64, const TS_DELTA_REINIT: u64> {
     data_rate: u64,
     delta_ts: i64,

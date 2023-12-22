@@ -1,6 +1,6 @@
 use transport::{MediaPacket, RequestKeyframeKind};
 
-use crate::{ClusterPeerId, ClusterTrackName, ClusterTrackStats};
+use crate::{ClusterPeerId, ClusterTrackName, ClusterTrackStats, ClusterTrackUuid};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterLocalTrackOutgoingEvent {
@@ -12,6 +12,6 @@ pub enum ClusterLocalTrackOutgoingEvent {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ClusterLocalTrackIncomingEvent {
-    MediaPacket(MediaPacket),
-    MediaStats(ClusterTrackStats),
+    MediaPacket(ClusterTrackUuid, MediaPacket),
+    MediaStats(ClusterTrackUuid, ClusterTrackStats),
 }

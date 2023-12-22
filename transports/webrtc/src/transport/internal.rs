@@ -173,8 +173,6 @@ where
                 if let Some(mid) = self.remote_video_mids.first() {
                     log::debug!("[TransportWebrtc] request ingress bitrate: {} with first video mid {}", bitrate, mid);
                     self.str0m_actions.push_back(Str0mAction::LimitIngressBitrate { mid: mid.clone(), max: bitrate });
-                } else {
-                    log::warn!("[TransportWebrtc] request ingress bitrate: {} but no video mid", bitrate);
                 }
             }
             TransportOutgoingEvent::ConfigEgressBitrate { current, desired } => {

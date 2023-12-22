@@ -1,4 +1,4 @@
-use cluster::{ClusterEndpoint, EndpointSubscribeScope};
+use cluster::{ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode};
 use media_utils::ServerError;
 use transport::Transport;
 
@@ -13,15 +13,19 @@ pub struct MediaEndpointPreconditional {
     peer: String,
     subscribe_scope: EndpointSubscribeScope,
     bitrate_type: BitrateLimiterType,
+    mix_minus_mode: MixMinusAudioMode,
+    mix_minus_size: usize,
 }
 
 impl MediaEndpointPreconditional {
-    pub fn new(room: &str, peer: &str, subscribe_scope: EndpointSubscribeScope, bitrate_type: BitrateLimiterType) -> Self {
+    pub fn new(room: &str, peer: &str, subscribe_scope: EndpointSubscribeScope, bitrate_type: BitrateLimiterType, mix_minus_mode: MixMinusAudioMode, mix_minus_size: usize) -> Self {
         Self {
             room: room.into(),
             peer: peer.into(),
             subscribe_scope,
             bitrate_type,
+            mix_minus_mode,
+            mix_minus_size,
         }
     }
 
@@ -34,6 +38,8 @@ impl MediaEndpointPreconditional {
         transport: T,
         cluster: C,
     ) -> MediaEndpoint<T, E, C> {
-        MediaEndpoint::new(transport, cluster, &self.room, &self.peer, self.subscribe_scope, self.bitrate_type)
+        MediaEndpoint::new(
+            transport, cluster, &self.room, &self.peer, self.subscribe_scope, self.bitrate_type, self.mix_minus_mode, self.mix_minus_size,
+        )
     }
 }
