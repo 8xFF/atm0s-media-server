@@ -3,6 +3,7 @@ members = [
     "packages/cluster",
     "packages/endpoint",
     "packages/transport",
+    "packages/audio-mixer",
     "packages/media-utils",
     "transports/webrtc",
     "transports/rtmp",

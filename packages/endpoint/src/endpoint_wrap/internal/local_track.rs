@@ -92,7 +92,7 @@ impl LocalTrack {
 
     pub fn on_cluster_event(&mut self, now_ms: u64, event: ClusterLocalTrackIncomingEvent) {
         match event {
-            ClusterLocalTrackIncomingEvent::MediaPacket(pkt) => {
+            ClusterLocalTrackIncomingEvent::MediaPacket(_track_uuid, pkt) => {
                 if let Some(stats) = self.source_stats_generator.on_pkt(&pkt) {
                     log::info!("[LocalTrack {}] auto generate stats {:?}", self.track_name, stats);
                     self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceStats(stats)));
@@ -103,7 +103,7 @@ impl LocalTrack {
                     self.out_actions.push_back(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::MediaPacket(pkt)));
                 }
             }
-            ClusterLocalTrackIncomingEvent::MediaStats(stats) => {
+            ClusterLocalTrackIncomingEvent::MediaStats(_track_uuid, stats) => {
                 log::info!("[LocalTrack {}] stats {:?}", self.track_name, stats);
                 self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceStats(stats)));
                 self.source_stats_generator.arrived_stats();
@@ -199,7 +199,7 @@ mod tests {
         let mut track = LocalTrack::new("room1", "peer1", 100, "audio_main", TrackMeta::new_audio(None));
 
         let pkt = MediaPacket::simple_audio(1, 0, vec![1, 2, 3]);
-        track.on_cluster_event(0, ClusterLocalTrackIncomingEvent::MediaPacket(pkt.clone()));
+        track.on_cluster_event(0, ClusterLocalTrackIncomingEvent::MediaPacket(0.into(), pkt.clone()));
         assert_eq!(track.pop_action(), Some(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::MediaPacket(pkt))));
     }
 

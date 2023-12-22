@@ -11,7 +11,7 @@ use cluster::{
         whip::WhipConnectResponse,
         RpcEmitter, RpcEndpoint, RpcReqRes, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, EndpointSubscribeScope, RemoteBitrateControlMode, INNER_GATEWAY_SERVICE,
+    Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode, RemoteBitrateControlMode, INNER_GATEWAY_SERVICE,
 };
 use endpoint::BitrateLimiterType;
 use futures::{select, FutureExt};
@@ -185,6 +185,8 @@ where
                         },
                     ],
                     None,
+                    MixMinusAudioMode::Disabled,
+                    0,
                 )
                 .await
                 {
@@ -242,6 +244,8 @@ where
                     &sdp,
                     vec![],
                     Some(SdpBoxRewriteScope::OnlyTrack),
+                    MixMinusAudioMode::AllAudioStreams,
+                    1,
                 )
                 .await
                 {
@@ -299,6 +303,8 @@ where
                     &sdp,
                     param.senders.clone(),
                     Some(SdpBoxRewriteScope::StreamAndTrack),
+                    param.mix_minus_audio.unwrap_or(MixMinusAudioMode::Disabled),
+                    3,
                 )
                 .await
                 {

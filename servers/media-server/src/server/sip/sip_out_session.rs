@@ -1,5 +1,5 @@
-use cluster::EndpointSubscribeScope;
 use cluster::{Cluster, ClusterEndpoint};
+use cluster::{EndpointSubscribeScope, MixMinusAudioMode};
 use endpoint::{BitrateLimiterType, MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use transport_sip::SipTransportOut;
 
@@ -14,7 +14,14 @@ pub struct SipOutSession<E: ClusterEndpoint> {
 
 impl<E: ClusterEndpoint> SipOutSession<E> {
     pub async fn new<C: Cluster<E>>(room: &str, peer: &str, cluster: &mut C, transport: SipTransportOut) -> Result<Self, SipOutSessionError> {
-        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, EndpointSubscribeScope::RoomManual, BitrateLimiterType::DynamicWithConsumers);
+        let mut endpoint_pre = MediaEndpointPreconditional::new(
+            room,
+            peer,
+            EndpointSubscribeScope::RoomManual,
+            BitrateLimiterType::DynamicWithConsumers,
+            MixMinusAudioMode::AllAudioStreams,
+            1,
+        );
         endpoint_pre.check().map_err(|_e| SipOutSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let endpoint = endpoint_pre.build(transport, room);

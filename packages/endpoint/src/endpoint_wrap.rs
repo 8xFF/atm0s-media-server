@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_std::stream::StreamExt;
-use cluster::{ClusterEndpoint, EndpointSubscribeScope};
+use cluster::{ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode};
 use futures::{select, FutureExt};
 use media_utils::Timer;
 use transport::{Transport, TransportError};
@@ -17,6 +17,9 @@ use self::internal::MediaEndpointInternal;
 
 mod internal;
 pub use internal::BitrateLimiterType;
+
+const DEFAULT_MIX_MINUS_NAME: &str = "default";
+const DEFAULT_MIX_MINUS_VIRTUAL_TRACK_ID: u16 = 200;
 
 pub enum MediaEndpointOutput {
     Continue,
@@ -43,7 +46,16 @@ where
     T: Transport<E, EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn, EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>,
     C: ClusterEndpoint,
 {
-    pub fn new(transport: T, mut cluster: C, room: &str, peer: &str, sub_scope: EndpointSubscribeScope, bitrate_type: BitrateLimiterType) -> Self {
+    pub fn new(
+        transport: T,
+        mut cluster: C,
+        room: &str,
+        peer: &str,
+        sub_scope: EndpointSubscribeScope,
+        bitrate_type: BitrateLimiterType,
+        mix_minus_mode: MixMinusAudioMode,
+        mix_minus_size: usize,
+    ) -> Self {
         log::info!("[EndpointWrap] create");
         //TODO handle error of cluster sub room
         if matches!(sub_scope, EndpointSubscribeScope::RoomAuto) {
@@ -52,7 +64,16 @@ where
             }
         }
         let timer = Arc::new(media_utils::SystemTimer());
-        let middlewares: Vec<Box<dyn MediaEndpointMiddleware>> = vec![Box::new(middleware::logger::MediaEndpointEventLogger::new())];
+        let middlewares: Vec<Box<dyn MediaEndpointMiddleware>> = vec![
+            Box::new(middleware::logger::MediaEndpointEventLogger::new()),
+            Box::new(middleware::mix_minus::MixMinusEndpointMiddleware::new(
+                room,
+                DEFAULT_MIX_MINUS_NAME,
+                mix_minus_mode,
+                DEFAULT_MIX_MINUS_VIRTUAL_TRACK_ID,
+                mix_minus_size,
+            )),
+        ];
         let mut internal = MediaEndpointInternal::new(room, peer, bitrate_type, middlewares);
         internal.on_start(timer.now_ms());
 

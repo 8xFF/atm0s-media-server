@@ -499,7 +499,7 @@ impl Drop for MediaEndpointInternal {
 
 #[cfg(test)]
 mod tests {
-    use cluster::{generate_cluster_track_uuid, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta};
+    use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackUuid};
     use transport::{
         LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, RemoteTrackIncomingEvent, RequestKeyframeKind, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent,
     };
@@ -516,7 +516,7 @@ mod tests {
     fn should_fire_cluster_when_remote_track_added_then_close() {
         let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
 
-        let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
+        let cluster_track_uuid = ClusterTrackUuid::from_info("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
 
         assert_eq!(endpoint.remote_tracks.len(), 1);
@@ -560,7 +560,7 @@ mod tests {
     fn should_fire_cluster_when_remote_track_added_then_removed() {
         let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
 
-        let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
+        let cluster_track_uuid = ClusterTrackUuid::from_info("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
 
         assert_eq!(endpoint.remote_tracks.len(), 1);

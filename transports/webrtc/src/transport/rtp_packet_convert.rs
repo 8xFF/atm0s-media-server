@@ -1,6 +1,6 @@
 use self::rid_history::RidHistory;
 use str0m::{format::CodecConfig, media::Pt};
-use transport::{H264Profile, MediaPacket, PayloadCodec, Vp9Profile};
+use transport::{H264Profile, MediaPacket, MediaPacketExtensions, PayloadCodec, Vp9Profile};
 
 use super::{
     mid_convert::rid_to_u16,
@@ -80,10 +80,9 @@ impl RtpPacketConverter {
             seq_no: rtp.header.sequence_number,
             time: rtp.header.timestamp,
             marker: rtp.header.marker,
-            // ext_vals: MediaPacketExtensions {
-            //     abs_send_time: rtp.header.ext_vals.abs_send_time.map(|t| (t.number(), t.denom())),
-            //     transport_cc: rtp.header.ext_vals.transport_cc,
-            // },
+            ext_vals: MediaPacketExtensions {
+                audio_level: rtp.header.ext_vals.audio_level,
+            },
             nackable: nackable,
             payload: rtp.payload,
         })
