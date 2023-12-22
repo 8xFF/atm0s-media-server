@@ -48,7 +48,7 @@ pub struct ClusterEndpointSdn {
     data_fb_tx: Sender<Feedback>,
     data_fb_rx: Receiver<Feedback>,
     consumer_map: HashMap<u64, u16>,
-    track_sub_map: HashMap<u16, ConsumerRaw>,
+    track_sub_map: HashMap<u16, HashMap<ClusterTrackUuid, ConsumerRaw>>,
     room_sub: Option<()>,
     peer_sub: HashMap<String, ()>,
     track_pub: HashMap<ChannelUuid, (u16, PublisherRaw)>,
@@ -134,40 +134,44 @@ impl ClusterEndpoint for ClusterEndpointSdn {
                         RequestKeyframeKind::Fir => 1,
                         RequestKeyframeKind::Pli => 2,
                     } as i64;
-                    if let Some(consumer) = self.track_sub_map.get(&track_id) {
-                        log::debug!("[Atm0sClusterEndpoint] send track feedback RequestKeyFrame {track_id} => {:?}", consumer.uuid());
-                        consumer.feedback(
-                            TrackFeedbackType::RequestKeyFrame as u8,
-                            FeedbackType::Number {
-                                window_ms: 200,
-                                info: NumberInfo {
-                                    count: 1,
-                                    sum: value,
-                                    max: value,
-                                    min: value,
+                    if let Some(consumers) = self.track_sub_map.get(&track_id) {
+                        for (_, consumer) in consumers {
+                            log::debug!("[Atm0sClusterEndpoint] send track feedback RequestKeyFrame {track_id} => {:?}", consumer.uuid());
+                            consumer.feedback(
+                                TrackFeedbackType::RequestKeyFrame as u8,
+                                FeedbackType::Number {
+                                    window_ms: 200,
+                                    info: NumberInfo {
+                                        count: 1,
+                                        sum: value,
+                                        max: value,
+                                        min: value,
+                                    },
                                 },
-                            },
-                        )
+                            )
+                        }
                     } else {
                         log::warn!("[Atm0sClusterEndpoint] send track feedback RequestKeyFrame but track not found {track_id}");
                     }
                     Ok(())
                 }
                 ClusterLocalTrackOutgoingEvent::LimitBitrate(bitrate) => {
-                    if let Some(consumer) = self.track_sub_map.get(&track_id) {
-                        log::debug!("[Atm0sClusterEndpoint] send track feedback LimitBitrate({bitrate}) {track_id} => {:?}", consumer.uuid());
-                        consumer.feedback(
-                            TrackFeedbackType::LimitBitrate as u8,
-                            FeedbackType::Number {
-                                window_ms: 200,
-                                info: NumberInfo {
-                                    count: 1,
-                                    sum: bitrate as i64,
-                                    max: bitrate as i64,
-                                    min: bitrate as i64,
+                    if let Some(consumers) = self.track_sub_map.get(&track_id) {
+                        for (_, consumer) in consumers {
+                            log::debug!("[Atm0sClusterEndpoint] send track feedback LimitBitrate({bitrate}) {track_id} => {:?}", consumer.uuid());
+                            consumer.feedback(
+                                TrackFeedbackType::LimitBitrate as u8,
+                                FeedbackType::Number {
+                                    window_ms: 200,
+                                    info: NumberInfo {
+                                        count: 1,
+                                        sum: bitrate as i64,
+                                        max: bitrate as i64,
+                                        min: bitrate as i64,
+                                    },
                                 },
-                            },
-                        )
+                            )
+                        }
                     } else {
                         log::warn!("[Atm0sClusterEndpoint] send track feedback LimitBitrate({bitrate}) but track not found {track_id}");
                     }
@@ -178,18 +182,26 @@ impl ClusterEndpoint for ClusterEndpointSdn {
                     let consumer = self.pubsub_sdk.create_consumer_raw(*track_uuid as ChannelUuid, self.data_tx.clone());
                     log::info!("[Atm0sClusterEndpoint] sub track {peer_id} {track_name} => track_uuid {} consumer_id {}", *track_uuid, consumer.uuid());
                     self.consumer_map.insert(consumer.uuid(), track_id);
-                    self.track_sub_map.insert(track_id, consumer);
+                    let entry = self.track_sub_map.entry(track_id).or_insert_with(HashMap::new);
+                    entry.insert(track_uuid, consumer);
                     Ok(())
                 }
                 ClusterLocalTrackOutgoingEvent::Unsubscribe(peer_id, track_name) => {
                     let track_uuid = ClusterTrackUuid::from_info(&self.room_id, &peer_id, &track_name);
-                    if let Some(consumer) = self.track_sub_map.remove(&track_id) {
-                        log::info!(
-                            "[Atm0sClusterEndpoint] unsub track {peer_id} {track_name} => track_uuid {} consumer_id {}",
-                            *track_uuid,
-                            consumer.uuid()
-                        );
-                        self.consumer_map.remove(&consumer.uuid());
+                    if let Some(consumers) = self.track_sub_map.get_mut(&track_id) {
+                        if let Some(consumer) = consumers.remove(&track_uuid) {
+                            log::info!(
+                                "[Atm0sClusterEndpoint] unsub track {peer_id} {track_name} => track_uuid {} consumer_id {}",
+                                *track_uuid,
+                                consumer.uuid()
+                            );
+                            self.consumer_map.remove(&consumer.uuid());
+                            if consumers.is_empty() {
+                                self.track_sub_map.remove(&track_id);
+                            }
+                        } else {
+                            log::warn!("[Atm0sClusterEndpoint] unsub track but not found {peer_id} {track_name} => track_uuid {}", *track_uuid);
+                        }
                     } else {
                         log::warn!("[Atm0sClusterEndpoint] unsub track but not found {peer_id} {track_name} => track_uuid {}", *track_uuid);
                     }
