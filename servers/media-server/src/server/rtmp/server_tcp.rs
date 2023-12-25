@@ -6,7 +6,7 @@ use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
 use transport_rtmp::RtmpTransport;
 
 pub struct RtmpServer {
-    rx: Receiver<(String, String, RtmpTransport)>,
+    rx: Receiver<(String, RtmpTransport)>,
 }
 
 impl RtmpServer {
@@ -49,9 +49,9 @@ impl RtmpServer {
                         return;
                     }
 
-                    match (transport.room(), transport.peer()) {
-                        (Some(r), Some(p)) => {
-                            tx.send((r, p, transport)).await.log_error("need send");
+                    match transport.token() {
+                        Some(t) => {
+                            tx.send((t, transport)).await.log_error("need send");
                         }
                         _ => {}
                     }
@@ -62,7 +62,7 @@ impl RtmpServer {
         Self { rx }
     }
 
-    pub async fn recv(&mut self) -> Option<(String, String, RtmpTransport)> {
+    pub async fn recv(&mut self) -> Option<(String, RtmpTransport)> {
         self.rx.recv().await.ok()
     }
 }

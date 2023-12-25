@@ -7,11 +7,15 @@ mod local_track;
 mod media;
 mod remote_track;
 pub mod rpc;
+mod secure;
+mod session_uuid;
 
 pub use endpoint::*;
 pub use local_track::*;
 pub use media::*;
 pub use remote_track::*;
+pub use secure::*;
+pub use session_uuid::*;
 
 pub type ClusterPeerId = String;
 pub type ClusterTrackName = String;

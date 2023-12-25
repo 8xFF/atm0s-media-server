@@ -27,8 +27,7 @@ pub struct RtmpTransport {
     socket: TcpStream,
     session: RtmpSession,
     buf: Vec<u8>,
-    room: Option<String>,
-    peer: Option<String>,
+    token: Option<String>,
     actions: VecDeque<TransportIncomingEvent<RmIn, RrIn, RlIn>>,
     audio_convert: RtmpAacToMediaPacketOpus,
     video_convert: RtmpH264ToMediaPacketH264,
@@ -40,20 +39,15 @@ impl RtmpTransport {
             socket,
             session: RtmpSession::new(),
             buf: vec![0; 1 << 12],
-            room: None,
-            peer: None,
+            token: None,
             actions: VecDeque::new(),
             audio_convert: RtmpAacToMediaPacketOpus::new(),
             video_convert: RtmpH264ToMediaPacketH264::new(),
         }
     }
 
-    pub fn room(&self) -> Option<String> {
-        self.room.clone()
-    }
-
-    pub fn peer(&self) -> Option<String> {
-        self.peer.clone()
+    pub fn token(&self) -> Option<String> {
+        self.token.clone()
     }
 }
 
@@ -87,8 +81,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport {
                     self.session
                         .on_accept_request(request_id)
                         .map_err(|_e: ServerSessionError| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
-                    self.room = Some(app_name);
-                    self.peer = Some(stream_key);
+                    self.token = Some(stream_key);
 
                     // Because we need to wait connect to get room and peer info.
                     // TODO dont use this trick

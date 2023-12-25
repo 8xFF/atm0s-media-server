@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{ops::Deref, time::Duration};
 
 use async_std::{channel::Sender, prelude::FutureExt as _};
 use clap::Parser;
@@ -11,7 +11,7 @@ use cluster::{
         whip::WhipConnectResponse,
         RpcEmitter, RpcEndpoint, RpcReqRes, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode, RemoteBitrateControlMode, INNER_GATEWAY_SERVICE,
+    Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode, RemoteBitrateControlMode, VerifyObject, INNER_GATEWAY_SERVICE,
 };
 use endpoint::BitrateLimiterType;
 use futures::{select, FutureExt};
@@ -52,7 +52,11 @@ mod session;
 /// Media Server Webrtc
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-pub struct WebrtcArgs {}
+pub struct WebrtcArgs {
+    /// Max conn
+    #[arg(env, long, default_value_t = 100)]
+    pub max_conn: u64,
+}
 
 pub async fn run_webrtc_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: WebrtcArgs, ctx: MediaServerContext<InternalControl>, mut cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where
@@ -66,7 +70,7 @@ where
     let mut rpc_endpoint = WebrtcClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
 
-    let api_service = OpenApiService::new(WebrtcHttpApis, "Webrtc Server", "1.0.0").server("http://localhost:3000");
+    let api_service = OpenApiService::new(WebrtcHttpApis, "Webrtc Server", "1.0.0").server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
 
@@ -84,7 +88,7 @@ where
     // Init media-server related metrics
     ctx.init_metrics();
 
-    http_server.start(route).await;
+    http_server.start(route, ctx.clone()).await;
     let mut whep_counter = 0;
 
     let node_id = cluster.node_id();
@@ -109,7 +113,6 @@ where
                             addr: None,
                             domain: None,
                         }),
-                        token: "demo-token".to_string(), //TODO implement real-token
                     },
                     5000,
                 )
@@ -139,9 +142,14 @@ where
                 req.answer(Ok(NodeHealthcheckResponse { success: true }));
             }
             RpcEvent::WhipConnect(req) => {
-                //TODO validate token to get room
-                let room = req.param().token.as_str();
-                let peer = "publisher";
+                let s_token = if let Some(s_token) = req.param().verify(ctx.verifier().deref()) {
+                    s_token
+                } else {
+                    req.answer(Err("INVALID_TOKEN"));
+                    continue;
+                };
+                let room = s_token.room;
+                let peer = s_token.peer.unwrap_or("publisher".to_string());
                 let (sdp, is_compress) = match (&req.param().sdp, &req.param().compressed_sdp) {
                     (Some(sdp), _) => (sdp.clone(), false),
                     (_, Some(compressed_sdp)) => {
@@ -166,7 +174,7 @@ where
                     EndpointSubscribeScope::RoomManual,
                     BitrateLimiterType::MaxBitrateOnly,
                     &room,
-                    peer,
+                    &peer,
                     &sdp,
                     vec![
                         WebrtcConnectRequestSender {
@@ -211,9 +219,14 @@ where
                 }
             }
             RpcEvent::WhepConnect(req) => {
-                //TODO validate token to get room
-                let room = req.param().token.as_str();
-                let peer = format!("whep-{}", whep_counter);
+                let s_token = if let Some(s_token) = req.param().verify(ctx.verifier().deref()) {
+                    s_token
+                } else {
+                    req.answer(Err("INVALID_TOKEN"));
+                    continue;
+                };
+                let room = s_token.room;
+                let peer = s_token.peer.unwrap_or_else(|| format!("whep-{}", whep_counter));
                 let (sdp, is_compress) = match (&req.param().sdp, &req.param().compressed_sdp) {
                     (Some(sdp), _) => (sdp.clone(), false),
                     (_, Some(compressed_sdp)) => {
@@ -270,6 +283,10 @@ where
                 }
             }
             RpcEvent::WebrtcConnect(req) => {
+                if req.param().verify(ctx.verifier().deref()).is_none() {
+                    req.answer(Err("INVALID_TOKEN"));
+                    continue;
+                };
                 let (sdp, is_compress) = match (&req.param().sdp, &req.param().compressed_sdp) {
                     (Some(sdp), _) => (sdp.clone(), false),
                     (_, Some(compressed_sdp)) => {

@@ -8,7 +8,7 @@ use clap::Parser;
 use cluster::{
     rpc::{
         gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
-        general::MediaEndpointCloseResponse,
+        general::{MediaEndpointCloseResponse, MediaSessionProtocol},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },
     Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE,
@@ -53,7 +53,11 @@ pub enum InternalControl {
 pub struct RtmpArgs {
     /// Rtmp port
     #[arg(env, long)]
-    port: u16,
+    pub port: u16,
+
+    /// Max conn
+    #[arg(env, long, default_value_t = 10)]
+    pub max_conn: u64,
 }
 
 pub async fn run_rtmp_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: RtmpArgs, ctx: MediaServerContext<InternalControl>, mut cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
@@ -86,7 +90,7 @@ where
     // Init media-server related metrics
     ctx.init_metrics();
 
-    http_server.start(route).await;
+    http_server.start(route, ctx.clone()).await;
 
     let rtmp_port = opts.port;
     let node_id = cluster.node_id();
@@ -111,7 +115,6 @@ where
                             domain: None,
                         }),
                         webrtc: None,
-                        token: "demo-token".to_string(), //TODO implement real-token
                     },
                     5000,
                 )
@@ -135,12 +138,24 @@ where
                 rpc.ok_or("CLUSTER_RPC_ERROR")?
             },
             conn = rtmp_tcp_server.recv().fuse() => {
-                if let Some((room, peer, conn)) = conn {
+                if let Some((token, conn)) = conn {
+                    let s_token = if let Some(token) = ctx.verifier().verify_media_session(&token) {
+                        if token.protocol != MediaSessionProtocol::Rtmp {
+                            continue;
+                        }
+                        if token.peer.is_none() {
+                            continue;
+                        }
+                        token
+                    } else {
+                        continue;
+                    };
+
                     match run_rtmp_endpoint(
                         ctx.clone(),
                         &mut cluster,
-                        &room,
-                        &peer,
+                        &s_token.room,
+                        &s_token.peer.expect("Should have peer"),
                         conn,
                     )
                     .await

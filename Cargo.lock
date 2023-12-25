@@ -457,9 +457,12 @@ dependencies = [
  "bincode",
  "bytes",
  "futures",
+ "hmac 0.12.1",
+ "jwt",
  "log",
  "poem-openapi",
  "serde",
+ "sha2 0.10.8",
 ]
 
 [[package]]
@@ -851,6 +854,12 @@ checksum = "4cbbc9d0964165b47557570cce6c952866c2678457aca742aafc9fb771d30270"
 
 [[package]]
 name = "base64"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
+
+[[package]]
+name = "base64"
 version = "0.21.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35636a1494ede3b646cc98f74f8e62c773a38a659ebc777a2cf26b9b74171df9"
@@ -1127,7 +1136,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7efb37c3e1ccb1ff97164ad95ac1606e8ccd35b3fa0a7d99a304c7f4a428cc24"
 dependencies = [
  "aes-gcm",
- "base64",
+ "base64 0.21.5",
  "hkdf",
  "hmac 0.12.1",
  "percent-encoding",
@@ -1848,7 +1857,7 @@ version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06683b93020a07e3dbcf5f8c0f6d40080d725bea7936fc01ad345c01b97dc270"
 dependencies = [
- "base64",
+ "base64 0.21.5",
  "bytes",
  "headers-core",
  "http",
@@ -2121,6 +2130,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "54c0c35952f67de54bb584e9fd912b3023117cbafc0a77d8f3dee1fb5f572fe8"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "jwt"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6204285f77fe7d9784db3fdc449ecce1a0114927a51d5a41c4c7a292011c015f"
+dependencies = [
+ "base64 0.13.1",
+ "crypto-common",
+ "digest 0.10.7",
+ "hmac 0.12.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
 ]
 
 [[package]]
@@ -2812,7 +2836,7 @@ version = "3.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "664a0fd36922aebf32fa448378dd8b83317779794e42ecbe02796b9eca902728"
 dependencies = [
- "base64",
+ "base64 0.21.5",
  "bytes",
  "derive_more",
  "futures-util",

@@ -21,7 +21,11 @@ async-std = { workspace = true, optional = true }
 log = { workspace = true, optional = true  }
 futures = { workspace = true, optional = true  }
 bytes = { version = "1.5", optional = true  }
+jwt = { version = "0.16.0", optional = true }
+hmac = { version = "0.12.1", optional = true }
+sha2 = { version = "0.10.8", optional = true }
 
 [features]
-default = ["impl"]
+default = ["impl", "jwt-static-token"]
 impl = ["async-std", "log", "atm0s-sdn", "futures", "bytes"]
+jwt-static-token = ["jwt", "hmac", "sha2"]
