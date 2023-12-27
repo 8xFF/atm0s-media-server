@@ -59,7 +59,7 @@ where
     let mut rpc_endpoint = ConnectorClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
     let mut protocol = _opts.mq_uri.split("://");
-    let transporter: Result<Box<Transporter>, String> = match protocol.next() {
+    let transporter: Result<Box<dyn Transporter>, String> = match protocol.next() {
         Some("nats") => {
             let nats = NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone());
             match nats {
