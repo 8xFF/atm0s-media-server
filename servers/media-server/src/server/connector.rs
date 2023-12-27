@@ -18,7 +18,7 @@ use self::{
     rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, RpcEvent},
     serializers::{json::JsonConnectorEventSerializer, ConnectorEventSerializer},
     transports::nats::NatsTransporter,
-    transports::Transporter,
+    transports::{parse_uri, ConnectorTransporter},
 };
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
@@ -58,10 +58,13 @@ where
 {
     let mut rpc_endpoint = ConnectorClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
-    let mut protocol = _opts.mq_uri.split("://");
-    let transporter: Result<Box<dyn Transporter>, String> = match protocol.next() {
-        Some("nats") => {
-            let nats = NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone());
+    let (protocol, _) = parse_uri(&_opts.mq_uri).map_err(|e| {
+        log::error!("Error parsing MQ URI: {:?}", e);
+        "Error parsing MQ URI"
+    })?;
+    let transporter: Result<Box<dyn ConnectorTransporter>, String> = match protocol.as_str() {
+        "nats" => {
+            let nats = NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone()).await;
             match nats {
                 Ok(nats) => Ok(Box::new(nats)),
                 Err(e) => {
@@ -112,7 +115,7 @@ where
                 if let Ok(ref transport) = transporter {
                     match serializer.serialize(req.param()) {
                         Ok(serialized) => {
-                            if let Err(e) = transport.send(&serialized) {
+                            if let Err(e) = transport.send(&serialized).await {
                                 log::error!("Error sending message: {:?}", e);
                             }
                         }
