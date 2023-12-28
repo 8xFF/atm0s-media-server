@@ -52,7 +52,7 @@ pub enum InternalControl {
 #[command(author, version, about, long_about = None)]
 pub struct RtmpArgs {
     /// Rtmp port
-    #[arg(env, long)]
+    #[arg(env, long, default_value_t = 1935)]
     pub port: u16,
 
     /// Max conn
@@ -150,6 +150,8 @@ where
                     } else {
                         continue;
                     };
+
+                    log::info!("[RtmpMediaServer] new rtmp connection from {}/{:?}", s_token.room, s_token.peer);
 
                     match run_rtmp_endpoint(
                         ctx.clone(),

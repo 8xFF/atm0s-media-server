@@ -53,7 +53,7 @@ impl WebrtcHttpApis {
             return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
         }
 
-        log::info!("[HttpApis] create whip endpoint with token {}, ip {}, user_agent {} sdp {}", token.token, ip_addr, user_agent, body.0);
+        log::info!("[HttpApis] create whip endpoint with token {}, ip {}, user_agent {}", token.token, ip_addr, user_agent);
         let (req, rx) = RpcReqResHttp::<WhipConnectRequest, WhipConnectResponse>::new(WhipConnectRequest {
             session_uuid: data.1.generate_session_uuid(),
             ip_addr,
@@ -75,7 +75,7 @@ impl WebrtcHttpApis {
                 .ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
         }?;
-        log::info!("[HttpApis] Whip endpoint created with conn_id {} and sdp {}", res.conn_id, sdp);
+        log::info!("[HttpApis] Whip endpoint created with conn_id {}", res.conn_id);
         Ok(HttpResponse {
             code: StatusCode::CREATED,
             res: ApplicationSdp(sdp),
@@ -133,15 +133,16 @@ impl WebrtcHttpApis {
         TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
     ) -> Result<HttpResponse<ApplicationSdp<String>>> {
-        if let Some(s_token) = data.1.verifier().verify_media_session(&token.token) {
+        let s_token = if let Some(s_token) = data.1.verifier().verify_media_session(&token.token) {
             if !s_token.protocol.eq(&cluster::rpc::general::MediaSessionProtocol::Whep) {
                 return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
             }
+            s_token
         } else {
             return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
-        }
+        };
 
-        log::info!("[HttpApis] create whep endpoint with sdp {}", body.0);
+        log::info!("[HttpApis] create whep endpoint with token {:?}", s_token);
         let (req, rx) = RpcReqResHttp::<WhepConnectRequest, WhepConnectResponse>::new(WhepConnectRequest {
             session_uuid: data.1.generate_session_uuid(),
             ip_addr,
@@ -163,7 +164,7 @@ impl WebrtcHttpApis {
                 .ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
         }?;
-        log::info!("[HttpApis] Whep endpoint created with conn_id {} and sdp {}", res.conn_id, sdp);
+        log::info!("[HttpApis] Whep endpoint created with conn_id {}", res.conn_id);
         Ok(HttpResponse {
             code: StatusCode::CREATED,
             res: ApplicationSdp(sdp),

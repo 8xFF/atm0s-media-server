@@ -28,6 +28,7 @@ mod tests {
     async fn subscribe_room() {
         let (mut server, _rpc) = ServerSdn::new(
             1,
+            0,
             100,
             ServerSdnConfig {
                 static_key: "static_key".to_string(),
@@ -103,6 +104,7 @@ mod tests {
     async fn subscribe_peer() {
         let (mut server, _rpc) = ServerSdn::new(
             2,
+            0,
             100,
             ServerSdnConfig {
                 static_key: "static_key".to_string(),
@@ -178,6 +180,7 @@ mod tests {
     async fn subscribe_stream() {
         let (mut server, _rpc) = ServerSdn::new(
             3,
+            0,
             100,
             ServerSdnConfig {
                 static_key: "static_key".to_string(),
@@ -251,6 +254,7 @@ mod tests {
     async fn rpc() {
         let (_server, mut rpc) = ServerSdn::new(
             4,
+            0,
             100,
             ServerSdnConfig {
                 static_key: "static_key".to_string(),

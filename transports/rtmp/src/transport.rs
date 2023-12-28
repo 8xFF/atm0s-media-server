@@ -76,8 +76,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport {
                         .on_accept_request(request_id)
                         .map_err(|_e| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
                 }
-                ServerEvent::PublishRequest { request_id, app_name, stream_key } => {
-                    //TODO check if app_name and stream_key is valid
+                ServerEvent::PublishRequest { request_id, app_name: _, stream_key } => {
                     self.session
                         .on_accept_request(request_id)
                         .map_err(|_e: ServerSessionError| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;

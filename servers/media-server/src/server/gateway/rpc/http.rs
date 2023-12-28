@@ -59,11 +59,8 @@ impl GatewayHttpApis {
             compressed_sdp: Some(string_zip.compress(&body.0)),
         };
 
-        if req.verify(data.1.verifier().deref()).is_none() {
-            return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
-        }
-
-        log::info!("[HttpApis] create whip endpoint with sdp {}", body.0);
+        let s_token = req.verify(data.1.verifier().deref()).ok_or(poem::Error::from_status(StatusCode::UNAUTHORIZED))?;
+        log::info!("[HttpApis] create whip endpoint {:?}", s_token);
         let (req, rx) = RpcReqResHttp::<WhipConnectRequest, WhipConnectResponse>::new(req);
         data.0
             .send(RpcEvent::WhipConnect(Box::new(req)))
@@ -143,10 +140,8 @@ impl GatewayHttpApis {
             sdp: None,
             compressed_sdp: Some(string_zip.compress(&body.0)),
         };
-        if req.verify(data.1.verifier().deref()).is_none() {
-            return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
-        }
-        log::info!("[HttpApis] create whep endpoint with sdp {}", body.0);
+        let s_token = req.verify(data.1.verifier().deref()).ok_or(poem::Error::from_status(StatusCode::UNAUTHORIZED))?;
+        log::info!("[HttpApis] create whep endpoint {:?}", s_token);
         let (req, rx) = RpcReqResHttp::<WhepConnectRequest, WhepConnectResponse>::new(req);
         data.0
             .send(RpcEvent::WhepConnect(Box::new(req)))
@@ -159,7 +154,7 @@ impl GatewayHttpApis {
             (_, Some(compressed_sdp)) => string_zip.uncompress(&compressed_sdp).ok_or(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
         }?;
-        log::info!("[HttpApis] Whep endpoint created with conn_id {} and sdp {}", res.conn_id, sdp);
+        log::info!("[HttpApis] Whep endpoint created with conn_id {}", res.conn_id);
         Ok(HttpResponse {
             code: StatusCode::CREATED,
             res: ApplicationSdp(sdp),
