@@ -1,4 +1,7 @@
-use std::{collections::VecDeque, vec};
+use std::{
+    collections::{HashMap, VecDeque},
+    vec,
+};
 
 use audio_mixer::{AudioMixer, AudioMixerOutput};
 use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterTrackUuid, MixMinusAudioMode};
@@ -42,6 +45,7 @@ pub struct MixMinusEndpointMiddleware {
     mixer: AudioMixer<MediaPacket, ClusterTrackUuid>,
     output_slots: Vec<Slot>,
     outputs: VecDeque<MediaEndpointMiddlewareOutput>,
+    current_subs: HashMap<(String, String), ()>,
 }
 
 impl MixMinusEndpointMiddleware {
@@ -54,6 +58,7 @@ impl MixMinusEndpointMiddleware {
             mixer: AudioMixer::new(Box::new(|pkt| pkt.ext_vals.audio_level), audio_mixer::AudioMixerConfig { outputs }),
             output_slots: vec![Default::default(); outputs],
             outputs: VecDeque::new(),
+            current_subs: HashMap::new(),
         }
     }
 }
@@ -165,6 +170,7 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
             ClusterEndpointIncomingEvent::PeerTrackAdded(peer, track, meta) => {
                 if matches!(self.mode, MixMinusAudioMode::AllAudioStreams) && meta.kind.is_audio() {
                     if self.mixer.add_source(now_ms, ClusterTrackUuid::from_info(&self.room, peer, track)).is_some() {
+                        self.current_subs.insert((peer.clone(), track.clone()), ());
                         self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
                             self.virtual_track_id,
                             ClusterLocalTrackOutgoingEvent::Subscribe(peer.clone(), track.clone()),
@@ -176,6 +182,7 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
             ClusterEndpointIncomingEvent::PeerTrackRemoved(peer, track) => {
                 if matches!(self.mode, MixMinusAudioMode::AllAudioStreams) {
                     if self.mixer.remove_source(now_ms, ClusterTrackUuid::from_info(&self.room, peer, track)).is_some() {
+                        self.current_subs.remove(&(peer.clone(), track.clone()));
                         self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
                             self.virtual_track_id,
                             ClusterLocalTrackOutgoingEvent::Unsubscribe(peer.clone(), track.clone()),
@@ -233,6 +240,16 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
         }
 
         self.outputs.pop_front()
+    }
+
+    fn before_drop(&mut self, _now_ms: u64) {
+        let current_subs = std::mem::take(&mut self.current_subs);
+        for (peer, track) in current_subs.into_keys() {
+            self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                self.virtual_track_id,
+                ClusterLocalTrackOutgoingEvent::Unsubscribe(peer, track),
+            )));
+        }
     }
 }
 
