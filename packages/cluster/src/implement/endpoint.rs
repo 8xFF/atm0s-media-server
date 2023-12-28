@@ -61,11 +61,13 @@ impl ClusterEndpointSdn {
         let (kv_tx, kv_rx) = bounded(100);
         let (data_tx, data_rx) = bounded(1000);
         let (data_fb_tx, data_fb_rx) = bounded(100);
+        let room_key = hash_str(room_id);
+        log::info!("[Atm0sClusterEndpoint] create endpoint {}/{} room_key {}", room_id, peer_id, room_key);
 
         Self {
             room_id: room_id.to_string(),
             peer_id: peer_id.to_string(),
-            room_key: hash_str(room_id),
+            room_key,
             sub_uuid: hash_str(&format!("{}/{}", room_id, peer_id)),
             pubsub_sdk,
             kv_sdk,
@@ -96,6 +98,7 @@ impl ClusterEndpoint for ClusterEndpointSdn {
         match event {
             ClusterEndpointOutgoingEvent::SubscribeRoom => {
                 if self.peer_sub.is_empty() && self.room_sub.is_none() {
+                    log::warn!("[Atm0sClusterEndpoint] sub room");
                     self.kv_sdk.hsubscribe_raw(self.room_key, self.sub_uuid, Some(10000), self.kv_tx.clone());
                     self.room_sub = Some(());
                 } else {
@@ -105,6 +108,7 @@ impl ClusterEndpoint for ClusterEndpointSdn {
             }
             ClusterEndpointOutgoingEvent::UnsubscribeRoom => {
                 if self.peer_sub.is_empty() && self.room_sub.take().is_some() {
+                    log::warn!("[Atm0sClusterEndpoint] unsub room");
                     self.kv_sdk.hunsubscribe_raw(self.room_key, self.sub_uuid);
                 } else {
                     log::warn!("[Atm0sClusterEndpoint] unsub room but not found");
@@ -113,6 +117,7 @@ impl ClusterEndpoint for ClusterEndpointSdn {
             }
             ClusterEndpointOutgoingEvent::SubscribePeer(peer_id) => {
                 if self.room_sub.is_none() && !self.peer_sub.contains_key(&peer_id) {
+                    log::warn!("[Atm0sClusterEndpoint] sub peer {}", peer_id);
                     self.kv_sdk.hsubscribe_raw(self.peer_key(&peer_id), self.sub_uuid, Some(10000), self.kv_tx.clone());
                     self.peer_sub.insert(peer_id, ());
                 } else {
@@ -122,6 +127,7 @@ impl ClusterEndpoint for ClusterEndpointSdn {
             }
             ClusterEndpointOutgoingEvent::UnsubscribePeer(peer_id) => {
                 if self.room_sub.is_none() && self.peer_sub.remove(&peer_id).is_some() {
+                    log::warn!("[Atm0sClusterEndpoint] unsub peer {}", peer_id);
                     self.kv_sdk.hunsubscribe_raw(self.peer_key(&peer_id), self.sub_uuid);
                 } else {
                     log::warn!("[Atm0sClusterEndpoint] unsub peer but not found {peer_id}");

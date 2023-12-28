@@ -24,38 +24,152 @@
 
 # Decentralized Ultra-Low Latency Streaming Server
 
-A decentralized media server designed to handle media streaming at a global-scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
+A decentralized media server designed to handle media streaming at a global scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
 
-TODO: image about endpoints + connections
+[<img src="https://img.youtube.com/vi/QF8ZJq9xuSU/hqdefault.jpg"
+/>](https://www.youtube.com/embed/QF8ZJq9xuSU)
+
+(Above is a demo video of the version used by Bluesea Network)
 
 ## Features
   - 🚀 Powered by Rust with memory safety and performance.
   - High availability by being fully decentralized, with no central controller.
   - 🛰️ Multi-zone support, high scalability.
   - Support encodings: H264, Vp8, Vp9, H265 (Coming soon), AV1 (Coming soon)
-  - Cross platform: Linux, MacOs, Windows.
+  - Cross-platform: Linux, macOS, Windows.
   - Decentralized WebRTC SFU (Selective Forwarding Unit)
   - Modern, full-featured client SDKs
-    - [x] [Vanilla Javascript]()
-    - [x] [Rust]()
-    - [x] [React]()
-    - [x] [React Native]()
+    - [x] [Vanilla JavaScript](https://github.com/8xFF/atm0s-media-sdk-js)
+    - [x] [Rust](WIP)
+    - [x] [React](https://github.com/8xFF/atm0s-media-sdk-react)
+    - [x] [React Native](WIP)
     - [ ] Flutter
     - [ ] iOS Native
     - [ ] Android Native
   - Easy to deploy: single binary, Docker, or Kubernetes
   - Advanced features including:
-    - [ ] Audio Mix-Minus (WIP)
+    - [x] Audio Mix-Minus (WIP)
     - [x] Simulcast/SVC
     - [x] SFU
-    - [x] SFU Cascading (each streams is global PubSub channel, similar to [Cloudflare interconnected network](https://blog.cloudflare.com/announcing-cloudflare-calls/))
+    - [x] SFU Cascading (each stream is a global PubSub channel, similar to [Cloudflare interconnected network](https://blog.cloudflare.com/announcing-cloudflare-calls/))
     - [ ] Recording
     - [x] RTMP
-    - [ ] SIP (WIP)
+    - [x] SIP (WIP)
     - [x] WebRTC
-    - [ ] Whip/Whep
+    - [x] Whip/Whep
 
+## Getting started
+To get started, you can either:
+- Start from Docker
 
+```bash
+docker run --net=host 8xff/atm0s-media-server:latest
+```
+
+- Download prebuild
+
+```bash
+wget https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-aarch64-apple-darwin
+```
+
+- Or build from source
+
+```
+cargo build --release --package atm0s-media-server
+```
+
+### Prepare access token
+
+- Pregenerated token for default config:
+
+WHIP: `eyJhbGciOiJIUzI1NiJ9.eyJyb29tIjoiZGVtbyIsInBlZXIiOiJwdWJsaXNoZXIiLCJwcm90b2NvbCI6IldoaXAiLCJwdWJsaXNoIjp0cnVlLCJzdWJzY3JpYmUiOmZhbHNlLCJ0cyI6MTcwMzc1MjI5NDEyMn0.EfRZK7eHMZ-TCG23-jst8TAKVfbiQhX21cxB2mSznAM`
+
+WHEP: `eyJhbGciOiJIUzI1NiJ9.eyJyb29tIjoiZGVtbyIsInBlZXIiOm51bGwsInByb3RvY29sIjoiV2hlcCIsInB1Ymxpc2giOmZhbHNlLCJzdWJzY3JpYmUiOnRydWUsInRzIjoxNzAzNzUyMzE1NTgyfQ.6XS0gyZWJ699BUN0rXtlLH-0SvgtMXJeXIDtJomxnig`
+
+RTMP: `eyJhbGciOiJIUzI1NiJ9.eyJyb29tIjoiZGVtbyIsInBlZXIiOiJydG1wIiwicHJvdG9jb2wiOiJSdG1wIiwicHVibGlzaCI6dHJ1ZSwic3Vic2NyaWJlIjpmYWxzZSwidHMiOjE3MDM3NTIzMzU2OTV9.Gj0uCxPwqsFfMFLX8Cufrsyhtb7vedNp3GeUtKQCk3s`
+
+SDK: `eyJhbGciOiJIUzI1NiJ9.eyJyb29tIjoiZGVtbyIsInBlZXIiOm51bGwsInByb3RvY29sIjoiV2VicnRjIiwicHVibGlzaCI6dHJ1ZSwic3Vic2NyaWJlIjp0cnVlLCJ0cyI6MTcwMzc1MjM1NTI2NH0.llwwbSwVTsyFgL_jYCdoPNVdOiC2jbtNb4uxxE-PU7A`
+
+Or create with token-generate api
+
+```
+atm0s-media-server --http-port 3100 token-generate
+```
+
+After that access http://localhost:3100/ui/ to create token by your self, deault cluster token is `insecure`
+
+### Start a webrtc node only
+
+For simple testing, we can start single node which support Webrtc for testing with Whip and Whep
+
+```
+atm0s-media-server --http-port 3200 webrtc
+```
+
+After that we can access `http://localhost:3000/samples` to see all embeded samples
+
+### Start entire cluster
+
+In cluster mode, each module needs to be on a separate node. This setup can run on a single machine or multiple machines, whether they are connected via a public or private network.
+
+The Inner-Gateway module routes user traffic to the most suitable media server node.
+```bash
+atm0s-media-server --node-id 10 --sdn-port 10010 --http-port 3000 gateway
+```
+
+Afterward, the gateway prints out its address in the format: 10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001. This address serves as the seed node for other nodes joining the cluster.
+
+The WebRTC module serves users with either an SDK or a Whip, Whep client.
+```bash
+atm0s-media-server --node-id 21 --http-port 3001 --seeds ABOVE_GATEWAY_ADDR webrtc
+```
+
+The RTMP module serves users with an RTMP broadcaster such as OBS or Streamyard.
+```bash
+atm0s-media-server --node-id 30 --seeds ABOVE_GATEWAY_ADDR rtmp
+```
+
+The SIP module serves users with a SIP endpoint for integration with telephone providers.
+```bash
+atm0s-media-server --node-id 40 --seeds ABOVE_GATEWAY_ADDR sip
+```
+
+You can now access the sample page at the URL: http://localhost:3000/samples/webrtc/. There, you will find two pages: Whip Broadcast and Whep Viewer.
+
+Please note that the inner-gateway selects nodes based on usage, routing to the same media-server instance until it reaches high usage. For testing media exchange between systems, you can start more than one WebRTC module as needed.
+
+```
+atm0s-media-server --node-id 22 --http-port 3002 --seeds ABOVE_GATEWAY_ADDR webrtc
+atm0s-media-server --node-id 23 --http-port 3003 --seeds ABOVE_GATEWAY_ADDR webrtc
+```
+
+Afterward, you can directly access the samples on each WebRTC node:
+
+First media-server: http://localhost:3001/samples/
+Second media-server: http://localhost:3002/samples/
+Third media-server: http://localhost:3003/samples/
+
+![Demo Screen](./docs/imgs/demo-screen.jpg)
+
+Each node also expose a metric dashboard here:
+
+- Gateway: http://localhost:3000/dashboard/
+- Media1: http://localhost:3001/dashboard/
+- Media2: http://localhost:3002/dashboard/
+- Media3: http://localhost:3003/dashboard/
+
+![Monitoring](./docs/imgs/demo-monitor.png)
+
+### Start RTMP session
+
+Instead of publishing with the Whip client, we can use any RTMP client, such as OBS, to publish to the following stream:
+
+- Server: `rtmp://RTMP_NODE_IP:1935/live`
+- Stream Key: `above generated rtmp token`
+
+The stream codec should be configured with h264, without B-frames, and with the ultra-low latency option, as shown in the screenshot below.
+
+![Monitoring](./docs/imgs/demo-rtmp-config.png)
 
 ## Live Demos
 
@@ -76,69 +190,6 @@ WIP
 - Connector (connect to custom logic)
 
 TODO: Diagram
-
-## Getting started
-To get started, you can either:
-- Start from docker
-
-```bash
-docker run --net=host 8xff/media-server:latest
-```
-
-- Download prebuild
-
-```bash
-wget ....
-```
-
-- Or build from source
-
-```
-cargo build --package ...
-```
-
-### Start a single node
-
-```
-RUST_LOG=info media-server --enable-demos
-```
-
-After that we can access `http://localhost:3000/demos` to see all demos
-
-### Start multi-nodes
-
-```bash
-RUST_LOG=info media-server --node-id 1 --sdn-port 5001 --enable-demos
-```
-
-```bash
-RUST_LOG=info media-server --node-id 2 --sdn-port 5002 --neighbour-addr udp+p2p://NODE1_IP:5001 --enable-demos
-```
-
-After that we can access demo from both nodes:
-
-```
-http://NODE1_IP:3000/demos
-or
-http://NODE2_IP:3000/demos
-```
-
-Whenerever user access to demos on node1 or node2, users will see each other like single nodes
-
-### Start RTMP nodes
-
-We can enable rtmp by setting `--rtmp-port 1935` when starting a node, by that way we can publish rtmp stream by using any RTMP Client like OBS to publish to bellow stream:
-
-- Server: `rtmp://NODE_IP:1935/live`
-- Stream Key: `app?room=ROOM_ID&peer=PEER_ID`
-
-Stream codec should be config with h264 no B-Frame with ultra-low latency option.
-
-More info in [Publish Demo]()
-
-### Start SIP gateway
-
-TODO
 
 ## Contributing
 The project is continuously being improved and updated. We are always looking for ways to make it better, whether that's through optimizing performance, adding new features, or fixing bugs. We welcome contributions from the community and are always looking for new ideas and suggestions.

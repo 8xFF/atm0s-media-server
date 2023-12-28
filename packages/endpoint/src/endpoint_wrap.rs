@@ -165,6 +165,7 @@ where
     }
 
     pub async fn close(&mut self) {
+        log::info!("[EndpointWrap] close request");
         self.transport.close().await;
     }
 }

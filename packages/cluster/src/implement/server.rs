@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use crate::Cluster;
 use atm0s_sdn::{
-    convert_enum, KeyValueBehavior, KeyValueBehaviorEvent, KeyValueHandlerEvent, KeyValueSdk, KeyValueSdkEvent, LayersSpreadRouterSyncBehavior, LayersSpreadRouterSyncBehaviorEvent,
-    LayersSpreadRouterSyncHandlerEvent, ManualBehavior, ManualBehaviorConf, ManualBehaviorEvent, ManualHandlerEvent, NetworkPlane, NetworkPlaneConfig, NodeAddr, NodeAddrBuilder, NodeId, Protocol,
-    PubsubSdk, PubsubServiceBehaviour, PubsubServiceBehaviourEvent, PubsubServiceHandlerEvent, RpcBox, RpcEmitter, SharedRouter, SystemTimer, UdpTransport,
+    compose_transport, convert_enum, KeyValueBehavior, KeyValueBehaviorEvent, KeyValueHandlerEvent, KeyValueSdk, KeyValueSdkEvent, LayersSpreadRouterSyncBehavior, LayersSpreadRouterSyncBehaviorEvent,
+    LayersSpreadRouterSyncHandlerEvent, ManualBehavior, ManualBehaviorConf, ManualBehaviorEvent, ManualHandlerEvent, NetworkPlane, NetworkPlaneConfig, NodeAddr, NodeAddrBuilder, NodeId, PubsubSdk,
+    PubsubServiceBehaviour, PubsubServiceBehaviourEvent, PubsubServiceHandlerEvent, RpcBox, RpcEmitter, SharedRouter, SystemTimer, TcpTransport, UdpTransport,
 };
 
 use super::{endpoint, rpc::RpcEndpointSdn};
@@ -31,8 +31,11 @@ pub(crate) enum NodeSdkEvent {
 }
 
 pub struct ServerSdnConfig {
+    pub static_key: String,
     pub seeds: Vec<NodeAddr>,
 }
+
+compose_transport!(UdpTcpTransport, udp: UdpTransport, tcp: TcpTransport);
 
 pub struct ServerSdn {
     node_id: NodeId,
@@ -43,10 +46,15 @@ pub struct ServerSdn {
 }
 
 impl ServerSdn {
-    pub async fn new(node_id: NodeId, service_id: u8, config: ServerSdnConfig) -> (Self, RpcEndpointSdn) {
-        let node_addr_builder = Arc::new(NodeAddrBuilder::default());
-        node_addr_builder.add_protocol(Protocol::P2p(node_id));
-        let transport = Box::new(UdpTransport::new(node_id, 50000 + node_id as u16, node_addr_builder.clone()).await);
+    pub async fn new(node_id: NodeId, port: u16, service_id: u8, config: ServerSdnConfig) -> (Self, RpcEndpointSdn) {
+        let mut node_addr_builder = NodeAddrBuilder::new(node_id);
+        let udp_socket = UdpTransport::prepare(port, &mut node_addr_builder).await;
+        let tcp_listener = TcpTransport::prepare(port, &mut node_addr_builder).await;
+        let secure = Arc::new(atm0s_sdn::StaticKeySecure::new(&config.static_key));
+        let udp = UdpTransport::new(node_addr_builder.addr(), udp_socket, secure.clone());
+        let tcp = TcpTransport::new(node_addr_builder.addr(), tcp_listener, secure);
+
+        let transport = UdpTcpTransport::new(udp, tcp);
         let timer = Arc::new(SystemTimer());
 
         log::info!("[ServerAtm0s] node addr: {}", node_addr_builder.addr());
@@ -76,13 +84,14 @@ impl ServerSdn {
                 Box::new(router_sync_behaviour),
                 Box::new(manual),
             ],
-            transport,
+            transport: Box::new(transport),
             timer,
             router: Arc::new(router.clone()),
         });
 
-        let join_handler = async_std::task::spawn(async move {
-            plane.started();
+        plane.started();
+
+        let join_handler = async_std::task::spawn_local(async move {
             while let Ok(_) = plane.recv().await {}
             plane.stopped();
         });

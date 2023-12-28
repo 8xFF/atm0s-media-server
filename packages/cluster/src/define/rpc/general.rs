@@ -11,3 +11,12 @@ pub struct MediaEndpointCloseRequest {
 pub struct MediaEndpointCloseResponse {
     pub success: bool,
 }
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub enum MediaSessionProtocol {
+    Whip,
+    Whep,
+    Webrtc,
+    Rtmp,
+    Sip,
+}

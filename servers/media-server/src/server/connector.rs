@@ -40,7 +40,7 @@ where
         .nest("/ui/", ui)
         .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()));
 
-    http_server.start(route).await;
+    http_server.start(route, ()).await;
 
     loop {
         let rpc = select! {

@@ -486,6 +486,11 @@ impl MediaEndpointInternal {
             track.close();
             self.pop_remote_track_actions(track_id, &mut track);
         }
+
+        for middleware in self.middlewares.iter_mut() {
+            middleware.before_drop(now_ms);
+        }
+        self.pop_middlewares_action(now_ms);
     }
 }
 

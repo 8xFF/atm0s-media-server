@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use crate::{MediaSessionToken, VerifyObject};
+
 use super::super::media::{EndpointSubscribeScope, MixMinusAudioMode, PayloadType, RemoteBitrateControlMode};
 use poem_openapi::Object;
 use proc_macro::{IntoVecU8, TryFromSliceU8};
@@ -39,6 +41,24 @@ pub struct WebrtcConnectRequest {
     pub compressed_sdp: Option<Vec<u8>>,
     pub senders: Vec<WebrtcConnectRequestSender>,
     pub remote_bitrate_control_mode: Option<RemoteBitrateControlMode>,
+}
+
+impl VerifyObject for WebrtcConnectRequest {
+    fn verify(&self, verifier: &dyn crate::SessionTokenVerifier) -> Option<MediaSessionToken> {
+        let token = verifier.verify_media_session(&self.token)?;
+        if token.protocol != crate::rpc::general::MediaSessionProtocol::Webrtc {
+            return None;
+        }
+        if token.room != self.room {
+            return None;
+        }
+        if let Some(peer) = &token.peer {
+            if !peer.eq(&self.peer) {
+                return None;
+            }
+        }
+        Some(token)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8)]

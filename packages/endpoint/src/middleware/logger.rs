@@ -134,4 +134,6 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
     fn pop_action(&mut self, _now_ms: u64) -> Option<crate::MediaEndpointMiddlewareOutput> {
         self.outputs.pop_back()
     }
+
+    fn before_drop(&mut self, _now_ms: u64) {}
 }
