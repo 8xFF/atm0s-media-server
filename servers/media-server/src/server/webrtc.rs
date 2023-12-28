@@ -257,8 +257,8 @@ where
                     &sdp,
                     vec![],
                     Some(SdpBoxRewriteScope::OnlyTrack),
-                    MixMinusAudioMode::AllAudioStreams,
-                    1,
+                    MixMinusAudioMode::Disabled,
+                    0,
                 )
                 .await
                 {
