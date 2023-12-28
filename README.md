@@ -24,22 +24,22 @@
 
 # Decentralized Ultra-Low Latency Streaming Server
 
-A decentralized media server designed to handle media streaming at a global-scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
+A decentralized media server designed to handle media streaming at a global scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
 
 [<img src="https://img.youtube.com/vi/QF8ZJq9xuSU/hqdefault.jpg"
 />](https://www.youtube.com/embed/QF8ZJq9xuSU)
 
-(Above is demo video of version used by Bluesea Network)
+(Above is a demo video of the version used by Bluesea Network)
 
 ## Features
   - 🚀 Powered by Rust with memory safety and performance.
   - High availability by being fully decentralized, with no central controller.
   - 🛰️ Multi-zone support, high scalability.
   - Support encodings: H264, Vp8, Vp9, H265 (Coming soon), AV1 (Coming soon)
-  - Cross platform: Linux, MacOs, Windows.
+  - Cross-platform: Linux, macOS, Windows.
   - Decentralized WebRTC SFU (Selective Forwarding Unit)
   - Modern, full-featured client SDKs
-    - [x] [Vanilla Javascript](https://github.com/8xFF/atm0s-media-sdk-js)
+    - [x] [Vanilla JavaScript](https://github.com/8xFF/atm0s-media-sdk-js)
     - [x] [Rust](WIP)
     - [x] [React](https://github.com/8xFF/atm0s-media-sdk-react)
     - [x] [React Native](WIP)
@@ -51,7 +51,7 @@ A decentralized media server designed to handle media streaming at a global-scal
     - [x] Audio Mix-Minus (WIP)
     - [x] Simulcast/SVC
     - [x] SFU
-    - [x] SFU Cascading (each streams is global PubSub channel, similar to [Cloudflare interconnected network](https://blog.cloudflare.com/announcing-cloudflare-calls/))
+    - [x] SFU Cascading (each stream is a global PubSub channel, similar to [Cloudflare interconnected network](https://blog.cloudflare.com/announcing-cloudflare-calls/))
     - [ ] Recording
     - [x] RTMP
     - [x] SIP (WIP)
@@ -60,7 +60,7 @@ A decentralized media server designed to handle media streaming at a global-scal
 
 ## Getting started
 To get started, you can either:
-- Start from docker
+- Start from Docker
 
 ```bash
 docker run --net=host 8xff/atm0s-media-server:latest
@@ -110,40 +110,40 @@ After that we can access `http://localhost:3000/samples` to see all embeded samp
 
 ### Start entire cluster
 
-With cluster mode, we need each module in seperated node, we can run in single machine or multi machines with public or private network
+In cluster mode, each module needs to be on a separate node. This setup can run on a single machine or multiple machines, whether they are connected via a public or private network.
 
-Inner-Gateway module will route user trafic to best media-server node
+The Inner-Gateway module routes user traffic to the most suitable media server node.
 ```bash
 atm0s-media-server --node-id 10 --sdn-port 10010 --http-port 3000 gateway
 ```
 
-After that, gateway will print-out gateway address like: `10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001`, this address is used as seed node for other node joining to cluster
+Afterward, the gateway prints out its address in the format: 10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001. This address serves as the seed node for other nodes joining the cluster.
 
-WebRTC module will serve user with SDK or Whip, Whep client
+The WebRTC module serves users with either an SDK or a Whip, Whep client.
 ```bash
-atm0s-media-server --node-id 21 --http-port 3001 --seeds 10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001 webrtc
+atm0s-media-server --node-id 21 --http-port 3001 --seeds ABOVE_GATEWAY_ADDR webrtc
 ```
 
-RTMP module will serve user with RTMP broadcaster like OBS or Streamyard
+The RTMP module serves users with an RTMP broadcaster such as OBS or Streamyard.
 ```bash
-atm0s-media-server --node-id 30 --seeds 10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001 rtmp
+atm0s-media-server --node-id 30 --seeds ABOVE_GATEWAY_ADDR rtmp
 ```
 
-SIP module will serve user with sip-endpoint for integrating with Telephone provider.
+The SIP module serves users with a SIP endpoint for integration with telephone providers.
 ```bash
-atm0s-media-server --node-id 40 --seeds 10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001 sip
+atm0s-media-server --node-id 40 --seeds ABOVE_GATEWAY_ADDR sip
 ```
 
-Now you can access sample page in url: http://localhost:3000/samples/webrtc/ in there we have 2 page: Whip broadcast and Whep viewer.
+You can now access the sample page at the URL: http://localhost:3000/samples/webrtc/. There, you will find two pages: Whip Broadcast and Whep Viewer.
 
-Note that, inner-gateway will select node based on usage so it will route to same media-server instance util it reach high usage. For testing media-exchange between system you can star more than one Webrtc module as you want:
+Please note that the inner-gateway selects nodes based on usage, routing to the same media-server instance until it reaches high usage. For testing media exchange between systems, you can start more than one WebRTC module as needed.
 
 ```
-atm0s-media-server --node-id 22 --http-port 3002 --seeds 10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001 webrtc
-atm0s-media-server --node-id 23 --http-port 3003 --seeds 10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001 webrtc
+atm0s-media-server --node-id 22 --http-port 3002 --seeds ABOVE_GATEWAY_ADDR webrtc
+atm0s-media-server --node-id 23 --http-port 3003 --seeds ABOVE_GATEWAY_ADDR webrtc
 ```
 
-After that you can direct access to samples on each WebRTC node:
+Afterward, you can directly access the samples on each WebRTC node:
 
 First media-server: http://localhost:3001/samples/
 Second media-server: http://localhost:3002/samples/
@@ -162,12 +162,12 @@ Each node also expose a metric dashboard here:
 
 ### Start RTMP session
 
-Instead of publish with Whip client, we can publish rtmp stream by using any RTMP Client like OBS to publish to bellow stream:
+Instead of publishing with the Whip client, we can use any RTMP client, such as OBS, to publish to the following stream:
 
-- Server: `rtmp://NODE_IP:1935/live`
+- Server: `rtmp://RTMP_NODE_IP:1935/live`
 - Stream Key: `above generated rtmp token`
 
-Stream codec should be config with h264 no B-Frame with ultra-low latency option.
+The stream codec should be configured with h264, without B-frames, and with the ultra-low latency option, as shown in the screenshot below.
 
 ![Monitoring](./docs/imgs/demo-rtmp-config.png)
 
