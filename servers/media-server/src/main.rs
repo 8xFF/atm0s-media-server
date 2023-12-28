@@ -73,6 +73,10 @@ async fn main() {
     }
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+    let config = ServerSdnConfig {
+        static_key: args.token.clone(),
+        seeds: args.seeds,
+    };
 
     match args.server {
         #[cfg(feature = "token_generate")]
@@ -87,7 +91,7 @@ async fn main() {
             use server::MediaServerContext;
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.token));
             let ctx = MediaServerContext::<()>::new(args.node_id, 0, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, INNER_GATEWAY_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
+            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, INNER_GATEWAY_SERVICE, config).await;
             if let Err(e) = run_gateway_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[GatewayServer] error {}", e);
             }
@@ -97,7 +101,7 @@ async fn main() {
             use server::MediaServerContext;
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.token));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
+            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, config).await;
             if let Err(e) = run_webrtc_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[WebrtcServer] error {}", e);
             }
@@ -107,7 +111,7 @@ async fn main() {
             use server::MediaServerContext;
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.token));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
+            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, config).await;
             if let Err(e) = run_rtmp_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[RtmpServer] error {}", e);
             }
@@ -117,14 +121,14 @@ async fn main() {
             use server::MediaServerContext;
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.token));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
+            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, MEDIA_SERVER_SERVICE, config).await;
             if let Err(e) = run_sip_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[RtmpServer] error {}", e);
             }
         }
         #[cfg(feature = "connector")]
         Servers::Connector(opts) => {
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, CONNECTOR_SERVICE, ServerSdnConfig { seeds: args.seeds }).await;
+            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, CONNECTOR_SERVICE, config).await;
             if let Err(e) = run_connector_server(args.http_port, opts, cluster, rpc_endpoint).await {
                 log::error!("[ConnectorServer] error {}", e);
             }
