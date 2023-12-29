@@ -1,7 +1,10 @@
 use std::collections::VecDeque;
 
-use cluster::rpc::connector::{MediaEndpointEvent, MediaEndpointLogRequest};
-use media_utils::F32;
+use protocol::media_event_logs::{
+    MediaEndpointLogRequest,
+    session_event::{self, SessionConnectError, SessionConnected, SessionConnecting, SessionDisconnected, SessionReconnected, SessionReconnecting},
+    MediaEndpointLogEvent, ProtoF32, SessionEvent,
+};
 use transport::{TransportError, TransportIncomingEvent, TransportStateEvent};
 
 use crate::{MediaEndpointMiddleware, MediaEndpointMiddlewareOutput};
@@ -19,17 +22,20 @@ impl MediaEndpointEventLogger {
         }
     }
 
-    fn build_event(&self, now_ms: u64, event: MediaEndpointEvent) -> MediaEndpointMiddlewareOutput {
+    fn build_event(&self, now_ms: u64, event: session_event::Event) -> MediaEndpointMiddlewareOutput {
         log::info!("sending event out to connector {:?}", event);
-        let event = MediaEndpointLogRequest::SessionEvent {
-            ip: "127.0.0.1".to_string(), //TODO
-            version: None,
-            location: None,
-            token: vec![],
-            ts: now_ms,
-            session_uuid: 0, //TODO
-            event,
+        let event = MediaEndpointLogEvent {
+            event: Some(MediaEndpointLogRequest::SessionEvent(SessionEvent {
+                ip: "127.0.0.1".to_string(), //TODO
+                version: None,
+                location: None,
+                token: vec![],
+                ts: now_ms,
+                session_uuid: 0, //TODO
+                event: Some(event),
+            })),
         };
+
         MediaEndpointMiddlewareOutput::Cluster(cluster::ClusterEndpointOutgoingEvent::MediaEndpointLog(event))
     }
 }
@@ -39,10 +45,10 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
         self.started_ms = Some(now_ms);
         self.outputs.push_back(self.build_event(
             now_ms,
-            MediaEndpointEvent::Connecting {
+            session_event::Event::Connecting(SessionConnecting {
                 user_agent: "TODO".to_string(), //TODO
                 remote: None,                   //TODO
-            },
+            }),
         ));
     }
 
@@ -55,38 +61,38 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                 TransportStateEvent::Connected => {
                     self.outputs.push_back(self.build_event(
                         now_ms,
-                        MediaEndpointEvent::Connected {
+                        session_event::Event::Connected(SessionConnected {
                             after_ms: (now_ms - self.started_ms.expect("Should has started")) as u32,
                             remote: None, //TODO
-                        },
+                        }),
                     ));
                 }
                 TransportStateEvent::Reconnecting => {
                     self.outputs.push_back(self.build_event(
                         now_ms,
-                        MediaEndpointEvent::Reconnecting {
+                        session_event::Event::Reconnecting(SessionReconnecting {
                             reason: "TODO".to_string(), //TODO
-                        },
+                        }),
                     ));
                 }
                 TransportStateEvent::Reconnected => {
                     self.outputs.push_back(self.build_event(
                         now_ms,
-                        MediaEndpointEvent::Reconnected {
+                        session_event::Event::Reconnected(SessionReconnected{
                             remote: None, //TODO
-                        },
+                        }),
                     ));
                 }
                 TransportStateEvent::Disconnected => {
                     self.outputs.push_back(self.build_event(
                         now_ms,
-                        MediaEndpointEvent::Disconnected {
+                        session_event::Event::Disconnected(SessionDisconnected {
                             error: None,
                             duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                            received_bytes: 0,  //TODO
-                            rtt: F32::new(0.0), //TODO
-                            sent_bytes: 0,      //TODO
-                        },
+                            received_bytes: 0,                              //TODO
+                            rtt: Some(ProtoF32 { value: 0, precision: 2 }), //TODO
+                            sent_bytes: 0,                                  //TODO
+                        }),
                     ));
                 }
             },
@@ -101,23 +107,23 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
             TransportError::ConnectError(_) => {
                 self.outputs.push_back(self.build_event(
                     now_ms,
-                    MediaEndpointEvent::ConnectError {
+                    session_event::Event::ConnectError(SessionConnectError {
                         remote: None,                      //TODO
                         error_code: "TODO".to_string(),    //TODO
                         error_message: "TODO".to_string(), //TODO
-                    },
+                    }),
                 ));
             }
             TransportError::ConnectionError(_) => {
                 self.outputs.push_back(self.build_event(
                     now_ms,
-                    MediaEndpointEvent::Disconnected {
+                    session_event::Event::Disconnected(SessionDisconnected {
                         error: Some("TIMEOUT".to_string()), //TODO
                         duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                        received_bytes: 0,  //TODO
-                        rtt: F32::new(0.0), //TODO
-                        sent_bytes: 0,      //TODO
-                    },
+                        received_bytes: 0,                        //TODO
+                        rtt: Some(ProtoF32 { value: 0, precision: 2 }), //TODO
+                        sent_bytes: 0,
+                    }),
                 ));
             }
             _ => {}

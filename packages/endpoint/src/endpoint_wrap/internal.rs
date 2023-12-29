@@ -35,7 +35,7 @@ pub enum MediaEndpointInternalEvent {
     UnsubscribePeer(String),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum MediaInternalAction {
     Internal(MediaEndpointInternalEvent),
     Endpoint(TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>),

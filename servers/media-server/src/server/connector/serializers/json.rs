@@ -1,12 +1,12 @@
-use cluster::rpc::connector::MediaEndpointLogRequest;
+// use cluster::rpc::connector::MediaEndpointLogRequest;
 
-use super::ConnectorEventSerializer;
+// use super::ConnectorEventSerializer;
 
-pub struct JsonConnectorEventSerializer;
+// pub struct JsonConnectorEventSerializer;
 
-impl ConnectorEventSerializer for JsonConnectorEventSerializer {
-    fn serialize(&self, event: &MediaEndpointLogRequest) -> Result<Vec<u8>, String> {
-        let data = serde_json::to_vec(event).map_err(|e| e.to_string())?;
-        Ok(data)
-    }
-}
+// impl ConnectorEventSerializer for JsonConnectorEventSerializer {
+//     fn serialize(&self, event: &MediaEndpointLogRequest) -> Result<Vec<u8>, String> {
+//         let data = serde_json::to_vec(event).map_err(|e| e.to_string())?;
+//         Ok(data)
+//     }
+// }

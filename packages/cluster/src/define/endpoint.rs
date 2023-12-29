@@ -1,8 +1,9 @@
+use protocol::media_event_logs::MediaEndpointLogEvent;
 use transport::TrackId;
 
 use crate::{
-    rpc::connector::MediaEndpointLogRequest, ClusterEndpointError, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterPeerId, ClusterRemoteTrackIncomingEvent,
-    ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackName, ClusterTrackUuid,
+    ClusterEndpointError, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterPeerId, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta,
+    ClusterTrackName, ClusterTrackUuid,
 };
 
 #[async_trait::async_trait]
@@ -11,7 +12,7 @@ pub trait ClusterEndpoint: Send + Sync {
     async fn recv(&mut self) -> Result<ClusterEndpointIncomingEvent, ClusterEndpointError>;
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum ClusterEndpointOutgoingEvent {
     SubscribeRoom,
     UnsubscribeRoom,
@@ -19,7 +20,7 @@ pub enum ClusterEndpointOutgoingEvent {
     UnsubscribePeer(ClusterPeerId),
     LocalTrackEvent(TrackId, ClusterLocalTrackOutgoingEvent),
     RemoteTrackEvent(TrackId, ClusterTrackUuid, ClusterRemoteTrackOutgoingEvent),
-    MediaEndpointLog(MediaEndpointLogRequest),
+    MediaEndpointLog(MediaEndpointLogEvent),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

@@ -4,6 +4,7 @@ members = [
     "packages/endpoint",
     "packages/transport",
     "packages/media-utils",
+    "packages/protocol",
     "transports/webrtc",
     "transports/rtmp",
     "transports/sip",
@@ -20,3 +21,4 @@ log = { version = "0.4" }
 env_logger = { version = "0.10" }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+prost = "0.12"

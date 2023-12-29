@@ -7,6 +7,7 @@ use futures::{select, FutureExt};
 use metrics_dashboard::build_dashboard_route;
 use poem::Route;
 use poem_openapi::OpenApiService;
+use protocol::Protocol;
 
 use crate::rpc::http::HttpRpcServer;
 
@@ -16,16 +17,9 @@ mod transports;
 
 use self::{
     rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, RpcEvent},
-    serializers::{json::JsonConnectorEventSerializer, ConnectorEventSerializer},
     transports::nats::NatsTransporter,
     transports::{parse_uri, ConnectorTransporter},
 };
-
-#[derive(ValueEnum, Clone, Copy, Debug)]
-enum ConnectorSerializer {
-    Json,
-    // Protobuf,
-}
 
 /// Media Server Webrtc
 #[derive(Parser, Debug)]
@@ -42,10 +36,6 @@ pub struct ConnectorArgs {
     /// MQ Channel
     #[arg(env, long, default_value = "atm0s/event_log")]
     mq_channel: String,
-
-    /// Serializer, json or protobuf
-    #[arg(env, long, value_enum, default_value_t = ConnectorSerializer::Json)]
-    serializer: ConnectorSerializer,
 }
 
 pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: ConnectorArgs, _cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
@@ -79,14 +69,6 @@ where
         }
     };
 
-    let serializer: Box<dyn ConnectorEventSerializer> = match _opts.serializer {
-        ConnectorSerializer::Json => Box::new(JsonConnectorEventSerializer {}),
-        _ => {
-            log::error!("Unsupported serializer");
-            return Err("Unsupported serializer");
-        }
-    };
-
     let api_service = OpenApiService::new(ConnectorHttpApis, "Connector Server", "1.0.0").server(format!("http://localhost:{}", http_port));
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
@@ -113,15 +95,10 @@ where
             RpcEvent::MediaEndpointLog(req) => {
                 log::info!("On media endpoint log {:?}", req.param());
                 if let Ok(ref transport) = transporter {
-                    match serializer.serialize(req.param()) {
-                        Ok(serialized) => {
-                            if let Err(e) = transport.send(&serialized).await {
-                                log::error!("Error sending message: {:?}", e);
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("Error serializing message: {:?}", e);
-                        }
+                    let data: Vec<u8> = Protocol::to_vec(req.param());
+
+                    if let Err(e) = transport.send(&data).await {
+                        log::error!("Error sending message: {:?}", e);
                     }
                 }
                 req.answer(Ok(MediaEndpointLogResponse {}));

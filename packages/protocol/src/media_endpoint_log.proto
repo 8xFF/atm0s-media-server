@@ -1,0 +1,216 @@
+syntax = "proto3";
+
+package atm0s.media_endpoint_log;
+
+message ProtoF32 {
+  uint32 value = 1;
+  uint32 precision = 2;
+}
+
+message SessionEvent {
+  message Location {
+    ProtoF32 lat = 1;
+    ProtoF32 lng = 2;
+  }
+  message SessionRouting {
+    string user_agent = 1;
+    uint32 gateway_node_id = 2;
+  }
+
+  message SessionRoutingError {
+    string reason = 1;
+    uint32 gateway_node_id = 2;
+    repeated uint32 media_node_ids = 3;
+  }
+
+  message SessionRouted {
+    uint32 after_ms = 1;
+    uint32 media_node_id = 2;
+  }
+
+  message SessionConnecting {
+    string user_agent = 1;
+    optional string remote = 2;
+  }
+
+  message SessionConnectError {
+    optional string remote = 1;
+    string error_code = 2;
+    string error_message = 3;
+  }
+
+  message SessionConnected {
+    optional string remote = 1;
+    uint32 after_ms = 2;
+  }
+
+  message SessionReconnecting {
+    string reason = 1;
+  }
+
+  message SessionReconnected {
+    optional string remote = 1;
+  }
+
+  message SessionDisconnected {
+    optional string error = 1;
+    uint64 sent_bytes = 2;
+    uint64 received_bytes = 3;
+    uint64 duration_ms = 4;
+    ProtoF32 rtt = 5;
+  }
+
+  message SessionStats {
+    uint64 received_bytes = 1;
+    uint32 receive_limit_bitrate = 2;
+    uint64 sent_bytes = 3;
+    uint32 send_est_bitrate = 4;
+    uint64 rtt = 5;
+  }
+
+  string ip = 1;
+  optional string version = 2;
+  optional Location location = 3;
+  bytes token = 4;
+  uint64 ts = 5;
+  uint64 session_uuid = 6;
+  oneof event {
+    SessionRouting routing = 7;
+    SessionRoutingError routing_error = 8;
+    SessionRouted routed = 9;
+    SessionConnecting connecting = 10;
+    SessionConnectError connect_error = 11;
+    SessionConnected connected = 12;
+    SessionReconnecting reconnecting = 13;
+    SessionReconnected reconnected = 14;
+    SessionDisconnected disconnected = 15;
+    SessionStats stats = 16;
+  }
+}
+
+message MediaStreamIssueConnectivity {
+  ProtoF32 mos = 1;
+  ProtoF32 lost_percents = 2;
+  ProtoF32 jitter_ms = 3;
+  uint32 rtt_ms = 4;
+}
+
+enum MediaKind {
+  AUDIO = 0;
+  VIDEO = 1;
+}
+
+
+message SendStreamStarted {
+  string name = 1;
+  MediaKind kind = 2;
+  string remote_peer = 3;
+  string remote_stream = 4;
+}
+
+message SendStreamIssue {
+  string name = 1;
+  MediaKind kind = 2;
+  string remote_peer = 3;
+  string remote_stream = 4;
+  oneof issue {
+    MediaStreamIssueConnectivity connectivity = 5;
+  }
+}
+
+message SendStreamStats {
+  string name = 1;
+  MediaKind kind = 2;
+  uint64 sent_bytes = 3;
+  bool freeze = 4;
+  optional ProtoF32 mos = 5;
+  optional ProtoF32 lost = 6;
+  optional ProtoF32 jitter = 7;
+  optional uint32 rtt = 8;
+}
+
+message SendStreamEnded {
+  string name = 1;
+  MediaKind kind = 2;
+  uint64 received_bytes = 3;
+  uint32 freeze_count = 4;
+  uint64 duration_ms = 5;
+  optional ProtoF32 mos = 6;
+  optional ProtoF32 lost = 7;
+  optional ProtoF32 jitter = 8;
+  optional uint32 rtt = 9;
+}
+
+message ReceiveStreamEvent {
+  message ReceivedStreamStarted {
+    string name = 1;
+    MediaKind kind = 2;
+    string remote_peer = 3;
+    string remote_stream = 4;
+  }
+
+  message ReceivedStreamIssue {
+    string name = 1;
+    MediaKind kind = 2;
+    string remote_peer = 3;
+    string remote_stream = 4;
+    oneof issue {
+      MediaStreamIssueConnectivity connectivity = 5;
+    }
+  }
+
+  message ReceivedStreamStats {
+    string name = 1;
+    MediaKind kind = 2;
+    uint32 limit_bitrate = 3;
+    uint64 received_bytes = 4;
+    bool freeze = 5;
+    optional ProtoF32 mos = 6;
+    optional ProtoF32 lost = 7;
+    optional ProtoF32 jitter = 8;
+    optional uint32 rtt = 9;
+  }
+
+  message ReceivedStreamEnded {
+    string name = 1;
+    MediaKind kind = 2;
+    uint64 sent_bytes = 3;
+    uint32 freeze_count = 4;
+    uint64 duration_ms = 5;
+    optional ProtoF32 mos = 6;
+    optional ProtoF32 lost = 7;
+    optional ProtoF32 jitter = 8;
+    optional uint32 rtt = 9;
+  }
+
+  bytes token = 1;
+  uint64 ts = 2;
+  uint64 session_uuid = 3;
+  oneof event {
+    ReceivedStreamStarted started = 4;
+    ReceivedStreamIssue issue = 5;
+    ReceivedStreamStats stats = 6;
+    ReceivedStreamEnded ended = 7;
+  }
+}
+
+message SendStreamEvent {
+  bytes token = 1;
+  uint64 ts = 2;
+  uint64 session_uuid = 3;
+  oneof event {
+    SendStreamStarted started = 4;
+    SendStreamIssue issue = 5;
+    SendStreamStats stats = 6;
+    SendStreamEnded ended = 7;
+  }
+}
+
+message MediaEndpointLogEvent {
+  oneof event {
+    SessionEvent session_event = 1;
+    ReceiveStreamEvent receive_stream_event = 2;
+    SendStreamEvent send_stream_event = 3;
+  }
+}
+
