@@ -154,6 +154,8 @@ pub enum EndpointRpcOut {
     TrackAdded(TrackInfo),
     TrackUpdated(TrackInfo),
     TrackRemoved(TrackInfo),
+    SubscribePeerRes(RpcResponse<bool>),
+    UnsubscribePeerRes(RpcResponse<bool>),
 }
 
 #[derive(Debug, PartialEq, Eq)]

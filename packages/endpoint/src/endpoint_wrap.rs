@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use async_std::stream::StreamExt;
 use cluster::{ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode};
@@ -37,8 +37,6 @@ where
     cluster: C,
     tick: async_std::stream::Interval,
     timer: Arc<dyn Timer>,
-    sub_scope: EndpointSubscribeScope,
-    peer_subscribe: HashMap<String, ()>,
 }
 
 impl<T, E, C> MediaEndpoint<T, E, C>
@@ -48,7 +46,7 @@ where
 {
     pub fn new(
         transport: T,
-        mut cluster: C,
+        cluster: C,
         room: &str,
         peer: &str,
         sub_scope: EndpointSubscribeScope,
@@ -57,12 +55,6 @@ where
         mix_minus_size: usize,
     ) -> Self {
         log::info!("[EndpointWrap] create");
-        //TODO handle error of cluster sub room
-        if matches!(sub_scope, EndpointSubscribeScope::RoomAuto) {
-            if let Err(_e) = cluster.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribeRoom) {
-                todo!("handle error")
-            }
-        }
         let timer = Arc::new(media_utils::SystemTimer());
         let middlewares: Vec<Box<dyn MediaEndpointMiddleware>> = vec![
             Box::new(middleware::logger::MediaEndpointEventLogger::new()),
@@ -74,7 +66,7 @@ where
                 mix_minus_size,
             )),
         ];
-        let mut internal = MediaEndpointInternal::new(room, peer, bitrate_type, middlewares);
+        let mut internal = MediaEndpointInternal::new(room, peer, sub_scope, bitrate_type, middlewares);
         internal.on_start(timer.now_ms());
 
         Self {
@@ -84,8 +76,6 @@ where
             cluster,
             tick: async_std::stream::interval(std::time::Duration::from_millis(100)),
             timer,
-            sub_scope,
-            peer_subscribe: HashMap::new(),
         }
     }
 
@@ -105,22 +95,6 @@ where
                     }
                     MediaEndpointInternalEvent::ConnectionError(e) => {
                         return Err(e);
-                    }
-                    MediaEndpointInternalEvent::SubscribePeer(peer) => {
-                        if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
-                            self.peer_subscribe.insert(peer.clone(), ());
-                            if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::SubscribePeer(peer)) {
-                                todo!("handle error")
-                            }
-                        }
-                    }
-                    MediaEndpointInternalEvent::UnsubscribePeer(peer) => {
-                        if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
-                            self.peer_subscribe.remove(&peer);
-                            if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribePeer(peer)) {
-                                todo!("handle error")
-                            }
-                        }
                     }
                 },
                 MediaInternalAction::Endpoint(e) => {
@@ -176,20 +150,6 @@ where
 {
     fn drop(&mut self) {
         log::info!("[EndpointWrap] drop");
-        match self.sub_scope {
-            EndpointSubscribeScope::RoomAuto => {
-                if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribeRoom) {
-                    todo!("handle error")
-                }
-            }
-            EndpointSubscribeScope::RoomManual => {
-                for peer in self.peer_subscribe.keys() {
-                    if let Err(_e) = self.cluster.on_event(cluster::ClusterEndpointOutgoingEvent::UnsubscribePeer(peer.clone())) {
-                        todo!("handle error")
-                    }
-                }
-            }
-        }
         self.internal.before_drop(self.timer.now_ms());
         while let Some(out) = self.internal.pop_action() {
             match out {

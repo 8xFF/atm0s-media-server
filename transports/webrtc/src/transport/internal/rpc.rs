@@ -1,10 +1,11 @@
 use cluster::rpc::webrtc::{WebrtcConnectRequestReceivers, WebrtcConnectRequestSender};
 use endpoint::{
-    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle},
+    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle, RemotePeer},
     EndpointRpcIn, EndpointRpcOut, RpcRequest, RpcResponse,
 };
 use serde::{Deserialize, Serialize};
 
+#[allow(unused)]
 fn request_to_json<R: Serialize>(req_id: u32, request: &str, req: RpcRequest<R>) -> String {
     serde_json::json!({
         "req_id": req_id,
@@ -38,6 +39,8 @@ pub fn rpc_to_string(rpc: EndpointRpcOut) -> String {
         EndpointRpcOut::TrackAdded(res) => event_to_json("stream_added", res),
         EndpointRpcOut::TrackUpdated(res) => event_to_json("stream_updated", res),
         EndpointRpcOut::TrackRemoved(res) => event_to_json("stream_removed", res),
+        EndpointRpcOut::SubscribePeerRes(res) => serde_json::to_string(&res).expect("should serialize json"),
+        EndpointRpcOut::UnsubscribePeerRes(res) => serde_json::to_string(&res).expect("should serialize json"),
     }
 }
 
@@ -130,6 +133,14 @@ pub fn rpc_from_string(s: &str) -> Result<IncomingRpc, RpcError> {
             },
             "peer.updateSdp" => match serde_json::from_value::<UpdateSdp>(value) {
                 Ok(params) => Ok(IncomingRpc::Transport(TransportRpcIn::UpdateSdp(RpcRequest::from(req_id, params)))),
+                Err(_err) => Err(RpcError::InvalidJson(Some(req_id))),
+            },
+            "room.subscribe" => match serde_json::from_value::<RemotePeer>(value) {
+                Ok(params) => Ok(IncomingRpc::Endpoint(EndpointRpcIn::SubscribePeer(RpcRequest::from(req_id, params)))),
+                Err(_err) => Err(RpcError::InvalidJson(Some(req_id))),
+            },
+            "room.unsubscribe" => match serde_json::from_value::<RemotePeer>(value) {
+                Ok(params) => Ok(IncomingRpc::Endpoint(EndpointRpcIn::UnsubscribePeer(RpcRequest::from(req_id, params)))),
                 Err(_err) => Err(RpcError::InvalidJson(Some(req_id))),
             },
             _ => Err(RpcError::InvalidRpc(Some(req_id))),
