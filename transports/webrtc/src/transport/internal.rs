@@ -7,7 +7,7 @@ use endpoint::{
 };
 use media_utils::{HashMapMultiKey, RtpSeqExtend, StringCompression};
 use str0m::{
-    media::{Direction, MediaKind, Mid, Simulcast},
+    media::{Direction, MediaKind, Simulcast},
     rtp::SeqNo,
     IceConnectionState,
 };
@@ -27,10 +27,7 @@ use crate::{
     TransportLifeCycle,
 };
 
-use super::{
-    mid_convert::{mid_to_track, track_to_mid},
-    WebrtcTransportEvent,
-};
+use super::WebrtcTransportEvent;
 
 mod local_track_id_generator;
 pub(crate) mod rpc;
@@ -51,20 +48,20 @@ pub enum Str0mInput {
     ChannelClosed(usize),
     IceConnectionStateChange(IceConnectionState),
     MediaPacket(TrackId, MediaPacket),
-    MediaAdded(Direction, Mid, MediaKind, Option<Simulcast>),
-    MediaChanged(Direction, Mid),
-    KeyframeRequest(Mid, RequestKeyframeKind),
+    MediaAdded(Direction, TrackId, MediaKind, Option<Simulcast>),
+    MediaChanged(Direction, TrackId),
+    KeyframeRequest(TrackId, RequestKeyframeKind),
     EgressBitrateEstimate(u64),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Str0mAction {
-    Media(Mid, SeqNo, MediaPacket),
-    RequestKeyFrame(Mid, RequestKeyframeKind),
+    Media(TrackId, SeqNo, MediaPacket),
+    RequestKeyFrame(TrackId, RequestKeyframeKind),
     Datachannel(usize, String),
     Rpc(TransportRpcIn),
     ConfigEgressBitrate { current: u32, desired: u32 },
-    LimitIngressBitrate { mid: Mid, max: u32 },
+    LimitIngressBitrate { track_id: TrackId, max: u32 },
     RemoteIce(String),
     Close,
 }
@@ -77,8 +74,8 @@ where
     track_info_queue: TrackInfoQueue,
     local_track_id_map: HashMapMultiKey<TrackId, String, LocalTrack>,
     remote_track_id_map: HashMapMultiKey<TrackId, String, bool>,
-    remote_audio_mids: Vec<Mid>,
-    remote_video_mids: Vec<Mid>,
+    remote_audio_track_ids: Vec<TrackId>,
+    remote_video_track_ids: Vec<TrackId>,
     local_track_id_gen: LocalTrackIdGenerator,
     channel_id: Option<usize>,
     channel_pending_msgs: VecDeque<String>,
@@ -100,8 +97,8 @@ where
             local_track_id_map: Default::default(),
             remote_track_id_map: Default::default(),
             local_track_id_gen: Default::default(),
-            remote_audio_mids: Default::default(),
-            remote_video_mids: Default::default(),
+            remote_audio_track_ids: Default::default(),
+            remote_video_track_ids: Default::default(),
             channel_id: None,
             channel_pending_msgs: Default::default(),
             endpoint_actions: Default::default(),
@@ -146,8 +143,7 @@ where
                 LocalTrackOutgoingEvent::MediaPacket(pkt) => {
                     if let Some((slot, _)) = self.local_track_id_map.get_mut_by_k1(&track_id) {
                         if let Some(ext_seq) = slot.req_extender.generate(pkt.seq_no) {
-                            let mid = track_to_mid(track_id);
-                            self.str0m_actions.push_back(Str0mAction::Media(mid, ext_seq.into(), pkt));
+                            self.str0m_actions.push_back(Str0mAction::Media(track_id, ext_seq.into(), pkt));
                         }
                     }
                 }
@@ -159,9 +155,8 @@ where
             },
             TransportOutgoingEvent::RemoteTrackEvent(track_id, event) => match event {
                 RemoteTrackOutgoingEvent::RequestKeyFrame(kind) => {
-                    let mid = track_to_mid(track_id);
-                    log::info!("[TransportWebrtc] request keyframe with video mid {}", mid);
-                    self.str0m_actions.push_back(Str0mAction::RequestKeyFrame(mid, kind));
+                    log::info!("[TransportWebrtc] request keyframe with video track_id {}", track_id);
+                    self.str0m_actions.push_back(Str0mAction::RequestKeyFrame(track_id, kind));
                 }
                 RemoteTrackOutgoingEvent::Rpc(rpc) => {
                     let msg = rpc_remote_track_to_string(rpc);
@@ -170,9 +165,12 @@ where
                 }
             },
             TransportOutgoingEvent::LimitIngressBitrate(bitrate) => {
-                if let Some(mid) = self.remote_video_mids.first() {
-                    log::debug!("[TransportWebrtc] request ingress bitrate: {} with first video mid {}", bitrate, mid);
-                    self.str0m_actions.push_back(Str0mAction::LimitIngressBitrate { mid: mid.clone(), max: bitrate });
+                if let Some(track_id) = self.remote_video_track_ids.first() {
+                    log::debug!("[TransportWebrtc] request ingress bitrate: {} with first video track_id {}", bitrate, track_id);
+                    self.str0m_actions.push_back(Str0mAction::LimitIngressBitrate {
+                        track_id: track_id.clone(),
+                        max: bitrate,
+                    });
                 }
             }
             TransportOutgoingEvent::ConfigEgressBitrate { current, desired } => {
@@ -271,19 +269,18 @@ where
                     .push_back(Ok(TransportIncomingEvent::RemoteTrackEvent(track_id, RemoteTrackIncomingEvent::MediaPacket(pkt))));
                 Ok(())
             }
-            Str0mInput::MediaAdded(direction, mid, kind, _sim) => {
+            Str0mInput::MediaAdded(direction, track_id, kind, _sim) => {
                 match direction {
                     Direction::RecvOnly | Direction::SendRecv => {
                         match kind {
                             MediaKind::Audio => {
-                                self.remote_audio_mids.push(mid);
+                                self.remote_audio_track_ids.push(track_id);
                             }
                             MediaKind::Video => {
-                                self.remote_video_mids.push(mid);
+                                self.remote_video_track_ids.push(track_id);
                             }
                         }
                         //remote stream
-                        let track_id = mid_to_track(&mid);
                         if let Some(info) = self.track_info_queue.pop(kind) {
                             self.remote_track_id_map.insert(track_id, info.name.clone(), true);
                             log::info!("[TransportWebrtcInternal] added remote track {} => {} added {:?}", info.name, track_id, info);
@@ -294,14 +291,13 @@ where
                             )));
                             Ok(())
                         } else {
-                            log::warn!("[TransportWebrtcInternal] added remote track {} mid {} but missing info", kind, mid);
+                            log::warn!("[TransportWebrtcInternal] added remote track {} track_id {} but missing info", kind, track_id);
                             Err(TransportError::RuntimeError(TransportRuntimeError::TrackIdNotFound))
                         }
                     }
                     Direction::SendOnly => {
                         //local stream
-                        let track_id = mid_to_track(&mid);
-                        let track_name = self.local_track_id_gen.generate(kind, mid);
+                        let track_name = self.local_track_id_gen.generate(kind, track_id);
                         log::info!("[TransportWebrtcInternal] added local track {} => {} ", track_name, track_id);
                         self.local_track_id_map.insert(track_id, track_name.clone(), LocalTrack { active: true, ..Default::default() });
                         self.endpoint_actions
@@ -309,25 +305,24 @@ where
                         Ok(())
                     }
                     _ => {
-                        log::error!("[TransportWebrtcInternal] not support direction {:?} for track {}", direction, mid);
+                        log::error!("[TransportWebrtcInternal] not support direction {:?} for track {}", direction, track_id);
                         Ok(())
                     }
                 }
             }
-            Str0mInput::MediaChanged(direction, mid) => {
+            Str0mInput::MediaChanged(direction, track_id) => {
                 match direction {
                     Direction::Inactive => {
-                        let track_id = mid_to_track(&mid);
                         if let Some((active, name)) = self.remote_track_id_map.get_mut_by_k1(&track_id) {
-                            log::info!("[TransportWebrtcInternal] switched remote to inactive {}", mid);
+                            log::info!("[TransportWebrtcInternal] switched remote to inactive {}", track_id);
                             *active = false;
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::RemoteTrackRemoved(name.clone(), track_id)));
                         } else if let Some((slot, name)) = self.local_track_id_map.get_mut_by_k1(&track_id) {
-                            log::info!("[TransportWebrtcInternal] switched local to inactive {}", mid);
+                            log::info!("[TransportWebrtcInternal] switched local to inactive {}", track_id);
                             slot.active = false;
                             self.endpoint_actions.push_back(Ok(TransportIncomingEvent::LocalTrackRemoved(name.clone(), track_id)));
                         } else {
-                            log::warn!("[TransportWebrtcInternal] switch track to inactive {} but cannot determine remote or local", mid);
+                            log::warn!("[TransportWebrtcInternal] switch track to inactive {} but cannot determine remote or local", track_id);
                         }
                     }
                     Direction::RecvOnly => {
@@ -342,8 +337,7 @@ where
                 }
                 Ok(())
             }
-            Str0mInput::KeyframeRequest(mid, kind) => {
-                let track_id = mid_to_track(&mid);
+            Str0mInput::KeyframeRequest(track_id, kind) => {
                 self.endpoint_actions
                     .push_back(Ok(TransportIncomingEvent::LocalTrackEvent(track_id, LocalTrackIncomingEvent::RequestKeyFrame(kind))));
                 Ok(())
@@ -396,10 +390,7 @@ mod test {
     use str0m::media::{Direction, MediaKind};
     use transport::{MediaPacket, TransportIncomingEvent};
 
-    use crate::{
-        transport::{internal::Str0mInput, mid_convert::track_to_mid},
-        SdkTransportLifeCycle,
-    };
+    use crate::{transport::internal::Str0mInput, SdkTransportLifeCycle};
 
     use super::WebrtcTransportInternal;
 
@@ -434,9 +425,7 @@ mod test {
             label: "label".to_string(),
             screen: None,
         });
-        internal
-            .on_str0m_event(100, Str0mInput::MediaAdded(Direction::RecvOnly, track_to_mid(100), MediaKind::Audio, None))
-            .unwrap();
+        internal.on_str0m_event(100, Str0mInput::MediaAdded(Direction::RecvOnly, 100, MediaKind::Audio, None)).unwrap();
 
         assert_eq!(
             internal.endpoint_action(),
@@ -447,7 +436,7 @@ mod test {
             )))
         );
 
-        internal.on_str0m_event(100, Str0mInput::MediaChanged(Direction::Inactive, track_to_mid(100))).unwrap();
+        internal.on_str0m_event(100, Str0mInput::MediaChanged(Direction::Inactive, 100)).unwrap();
 
         assert_eq!(internal.endpoint_action(), Some(Ok(TransportIncomingEvent::RemoteTrackRemoved("audio_main".to_string(), 100,))));
     }
@@ -566,9 +555,7 @@ mod test {
             screen: None,
         });
 
-        internal
-            .on_str0m_event(1000, Str0mInput::MediaAdded(Direction::RecvOnly, track_to_mid(100), MediaKind::Audio, None))
-            .unwrap();
+        internal.on_str0m_event(1000, Str0mInput::MediaAdded(Direction::RecvOnly, 100, MediaKind::Audio, None)).unwrap();
 
         // must fire remote track added to endpoint
         assert_eq!(

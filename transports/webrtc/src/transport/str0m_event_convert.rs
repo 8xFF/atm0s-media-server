@@ -1,7 +1,12 @@
-use str0m::{bwe::BweKind, channel::ChannelId, format::CodecConfig, media::KeyframeRequestKind};
+use str0m::{
+    bwe::BweKind,
+    channel::ChannelId,
+    format::CodecConfig,
+    media::{KeyframeRequestKind, Mid},
+};
 use transport::RequestKeyframeKind;
 
-use super::{internal::Str0mInput, mid_convert::mid_to_track, mid_history::MidHistory, rtp_packet_convert::RtpPacketConverter};
+use super::{internal::Str0mInput, mid_convert::MidMapper, mid_history::MidHistory, rtp_packet_convert::RtpPacketConverter};
 
 pub enum Str0mEventConvertError {
     ChannelNotFound,
@@ -12,6 +17,7 @@ pub enum Str0mEventConvertError {
 #[derive(Default)]
 pub struct Str0mEventConvert {
     channels: Vec<ChannelId>,
+    mid_mapper: MidMapper,
     mid_history: MidHistory,
     rtp_convert: RtpPacketConverter,
     twcc_bitrate: Option<u64>,
@@ -44,12 +50,22 @@ impl Str0mEventConvert {
         self.rtp_convert.str0m_sync_codec_config(config);
     }
 
+    pub fn mid_for_track(&self, track_id: u16) -> Option<&Mid> {
+        self.mid_mapper.track_to_mid(track_id)
+    }
+
     pub fn str0m_to_internal(&mut self, event: str0m::Event) -> Result<Option<Str0mInput>, Str0mEventConvertError> {
         match event {
             str0m::Event::Connected => Ok(Some(Str0mInput::Connected)),
             str0m::Event::IceConnectionStateChange(e) => Ok(Some(Str0mInput::IceConnectionStateChange(e))),
-            str0m::Event::MediaAdded(added) => Ok(Some(Str0mInput::MediaAdded(added.direction, added.mid, added.kind, added.simulcast))),
-            str0m::Event::MediaChanged(changed) => Ok(Some(Str0mInput::MediaChanged(changed.direction, changed.mid))),
+            str0m::Event::MediaAdded(added) => {
+                let track_id = self.mid_mapper.mid_to_track(added.mid);
+                Ok(Some(Str0mInput::MediaAdded(added.direction, track_id, added.kind, added.simulcast)))
+            }
+            str0m::Event::MediaChanged(changed) => {
+                let track_id = self.mid_mapper.mid_to_track(changed.mid);
+                Ok(Some(Str0mInput::MediaChanged(changed.direction, track_id)))
+            }
             str0m::Event::ChannelOpen(id, name) => {
                 let index = self.channels.len();
                 self.channels.push(id);
@@ -68,17 +84,17 @@ impl Str0mEventConvert {
             str0m::Event::MediaEgressStats(_) => Ok(None),
             str0m::Event::EgressBitrateEstimate(kind) => Ok(Some(Str0mInput::EgressBitrateEstimate(self.process_bitrate(kind)))),
             str0m::Event::KeyframeRequest(req) => match req.kind {
-                KeyframeRequestKind::Pli => Ok(Some(Str0mInput::KeyframeRequest(req.mid, RequestKeyframeKind::Pli))),
-                KeyframeRequestKind::Fir => Ok(Some(Str0mInput::KeyframeRequest(req.mid, RequestKeyframeKind::Fir))),
+                KeyframeRequestKind::Pli => Ok(Some(Str0mInput::KeyframeRequest(self.mid_mapper.mid_to_track(req.mid), RequestKeyframeKind::Pli))),
+                KeyframeRequestKind::Fir => Ok(Some(Str0mInput::KeyframeRequest(self.mid_mapper.mid_to_track(req.mid), RequestKeyframeKind::Fir))),
             },
             str0m::Event::StreamPaused(status) => {
-                let track_id = mid_to_track(&status.mid);
+                let track_id = self.mid_mapper.mid_to_track(status.mid);
                 self.mid_history.get(Some(track_id), *(&status.ssrc as &u32));
                 log::info!("[Str0mEventConvert] map between track {} and ssrc {}", track_id, status.ssrc);
                 Ok(None)
             }
             str0m::Event::RtpPacket(rtp) => {
-                let track_id = rtp.header.ext_vals.mid.map(|mid| mid_to_track(&mid));
+                let track_id = rtp.header.ext_vals.mid.map(|mid| self.mid_mapper.mid_to_track(mid));
                 let ssrc: &u32 = &rtp.header.ssrc;
                 if let Some(track_id) = self.mid_history.get(track_id, *ssrc) {
                     if let Some(pkt) = self.rtp_convert.to_pkt(rtp) {
