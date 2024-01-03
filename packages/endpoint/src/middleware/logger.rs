@@ -1,9 +1,8 @@
 use std::collections::VecDeque;
 
 use protocol::media_event_logs::{
-    MediaEndpointLogRequest,
     session_event::{self, SessionConnectError, SessionConnected, SessionConnecting, SessionDisconnected, SessionReconnected, SessionReconnecting},
-    MediaEndpointLogEvent, ProtoF32, SessionEvent,
+    MediaEndpointLogEvent, MediaEndpointLogRequest, F32p2, SessionEvent,
 };
 use transport::{TransportError, TransportIncomingEvent, TransportStateEvent};
 
@@ -24,8 +23,8 @@ impl MediaEndpointEventLogger {
 
     fn build_event(&self, now_ms: u64, event: session_event::Event) -> MediaEndpointMiddlewareOutput {
         log::info!("sending event out to connector {:?}", event);
-        let event = MediaEndpointLogEvent {
-            event: Some(MediaEndpointLogRequest::SessionEvent(SessionEvent {
+        let event = MediaEndpointLogRequest {
+            event: Some(MediaEndpointLogEvent::SessionEvent(SessionEvent {
                 ip: "127.0.0.1".to_string(), //TODO
                 version: None,
                 location: None,
@@ -90,7 +89,7 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                             error: None,
                             duration_ms: now_ms - self.started_ms.expect("Should has started"),
                             received_bytes: 0,                              //TODO
-                            rtt: Some(ProtoF32 { value: 0, precision: 2 }), //TODO
+                            rtt: Some(F32p2 { value: 0 }), //TODO
                             sent_bytes: 0,                                  //TODO
                         }),
                     ));
@@ -120,8 +119,8 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                     session_event::Event::Disconnected(SessionDisconnected {
                         error: Some("TIMEOUT".to_string()), //TODO
                         duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                        received_bytes: 0,                        //TODO
-                        rtt: Some(ProtoF32 { value: 0, precision: 2 }), //TODO
+                        received_bytes: 0,                              //TODO
+                        rtt: Some(F32p2 { value: 0 }), //TODO
                         sent_bytes: 0,
                     }),
                 ));

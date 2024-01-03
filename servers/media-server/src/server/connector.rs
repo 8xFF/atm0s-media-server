@@ -1,4 +1,4 @@
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use cluster::{
     rpc::{connector::MediaEndpointLogResponse, RpcEmitter, RpcEndpoint, RpcRequest},
     Cluster, ClusterEndpoint,
@@ -7,12 +7,11 @@ use futures::{select, FutureExt};
 use metrics_dashboard::build_dashboard_route;
 use poem::Route;
 use poem_openapi::OpenApiService;
-use protocol::Protocol;
+use protocol::media_event_logs::MediaEndpointLogRequest;
 
 use crate::rpc::http::HttpRpcServer;
 
 mod rpc;
-mod serializers;
 mod transports;
 
 use self::{
@@ -25,10 +24,6 @@ use self::{
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct ConnectorArgs {
-    /// Http port
-    #[arg(env, long, default_value_t = 3000)]
-    http_port: u16,
-
     /// Message Queue URI in the form of `amqp://user:pass@host:port/vhost`
     #[arg(env, long, default_value = "nats://localhost:4222")]
     mq_uri: String,
@@ -52,7 +47,7 @@ where
         log::error!("Error parsing MQ URI: {:?}", e);
         "Error parsing MQ URI"
     })?;
-    let transporter: Result<Box<dyn ConnectorTransporter>, String> = match protocol.as_str() {
+    let transporter: Result<Box<dyn ConnectorTransporter<MediaEndpointLogRequest>>, String> = match protocol.as_str() {
         "nats" => {
             let nats = NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone()).await;
             match nats {
@@ -95,9 +90,9 @@ where
             RpcEvent::MediaEndpointLog(req) => {
                 log::info!("On media endpoint log {:?}", req.param());
                 if let Ok(ref transport) = transporter {
-                    let data: Vec<u8> = Protocol::to_vec(req.param());
+                    let data = req.param();
 
-                    if let Err(e) = transport.send(&data).await {
+                    if let Err(e) = transport.send(data).await {
                         log::error!("Error sending message: {:?}", e);
                     }
                 }

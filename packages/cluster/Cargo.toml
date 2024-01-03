@@ -22,7 +22,6 @@ async-std = { workspace = true, optional = true }
 log = { workspace = true, optional = true  }
 futures = { workspace = true, optional = true  }
 bytes = { version = "1.5", optional = true  }
-prost = "0.12"
 
 [features]
 default = ["impl"]

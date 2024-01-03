@@ -1,4 +1,4 @@
-use protocol::media_event_logs::MediaEndpointLogEvent;
+use protocol::media_event_logs::MediaEndpointLogRequest;
 use transport::TrackId;
 
 use crate::{
@@ -20,7 +20,7 @@ pub enum ClusterEndpointOutgoingEvent {
     UnsubscribePeer(ClusterPeerId),
     LocalTrackEvent(TrackId, ClusterLocalTrackOutgoingEvent),
     RemoteTrackEvent(TrackId, ClusterTrackUuid, ClusterRemoteTrackOutgoingEvent),
-    MediaEndpointLog(MediaEndpointLogEvent),
+    MediaEndpointLog(MediaEndpointLogRequest),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

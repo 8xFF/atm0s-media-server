@@ -1,10 +1,11 @@
 use async_trait::async_trait;
+use prost::Message;
 
 pub mod nats;
 
 #[async_trait]
-pub trait ConnectorTransporter: Send + Sync {
-    async fn send(&self, data: &[u8]) -> Result<(), String>;
+pub trait ConnectorTransporter<M: Message>: Send + Sync {
+    async fn send(&self, data: &M) -> Result<(), String>;
     async fn close(&mut self) -> Result<(), String>;
 }
 

@@ -438,6 +438,7 @@ dependencies = [
  "parking_lot",
  "poem",
  "poem-openapi",
+ "prost",
  "rsip",
  "rust-embed",
  "serde",
@@ -461,7 +462,6 @@ dependencies = [
  "futures",
  "log",
  "poem-openapi",
- "prost",
  "serde",
 ]
 

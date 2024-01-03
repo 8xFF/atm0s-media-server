@@ -2,6 +2,8 @@
 name = "atm0s-media-server-protocol"
 version = "0.1.0"
 edition = "2021"
+description = "Cluster Protobuf definitions for atm0s-media-server"
+license = "MIT"
 build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

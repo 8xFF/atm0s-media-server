@@ -14,7 +14,7 @@ use media_utils::{ErrorDebugger, Timer};
 use metrics::increment_counter;
 use protocol::media_event_logs::{
     session_event::{SessionRouted, SessionRouting, SessionRoutingError},
-    MediaEndpointLogRequest, SessionEvent, MediaSessionEvent,
+    MediaEndpointLogEvent, SessionEvent, MediaSessionEvent,
 };
 
 use crate::server::gateway::{GATEWAY_SESSIONS_CONNECT_COUNT, GATEWAY_SESSIONS_CONNECT_ERROR};
@@ -66,7 +66,7 @@ fn emit_endpoint_event<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, 
                 CONNECTOR_SERVICE,
                 None,
                 RPC_MEDIA_ENDPOINT_LOG,
-                MediaEndpointLogRequest::SessionEvent(SessionEvent {
+                MediaEndpointLogEvent::SessionEvent(SessionEvent {
                     ip,
                     location: None,
                     version,
