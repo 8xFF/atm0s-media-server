@@ -15,10 +15,12 @@ mod rpc;
 mod transports;
 
 use self::{
-    rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, RpcEvent},
+    rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, RpcEvent, InternalControl},
     transports::nats::NatsTransporter,
     transports::{parse_uri, ConnectorTransporter},
 };
+
+use super::MediaServerContext;
 
 /// Media Server Webrtc
 #[derive(Parser, Debug)]
@@ -31,9 +33,13 @@ pub struct ConnectorArgs {
     /// MQ Channel
     #[arg(env, long, default_value = "atm0s/event_log")]
     mq_channel: String,
+
+    /// Max conn
+    #[arg(env, long, default_value_t = 100)]
+    pub max_conn: u64,
 }
 
-pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: ConnectorArgs, _cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: ConnectorArgs, ctx: MediaServerContext<InternalControl>, _cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -74,7 +80,7 @@ where
         .nest("/ui/", ui)
         .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()));
 
-    http_server.start(route, ()).await;
+    http_server.start(route, ctx).await;
 
     loop {
         let rpc = select! {

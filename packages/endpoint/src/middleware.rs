@@ -9,7 +9,7 @@ use crate::{
 pub mod logger;
 pub mod mix_minus;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum MediaEndpointMiddlewareOutput {
     Endpoint(TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>),
     Cluster(ClusterEndpointOutgoingEvent),
