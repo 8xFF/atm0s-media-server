@@ -1,13 +1,13 @@
 use std::collections::{HashMap, VecDeque};
 
-use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent};
+use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, EndpointSubscribeScope};
 use media_utils::hash_str;
 use transport::{MediaKind, TrackId, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
 
 use crate::{
     middleware::MediaEndpointMiddleware,
     rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut, TrackInfo},
-    MediaEndpointMiddlewareOutput,
+    MediaEndpointMiddlewareOutput, RpcResponse,
 };
 
 use self::{
@@ -31,8 +31,6 @@ pub enum MediaEndpointInternalEvent {
     ConnectionClosed,
     ConnectionCloseRequest,
     ConnectionError(TransportError),
-    SubscribePeer(String),
-    UnsubscribePeer(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -45,6 +43,7 @@ pub enum MediaInternalAction {
 pub struct MediaEndpointInternal {
     room_id: String,
     peer_id: String,
+    sub_scope: EndpointSubscribeScope,
     cluster_track_map: HashMap<(String, String), MediaKind>,
     local_track_map: HashMap<String, TrackId>,
     output_actions: VecDeque<MediaInternalAction>,
@@ -53,14 +52,16 @@ pub struct MediaEndpointInternal {
     bitrate_allocator: bitrate_allocator::BitrateAllocator,
     bitrate_limiter: bitrate_limiter::BitrateLimiter,
     middlewares: Vec<Box<dyn MediaEndpointMiddleware>>,
+    subscribe_peers: HashMap<String, ()>,
 }
 
 impl MediaEndpointInternal {
-    pub fn new(room_id: &str, peer_id: &str, bitrate_limiter: BitrateLimiterType, middlewares: Vec<Box<dyn MediaEndpointMiddleware>>) -> Self {
+    pub fn new(room_id: &str, peer_id: &str, sub_scope: EndpointSubscribeScope, bitrate_limiter: BitrateLimiterType, middlewares: Vec<Box<dyn MediaEndpointMiddleware>>) -> Self {
         log::info!("[MediaEndpointInternal {}/{}] create", room_id, peer_id);
         Self {
             room_id: room_id.into(),
             peer_id: peer_id.into(),
+            sub_scope,
             cluster_track_map: HashMap::new(),
             local_track_map: HashMap::new(),
             output_actions: VecDeque::with_capacity(100),
@@ -69,6 +70,7 @@ impl MediaEndpointInternal {
             bitrate_allocator: bitrate_allocator::BitrateAllocator::new(DEFAULT_BITRATE_OUT_BPS),
             bitrate_limiter: bitrate_limiter::BitrateLimiter::new(bitrate_limiter, MAX_BITRATE_IN_BPS),
             middlewares,
+            subscribe_peers: HashMap::new(),
         }
     }
 
@@ -100,6 +102,10 @@ impl MediaEndpointInternal {
     }
 
     pub fn on_start(&mut self, now_ms: u64) {
+        if matches!(self.sub_scope, EndpointSubscribeScope::RoomAuto) {
+            self.push_cluster(ClusterEndpointOutgoingEvent::SubscribeRoom);
+        }
+
         for middleware in self.middlewares.iter_mut() {
             middleware.on_start(now_ms);
         }
@@ -302,11 +308,28 @@ impl MediaEndpointInternal {
             EndpointRpcIn::PeerClose => {
                 self.push_internal(MediaEndpointInternalEvent::ConnectionCloseRequest);
             }
-            EndpointRpcIn::SubscribePeer(peer) => {}
-            EndpointRpcIn::UnsubscribePeer(peer) => {}
-            EndpointRpcIn::MixMinusSourceAdd(_) => todo!(),
-            EndpointRpcIn::MixMinusSourceRemove(_) => todo!(),
-            EndpointRpcIn::MixMinusToggle(_) => todo!(),
+            EndpointRpcIn::SubscribePeer(req) => {
+                if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
+                    if !self.subscribe_peers.contains_key(&req.data.peer) {
+                        self.subscribe_peers.insert(req.data.peer.clone(), ());
+                        self.push_cluster(ClusterEndpointOutgoingEvent::SubscribePeer(req.data.peer));
+                    }
+                    self.push_rpc(EndpointRpcOut::SubscribePeerRes(RpcResponse::success(req.req_id, true)));
+                } else {
+                    self.push_rpc(EndpointRpcOut::SubscribePeerRes(RpcResponse::error(req.req_id)));
+                }
+            }
+            EndpointRpcIn::UnsubscribePeer(req) => {
+                if matches!(self.sub_scope, EndpointSubscribeScope::RoomManual) {
+                    if self.subscribe_peers.remove(&req.data.peer).is_some() {
+                        self.push_cluster(ClusterEndpointOutgoingEvent::UnsubscribePeer(req.data.peer));
+                    }
+                    self.push_rpc(EndpointRpcOut::UnsubscribePeerRes(RpcResponse::success(req.req_id, true)));
+                } else {
+                    self.push_rpc(EndpointRpcOut::UnsubscribePeerRes(RpcResponse::error(req.req_id)));
+                }
+            }
+            _ => {}
         }
     }
 
@@ -450,10 +473,10 @@ impl MediaEndpointInternal {
         has_event
     }
 
-    fn pop_middlewares_action(&mut self, _now_ms: u64) -> bool {
+    fn pop_middlewares_action(&mut self, now_ms: u64) -> bool {
         let mut has_event = false;
         for middleware in self.middlewares.iter_mut() {
-            while let Some(action) = middleware.pop_action() {
+            while let Some(action) = middleware.pop_action(now_ms) {
                 has_event = true;
                 match action {
                     MediaEndpointMiddlewareOutput::Endpoint(event) => {
@@ -473,6 +496,18 @@ impl MediaEndpointInternal {
     /// This should be called when the endpoint is closed
     /// - Close all tracks
     pub fn before_drop(&mut self, now_ms: u64) {
+        match self.sub_scope {
+            EndpointSubscribeScope::RoomAuto => {
+                self.push_cluster(ClusterEndpointOutgoingEvent::UnsubscribeRoom);
+            }
+            EndpointSubscribeScope::RoomManual => {
+                let peer_subscribe = std::mem::take(&mut self.subscribe_peers);
+                for peer in peer_subscribe.into_keys() {
+                    self.push_cluster(ClusterEndpointOutgoingEvent::UnsubscribePeer(peer));
+                }
+            }
+        }
+
         let local_tracks = std::mem::take(&mut self.local_tracks);
         for (track_id, mut track) in local_tracks {
             log::info!("[MediaEndpointInternal {}/{}] close local track {}", self.room_id, self.peer_id, track_id);
@@ -486,6 +521,11 @@ impl MediaEndpointInternal {
             track.close();
             self.pop_remote_track_actions(track_id, &mut track);
         }
+
+        for middleware in self.middlewares.iter_mut() {
+            middleware.before_drop(now_ms);
+        }
+        self.pop_middlewares_action(now_ms);
     }
 }
 
@@ -499,24 +539,26 @@ impl Drop for MediaEndpointInternal {
 
 #[cfg(test)]
 mod tests {
-    use cluster::{generate_cluster_track_uuid, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta};
+    use cluster::{
+        ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackUuid, EndpointSubscribeScope,
+    };
     use transport::{
         LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, RemoteTrackIncomingEvent, RequestKeyframeKind, TrackMeta, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent,
     };
 
     use crate::{
         endpoint_wrap::internal::{bitrate_limiter::BitrateLimiterType, MediaEndpointInternalEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS},
-        rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverSwitch, RemoteStream, TrackInfo},
-        EndpointRpcOut, RpcRequest, RpcResponse,
+        rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverSwitch, RemotePeer, RemoteStream, TrackInfo},
+        EndpointRpcIn, EndpointRpcOut, RpcRequest, RpcResponse,
     };
 
     use super::MediaEndpointInternal;
 
     #[test]
     fn should_fire_cluster_when_remote_track_added_then_close() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", EndpointSubscribeScope::RoomManual, BitrateLimiterType::DynamicWithConsumers, vec![]);
 
-        let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
+        let cluster_track_uuid = ClusterTrackUuid::from_info("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
 
         assert_eq!(endpoint.remote_tracks.len(), 1);
@@ -558,9 +600,9 @@ mod tests {
 
     #[test]
     fn should_fire_cluster_when_remote_track_added_then_removed() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", EndpointSubscribeScope::RoomManual, BitrateLimiterType::DynamicWithConsumers, vec![]);
 
-        let cluster_track_uuid = generate_cluster_track_uuid("room1", "peer1", "audio_main");
+        let cluster_track_uuid = ClusterTrackUuid::from_info("room1", "peer1", "audio_main");
         endpoint.on_transport(0, TransportIncomingEvent::RemoteTrackAdded("audio_main".to_string(), 100, TrackMeta::new_audio(None)));
 
         assert_eq!(endpoint.remote_tracks.len(), 1);
@@ -601,7 +643,7 @@ mod tests {
 
     #[test]
     fn should_fire_rpc_when_cluster_track_added() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", EndpointSubscribeScope::RoomManual, BitrateLimiterType::DynamicWithConsumers, vec![]);
 
         endpoint.on_cluster(
             0,
@@ -633,7 +675,7 @@ mod tests {
 
     #[test]
     fn should_fire_disconnect_when_transport_disconnect() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", EndpointSubscribeScope::RoomManual, BitrateLimiterType::DynamicWithConsumers, vec![]);
 
         endpoint.on_transport(0, TransportIncomingEvent::State(TransportStateEvent::Disconnected));
 
@@ -644,7 +686,7 @@ mod tests {
 
     #[test]
     fn should_fire_answer_rpc() {
-        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", BitrateLimiterType::DynamicWithConsumers, vec![]);
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", EndpointSubscribeScope::RoomManual, BitrateLimiterType::DynamicWithConsumers, vec![]);
 
         endpoint.on_transport(0, TransportIncomingEvent::LocalTrackAdded("video_0".to_string(), 1, TrackMeta::new_video(None)));
 
@@ -726,6 +768,97 @@ mod tests {
                 ClusterLocalTrackOutgoingEvent::Unsubscribe("peer2".to_string(), "video_main".to_string())
             )))
         );
+    }
+
+    #[test]
+    fn should_fire_room_sub_in_scope_auto() {
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", EndpointSubscribeScope::RoomAuto, BitrateLimiterType::DynamicWithConsumers, vec![]);
+
+        endpoint.on_start(0);
+
+        assert_eq!(endpoint.pop_action(), Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::SubscribeRoom)));
+        assert_eq!(endpoint.pop_action(), None);
+
+        endpoint.before_drop(1000);
+
+        assert_eq!(endpoint.pop_action(), Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::UnsubscribeRoom)));
+        assert_eq!(endpoint.pop_action(), None);
+    }
+
+    #[test]
+    fn should_handle_sub_peer_in_scope_manual() {
+        let mut endpoint = MediaEndpointInternal::new("room1", "peer1", EndpointSubscribeScope::RoomManual, BitrateLimiterType::DynamicWithConsumers, vec![]);
+
+        endpoint.on_start(0);
+
+        // on endpoint sub_peer rpc should fire cluster sub_peer
+        endpoint.on_transport(
+            0,
+            TransportIncomingEvent::Rpc(EndpointRpcIn::SubscribePeer(RpcRequest {
+                req_id: 1,
+                data: RemotePeer { peer: "peer2".to_string() },
+            })),
+        );
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::SubscribePeer("peer2".to_string())))
+        );
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::SubscribePeerRes(RpcResponse::success(
+                1, true
+            )))))
+        );
+        assert_eq!(endpoint.pop_action(), None);
+
+        // on endpoint sub_peer rpc should fire cluster sub_peer
+        endpoint.on_transport(
+            0,
+            TransportIncomingEvent::Rpc(EndpointRpcIn::SubscribePeer(RpcRequest {
+                req_id: 2,
+                data: RemotePeer { peer: "peer3".to_string() },
+            })),
+        );
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::SubscribePeer("peer3".to_string())))
+        );
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::SubscribePeerRes(RpcResponse::success(
+                2, true
+            )))))
+        );
+        assert_eq!(endpoint.pop_action(), None);
+
+        // on endpoint unsub_peer rpc should fire cluster unsub_peer
+        endpoint.on_transport(
+            0,
+            TransportIncomingEvent::Rpc(EndpointRpcIn::UnsubscribePeer(RpcRequest {
+                req_id: 3,
+                data: RemotePeer { peer: "peer3".to_string() },
+            })),
+        );
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::UnsubscribePeer("peer3".to_string())))
+        );
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::UnsubscribePeerRes(RpcResponse::success(
+                3, true
+            )))))
+        );
+        assert_eq!(endpoint.pop_action(), None);
+
+        // on endpoint before_drop should fire remain cluster unsub_peer
+        endpoint.before_drop(1000);
+
+        assert_eq!(
+            endpoint.pop_action(),
+            Some(MediaInternalAction::Cluster(ClusterEndpointOutgoingEvent::UnsubscribePeer("peer2".to_string())))
+        );
+        assert_eq!(endpoint.pop_action(), None);
     }
 
     #[test]

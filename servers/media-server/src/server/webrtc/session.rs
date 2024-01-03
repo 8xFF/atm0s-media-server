@@ -1,5 +1,5 @@
 use async_std::{channel::Receiver, prelude::FutureExt as _};
-use cluster::{rpc::webrtc::WebrtcConnectRequestSender, Cluster, ClusterEndpoint, EndpointSubscribeScope};
+use cluster::{rpc::webrtc::WebrtcConnectRequestSender, Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode};
 use endpoint::{BitrateLimiterType, MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
 use media_utils::{ErrorDebugger, ServerError};
@@ -34,8 +34,10 @@ impl<E: ClusterEndpoint, L: TransportLifeCycle> WebrtcSession<E, L> {
         senders: Vec<WebrtcConnectRequestSender>,
         sdp_rewrite: Option<SdpBoxRewriteScope>,
         rx: Receiver<InternalControl>,
+        mix_minus_mode: MixMinusAudioMode,
+        mix_minus_size: usize,
     ) -> Result<(Self, String), WebrtcSessionError> {
-        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, sub_scope, bitrate_type);
+        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, sub_scope, bitrate_type, mix_minus_mode, mix_minus_size);
         endpoint_pre.check().map_err(|_e| WebrtcSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let mut transport = WebrtcTransport::new(life_cycle, sdp_rewrite).await.map_err(|_| WebrtcSessionError::NetworkError)?;
@@ -106,6 +108,8 @@ pub(crate) async fn run_webrtc_endpoint<C, CE, L>(
     offer_sdp: &str,
     senders: Vec<WebrtcConnectRequestSender>,
     sdp_rewrite: Option<SdpBoxRewriteScope>,
+    mix_minus_mode: MixMinusAudioMode,
+    mix_minus_size: usize,
 ) -> Result<(String, String), ServerError>
 where
     C: Cluster<CE> + 'static,
@@ -113,7 +117,11 @@ where
     L: TransportLifeCycle + 'static,
 {
     let (rx, conn_id, old_tx) = context.create_peer(room, peer);
-    let (mut session, answer_sdp) = match WebrtcSession::new(room, peer, sub_scope, bitrate_type, life_cycle, cluster, offer_sdp, senders, sdp_rewrite, rx).await {
+    let (mut session, answer_sdp) = match WebrtcSession::new(
+        room, peer, sub_scope, bitrate_type, life_cycle, cluster, offer_sdp, senders, sdp_rewrite, rx, mix_minus_mode, mix_minus_size,
+    )
+    .await
+    {
         Ok(res) => res,
         Err(e) => {
             log::error!("Error on create webrtc session: {:?}", e);

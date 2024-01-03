@@ -35,10 +35,12 @@ nats = { version = "0.24.1", optional = true }
 prost = { version = "0.12.3", optional = true }
 
 [features]
-default = ["embed-samples", "gateway", "webrtc", "rtmp", "sip", "connector"]
+default = ["embed-samples", "gateway", "webrtc", "rtmp", "sip", "connector", "token_generate"]
 embed-samples = ["rust-embed"]
 webrtc = ["transport-webrtc"]
 rtmp = ["transport-rtmp"]
 sip = ["rsip", "transport-sip"]
 gateway = []
-connector = ["nats", "serde_json", "prost"]
+connector = ["nats", "prost"]
+connector = []
+token_generate = []

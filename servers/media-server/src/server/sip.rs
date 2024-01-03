@@ -19,7 +19,11 @@ pub enum InternalControl {}
 pub struct SipArgs {
     /// Sip listen addr
     #[arg(env, long)]
-    addr: SocketAddr,
+    pub addr: SocketAddr,
+
+    /// Max conn
+    #[arg(env, long, default_value_t = 100)]
+    pub max_conn: u64,
 }
 
 pub async fn run_sip_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: SipArgs, ctx: MediaServerContext<InternalControl>, mut cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>

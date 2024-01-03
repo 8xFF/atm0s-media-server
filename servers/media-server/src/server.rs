@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use async_std::channel::{bounded, Receiver, Sender};
-use cluster::{implement::NodeId, rpc::gateway::create_conn_id};
+use cluster::{atm0s_sdn::Timer, implement::NodeId, ClusterSessionUuid, MediaConnId, SessionTokenSigner, SessionTokenVerifier};
 use metrics::{describe_counter, describe_gauge, gauge, increment_counter};
 use parking_lot::RwLock;
 
@@ -17,6 +17,8 @@ pub mod gateway;
 pub mod rtmp;
 #[cfg(feature = "sip")]
 pub mod sip;
+#[cfg(feature = "token_generate")]
+pub mod token_generate;
 #[cfg(feature = "webrtc")]
 pub mod webrtc;
 
@@ -35,9 +37,13 @@ impl PeerIdentity {
 pub struct MediaServerContext<InternalControl> {
     node_id: NodeId,
     conn_max: u64,
-    counter: Arc<RwLock<u64>>,
+    session_counter: Arc<RwLock<u64>>,
+    conn_counter: Arc<RwLock<u64>>,
     conns: Arc<RwLock<HashMap<String, (Sender<InternalControl>, PeerIdentity)>>>,
     peers: Arc<RwLock<HashMap<PeerIdentity, (Sender<InternalControl>, String)>>>,
+    timer: Arc<dyn Timer>,
+    token_verifier: Arc<dyn SessionTokenVerifier + Send + Sync>,
+    token_signer: Arc<dyn SessionTokenSigner + Send + Sync>,
 }
 
 impl<InternalControl> Clone for MediaServerContext<InternalControl> {
@@ -45,21 +51,29 @@ impl<InternalControl> Clone for MediaServerContext<InternalControl> {
         Self {
             node_id: self.node_id,
             conn_max: self.conn_max,
-            counter: self.counter.clone(),
+            session_counter: self.session_counter.clone(),
+            conn_counter: self.conn_counter.clone(),
             conns: self.conns.clone(),
             peers: self.peers.clone(),
+            timer: self.timer.clone(),
+            token_verifier: self.token_verifier.clone(),
+            token_signer: self.token_signer.clone(),
         }
     }
 }
 
 impl<InternalControl> MediaServerContext<InternalControl> {
-    pub fn new(node_id: NodeId, conn_max: u64) -> Self {
+    pub fn new(node_id: NodeId, conn_max: u64, timer: Arc<dyn Timer>, token_verifier: Arc<dyn SessionTokenVerifier + Send + Sync>, token_signer: Arc<dyn SessionTokenSigner + Send + Sync>) -> Self {
         Self {
             node_id,
             conn_max,
-            counter: Arc::new(RwLock::new(0)),
+            session_counter: Arc::new(RwLock::new(0)),
+            conn_counter: Arc::new(RwLock::new(0)),
             conns: Arc::new(RwLock::new(HashMap::new())),
             peers: Arc::new(RwLock::new(HashMap::new())),
+            timer,
+            token_verifier,
+            token_signer,
         }
     }
 
@@ -117,9 +131,27 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         Some(tx)
     }
 
+    pub fn verifier(&self) -> Arc<dyn SessionTokenVerifier + Send + Sync> {
+        self.token_verifier.clone()
+    }
+
+    pub fn signer(&self) -> Arc<dyn SessionTokenSigner + Send + Sync> {
+        self.token_signer.clone()
+    }
+
     fn generate_conn_id(&self) -> String {
-        let mut counter = self.counter.write();
+        let mut counter = self.conn_counter.write();
         *counter += 1;
-        create_conn_id(self.node_id, *counter)
+        self.token_signer.sign_conn_id(&MediaConnId {
+            node_id: self.node_id,
+            conn_id: *counter,
+        })
+    }
+
+    fn generate_session_uuid(&self) -> u64 {
+        let mut counter = self.session_counter.write();
+        *counter += 1;
+        let uuid = ClusterSessionUuid::new(self.node_id as u16, self.timer.now_ms() as u32, *counter as u16);
+        uuid.to_u64()
     }
 }

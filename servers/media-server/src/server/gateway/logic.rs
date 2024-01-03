@@ -127,7 +127,6 @@ mod tests {
                 domain: None,
             }),
             sip: None,
-            token: "fake-token".to_string(), //TODO
         };
         let node_pong = gateway_logic.on_ping(0, &node_ping);
         assert_eq!(node_pong.success, true);
@@ -143,7 +142,6 @@ mod tests {
             webrtc: None,
             rtmp: None,
             sip: None,
-            token: "fake-token".to_string(), //TODO
         };
         let node_pong = gateway_logic.on_ping(0, &node_ping);
         assert_eq!(node_pong.success, true);

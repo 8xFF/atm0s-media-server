@@ -11,7 +11,7 @@ license = "MIT"
 transport = { package = "atm0s-media-server-transport", path = "../transport", version = "0.1.0" }
 media-utils = { package = "atm0s-media-server-utils", path = "../media-utils", version = "0.1.0" }
 proc-macro = { package = "atm0s-media-server-proc-macro", path = "../proc-macro", version = "0.1.0" }
-atm0s-sdn = { version = "0.1.4", features = ["all"], optional = true  }
+atm0s-sdn = { version = "0.1.6", features = ["all"], optional = true  }
 async-trait = { workspace = true }
 serde = { workspace = true }
 poem-openapi = { version = "3.0" }
@@ -22,7 +22,11 @@ async-std = { workspace = true, optional = true }
 log = { workspace = true, optional = true  }
 futures = { workspace = true, optional = true  }
 bytes = { version = "1.5", optional = true  }
+jwt = { version = "0.16.0", optional = true }
+hmac = { version = "0.12.1", optional = true }
+sha2 = { version = "0.10.8", optional = true }
 
 [features]
-default = ["impl"]
+default = ["impl", "jwt-static-token"]
 impl = ["async-std", "log", "atm0s-sdn", "futures", "bytes"]
+jwt-static-token = ["jwt", "hmac", "sha2"]

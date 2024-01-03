@@ -143,7 +143,8 @@ where
                         }
                     }
                 },
-                Str0mAction::Media(mid, seq_no, mut pkt) => {
+                Str0mAction::Media(track_id, seq_no, mut pkt) => {
+                    let mid = self.event_convert.mid_for_track(track_id).cloned().expect("Should has mid");
                     if let Some(stream) = self.rtc.direct_api().stream_tx_by_mid(mid, None) {
                         self.pkt_convert.rewrite_codec(&mut pkt);
                         stream
@@ -163,7 +164,8 @@ where
                         debug_assert!(false, "should not missing mid");
                     }
                 }
-                Str0mAction::RequestKeyFrame(mid, kind) => {
+                Str0mAction::RequestKeyFrame(track_id, kind) => {
+                    let mid = self.event_convert.mid_for_track(track_id).cloned().expect("Should has mid");
                     if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
                         match kind {
                             RequestKeyframeKind::Pli => stream.request_keyframe(KeyframeRequestKind::Pli),
@@ -194,7 +196,8 @@ where
                     bwe.set_current_bitrate(Bitrate::bps(current as u64));
                     bwe.set_desired_bitrate(Bitrate::bps(desired as u64));
                 }
-                Str0mAction::LimitIngressBitrate { mid, max } => {
+                Str0mAction::LimitIngressBitrate { track_id, max } => {
+                    let mid = self.event_convert.mid_for_track(track_id).cloned().expect("Should has mid");
                     if let Some(stream) = self.rtc.direct_api().stream_rx_by_mid(mid, None) {
                         log::debug!("[TransportWebrtc] on limit ingress bitrate mid {} max {}", mid, max);
                         stream.request_remb(Bitrate::bps(max as u64));

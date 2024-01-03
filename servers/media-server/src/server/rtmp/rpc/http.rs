@@ -11,6 +11,7 @@ use poem_openapi::{payload::Json, Object, OpenApi};
 use serde::{Deserialize, Serialize};
 
 use crate::rpc::http::RpcReqResHttp;
+use crate::server::MediaServerContext;
 
 use super::RpcEvent;
 
@@ -29,7 +30,7 @@ pub struct RtmpHttpApis;
 impl RtmpHttpApis {
     /// delete Rtmp conn
     #[oai(path = "/rtmp/conn/:conn_id", method = "delete")]
-    async fn conn_rtmp_delete(&self, ctx: Data<&Sender<RpcEvent>>, conn_id: Path<String>) -> Result<Json<Response<String>>> {
+    async fn conn_rtmp_delete(&self, Data(ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>, conn_id: Path<String>) -> Result<Json<Response<String>>> {
         log::info!("[HttpApis] close Rtmp endpoint conn {}", conn_id.0);
         let (req, rx) = RpcReqResHttp::<MediaEndpointCloseRequest, MediaEndpointCloseResponse>::new(MediaEndpointCloseRequest { conn_id: conn_id.0.clone() });
         ctx.0

@@ -1,5 +1,6 @@
 use sorted_vec::SortedSet;
 
+#[derive(Clone)]
 pub struct SeqRewrite<const MAX: u64, const DROPPED_QUEUE_LEN: usize> {
     base: u64,
     max_output: u64,

@@ -4,16 +4,12 @@ use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverDisconnect, ReceiverSwitch, RemoteStream, RemoteTrackRpcOut},
     EndpointRpcOut, RpcRequest,
 };
-use str0m::{
-    media::{Direction, Mid},
-    IceConnectionState,
+use str0m::{media::Direction, IceConnectionState};
+use transport::{
+    ConnectErrorReason, ConnectionErrorReason, LocalTrackIncomingEvent, MediaKind, TrackId, TransportError, TransportIncomingEvent as TransIn, TransportOutgoingEvent, TransportStateEvent,
 };
-use transport::{ConnectErrorReason, ConnectionErrorReason, LocalTrackIncomingEvent, MediaKind, TransportError, TransportIncomingEvent as TransIn, TransportOutgoingEvent, TransportStateEvent};
 
-use crate::transport::{
-    internal::{utils::to_transport_kind, Str0mInput},
-    mid_convert::mid_to_track,
-};
+use crate::transport::internal::{utils::to_transport_kind, Str0mInput};
 
 use super::{TransportLifeCycle, TransportLifeCycleAction as Out};
 
@@ -36,7 +32,7 @@ enum State {
 }
 
 struct LocalTrack {
-    mid: Mid,
+    track_id: TrackId,
     viewing: Option<(String, String)>,
 }
 
@@ -77,8 +73,7 @@ impl WhepTransportLifeCycle {
                     },
                 });
                 slot.viewing = Some((peer.clone(), track.clone()));
-                self.outputs
-                    .push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(mid_to_track(&slot.mid), LocalTrackIncomingEvent::Rpc(req))))
+                self.outputs.push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(slot.track_id, LocalTrackIncomingEvent::Rpc(req))))
             }
         }
     }
@@ -133,12 +128,12 @@ impl TransportLifeCycle for WhepTransportLifeCycle {
                 }
                 _ => {}
             },
-            Str0mInput::MediaAdded(direction, mid, kind, _) => {
+            Str0mInput::MediaAdded(direction, track_id, kind, _) => {
                 let kind = to_transport_kind(*kind);
                 log::info!("[WhepTransportLifeCycle] added media {kind:?} {direction}");
                 if direction.eq(&Direction::SendOnly) {
                     if !self.local_tracks.contains_key(&kind) {
-                        self.local_tracks.insert(kind, LocalTrack { mid: *mid, viewing: None });
+                        self.local_tracks.insert(kind, LocalTrack { track_id: *track_id, viewing: None });
                         //dont call self.connect_waiting_tracks(); here because is if before internal logic => will view request before LocalTrack added
                     }
                 }
@@ -170,8 +165,7 @@ impl TransportLifeCycle for WhepTransportLifeCycle {
                                     req_id: 0,
                                     data: ReceiverDisconnect { id: kind_track_name(info.kind) },
                                 });
-                                self.outputs
-                                    .push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(mid_to_track(&slot.mid), LocalTrackIncomingEvent::Rpc(req))));
+                                self.outputs.push_back(Out::ToEndpoint(TransIn::LocalTrackEvent(slot.track_id, LocalTrackIncomingEvent::Rpc(req))));
 
                                 self.connect_waiting_tracks();
                             }
@@ -191,7 +185,7 @@ impl TransportLifeCycle for WhepTransportLifeCycle {
 
 #[cfg(test)]
 mod tests {
-    use crate::transport::mid_convert::track_to_mid;
+    use crate::transport::mid_convert::generate_mid;
 
     use super::*;
     use endpoint::rpc::TrackInfo;
@@ -262,7 +256,7 @@ mod tests {
         assert_eq!(life_cycle.pop_action(), None);
 
         // on endpoint RemoteAdded rpc => should request connect
-        life_cycle.on_transport_event(100, &Str0mInput::MediaAdded(Direction::SendOnly, track_to_mid(0), str0m::media::MediaKind::Audio, None));
+        life_cycle.on_transport_event(100, &Str0mInput::MediaAdded(Direction::SendOnly, 0, str0m::media::MediaKind::Audio, None));
         assert_eq!(life_cycle.pop_action(), None);
 
         life_cycle.on_endpoint_event(
@@ -380,7 +374,7 @@ mod tests {
         );
 
         // after has local track still not switch, need to wait for next tick
-        life_cycle.on_transport_event(100, &Str0mInput::MediaAdded(Direction::SendOnly, track_to_mid(0), str0m::media::MediaKind::Audio, None));
+        life_cycle.on_transport_event(100, &Str0mInput::MediaAdded(Direction::SendOnly, 0, str0m::media::MediaKind::Audio, None));
         assert_eq!(life_cycle.pop_action(), None);
 
         life_cycle.on_tick(200);

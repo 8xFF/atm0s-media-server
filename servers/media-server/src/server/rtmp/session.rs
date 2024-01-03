@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_std::{channel::Receiver, prelude::FutureExt as _};
-use cluster::{Cluster, ClusterEndpoint, EndpointSubscribeScope};
+use cluster::{Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode};
 use endpoint::{BitrateLimiterType, MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
 use media_utils::ErrorDebugger;
@@ -24,7 +24,7 @@ pub(super) struct RtmpSession<E: ClusterEndpoint> {
 
 impl<E: ClusterEndpoint> RtmpSession<E> {
     pub async fn new<C: Cluster<E>>(room: &str, peer: &str, cluster: &mut C, transport: RtmpTransport, rx: Receiver<InternalControl>) -> Result<Self, RtmpSessionError> {
-        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, EndpointSubscribeScope::RoomManual, BitrateLimiterType::MaxBitrateOnly);
+        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, EndpointSubscribeScope::RoomManual, BitrateLimiterType::MaxBitrateOnly, MixMinusAudioMode::Disabled, 0);
         endpoint_pre.check().map_err(|_e| RtmpSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let endpoint = endpoint_pre.build(transport, room);
@@ -79,7 +79,7 @@ where
     let (rx, conn_id, old_tx) = context.create_peer(room, peer);
     log::info!("[MediaServer] on rtmp connection from {} {}", room, peer);
 
-    let mut session = match RtmpSession::new(&peer, &peer, cluster, conn, rx).await {
+    let mut session = match RtmpSession::new(&room, &peer, cluster, conn, rx).await {
         Ok(session) => session,
         Err(e) => {
             context.close_conn(&conn_id);
