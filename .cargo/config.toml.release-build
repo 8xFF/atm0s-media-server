@@ -2,4 +2,4 @@
 git-fetch-with-cli = true
 
 [patch.crates-io]
-libsoxr-sys = { git = "https://github.com/giangndm/libsoxr-sys.git", rev = "7290f89e2a8caa420885d01e8d76209d7d59108a" }
+libsoxr-sys = { git = "https://github.com/giangndm/libsoxr-sys.git", rev = "3154931420e385ef2d9d707755412f4fbfb7519a" }
