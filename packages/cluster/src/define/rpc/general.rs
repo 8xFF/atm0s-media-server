@@ -20,3 +20,10 @@ pub enum MediaSessionProtocol {
     Rtmp,
     Sip,
 }
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct NodeInfo {
+    pub node_id: u32,
+    pub address: String,
+    pub service: u8,
+}

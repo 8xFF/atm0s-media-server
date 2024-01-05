@@ -1,11 +1,11 @@
 use clap::Parser;
 use cluster::{
-    rpc::{connector::MediaEndpointLogResponse, RpcEmitter, RpcEndpoint, RpcRequest},
-    Cluster, ClusterEndpoint,
+    rpc::{connector::MediaEndpointLogResponse, RpcEmitter, RpcEndpoint, RpcRequest, general::NodeInfo},
+    Cluster, ClusterEndpoint, CONNECTOR_SERVICE,
 };
 use futures::{select, FutureExt};
 use metrics_dashboard::build_dashboard_route;
-use poem::Route;
+use poem::{Route, web::Json};
 use poem_openapi::OpenApiService;
 use protocol::media_event_logs::MediaEndpointLogRequest;
 
@@ -15,7 +15,7 @@ mod rpc;
 mod transports;
 
 use self::{
-    rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, RpcEvent, InternalControl},
+    rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, InternalControl, RpcEvent},
     transports::nats::NatsTransporter,
     transports::{parse_uri, ConnectorTransporter},
 };
@@ -39,7 +39,7 @@ pub struct ConnectorArgs {
     pub max_conn: u64,
 }
 
-pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: ConnectorArgs, ctx: MediaServerContext<InternalControl>, _cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: ConnectorArgs, ctx: MediaServerContext<InternalControl>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -69,6 +69,11 @@ where
             return Err("Unsupported transporter");
         }
     };
+    let node_info = NodeInfo {
+        node_id: cluster.node_id(),
+        address: format!("{}", cluster.node_addr()),
+        service: CONNECTOR_SERVICE,
+    };
 
     let api_service = OpenApiService::new(ConnectorHttpApis, "Connector Server", "1.0.0").server(format!("http://localhost:{}", http_port));
     let ui = api_service.swagger_ui();
@@ -78,6 +83,7 @@ where
         .nest("/", api_service)
         .nest("/dashboard/", build_dashboard_route())
         .nest("/ui/", ui)
+        .at("/node-info/", poem::endpoint::make_sync(move |_| Json(node_info.clone())))
         .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()));
 
     http_server.start(route, ctx).await;
