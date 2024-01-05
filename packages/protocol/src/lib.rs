@@ -1,11 +1,6 @@
-use std::marker::PhantomData;
-
-use prost::Message;
-
 pub mod media_event_logs {
-    use std::vec;
-
     use prost::Message;
+    use std::vec;
 
     pub type MediaEndpointLogEvent = media_endpoint_log_request::Event;
     pub type MediaSessionEvent = session_event::Event;
@@ -17,7 +12,7 @@ pub mod media_event_logs {
         }
     }
 
-    impl TryFrom<&[u8]> for MediaEndpointLogRequest{
+    impl TryFrom<&[u8]> for MediaEndpointLogRequest {
         type Error = prost::DecodeError;
 
         fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
@@ -31,5 +26,31 @@ pub mod media_event_logs {
             val.encode(&mut buf);
             buf
         }
+    }
+
+    impl From<f32> for F32p2 {
+        fn from(val: f32) -> Self {
+            Self { value: (val * 100.0) as u32 }
+        }
+    }
+
+    impl From<F32p2> for f32 {
+        fn from(value: F32p2) -> Self {
+            value.value as f32 / 100.0
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::media_event_logs::*;
+
+    #[test]
+    fn test_f32p2_conversion() {
+        let value: f32 = 3.14;
+        let f32p2_value: F32p2 = value.into();
+        let converted_value: f32 = f32p2_value.into();
+
+        assert_eq!(value, converted_value);
     }
 }
