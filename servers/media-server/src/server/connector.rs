@@ -15,7 +15,7 @@ mod rpc;
 mod transports;
 
 use self::{
-    rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, RpcEvent, InternalControl},
+    rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, InternalControl, RpcEvent},
     transports::nats::NatsTransporter,
     transports::{parse_uri, ConnectorTransporter},
 };
