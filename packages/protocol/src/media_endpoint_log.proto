@@ -1,51 +1,51 @@
-syntax = "proto3";
+syntax = "proto2";
 
 package atm0s.media_endpoint_log;
 
 // F32p2 is used to represent a floating point number with the precision of 2. 
 message F32p2 {
-  uint32 value = 1;
+  required uint32 value = 1;
 }
 
 message SessionEvent {
   message Location {
-    F32p2 lat = 1;
-    F32p2 lng = 2;
+    required F32p2 lat = 1;
+    required F32p2 lng = 2;
   }
   message SessionRouting {
-    string user_agent = 1;
-    uint32 gateway_node_id = 2;
+    required string user_agent = 1;
+    required uint32 gateway_node_id = 2;
   }
 
   message SessionRoutingError {
-    string reason = 1;
-    uint32 gateway_node_id = 2;
+    required string reason = 1;
+    required uint32 gateway_node_id = 2;
     repeated uint32 media_node_ids = 3;
   }
 
   message SessionRouted {
-    uint32 after_ms = 1;
-    uint32 media_node_id = 2;
+    required uint32 after_ms = 1;
+    required uint32 media_node_id = 2;
   }
 
   message SessionConnecting {
-    string user_agent = 1;
+    required string user_agent = 1;
     optional string remote = 2;
   }
 
   message SessionConnectError {
     optional string remote = 1;
-    string error_code = 2;
-    string error_message = 3;
+    required string error_code = 2;
+    required string error_message = 3;
   }
 
   message SessionConnected {
     optional string remote = 1;
-    uint32 after_ms = 2;
+    required uint32 after_ms = 2;
   }
 
   message SessionReconnecting {
-    string reason = 1;
+    required string reason = 1;
   }
 
   message SessionReconnected {
@@ -54,26 +54,26 @@ message SessionEvent {
 
   message SessionDisconnected {
     optional string error = 1;
-    uint64 sent_bytes = 2;
-    uint64 received_bytes = 3;
-    uint64 duration_ms = 4;
-    F32p2 rtt = 5;
+    required uint64 sent_bytes = 2;
+    required uint64 received_bytes = 3;
+    required uint64 duration_ms = 4;
+    required F32p2 rtt = 5;
   }
 
   message SessionStats {
-    uint64 received_bytes = 1;
-    uint32 receive_limit_bitrate = 2;
-    uint64 sent_bytes = 3;
-    uint32 send_est_bitrate = 4;
-    uint64 rtt = 5;
+    required uint64 received_bytes = 1;
+    required uint32 receive_limit_bitrate = 2;
+    required uint64 sent_bytes = 3;
+    required uint32 send_est_bitrate = 4;
+    required uint64 rtt = 5;
   }
 
-  string ip = 1;
+  required string ip = 1;
   optional string version = 2;
   optional Location location = 3;
-  bytes token = 4;
-  uint64 ts = 5;
-  uint64 session_uuid = 6;
+  required bytes token = 4;
+  required uint64 ts = 5;
+  required uint64 session_uuid = 6;
   oneof event {
     SessionRouting routing = 7;
     SessionRoutingError routing_error = 8;
@@ -89,10 +89,10 @@ message SessionEvent {
 }
 
 message MediaStreamIssueConnectivity {
-  F32p2 mos = 1;
-  F32p2 lost_percents = 2;
-  F32p2 jitter_ms = 3;
-  uint32 rtt_ms = 4;
+  required F32p2 mos = 1;
+  required F32p2 lost_percents = 2;
+  required F32p2 jitter_ms = 3;
+  required uint32 rtt_ms = 4;
 }
 
 enum MediaKind {
@@ -104,28 +104,28 @@ enum MediaKind {
 
 message ReceiveStreamEvent {
   message ReceivedStreamStarted {
-    string name = 1;
-    MediaKind kind = 2;
-    string remote_peer = 3;
-    string remote_stream = 4;
+    required string name = 1;
+    required MediaKind kind = 2;
+    required string remote_peer = 3;
+    required string remote_stream = 4;
   }
 
   message ReceivedStreamIssue {
-    string name = 1;
-    MediaKind kind = 2;
-    string remote_peer = 3;
-    string remote_stream = 4;
+    required string name = 1;
+    required MediaKind kind = 2;
+    required string remote_peer = 3;
+    required string remote_stream = 4;
     oneof issue {
       MediaStreamIssueConnectivity connectivity = 5;
     }
   }
 
   message ReceivedStreamStats {
-    string name = 1;
-    MediaKind kind = 2;
-    uint32 limit_bitrate = 3;
-    uint64 received_bytes = 4;
-    bool freeze = 5;
+    required string name = 1;
+    required MediaKind kind = 2;
+    required uint32 limit_bitrate = 3;
+    required uint64 received_bytes = 4;
+    required bool freeze = 5;
     optional F32p2 mos = 6;
     optional F32p2 lost = 7;
     optional F32p2 jitter = 8;
@@ -133,20 +133,20 @@ message ReceiveStreamEvent {
   }
 
   message ReceivedStreamEnded {
-    string name = 1;
-    MediaKind kind = 2;
-    uint64 sent_bytes = 3;
-    uint32 freeze_count = 4;
-    uint64 duration_ms = 5;
+    required string name = 1;
+    required MediaKind kind = 2;
+    required uint64 sent_bytes = 3;
+    required uint32 freeze_count = 4;
+    required uint64 duration_ms = 5;
     optional F32p2 mos = 6;
     optional F32p2 lost = 7;
     optional F32p2 jitter = 8;
     optional uint32 rtt = 9;
   }
 
-  bytes token = 1;
-  uint64 ts = 2;
-  uint64 session_uuid = 3;
+  required bytes token = 1;
+  required uint64 ts = 2;
+  required uint64 session_uuid = 3;
   oneof event {
     ReceivedStreamStarted started = 4;
     ReceivedStreamIssue issue = 5;
@@ -157,27 +157,27 @@ message ReceiveStreamEvent {
 
 message SendStreamEvent {
   message SendStreamStarted {
-  string name = 1;
-  MediaKind kind = 2;
-  string remote_peer = 3;
-  string remote_stream = 4;
+    required string name = 1;
+    required MediaKind kind = 2;
+    required string remote_peer = 3;
+    required string remote_stream = 4;
   }
 
   message SendStreamIssue {
-    string name = 1;
-    MediaKind kind = 2;
-    string remote_peer = 3;
-    string remote_stream = 4;
+    required string name = 1;
+    required MediaKind kind = 2;
+    required string remote_peer = 3;
+    required string remote_stream = 4;
     oneof issue {
       MediaStreamIssueConnectivity connectivity = 5;
     }
   }
 
   message SendStreamStats {
-    string name = 1;
-    MediaKind kind = 2;
-    uint64 sent_bytes = 3;
-    bool freeze = 4;
+    required string name = 1;
+    required MediaKind kind = 2;
+    required uint64 sent_bytes = 3;
+    required bool freeze = 4;
     optional F32p2 mos = 5;
     optional F32p2 lost = 6;
     optional F32p2 jitter = 7;
@@ -185,20 +185,20 @@ message SendStreamEvent {
   }
 
   message SendStreamEnded {
-    string name = 1;
-    MediaKind kind = 2;
-    uint64 received_bytes = 3;
-    uint32 freeze_count = 4;
-    uint64 duration_ms = 5;
+    required string name = 1;
+    required MediaKind kind = 2;
+    required uint64 received_bytes = 3;
+    required uint32 freeze_count = 4;
+    required uint64 duration_ms = 5;
     optional F32p2 mos = 6;
     optional F32p2 lost = 7;
     optional F32p2 jitter = 8;
     optional uint32 rtt = 9;
   }
  
-  bytes token = 1;
-  uint64 ts = 2;
-  uint64 session_uuid = 3;
+  required bytes token = 1;
+  required uint64 ts = 2;
+  required uint64 session_uuid = 3;
   oneof event {
     SendStreamStarted started = 4;
     SendStreamIssue issue = 5;

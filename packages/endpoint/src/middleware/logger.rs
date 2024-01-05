@@ -88,9 +88,9 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                         session_event::Event::Disconnected(SessionDisconnected {
                             error: None,
                             duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                            received_bytes: 0,             //TODO
-                            rtt: Some(F32p2 { value: 0 }), //TODO
-                            sent_bytes: 0,                 //TODO
+                            received_bytes: 0,       //TODO
+                            rtt: F32p2 { value: 0 }, //TODO
+                            sent_bytes: 0,           //TODO
                         }),
                     ));
                 }
@@ -119,8 +119,8 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                     session_event::Event::Disconnected(SessionDisconnected {
                         error: Some("TIMEOUT".to_string()), //TODO
                         duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                        received_bytes: 0,             //TODO
-                        rtt: Some(F32p2 { value: 0 }), //TODO
+                        received_bytes: 0,         //TODO
+                        rtt: F32p2 { value: 0 }, //TODO
                         sent_bytes: 0,
                     }),
                 ));
@@ -240,7 +240,7 @@ mod tests {
                             error: None,
                             duration_ms: 1000,
                             received_bytes: 0,
-                            rtt: Some(F32p2 { value: 0 }),
+                            rtt: F32p2 { value: 0 },
                             sent_bytes: 0,
                         })),
                     })),
