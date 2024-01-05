@@ -3,7 +3,7 @@ use std::sync::Arc;
 use cluster::{
     implement::NodeId,
     rpc::{
-        connector::{MediaEndpointEvent, MediaEndpointLogRequest, MediaEndpointLogResponse},
+        connector::MediaEndpointLogResponse,
         gateway::{NodeHealthcheckRequest, NodeHealthcheckResponse},
         RpcEmitter, RpcReqRes, RPC_MEDIA_ENDPOINT_LOG, RPC_NODE_HEALTHCHECK,
     },
@@ -12,6 +12,10 @@ use cluster::{
 use futures::FutureExt as _;
 use media_utils::{ErrorDebugger, Timer};
 use metrics::increment_counter;
+use protocol::media_event_logs::{
+    session_event::{SessionRouted, SessionRouting, SessionRoutingError},
+    MediaEndpointLogEvent, SessionEvent, MediaSessionEvent,
+};
 
 use crate::server::gateway::{GATEWAY_SESSIONS_CONNECT_COUNT, GATEWAY_SESSIONS_CONNECT_ERROR};
 
@@ -51,7 +55,7 @@ async fn select_node<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, no
 }
 
 // TODO running in queue and retry if failed. It should retry when connector service not accept
-fn emit_endpoint_event<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, timer: &Arc<dyn Timer>, session_uuid: u64, ip: &str, version: &Option<String>, event: MediaEndpointEvent) {
+fn emit_endpoint_event<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, timer: &Arc<dyn Timer>, session_uuid: u64, ip: &str, version: &Option<String>, event: MediaSessionEvent) {
     let emitter = emitter.clone();
     let ts = timer.now_ms();
     let ip = ip.to_string();
@@ -62,15 +66,15 @@ fn emit_endpoint_event<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, 
                 CONNECTOR_SERVICE,
                 None,
                 RPC_MEDIA_ENDPOINT_LOG,
-                MediaEndpointLogRequest::SessionEvent {
+                MediaEndpointLogEvent::SessionEvent(SessionEvent {
                     ip,
                     location: None,
                     version,
                     token: vec![],
                     ts,
                     session_uuid,
-                    event,
-                },
+                    event: Some(event),
+                }),
                 1000,
             )
             .await
@@ -97,10 +101,10 @@ pub fn route_to_node<EMITTER, Req, Res>(
 {
     increment_counter!(GATEWAY_SESSIONS_CONNECT_COUNT);
     let started_ms = timer.now_ms();
-    let event = MediaEndpointEvent::Routing {
+    let event = MediaSessionEvent::Routing(SessionRouting {
         user_agent: user_agent.to_string(),
         gateway_node_id,
-    };
+    });
     emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
 
     let nodes = gateway_logic.best_nodes(service, 60, 80, 3);
@@ -117,16 +121,16 @@ pub fn route_to_node<EMITTER, Req, Res>(
                 log::info!("[Gateway] webrtc connect res from media-server {:?}", res.as_ref().map(|_| ()));
                 let event = if res.is_err() {
                     increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
-                    MediaEndpointEvent::RoutingError {
+                    MediaSessionEvent::RoutingError(SessionRoutingError {
                         reason: "NODE_ANSWER_ERROR".to_string(),
                         gateway_node_id,
                         media_node_ids: vec![node_id],
-                    }
+                    })
                 } else {
-                    MediaEndpointEvent::Routed {
+                    MediaSessionEvent::Routed(SessionRouted {
                         media_node_id: node_id,
                         after_ms: (timer.now_ms() - started_ms) as u32,
-                    }
+                    })
                 };
 
                 emit_endpoint_event(&emitter, &timer, session_uuid, &ip, &version, event);
@@ -134,22 +138,23 @@ pub fn route_to_node<EMITTER, Req, Res>(
             } else {
                 log::warn!("[Gateway] webrtc connect but ping nodes {:?} timeout", nodes);
                 increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
-                let event = MediaEndpointEvent::RoutingError {
+                let event = MediaSessionEvent::RoutingError(SessionRoutingError {
                     reason: "NODE_PING_TIMEOUT".to_string(),
                     gateway_node_id,
                     media_node_ids: nodes,
-                };
+                });
                 emit_endpoint_event(&emitter, &timer, session_uuid, &ip, &version, event);
                 req.answer(Err("NODE_PING_TIMEOUT"));
             }
         });
     } else {
         increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
-        let event = MediaEndpointEvent::RoutingError {
+        let event = MediaSessionEvent::RoutingError(SessionRoutingError {
             reason: "NODE_POOL_EMPTY".to_string(),
             gateway_node_id,
             media_node_ids: vec![],
-        };
+        });
+
         emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
 
         log::warn!("[Gateway] webrtc connect but media-server pool empty");

@@ -23,7 +23,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dev-tools
-        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
+        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools protobuf-compiler
 
       - name: Install deps
         run: sudo apt-get install -y --no-install-recommends libssl-dev libopus-dev libfdk-aac-dev libsoxr-dev

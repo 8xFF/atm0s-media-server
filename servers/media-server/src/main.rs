@@ -132,8 +132,11 @@ async fn main() {
         }
         #[cfg(feature = "connector")]
         Servers::Connector(opts) => {
+            use server::MediaServerContext;
+            let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.token));
+            let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, CONNECTOR_SERVICE, config).await;
-            if let Err(e) = run_connector_server(args.http_port, opts, cluster, rpc_endpoint).await {
+            if let Err(e) = run_connector_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[ConnectorServer] error {}", e);
             }
         }
