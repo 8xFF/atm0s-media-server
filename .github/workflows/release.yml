@@ -28,6 +28,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       RUST_BACKTRACE: 1
+ 
     strategy:
       matrix:
         build:
@@ -151,6 +152,10 @@ jobs:
       - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools protobuf-compiler
+      
+      - name: Install mac dev-tools
+        if: matrix.os == 'macos-latest'
+        run: brew install protobuf
 
       - name: Patch some libs
         run: |
