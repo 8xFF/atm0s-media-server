@@ -14,7 +14,7 @@ use media_utils::{ErrorDebugger, Timer};
 use metrics::increment_counter;
 use protocol::media_event_logs::{
     session_event::{SessionRouted, SessionRouting, SessionRoutingError},
-    MediaEndpointLogEvent, SessionEvent, MediaSessionEvent,
+    MediaEndpointLogEvent, MediaSessionEvent, SessionEvent,
 };
 
 use crate::server::gateway::{GATEWAY_SESSIONS_CONNECT_COUNT, GATEWAY_SESSIONS_CONNECT_ERROR};

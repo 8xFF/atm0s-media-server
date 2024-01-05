@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use protocol::media_event_logs::{
     session_event::{self, SessionConnectError, SessionConnected, SessionConnecting, SessionDisconnected, SessionReconnected, SessionReconnecting},
-    F32p2, MediaEndpointLogEvent, MediaEndpointLogRequest, SessionEvent,
+    MediaEndpointLogEvent, MediaEndpointLogRequest, SessionEvent,
 };
 use transport::{TransportError, TransportIncomingEvent, TransportStateEvent};
 
@@ -88,9 +88,9 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                         session_event::Event::Disconnected(SessionDisconnected {
                             error: None,
                             duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                            received_bytes: 0,       //TODO
-                            rtt: F32p2 { value: 0 }, //TODO
-                            sent_bytes: 0,           //TODO
+                            received_bytes: 0, //TODO
+                            rtt: 0.0.into(),   //TODO
+                            sent_bytes: 0,     //TODO
                         }),
                     ));
                 }
@@ -119,8 +119,8 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                     session_event::Event::Disconnected(SessionDisconnected {
                         error: Some("TIMEOUT".to_string()), //TODO
                         duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                        received_bytes: 0,         //TODO
-                        rtt: F32p2 { value: 0 }, //TODO
+                        received_bytes: 0, //TODO
+                        rtt: 0.0.into(),   //TODO
                         sent_bytes: 0,
                     }),
                 ));
@@ -240,7 +240,7 @@ mod tests {
                             error: None,
                             duration_ms: 1000,
                             received_bytes: 0,
-                            rtt: F32p2 { value: 0 },
+                            rtt: 0.0.into(),
                             sent_bytes: 0,
                         })),
                     })),

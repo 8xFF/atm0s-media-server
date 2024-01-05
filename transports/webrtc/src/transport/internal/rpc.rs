@@ -1,6 +1,6 @@
 use cluster::rpc::webrtc::{WebrtcConnectRequestReceivers, WebrtcConnectRequestSender};
 use endpoint::{
-    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle, RemotePeer},
+    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, RemotePeer, RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle},
     EndpointRpcIn, EndpointRpcOut, RpcRequest, RpcResponse,
 };
 use serde::{Deserialize, Serialize};
