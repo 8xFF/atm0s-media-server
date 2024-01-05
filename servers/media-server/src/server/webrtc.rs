@@ -5,7 +5,7 @@ use clap::Parser;
 use cluster::{
     rpc::{
         gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
-        general::{MediaEndpointCloseResponse, NodeInfo},
+        general::{MediaEndpointCloseResponse, NodeInfo, ServerType},
         webrtc::{WebrtcConnectRequestSender, WebrtcConnectResponse, WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         whep::WhepConnectResponse,
         whip::WhipConnectResponse,
@@ -17,7 +17,7 @@ use endpoint::BitrateLimiterType;
 use futures::{select, FutureExt};
 use media_utils::{AutoCancelTask, ErrorDebugger, StringCompression, SystemTimer, Timer};
 use metrics_dashboard::build_dashboard_route;
-use poem::{Route, web::Json};
+use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
 use transport_webrtc::{SdkTransportLifeCycle, SdpBoxRewriteScope, WhepTransportLifeCycle, WhipTransportLifeCycle};
 
@@ -72,7 +72,7 @@ where
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
         address: format!("{}", cluster.node_addr()),
-        service: MEDIA_SERVER_SERVICE,
+        server_type: ServerType::WEBRTC,
     };
     let api_service = OpenApiService::new(WebrtcHttpApis, "Webrtc Server", "1.0.0").server("/");
     let ui = api_service.swagger_ui();

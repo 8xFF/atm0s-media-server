@@ -8,7 +8,7 @@ use clap::Parser;
 use cluster::{
     rpc::{
         gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
-        general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo},
+        general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },
     Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
@@ -78,7 +78,7 @@ where
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
         address: format!("{}", cluster.node_addr()),
-        service: MEDIA_SERVER_SERVICE,
+        server_type: ServerType::RTMP,
     };
 
     #[cfg(feature = "embed-samples")]

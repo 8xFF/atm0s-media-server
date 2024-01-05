@@ -1,11 +1,15 @@
 use clap::Parser;
 use cluster::{
-    rpc::{connector::MediaEndpointLogResponse, RpcEmitter, RpcEndpoint, RpcRequest, general::NodeInfo},
-    Cluster, ClusterEndpoint, CONNECTOR_SERVICE,
+    rpc::{
+        connector::MediaEndpointLogResponse,
+        general::{NodeInfo, ServerType},
+        RpcEmitter, RpcEndpoint, RpcRequest,
+    },
+    Cluster, ClusterEndpoint,
 };
 use futures::{select, FutureExt};
 use metrics_dashboard::build_dashboard_route;
-use poem::{Route, web::Json};
+use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
 use protocol::media_event_logs::MediaEndpointLogRequest;
 
@@ -69,10 +73,11 @@ where
             return Err("Unsupported transporter");
         }
     };
+
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
         address: format!("{}", cluster.node_addr()),
-        service: CONNECTOR_SERVICE,
+        server_type: ServerType::CONNECTOR,
     };
 
     let api_service = OpenApiService::new(ConnectorHttpApis, "Connector Server", "1.0.0").server(format!("http://localhost:{}", http_port));

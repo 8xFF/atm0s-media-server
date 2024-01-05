@@ -25,5 +25,14 @@ pub enum MediaSessionProtocol {
 pub struct NodeInfo {
     pub node_id: u32,
     pub address: String,
-    pub service: u8,
+    pub server_type: ServerType,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub enum ServerType {
+    GATEWAY,
+    CONNECTOR,
+    SIP,
+    WEBRTC,
+    RTMP,
 }

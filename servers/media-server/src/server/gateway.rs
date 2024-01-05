@@ -4,17 +4,17 @@ use async_std::stream::StreamExt;
 use clap::Parser;
 use cluster::{
     rpc::{
-        general::{MediaEndpointCloseRequest, MediaEndpointCloseResponse, NodeInfo},
+        general::{MediaEndpointCloseRequest, MediaEndpointCloseResponse, NodeInfo, ServerType},
         webrtc::{WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT,
     },
-    Cluster, ClusterEndpoint, MEDIA_SERVER_SERVICE, INNER_GATEWAY_SERVICE,
+    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{SystemTimer, Timer};
 use metrics::describe_counter;
 use metrics_dashboard::build_dashboard_route;
-use poem::{Route, web::Json};
+use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
 
 use crate::rpc::http::HttpRpcServer;
@@ -70,7 +70,7 @@ where
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
         address: format!("{}", cluster.node_addr()),
-        service: INNER_GATEWAY_SERVICE,
+        server_type: ServerType::GATEWAY,
     };
     #[cfg(feature = "embed-samples")]
     let samples = EmbeddedFilesEndpoint::<Files>::new(Some("index.html".to_string()));
