@@ -39,6 +39,7 @@ compose_transport!(UdpTcpTransport, udp: UdpTransport, tcp: TcpTransport);
 
 pub struct ServerSdn {
     node_id: NodeId,
+    node_addr: NodeAddr,
     join_handler: Option<async_std::task::JoinHandle<()>>,
     pubsub_sdk: PubsubSdk,
     kv_sdk: KeyValueSdk,
@@ -99,6 +100,7 @@ impl ServerSdn {
         (
             Self {
                 node_id,
+                node_addr: node_addr_builder.addr(),
                 pubsub_sdk,
                 kv_sdk,
                 join_handler: Some(join_handler),
@@ -112,6 +114,10 @@ impl ServerSdn {
 impl Cluster<endpoint::ClusterEndpointSdn> for ServerSdn {
     fn node_id(&self) -> u32 {
         self.node_id
+    }
+
+    fn node_addr(&self) -> NodeAddr {
+        self.node_addr.clone()
     }
 
     fn build(&mut self, room_id: &str, peer_id: &str) -> endpoint::ClusterEndpointSdn {
