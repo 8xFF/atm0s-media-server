@@ -5,19 +5,19 @@ use clap::Parser;
 use cluster::{
     rpc::{
         gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
-        general::MediaEndpointCloseResponse,
+        general::{MediaEndpointCloseResponse, NodeInfo, ServerType},
         webrtc::{WebrtcConnectRequestSender, WebrtcConnectResponse, WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         whep::WhepConnectResponse,
         whip::WhipConnectResponse,
         RpcEmitter, RpcEndpoint, RpcReqRes, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode, RemoteBitrateControlMode, VerifyObject, INNER_GATEWAY_SERVICE,
+    Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode, RemoteBitrateControlMode, VerifyObject, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
 };
 use endpoint::BitrateLimiterType;
 use futures::{select, FutureExt};
 use media_utils::{AutoCancelTask, ErrorDebugger, StringCompression, SystemTimer, Timer};
 use metrics_dashboard::build_dashboard_route;
-use poem::Route;
+use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
 use transport_webrtc::{SdkTransportLifeCycle, SdpBoxRewriteScope, WhepTransportLifeCycle, WhipTransportLifeCycle};
 
@@ -69,7 +69,11 @@ where
     let timer = SystemTimer();
     let mut rpc_endpoint = WebrtcClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
-
+    let node_info = NodeInfo {
+        node_id: cluster.node_id(),
+        address: format!("{}", cluster.node_addr()),
+        server_type: ServerType::WEBRTC,
+    };
     let api_service = OpenApiService::new(WebrtcHttpApis, "Webrtc Server", "1.0.0").server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
@@ -82,6 +86,7 @@ where
         .nest("/", api_service)
         .nest("/dashboard/", build_dashboard_route())
         .nest("/ui/", ui)
+        .at("/node-info/", poem::endpoint::make_sync(move |_| Json(node_info.clone())))
         .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()))
         .nest("/samples", samples);
 
