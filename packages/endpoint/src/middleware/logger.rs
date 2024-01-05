@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use protocol::media_event_logs::{
     session_event::{self, SessionConnectError, SessionConnected, SessionConnecting, SessionDisconnected, SessionReconnected, SessionReconnecting},
-    MediaEndpointLogEvent, MediaEndpointLogRequest, F32p2, SessionEvent,
+    F32p2, MediaEndpointLogEvent, MediaEndpointLogRequest, SessionEvent,
 };
 use transport::{TransportError, TransportIncomingEvent, TransportStateEvent};
 
@@ -23,7 +23,7 @@ impl MediaEndpointEventLogger {
 
     fn build_event(&self, now_ms: u64, event: session_event::Event) -> MediaEndpointMiddlewareOutput {
         log::info!("sending event out to connector {:?}", event);
-        let event = MediaEndpointLogRequest {
+        let event: MediaEndpointLogRequest = MediaEndpointLogRequest {
             event: Some(MediaEndpointLogEvent::SessionEvent(SessionEvent {
                 ip: "127.0.0.1".to_string(), //TODO
                 version: None,
@@ -88,9 +88,9 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                         session_event::Event::Disconnected(SessionDisconnected {
                             error: None,
                             duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                            received_bytes: 0,                              //TODO
+                            received_bytes: 0,             //TODO
                             rtt: Some(F32p2 { value: 0 }), //TODO
-                            sent_bytes: 0,                                  //TODO
+                            sent_bytes: 0,                 //TODO
                         }),
                     ));
                 }
@@ -119,7 +119,7 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
                     session_event::Event::Disconnected(SessionDisconnected {
                         error: Some("TIMEOUT".to_string()), //TODO
                         duration_ms: now_ms - self.started_ms.expect("Should has started"),
-                        received_bytes: 0,                              //TODO
+                        received_bytes: 0,             //TODO
                         rtt: Some(F32p2 { value: 0 }), //TODO
                         sent_bytes: 0,
                     }),
@@ -141,4 +141,139 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
     }
 
     fn before_drop(&mut self, _now_ms: u64) {}
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use protocol::media_event_logs::session_event::*;
+
+    #[test]
+    fn test_on_transport_connected() {
+        let mut logger = MediaEndpointEventLogger::new();
+        let event = TransportIncomingEvent::State(TransportStateEvent::Connected);
+        logger.on_start(0);
+        logger.on_transport(1000, &event);
+        assert_eq!(
+            logger.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Cluster(cluster::ClusterEndpointOutgoingEvent::MediaEndpointLog(
+                MediaEndpointLogRequest {
+                    event: Some(MediaEndpointLogEvent::SessionEvent(SessionEvent {
+                        ip: "127.0.0.1".to_string(),
+                        version: None,
+                        location: None,
+                        token: vec![],
+                        ts: 1000,
+                        session_uuid: 0,
+                        event: Some(Event::Connected(SessionConnected { after_ms: 1000, remote: None })),
+                    })),
+                }
+            )))
+        );
+    }
+
+    #[test]
+    fn test_on_transport_reconnecting() {
+        let mut logger = MediaEndpointEventLogger::new();
+        let event = TransportIncomingEvent::State(TransportStateEvent::Reconnecting);
+        logger.on_start(0);
+        logger.on_transport(1000, &event);
+        assert_eq!(
+            logger.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Cluster(cluster::ClusterEndpointOutgoingEvent::MediaEndpointLog(
+                MediaEndpointLogRequest {
+                    event: Some(MediaEndpointLogEvent::SessionEvent(SessionEvent {
+                        ip: "127.0.0.1".to_string(),
+                        version: None,
+                        location: None,
+                        token: vec![],
+                        ts: 1000,
+                        session_uuid: 0,
+                        event: Some(Event::Reconnecting(SessionReconnecting { reason: "TODO".to_string() })),
+                    })),
+                }
+            )))
+        );
+    }
+
+    #[test]
+    fn test_on_transport_reconnected() {
+        let mut logger = MediaEndpointEventLogger::new();
+        let event = TransportIncomingEvent::State(TransportStateEvent::Reconnected);
+        logger.on_start(0);
+        logger.on_transport(1000, &event);
+        assert_eq!(
+            logger.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Cluster(cluster::ClusterEndpointOutgoingEvent::MediaEndpointLog(
+                MediaEndpointLogRequest {
+                    event: Some(MediaEndpointLogEvent::SessionEvent(SessionEvent {
+                        ip: "127.0.0.1".to_string(),
+                        version: None,
+                        location: None,
+                        token: vec![],
+                        ts: 1000,
+                        session_uuid: 0,
+                        event: Some(Event::Reconnected(SessionReconnected { remote: None })),
+                    })),
+                }
+            )))
+        );
+    }
+
+    #[test]
+    fn test_on_transport_disconnected() {
+        let mut logger = MediaEndpointEventLogger::new();
+        let event = TransportIncomingEvent::State(TransportStateEvent::Disconnected);
+        logger.on_start(0);
+        logger.on_transport(1000, &event);
+        assert_eq!(
+            logger.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Cluster(cluster::ClusterEndpointOutgoingEvent::MediaEndpointLog(
+                MediaEndpointLogRequest {
+                    event: Some(MediaEndpointLogEvent::SessionEvent(SessionEvent {
+                        ip: "127.0.0.1".to_string(),
+                        version: None,
+                        location: None,
+                        token: vec![],
+                        ts: 1000,
+                        session_uuid: 0,
+                        event: Some(Event::Disconnected(SessionDisconnected {
+                            error: None,
+                            duration_ms: 1000,
+                            received_bytes: 0,
+                            rtt: Some(F32p2 { value: 0 }),
+                            sent_bytes: 0,
+                        })),
+                    })),
+                }
+            )))
+        );
+    }
+
+    #[test]
+    fn test_on_transport_error_connect_error() {
+        let mut logger = MediaEndpointEventLogger::new();
+        let error = TransportError::ConnectError(transport::ConnectErrorReason::Timeout);
+        logger.on_start(0);
+        logger.on_transport_error(1000, &error);
+        assert_eq!(
+            logger.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Cluster(cluster::ClusterEndpointOutgoingEvent::MediaEndpointLog(
+                MediaEndpointLogRequest {
+                    event: Some(MediaEndpointLogEvent::SessionEvent(SessionEvent {
+                        ip: "127.0.0.1".to_string(),
+                        version: None,
+                        location: None,
+                        token: vec![],
+                        ts: 1000,
+                        session_uuid: 0,
+                        event: Some(Event::ConnectError(SessionConnectError {
+                            remote: None,
+                            error_code: "TODO".to_string(),
+                            error_message: "TODO".to_string(),
+                        })),
+                    })),
+                }
+            )))
+        );
+    }
 }
