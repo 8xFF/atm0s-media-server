@@ -10,7 +10,7 @@ description = "Utils for atm0s-media-server"
 [dependencies]
 serde = { workspace = true }
 sorted-vec = "0.8"
-poem-openapi = { version = "3.0" }
+poem-openapi = { version = "4.0" }
 log = { workspace = true }
 async-std = { workspace = true }
 lz4_flex = { version = "0.11.1" }
