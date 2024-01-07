@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-transport-webrtc-v0.1.0...atm0s-media-server-transport-webrtc-v0.2.0) - 2024-01-07
+
+### Added
+- F32p2 conversion to from f32 ([#152](https://github.com/8xFF/atm0s-media-server/pull/152))
+- auto or manual peer info subscribe ([#135](https://github.com/8xFF/atm0s-media-server/pull/135))
+- audio mix-minus and allow subscribe multi sources ([#126](https://github.com/8xFF/atm0s-media-server/pull/126))
+- gateway and refactor media-server ([#106](https://github.com/8xFF/atm0s-media-server/pull/106))
+
+### Fixed
+- wrong track_id convert from random webrtc Mid ([#140](https://github.com/8xFF/atm0s-media-server/pull/140))
+- webrtc stream missing info if sdk stop then create new with same name ([#100](https://github.com/8xFF/atm0s-media-server/pull/100))
+- unused warn and local cluster aggregate bitrate ([#99](https://github.com/8xFF/atm0s-media-server/pull/99))
+
+### Other
+- restructure cargo workspace deps and fix [#122](https://github.com/8xFF/atm0s-media-server/pull/122) ([#125](https://github.com/8xFF/atm0s-media-server/pull/125))
+- Feat connector server ([#120](https://github.com/8xFF/atm0s-media-server/pull/120))
+- Bump udp_sas_async from 0.1.0 to 0.2.0 ([#97](https://github.com/8xFF/atm0s-media-server/pull/97))
+
 ## [0.1.0](https://github.com/8xFF/atm0s-media-server/releases/tag/atm0s-media-server-transport-webrtc-v0.1.0) - 2023-11-23
 
 ### Added
