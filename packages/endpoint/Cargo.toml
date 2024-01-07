@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-endpoint"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "Media Endpoint for atm0s-media-server"
@@ -8,10 +8,10 @@ description = "Media Endpoint for atm0s-media-server"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cluster = { package = "atm0s-media-server-cluster", path = "../cluster", version = "0.1.0" }
-transport = { package = "atm0s-media-server-transport", path = "../transport", version = "0.1.0" }
-media-utils = { package = "atm0s-media-server-utils", path = "../media-utils", version = "0.1.0" }
-protocol = { package = "atm0s-media-server-protocol", path = "../protocol", version = "0.1.0" }
+cluster = { package = "atm0s-media-server-cluster", path = "../cluster", version = "0.2.0" }
+transport = { package = "atm0s-media-server-transport", path = "../transport", version = "0.2.0" }
+media-utils = { package = "atm0s-media-server-utils", path = "../media-utils", version = "0.2.0" }
+protocol = { package = "atm0s-media-server-protocol", path = "../protocol", version = "0.1.1" }
 audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "../audio-mixer", version = "0.1.0" }
 log = { workspace = true }
 async-std = { workspace = true }

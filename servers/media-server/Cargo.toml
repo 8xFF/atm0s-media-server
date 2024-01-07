@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "Decentralized media-server with WebRTC/RTMP/Whip/Whep support"
@@ -9,13 +9,13 @@ description = "Decentralized media-server with WebRTC/RTMP/Whip/Whep support"
 
 [dependencies]
 clap = { version = "4.4.13", features = ["derive", "env"] }
-endpoint = { package = "atm0s-media-server-endpoint", path = "../../packages/endpoint", version = "0.1.0" }
-transport = { package = "atm0s-media-server-transport", path = "../../packages/transport", version = "0.1.0" }
-cluster = { package = "atm0s-media-server-cluster", path = "../../packages/cluster", version = "0.1.0" }
-protocol = { package = "atm0s-media-server-protocol", path = "../../packages/protocol", version = "0.1.0" }
-media-utils = { package = "atm0s-media-server-utils", path = "../../packages/media-utils", version = "0.1.0" }
-transport-webrtc = { package = "atm0s-media-server-transport-webrtc", path = "../../transports/webrtc", version = "0.1.0", optional = true }
-transport-rtmp = { package = "atm0s-media-server-transport-rtmp", path = "../../transports/rtmp", version = "0.1.0", optional = true }
+endpoint = { package = "atm0s-media-server-endpoint", path = "../../packages/endpoint", version = "0.2.0" }
+transport = { package = "atm0s-media-server-transport", path = "../../packages/transport", version = "0.2.0" }
+cluster = { package = "atm0s-media-server-cluster", path = "../../packages/cluster", version = "0.2.0" }
+protocol = { package = "atm0s-media-server-protocol", path = "../../packages/protocol", version = "0.1.1" }
+media-utils = { package = "atm0s-media-server-utils", path = "../../packages/media-utils", version = "0.2.0" }
+transport-webrtc = { package = "atm0s-media-server-transport-webrtc", path = "../../transports/webrtc", version = "0.2.0", optional = true }
+transport-rtmp = { package = "atm0s-media-server-transport-rtmp", path = "../../transports/rtmp", version = "0.2.0", optional = true }
 transport-sip = { package = "atm0s-media-server-transport-sip", path = "../../transports/sip", version = "0.1.0", optional = true }
 async-std = { workspace = true }
 async-trait = { workspace = true }

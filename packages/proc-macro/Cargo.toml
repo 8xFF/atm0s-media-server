@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-proc-macro"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "Proc macro for atm0s-media-server"
