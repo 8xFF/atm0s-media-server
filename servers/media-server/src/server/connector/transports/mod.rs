@@ -7,6 +7,9 @@ pub mod nats;
 pub trait ConnectorTransporter<M: Message>: Send + Sync {
     async fn send(&self, data: &M) -> Result<(), String>;
     async fn close(&mut self) -> Result<(), String>;
+    async fn connect(&mut self) -> Result<(), String>;
+    async fn try_send(&mut self, data: &M) -> Result<(), String>;
+    fn is_connected(&self) -> bool;
 }
 
 pub fn parse_uri(uri: &str) -> Result<(String, String), String> {

@@ -57,22 +57,16 @@ where
         log::error!("Error parsing MQ URI: {:?}", e);
         "Error parsing MQ URI"
     })?;
-    let transporter: Result<Box<dyn ConnectorTransporter<MediaEndpointLogRequest>>, String> = match protocol.as_str() {
-        "nats" => {
-            let nats = NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone()).await;
-            match nats {
-                Ok(nats) => Ok(Box::new(nats)),
-                Err(e) => {
-                    log::error!("Error creating Nats transporter: {:?}", e);
-                    Err("Error creating Nats transporter".to_string())
-                }
-            }
-        }
+    let mut transporter: Box<dyn ConnectorTransporter<MediaEndpointLogRequest>> = match protocol.as_str() {
+        "nats" => Box::new(NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone())),
         _ => {
             log::error!("Unsupported transporter");
-            Err("Unsupported transporter".to_string())
+            return Err("Unsupported transporter");
         }
     };
+    if let Err(e) = transporter.connect().await {
+        log::error!("Error connecting to MQ: {:?}", e);
+    }
 
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
@@ -106,13 +100,13 @@ where
         match rpc {
             RpcEvent::MediaEndpointLog(req) => {
                 log::info!("On media endpoint log {:?}", req.param());
-                if let Ok(ref transport) = transporter {
-                    let data = req.param();
 
-                    if let Err(e) = transport.send(data).await {
-                        log::error!("Error sending message: {:?}", e);
-                    }
+                let data = req.param();
+
+                if let Err(e) = transporter.try_send(data).await {
+                    log::error!("Error sending message: {:?}", e);
                 }
+
                 req.answer(Ok(MediaEndpointLogResponse {}));
             }
         }
