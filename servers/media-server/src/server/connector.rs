@@ -64,13 +64,13 @@ where
                 Ok(nats) => Ok(Box::new(nats)),
                 Err(e) => {
                     log::error!("Error creating Nats transporter: {:?}", e);
-                    return Err("Error creating Nats transporter");
+                    Err("Error creating Nats transporter".to_string())
                 }
             }
         }
         _ => {
             log::error!("Unsupported transporter");
-            return Err("Unsupported transporter");
+            Err("Unsupported transporter".to_string())
         }
     };
 
