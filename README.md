@@ -26,6 +26,8 @@
 
 A decentralized media server designed to handle media streaming at a global scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
 
+For a deep dive into the technical aspects of network architecture, please refer to our [Smart-Routing](https://github.com/8xFF/atm0s-sdn/blob/master/docs/smart_routing.md)
+
 [<img src="https://img.youtube.com/vi/QF8ZJq9xuSU/hqdefault.jpg"
 />](https://www.youtube.com/embed/QF8ZJq9xuSU)
 
