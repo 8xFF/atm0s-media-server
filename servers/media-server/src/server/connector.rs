@@ -1,3 +1,4 @@
+use async_std::channel::{bounded, unbounded};
 use clap::Parser;
 use cluster::{
     rpc::{
@@ -57,16 +58,22 @@ where
         log::error!("Error parsing MQ URI: {:?}", e);
         "Error parsing MQ URI"
     })?;
+
+    let (tx, rx) = unbounded::<MediaEndpointLogRequest>();
     let mut transporter: Box<dyn ConnectorTransporter<MediaEndpointLogRequest>> = match protocol.as_str() {
-        "nats" => Box::new(NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone())),
+        "nats" => Box::new(NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone(), rx)),
         _ => {
             log::error!("Unsupported transporter");
             return Err("Unsupported transporter");
         }
     };
-    if let Err(e) = transporter.connect().await {
-        log::error!("Error connecting to MQ: {:?}", e);
+
+    if let Err(e) = transporter.start().await {
+        log::error!("Error starting transporter: {:?}", e);
     }
+    async_std::task::spawn(async move {
+        let _ = transporter.poll().await;
+    });
 
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
@@ -103,7 +110,7 @@ where
 
                 let data = req.param();
 
-                if let Err(e) = transporter.try_send(data).await {
+                if let Err(e) = tx.try_send(data.clone()) {
                     log::error!("Error sending message: {:?}", e);
                 }
 
