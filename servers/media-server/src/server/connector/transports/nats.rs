@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, marker::PhantomData};
 
-use async_std::channel::{bounded, Receiver, Sender};
+use async_std::channel::Receiver;
 use async_trait::async_trait;
 use prost::Message;
 

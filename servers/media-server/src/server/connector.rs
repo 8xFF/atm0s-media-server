@@ -1,4 +1,4 @@
-use async_std::channel::{bounded, unbounded};
+use async_std::channel::bounded;
 use clap::Parser;
 use cluster::{
     rpc::{
@@ -59,7 +59,7 @@ where
         "Error parsing MQ URI"
     })?;
 
-    let (tx, rx) = unbounded::<MediaEndpointLogRequest>();
+    let (tx, rx) = bounded::<MediaEndpointLogRequest>(1000);
     let mut transporter: Box<dyn ConnectorTransporter<MediaEndpointLogRequest>> = match protocol.as_str() {
         "nats" => Box::new(NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone(), rx)),
         _ => {
