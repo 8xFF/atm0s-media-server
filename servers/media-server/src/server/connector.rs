@@ -1,4 +1,3 @@
-use async_std::channel::bounded;
 use clap::Parser;
 use cluster::{
     rpc::{
@@ -12,6 +11,7 @@ use futures::{select, FutureExt};
 use metrics_dashboard::build_dashboard_route;
 use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
+use prost::Message;
 use protocol::media_event_logs::MediaEndpointLogRequest;
 
 use crate::rpc::http::HttpRpcServer;
@@ -39,6 +39,10 @@ pub struct ConnectorArgs {
     #[arg(env, long, default_value = "atm0s/event_log")]
     mq_channel: String,
 
+    /// Filebase backup path for logs
+    #[arg(env, long, default_value = ".atm0s/data/connector-queue")]
+    backup_path: String,
+
     /// Max conn
     #[arg(env, long, default_value_t = 100)]
     pub max_conn: u64,
@@ -59,20 +63,33 @@ where
         "Error parsing MQ URI"
     })?;
 
-    let (tx, rx) = bounded::<MediaEndpointLogRequest>(1000);
+    if let Err(err) = yaque::recovery::recover(_opts.backup_path.clone()) {
+        log::warn!("Error trying to recover queue: {:?}", err);
+    }
+    let (mut tx, rx) = yaque::channel(_opts.backup_path.clone()).map_err(|e| {
+        log::error!("Error creating queue: {:?}", e);
+        "Error creating queue"
+    })?;
     let mut transporter: Box<dyn ConnectorTransporter<MediaEndpointLogRequest>> = match protocol.as_str() {
-        "nats" => Box::new(NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone(), rx)),
+        "nats" => {
+            let nats = NatsTransporter::<MediaEndpointLogRequest>::new(_opts.mq_uri.clone(), _opts.mq_channel.clone(), rx)
+                .await
+                .expect("Nats should be connected");
+            Box::new(nats)
+        }
         _ => {
             log::error!("Unsupported transporter");
             return Err("Unsupported transporter");
         }
     };
 
-    if let Err(e) = transporter.start().await {
-        log::error!("Error starting transporter: {:?}", e);
-    }
     async_std::task::spawn(async move {
-        let _ = transporter.poll().await;
+        loop {
+            if let Err(e) = transporter.poll().await {
+                log::error!("msg queue transport error {:?}", e);
+                panic!("msg queue transport error, should restart");
+            }
+        }
     });
 
     let node_info = NodeInfo {
@@ -110,7 +127,7 @@ where
 
                 let data = req.param();
 
-                if let Err(e) = tx.try_send(data.clone()) {
+                if let Err(e) = tx.try_send(data.encode_to_vec()) {
                     log::error!("Error sending message: {:?}", e);
                 }
 

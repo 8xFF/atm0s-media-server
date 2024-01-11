@@ -33,6 +33,7 @@ metrics-dashboard = { version = "0.1.3", features = ["system"] }
 metrics = "0.21.1"
 nats = { version = "0.24.1", optional = true }
 prost = { workspace = true, optional = true }
+yaque = { version = "0.6.5", optional = true }
 
 [features]
 default = ["embed-samples", "gateway", "webrtc", "rtmp", "sip", "connector", "token_generate"]
@@ -41,5 +42,5 @@ webrtc = ["transport-webrtc"]
 rtmp = ["transport-rtmp"]
 sip = ["rsip", "transport-sip"]
 gateway = []
-connector = ["nats", "prost"]
+connector = ["nats", "prost", "yaque"]
 token_generate = []

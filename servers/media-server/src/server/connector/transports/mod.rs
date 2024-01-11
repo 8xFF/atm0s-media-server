@@ -1,19 +1,25 @@
+use std::io;
+
 use async_trait::async_trait;
 use prost::Message;
 
 pub mod nats;
 
-#[async_trait]
-pub trait ConnectorTransporter<M: Message>: Send + Sync {
-    async fn close(&mut self) -> Result<(), String>;
-    async fn start(&mut self) -> Result<(), String>;
-    async fn poll(&mut self) -> Result<(), String>;
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParseURIError {
+    InvalidURI,
 }
 
-pub fn parse_uri(uri: &str) -> Result<(String, String), String> {
+#[async_trait]
+pub trait ConnectorTransporter<M: Message>: Send + Sync {
+    async fn close(&mut self) -> Result<(), io::Error>;
+    async fn poll(&mut self) -> Result<(), io::Error>;
+}
+
+pub fn parse_uri(uri: &str) -> Result<(String, String), ParseURIError> {
     let mut parts = uri.splitn(2, "://");
-    let transport = parts.next().ok_or("Invalid URI")?;
-    let uri = parts.next().ok_or("Invalid URI")?;
+    let transport = parts.next().ok_or(ParseURIError::InvalidURI)?;
+    let uri = parts.next().ok_or(ParseURIError::InvalidURI)?;
     Ok((transport.to_string(), uri.to_string()))
 }
 
