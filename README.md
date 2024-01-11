@@ -198,6 +198,10 @@ The project is continuously being improved and updated. We are always looking fo
 
 For more information, you can join our [Discord channel](https://discord.gg/tJ6dxBRk)
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=8xFF/atm0s-media-server&type=Date)](https://star-history.com/#8xFF/atm0s-media-server&Date)
+
 
 ## Roadmap
 The first version will be released together with [our SDN](https://github.com/8xFF/decentralized-sdn) at the end of 2023.
