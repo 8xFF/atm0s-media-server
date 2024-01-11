@@ -21,7 +21,7 @@ pub enum SipServerSocketError {
 
 pub enum SipServerSocketMessage {
     Continue,
-    RegisterValidate(GroupId, String),
+    RegisterValidate(GroupId, String, String),
     InCall(VirtualSocket<GroupId, SipMessage>, SipRequest),
 }
 
@@ -52,7 +52,7 @@ impl SipServerSocket {
     }
 
     pub fn create_call(&mut self, call_id: &str, dest: SocketAddr) -> Result<VirtualSocket<GroupId, SipMessage>, SipServerSocketError> {
-        let group_id: GroupId = (dest, call_id.to_string().into());
+        let group_id = GroupId(dest, call_id.to_string().into());
         self.sip_core.open_out_call(&group_id);
         Ok(self.virtual_socket_plane.new_socket(group_id))
     }
@@ -60,8 +60,8 @@ impl SipServerSocket {
     pub async fn recv(&mut self) -> Result<SipServerSocketMessage, SipServerSocketError> {
         while let Some(output) = self.sip_core.pop_action() {
             match output {
-                SipServerEvent::OnRegisterValidate(group, username) => {
-                    return Ok(SipServerSocketMessage::RegisterValidate(group, username));
+                SipServerEvent::OnRegisterValidate(group, username, hashed_password) => {
+                    return Ok(SipServerSocketMessage::RegisterValidate(group, username, hashed_password));
                 }
                 SipServerEvent::OnInCallStarted(group_id, req) => {
                     log::info!("InCall started {:?}", group_id);

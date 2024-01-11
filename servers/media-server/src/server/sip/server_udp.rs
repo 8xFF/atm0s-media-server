@@ -15,7 +15,9 @@ use rsip::{
 use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
 use transport_sip::{SipServerSocket, SipServerSocketError, SipServerSocketMessage, SipTransportIn, SipTransportOut};
 
-use super::{sip_in_session::SipInSession, sip_out_session::SipOutSession};
+use crate::server::MediaServerContext;
+
+use super::{sip_in_session::SipInSession, sip_out_session::SipOutSession, InternalControl};
 
 type RmIn = EndpointRpcIn;
 type RrIn = RemoteTrackRpcIn;
@@ -59,7 +61,7 @@ enum SipTransport {
     Out(SipTransportOut),
 }
 
-pub async fn start_server<C, CR>(mut cluster: C, sip_addr: SocketAddr)
+pub async fn start_server<C, CR>(mut cluster: C, ctx: MediaServerContext<InternalControl>, sip_addr: SocketAddr)
 where
     C: Cluster<CR> + 'static,
     CR: ClusterEndpoint + 'static,
@@ -110,8 +112,7 @@ where
     loop {
         match sip_server.recv().await {
             Ok(event) => match event {
-                SipServerSocketMessage::RegisterValidate(session, username) => {
-                    //TODO hook this to some kind of auth
+                SipServerSocketMessage::RegisterValidate(session, username, hashed_password) => {
                     users.insert(username, session.0);
                     sip_server.accept_register(session, true);
                 }

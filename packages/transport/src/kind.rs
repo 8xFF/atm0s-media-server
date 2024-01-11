@@ -1,6 +1,7 @@
+use poem_openapi::Enum;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Hash, Enum)]
 pub enum MediaKind {
     #[serde(rename = "audio")]
     Audio,

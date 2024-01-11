@@ -108,7 +108,7 @@ where
     }
 
     pub fn map_remote_stream(&mut self, sender: WebrtcConnectRequestSender) {
-        self.track_info_queue.add(&sender.uuid, &sender.label, &sender.kind, &sender.name);
+        self.track_info_queue.add(&sender.uuid, &sender.label, sender.kind, &sender.name);
     }
 
     fn send_msg(&mut self, msg: String) {
@@ -419,7 +419,7 @@ mod test {
         assert_eq!(internal.str0m_action(), None);
 
         internal.map_remote_stream(WebrtcConnectRequestSender {
-            kind: "audio".to_string(),
+            kind: transport::MediaKind::Audio,
             name: "audio_main".to_string(),
             uuid: "track_id".to_string(),
             label: "label".to_string(),
@@ -513,16 +513,7 @@ mod test {
         let mut internal = WebrtcTransportInternal::new(SdkTransportLifeCycle::new(0));
 
         internal
-            .on_endpoint_event(
-                10,
-                transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
-                    peer_hash: 1,
-                    peer: "test".to_string(),
-                    kind: transport::MediaKind::Audio,
-                    state: None,
-                    track: "track".to_string(),
-                })),
-            )
+            .on_endpoint_event(10, transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo::new_audio("test", "track", None))))
             .unwrap();
         assert_eq!(internal.str0m_action(), None);
 
@@ -538,7 +529,7 @@ mod test {
             internal.str0m_action(),
             Some(crate::transport::Str0mAction::Datachannel(
                 0,
-                "{\"data\":{\"kind\":\"audio\",\"peer\":\"test\",\"peer_hash\":1,\"state\":null,\"stream\":\"track\"},\"event\":\"stream_added\",\"type\":\"event\"}".to_string()
+                "{\"data\":{\"kind\":\"audio\",\"peer\":\"test\",\"peer_hash\":854508108,\"state\":null,\"stream\":\"track\"},\"event\":\"stream_added\",\"type\":\"event\"}".to_string()
             ))
         );
     }
@@ -548,7 +539,7 @@ mod test {
         let mut internal = create_connected_internal();
 
         internal.map_remote_stream(WebrtcConnectRequestSender {
-            kind: "audio".to_string(),
+            kind: transport::MediaKind::Audio,
             name: "audio_main".to_string(),
             uuid: "track_id".to_string(),
             label: "label".to_string(),

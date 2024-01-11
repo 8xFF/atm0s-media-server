@@ -185,8 +185,6 @@ impl TransportLifeCycle for WhepTransportLifeCycle {
 
 #[cfg(test)]
 mod tests {
-    use crate::transport::mid_convert::generate_mid;
-
     use super::*;
     use endpoint::rpc::TrackInfo;
     use str0m::IceConnectionState;
@@ -259,27 +257,9 @@ mod tests {
         life_cycle.on_transport_event(100, &Str0mInput::MediaAdded(Direction::SendOnly, 0, str0m::media::MediaKind::Audio, None));
         assert_eq!(life_cycle.pop_action(), None);
 
-        life_cycle.on_endpoint_event(
-            1000,
-            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
-                kind: MediaKind::Audio,
-                peer: "peer1".to_string(),
-                peer_hash: 0,
-                track: "track_audio".to_string(),
-                state: None,
-            })),
-        );
+        life_cycle.on_endpoint_event(1000, &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo::new_audio("peer1", "track_audio", None))));
 
-        life_cycle.on_endpoint_event(
-            1000,
-            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
-                kind: MediaKind::Audio,
-                peer: "peer2".to_string(),
-                peer_hash: 0,
-                track: "track_audio".to_string(),
-                state: None,
-            })),
-        );
+        life_cycle.on_endpoint_event(1000, &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo::new_audio("peer2", "track_audio", None))));
 
         let event = TransIn::LocalTrackEvent(
             0,
@@ -299,16 +279,7 @@ mod tests {
         assert_eq!(life_cycle.pop_action(), None);
 
         // on endpoint RemoteRemoved => should request disconnected
-        life_cycle.on_endpoint_event(
-            1000,
-            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
-                kind: MediaKind::Audio,
-                peer: "peer1".to_string(),
-                peer_hash: 0,
-                track: "track_audio".to_string(),
-                state: None,
-            })),
-        );
+        life_cycle.on_endpoint_event(1000, &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo::new_audio("peer1", "track_audio", None))));
 
         let event = TransIn::LocalTrackEvent(
             0,
@@ -351,27 +322,9 @@ mod tests {
         assert_eq!(life_cycle.pop_action(), None);
 
         // on endpoint RemoteAdded rpc but dont have local track => should not request switch
-        life_cycle.on_endpoint_event(
-            1000,
-            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
-                kind: MediaKind::Audio,
-                peer: "peer1".to_string(),
-                peer_hash: 0,
-                track: "track_audio".to_string(),
-                state: None,
-            })),
-        );
+        life_cycle.on_endpoint_event(1000, &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo::new_audio("peer1", "track_audio", None))));
 
-        life_cycle.on_endpoint_event(
-            1000,
-            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
-                kind: MediaKind::Audio,
-                peer: "peer2".to_string(),
-                peer_hash: 0,
-                track: "track_audio".to_string(),
-                state: None,
-            })),
-        );
+        life_cycle.on_endpoint_event(1000, &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo::new_audio("peer2", "track_audio", None))));
 
         // after has local track still not switch, need to wait for next tick
         life_cycle.on_transport_event(100, &Str0mInput::MediaAdded(Direction::SendOnly, 0, str0m::media::MediaKind::Audio, None));
@@ -396,16 +349,7 @@ mod tests {
         assert_eq!(life_cycle.pop_action(), None);
 
         // on endpoint RemoteRemoved => should request disconnected
-        life_cycle.on_endpoint_event(
-            1000,
-            &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo {
-                kind: MediaKind::Audio,
-                peer: "peer1".to_string(),
-                peer_hash: 0,
-                track: "track_audio".to_string(),
-                state: None,
-            })),
-        );
+        life_cycle.on_endpoint_event(1000, &TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackRemoved(TrackInfo::new_audio("peer1", "track_audio", None))));
 
         let event = TransIn::LocalTrackEvent(
             0,

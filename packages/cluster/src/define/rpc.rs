@@ -3,6 +3,7 @@ use std::fmt::Debug;
 pub mod connector;
 pub mod gateway;
 pub mod general;
+pub mod sip;
 pub mod webrtc;
 pub mod whep;
 pub mod whip;

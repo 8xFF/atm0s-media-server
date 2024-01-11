@@ -224,7 +224,7 @@ impl WebrtcHttpApis {
         let token_success = match data.1.verifier().verify_media_session(&body.0.token) {
             None => false,
             Some(s_token) => {
-                s_token.room.eq(&body.0.room)
+                s_token.room.eq(&Some(body.0.room.clone()))
                     && s_token.protocol.eq(&cluster::rpc::general::MediaSessionProtocol::Webrtc)
                     && if let Some(peer) = &s_token.peer {
                         peer.eq(&body.0.peer)

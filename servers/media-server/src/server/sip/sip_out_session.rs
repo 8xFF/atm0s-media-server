@@ -1,6 +1,6 @@
-use cluster::{Cluster, ClusterEndpoint};
-use cluster::{EndpointSubscribeScope, MixMinusAudioMode};
-use endpoint::{BitrateLimiterType, MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
+use cluster::rpc::general::MediaSessionProtocol;
+use cluster::{BitrateControlMode, Cluster, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode};
+use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use transport_sip::SipTransportOut;
 
 #[derive(Debug)]
@@ -17,8 +17,10 @@ impl<E: ClusterEndpoint> SipOutSession<E> {
         let mut endpoint_pre = MediaEndpointPreconditional::new(
             room,
             peer,
-            EndpointSubscribeScope::RoomManual,
-            BitrateLimiterType::DynamicWithConsumers,
+            MediaSessionProtocol::Sip,
+            ClusterEndpointPublishScope::Full,
+            ClusterEndpointSubscribeScope::Full,
+            BitrateControlMode::DynamicWithConsumers,
             MixMinusAudioMode::AllAudioStreams,
             1,
         );

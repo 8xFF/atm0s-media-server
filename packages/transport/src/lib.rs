@@ -64,6 +64,8 @@ pub struct TransportStats {
 #[derive(PartialEq, Eq, Debug)]
 pub enum ConnectErrorReason {
     Timeout,
+    ///This is used with SIP transport if the SIP server return 4xx or 5xx
+    Rejected,
 }
 
 #[derive(PartialEq, Eq, Debug)]

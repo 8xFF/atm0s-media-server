@@ -10,7 +10,7 @@ pub const REALM: &str = "sip.media-server.8xff.io";
 pub const NONCE: &str = "ea9c8e88df84f1cec4341ae6cbe5a359";
 
 pub enum RegisterProcessorAction {
-    Validate(String),
+    Validate(String, String),
 }
 
 pub struct RegisterProcessor {
@@ -52,7 +52,7 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
     fn start(&mut self, _now_ms: u64) -> Result<(), super::ProcessorError> {
         if let Some(authorization) = self.init_req.header_authorization() {
             if let Ok(auth) = authorization.clone().into_typed() {
-                self.actions.push_back(ProcessorAction::LogicOutput(RegisterProcessorAction::Validate(auth.username)));
+                self.actions.push_back(ProcessorAction::LogicOutput(RegisterProcessorAction::Validate(auth.username, auth.response)));
                 Ok(())
             } else {
                 let mut res = self.init_req.build_response(StatusCode::Unauthorized, None);

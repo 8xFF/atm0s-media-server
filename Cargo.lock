@@ -494,6 +494,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "atm0s-media-server-utils",
+ "poem-openapi",
  "serde",
 ]
 

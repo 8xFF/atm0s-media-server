@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_std::stream::StreamExt;
-use cluster::{ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode};
+use cluster::{rpc::general::MediaSessionProtocol, BitrateControlMode, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode};
 use futures::{select, FutureExt};
 use media_utils::Timer;
 use transport::{Transport, TransportError};
@@ -16,7 +16,6 @@ use crate::{
 use self::internal::MediaEndpointInternal;
 
 mod internal;
-pub use internal::BitrateLimiterType;
 
 const DEFAULT_MIX_MINUS_NAME: &str = "default";
 const DEFAULT_MIX_MINUS_VIRTUAL_TRACK_ID: u16 = 200;
@@ -49,8 +48,10 @@ where
         cluster: C,
         room: &str,
         peer: &str,
-        sub_scope: EndpointSubscribeScope,
-        bitrate_type: BitrateLimiterType,
+        protocol: MediaSessionProtocol,
+        sub_scope: ClusterEndpointSubscribeScope,
+        pub_scope: ClusterEndpointPublishScope,
+        bitrate_mode: BitrateControlMode,
         mix_minus_mode: MixMinusAudioMode,
         mix_minus_size: usize,
     ) -> Self {
@@ -66,7 +67,7 @@ where
                 mix_minus_size,
             )),
         ];
-        let mut internal = MediaEndpointInternal::new(room, peer, sub_scope, bitrate_type, middlewares);
+        let mut internal = MediaEndpointInternal::new(room, peer, protocol, sub_scope, pub_scope, bitrate_mode, middlewares);
         internal.on_start(timer.now_ms());
 
         Self {

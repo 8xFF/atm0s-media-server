@@ -1,4 +1,4 @@
-use cluster::ClusterTrackMeta;
+use cluster::{ClusterEndpointMeta, ClusterTrackMeta};
 use media_utils::hash_str;
 use serde::{Deserialize, Serialize};
 use transport::MediaKind;
@@ -103,8 +103,25 @@ pub struct ReceiverDisconnect {
 }
 
 #[derive(Serialize, Debug, PartialEq, Eq)]
+pub struct PeerInfo {
+    peer_hash: u32,
+    pub peer: String,
+    pub state: Option<ClusterEndpointMeta>,
+}
+
+impl PeerInfo {
+    pub fn new(peer: &str, state: Option<ClusterEndpointMeta>) -> Self {
+        Self {
+            peer_hash: hash_str(peer) as u32,
+            peer: peer.to_string(),
+            state,
+        }
+    }
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
 pub struct TrackInfo {
-    pub peer_hash: u32,
+    peer_hash: u32,
     pub peer: String,
     pub kind: MediaKind,
     #[serde(rename = "stream")]
@@ -113,14 +130,22 @@ pub struct TrackInfo {
 }
 
 impl TrackInfo {
-    pub fn new_audio(peer: &str, track: &str, state: Option<ClusterTrackMeta>) -> Self {
+    pub fn new(peer: &str, track: &str, kind: MediaKind, state: Option<ClusterTrackMeta>) -> Self {
         Self {
             peer_hash: hash_str(peer) as u32,
             peer: peer.to_string(),
-            kind: MediaKind::Audio,
+            kind,
             track: track.to_string(),
             state,
         }
+    }
+
+    pub fn new_audio(peer: &str, track: &str, state: Option<ClusterTrackMeta>) -> Self {
+        Self::new(peer, track, MediaKind::Audio, state)
+    }
+
+    pub fn new_video(peer: &str, track: &str, state: Option<ClusterTrackMeta>) -> Self {
+        Self::new(peer, track, MediaKind::Video, state)
     }
 }
 
@@ -151,6 +176,9 @@ pub enum EndpointRpcOut {
     MixMinusSourceAddRes(RpcResponse<bool>),
     MixMinusSourceRemoveRes(RpcResponse<bool>),
     MixMinusToggleRes(RpcResponse<bool>),
+    PeerAdded(PeerInfo),
+    PeerUpdated(PeerInfo),
+    PeerRemoved(PeerInfo),
     TrackAdded(TrackInfo),
     TrackUpdated(TrackInfo),
     TrackRemoved(TrackInfo),

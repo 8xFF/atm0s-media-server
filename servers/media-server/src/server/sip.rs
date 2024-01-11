@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 
 use super::MediaServerContext;
 
+mod hooks;
 mod server_udp;
 mod sip_in_session;
 mod sip_out_session;
@@ -34,6 +35,6 @@ where
     REQ: RpcRequest + Send + 'static,
     EMITTER: RpcEmitter + Send + 'static,
 {
-    server_udp::start_server(cluster, opts.addr).await;
+    server_udp::start_server(cluster, ctx, opts.addr).await;
     Ok(())
 }

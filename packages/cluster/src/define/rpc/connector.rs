@@ -26,6 +26,9 @@ pub enum MediaEndpointEvent {
         media_node_id: NodeId,
         after_ms: u32,
     },
+    Ringing {
+        remote: Option<SocketAddr>,
+    },
     Connecting {
         user_agent: String,
         remote: Option<SocketAddr>,

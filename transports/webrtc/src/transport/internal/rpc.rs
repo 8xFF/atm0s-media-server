@@ -1,6 +1,6 @@
 use cluster::rpc::webrtc::{WebrtcConnectRequestReceivers, WebrtcConnectRequestSender};
 use endpoint::{
-    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle, RemotePeer},
+    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, MixMinusToggle, ReceiverDisconnect, ReceiverLimit, ReceiverSwitch, RemotePeer, RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle},
     EndpointRpcIn, EndpointRpcOut, RpcRequest, RpcResponse,
 };
 use serde::{Deserialize, Serialize};
@@ -33,6 +33,9 @@ pub enum RpcError {
 
 pub fn rpc_to_string(rpc: EndpointRpcOut) -> String {
     match rpc {
+        EndpointRpcOut::PeerAdded(peer) => event_to_json("peer_added", peer),
+        EndpointRpcOut::PeerUpdated(peer) => event_to_json("peer_updated", peer),
+        EndpointRpcOut::PeerRemoved(peer) => event_to_json("peer_removed", peer),
         EndpointRpcOut::MixMinusSourceAddRes(res) => serde_json::to_string(&res).expect("should serialize json"),
         EndpointRpcOut::MixMinusSourceRemoveRes(res) => serde_json::to_string(&res).expect("should serialize json"),
         EndpointRpcOut::MixMinusToggleRes(res) => serde_json::to_string(&res).expect("should serialize json"),

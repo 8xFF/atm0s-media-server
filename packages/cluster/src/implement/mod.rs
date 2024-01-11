@@ -40,8 +40,8 @@ mod tests {
         let mut peer1 = server.build("room1", "peer1");
         let mut peer2 = server.build("room1", "peer2");
 
-        peer1.on_event(ClusterEndpointOutgoingEvent::SubscribeRoom).expect("");
-        peer2.on_event(ClusterEndpointOutgoingEvent::SubscribeRoom).expect("");
+        peer1.on_event(ClusterEndpointOutgoingEvent::SubscribeRoomStreams).expect("");
+        peer2.on_event(ClusterEndpointOutgoingEvent::SubscribeRoomStreams).expect("");
 
         // add track to peer2 then should fire event to both peer1 and peer2
         let peer2_cluster_track_uuid = ClusterTrackUuid::from_info("room1", "peer2", "audio_main");
@@ -96,8 +96,8 @@ mod tests {
         assert_eq!(event1, event2);
         assert_eq!(event1, ClusterEndpointIncomingEvent::PeerTrackRemoved("peer2".to_string(), "audio_main".to_string()));
 
-        peer1.on_event(ClusterEndpointOutgoingEvent::UnsubscribeRoom).expect("");
-        peer2.on_event(ClusterEndpointOutgoingEvent::UnsubscribeRoom).expect("");
+        peer1.on_event(ClusterEndpointOutgoingEvent::UnsubscribeRoomStreams).expect("");
+        peer2.on_event(ClusterEndpointOutgoingEvent::UnsubscribeRoomStreams).expect("");
     }
 
     #[async_std::test]
@@ -116,8 +116,8 @@ mod tests {
         let mut peer1 = server.build("room1", "peer1");
         let mut peer2 = server.build("room1", "peer2");
 
-        peer1.on_event(ClusterEndpointOutgoingEvent::SubscribePeer("peer2".to_string())).expect("");
-        peer2.on_event(ClusterEndpointOutgoingEvent::SubscribePeer("peer1".to_string())).expect("");
+        peer1.on_event(ClusterEndpointOutgoingEvent::SubscribeSinglePeer("peer2".to_string())).expect("");
+        peer2.on_event(ClusterEndpointOutgoingEvent::SubscribeSinglePeer("peer1".to_string())).expect("");
 
         // add track to peer2 then should fire event to only peer1
         let peer2_cluster_track_uuid = ClusterTrackUuid::from_info("room1", "peer2", "audio_main");
@@ -172,8 +172,8 @@ mod tests {
         assert_eq!(event1, Ok(Ok(ClusterEndpointIncomingEvent::PeerTrackRemoved("peer2".to_string(), "audio_main".to_string()))));
         assert!(event2.is_err());
 
-        peer1.on_event(ClusterEndpointOutgoingEvent::UnsubscribePeer("peer2".to_string())).expect("");
-        peer2.on_event(ClusterEndpointOutgoingEvent::UnsubscribePeer("peer1".to_string())).expect("");
+        peer1.on_event(ClusterEndpointOutgoingEvent::UnsubscribeSinglePeer("peer2".to_string())).expect("");
+        peer2.on_event(ClusterEndpointOutgoingEvent::UnsubscribeSinglePeer("peer1".to_string())).expect("");
     }
 
     #[async_std::test]

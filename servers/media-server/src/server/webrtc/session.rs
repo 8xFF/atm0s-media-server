@@ -1,6 +1,9 @@
 use async_std::{channel::Receiver, prelude::FutureExt as _};
-use cluster::{rpc::webrtc::WebrtcConnectRequestSender, Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode};
-use endpoint::{BitrateLimiterType, MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
+use cluster::{
+    rpc::{general::MediaSessionProtocol, webrtc::WebrtcConnectRequestSender},
+    BitrateControlMode, Cluster, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode,
+};
+use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
 use media_utils::{ErrorDebugger, ServerError};
 use std::time::Duration;
@@ -26,8 +29,10 @@ impl<E: ClusterEndpoint, L: TransportLifeCycle> WebrtcSession<E, L> {
     pub async fn new<C: Cluster<E>>(
         room: &str,
         peer: &str,
-        sub_scope: EndpointSubscribeScope,
-        bitrate_type: BitrateLimiterType,
+        protocol: MediaSessionProtocol,
+        pub_scope: ClusterEndpointPublishScope,
+        sub_scope: ClusterEndpointSubscribeScope,
+        bitrate_mode: BitrateControlMode,
         life_cycle: L,
         cluster: &mut C,
         sdp: &str,
@@ -37,7 +42,7 @@ impl<E: ClusterEndpoint, L: TransportLifeCycle> WebrtcSession<E, L> {
         mix_minus_mode: MixMinusAudioMode,
         mix_minus_size: usize,
     ) -> Result<(Self, String), WebrtcSessionError> {
-        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, sub_scope, bitrate_type, mix_minus_mode, mix_minus_size);
+        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, protocol, pub_scope, sub_scope, bitrate_mode, mix_minus_mode, mix_minus_size);
         endpoint_pre.check().map_err(|_e| WebrtcSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let mut transport = WebrtcTransport::new(life_cycle, sdp_rewrite).await.map_err(|_| WebrtcSessionError::NetworkError)?;
@@ -101,8 +106,10 @@ pub(crate) async fn run_webrtc_endpoint<C, CE, L>(
     context: MediaServerContext<InternalControl>,
     cluster: &mut C,
     life_cycle: L,
-    sub_scope: EndpointSubscribeScope,
-    bitrate_type: BitrateLimiterType,
+    protocol: MediaSessionProtocol,
+    pub_scope: ClusterEndpointPublishScope,
+    sub_scope: ClusterEndpointSubscribeScope,
+    bitrate_mode: BitrateControlMode,
     room: &str,
     peer: &str,
     offer_sdp: &str,
@@ -118,7 +125,7 @@ where
 {
     let (rx, conn_id, old_tx) = context.create_peer(room, peer);
     let (mut session, answer_sdp) = match WebrtcSession::new(
-        room, peer, sub_scope, bitrate_type, life_cycle, cluster, offer_sdp, senders, sdp_rewrite, rx, mix_minus_mode, mix_minus_size,
+        room, peer, protocol, pub_scope, sub_scope, bitrate_mode, life_cycle, cluster, offer_sdp, senders, sdp_rewrite, rx, mix_minus_mode, mix_minus_size,
     )
     .await
     {
