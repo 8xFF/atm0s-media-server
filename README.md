@@ -24,7 +24,7 @@
 
 # Decentralized Ultra-Low Latency Streaming Server
 
-A decentralized media server designed to handle media streaming at a global scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
+A decentralized media server designed to handle media streaming on a global scale, making it suitable for large-scale applications but with minimal cost. It is designed with [SAN-I/O](https://sans-io.readthedocs.io/) in mind.
 
 For a deep dive into the technical aspects of network architecture, please refer to our [Smart-Routing](https://github.com/8xFF/atm0s-sdn/blob/master/docs/smart_routing.md)
 
@@ -92,23 +92,23 @@ RTMP: `eyJhbGciOiJIUzI1NiJ9.eyJyb29tIjoiZGVtbyIsInBlZXIiOiJydG1wIiwicHJvdG9jb2wi
 
 SDK: `eyJhbGciOiJIUzI1NiJ9.eyJyb29tIjoiZGVtbyIsInBlZXIiOm51bGwsInByb3RvY29sIjoiV2VicnRjIiwicHVibGlzaCI6dHJ1ZSwic3Vic2NyaWJlIjp0cnVlLCJ0cyI6MTcwMzc1MjM1NTI2NH0.llwwbSwVTsyFgL_jYCdoPNVdOiC2jbtNb4uxxE-PU7A`
 
-Or create with token-generate api
+Or create with token-generated api
 
 ```
 atm0s-media-server --http-port 3100 token-generate
 ```
 
-After that access http://localhost:3100/ui/ to create token by your self, deault cluster token is `insecure`
+After that, you can access http://localhost:3100/ui/ to create a token by yourself. The default cluster token is `insecure`
 
 ### Start a webrtc node only
 
-For simple testing, we can start single node which support Webrtc for testing with Whip and Whep
+For simple testing, we can start a single node which supports Webrtc for testing with Whip and Whep
 
 ```
 atm0s-media-server --http-port 3200 webrtc
 ```
 
-After that we can access `http://localhost:3000/samples` to see all embeded samples
+After that, we can access `http://localhost:3000/samples` to see all embedded samples
 
 ### Start entire cluster
 
@@ -153,7 +153,7 @@ Third media-server: http://localhost:3003/samples/
 
 ![Demo Screen](./docs/imgs/demo-screen.jpg)
 
-Each node also expose a metric dashboard here:
+Each node also exposes a metric dashboard here:
 
 - Gateway: http://localhost:3000/dashboard/
 - Media1: http://localhost:3001/dashboard/
@@ -194,10 +194,9 @@ WIP
 TODO: Diagram
 
 ## Contributing
-The project is continuously being improved and updated. We are always looking for ways to make it better, whether that's through optimizing performance, adding new features, or fixing bugs. We welcome contributions from the community and are always looking for new ideas and suggestions.
+The project is continuously being improved and updated. We are always looking for ways to make it better, whether that's through optimizing performance, adding new features, or fixing bugs. We welcome contributions from the community and are always looking for new ideas and suggestions. If you find it interesting or believe it could be helpful, we welcome your contributions to the codebase or consider starring the repository to show your support and motivate our team!
 
 For more information, you can join our [Discord channel](https://discord.gg/tJ6dxBRk)
-
 
 ## Roadmap
 The first version will be released together with [our SDN](https://github.com/8xFF/decentralized-sdn) at the end of 2023.
