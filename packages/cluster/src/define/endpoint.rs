@@ -1,11 +1,11 @@
 use poem_openapi::Enum;
+use protocol::media_event_logs::MediaEndpointLogRequest;
 use serde::{Deserialize, Serialize};
 use transport::TrackId;
 
 use crate::{
-    rpc::{connector::MediaEndpointLogRequest, general::MediaSessionProtocol},
-    ClusterEndpointError, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterPeerId, ClusterRemoteTrackIncomingEvent, ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta,
-    ClusterTrackName, ClusterTrackUuid,
+    rpc::general::MediaSessionProtocol, ClusterEndpointError, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterPeerId, ClusterRemoteTrackIncomingEvent,
+    ClusterRemoteTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackName, ClusterTrackUuid,
 };
 
 #[async_trait::async_trait]
@@ -80,7 +80,7 @@ impl ClusterEndpointMeta {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum ClusterEndpointOutgoingEvent {
     InfoSet(ClusterEndpointMeta),
     InfoUpdate(ClusterEndpointMeta),
@@ -96,7 +96,7 @@ pub enum ClusterEndpointOutgoingEvent {
     MediaEndpointLog(MediaEndpointLogRequest),
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ClusterEndpointIncomingEvent {
     PeerAdded(ClusterPeerId, ClusterEndpointMeta),
     PeerUpdated(ClusterPeerId, ClusterEndpointMeta),

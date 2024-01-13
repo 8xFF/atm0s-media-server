@@ -8,15 +8,15 @@ use clap::Parser;
 use cluster::{
     rpc::{
         gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
-        general::{MediaEndpointCloseResponse, MediaSessionProtocol},
+        general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE,
+    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{AutoCancelTask, ErrorDebugger};
 use metrics_dashboard::build_dashboard_route;
-use poem::Route;
+use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
 
 use crate::rpc::http::HttpRpcServer;
@@ -75,6 +75,11 @@ where
     let api_service = OpenApiService::new(RtmpHttpApis, "Rtmp Server", "1.0.0").server("http://localhost:3000");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
+    let node_info = NodeInfo {
+        node_id: cluster.node_id(),
+        address: format!("{}", cluster.node_addr()),
+        server_type: ServerType::RTMP,
+    };
 
     #[cfg(feature = "embed-samples")]
     let samples = EmbeddedFilesEndpoint::<Files>::new(Some("index.html".to_string()));
@@ -84,6 +89,7 @@ where
         .nest("/", api_service)
         .nest("/dashboard/", build_dashboard_route())
         .nest("/ui/", ui)
+        .at("/node-info/", poem::endpoint::make_sync(move |_| Json(node_info.clone())))
         .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()))
         .nest("/samples", samples);
 

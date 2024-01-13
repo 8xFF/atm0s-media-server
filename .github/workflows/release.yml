@@ -28,13 +28,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       RUST_BACKTRACE: 1
+ 
     strategy:
       matrix:
         build:
           - linux gnu x64
           - linux musl x64
           - linux gnu aarch64
-          # - linux musl aarch64
+          - linux musl aarch64
           # - linux gnueabihf arm
           # - linux gnueabihf armv7
           # - linux gnu mips
@@ -64,12 +65,12 @@ jobs:
             target: aarch64-unknown-linux-gnu
             extension: ""
             cross: true
-          # - build: linux musl aarch64
-          #   os: ubuntu-latest
-          #   rust: stable
-          #   target: aarch64-unknown-linux-musl
-          #   extension: ""
-          #   cross: true
+          - build: linux musl aarch64
+            os: ubuntu-latest
+            rust: stable
+            target: aarch64-unknown-linux-musl
+            extension: ""
+            cross: true
           # - build: linux gnueabihf arm
           #   os: ubuntu-latest
           #   rust: stable
@@ -150,7 +151,11 @@ jobs:
 
       - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
+        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools protobuf-compiler
+      
+      - name: Install mac dev-tools
+        if: matrix.os == 'macos-latest'
+        run: brew install protobuf
 
       - name: Patch some libs
         run: |

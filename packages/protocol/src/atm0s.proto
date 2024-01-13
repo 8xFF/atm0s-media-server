@@ -1,0 +1,5 @@
+syntax = "proto2";
+
+import "media_endpoint_log.proto";
+
+package atm0s;

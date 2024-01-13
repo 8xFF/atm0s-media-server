@@ -1,3 +1,4 @@
+use atm0s_sdn::NodeAddr;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -56,6 +57,7 @@ where
     C: ClusterEndpoint,
 {
     fn node_id(&self) -> u32;
+    fn node_addr(&self) -> NodeAddr;
     fn build(&mut self, room_id: &str, peer_id: &str) -> C;
 }
 
