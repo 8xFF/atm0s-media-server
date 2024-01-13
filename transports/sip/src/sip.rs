@@ -53,7 +53,7 @@ pub enum SipServerError {
 
 #[derive(Debug)]
 pub enum SipServerEvent {
-    OnRegisterValidate(GroupId, String, String),
+    OnRegisterValidate(GroupId, String, String, String, String, String),
     OnInCallStarted(GroupId, SipRequest),
     OnInCallRequest(GroupId, SipRequest),
     OnInCallResponse(GroupId, SipResponse),
@@ -82,10 +82,10 @@ impl SipCore {
 
     pub fn on_tick(&mut self, _now_ms: u64) {}
 
-    pub fn reply_register_validate(&mut self, group_id: GroupId, accept: bool) {
-        if let Some(processor) = self.register_processors.get_mut(&group_id) {
+    pub fn reply_register_validate(&mut self, group_id: &GroupId, accept: bool) {
+        if let Some(processor) = self.register_processors.get_mut(group_id) {
             processor.accept(accept);
-            self.process_register_processor(&group_id);
+            self.process_register_processor(group_id);
         }
     }
 
@@ -176,8 +176,8 @@ impl SipCore {
                     self.actions.push(SipServerEvent::SendRes(remote_addr.unwrap_or(group_id.0), res));
                 }
                 ProcessorAction::LogicOutput(action) => match action {
-                    processor::register::RegisterProcessorAction::Validate(username, hashed_password) => {
-                        self.actions.push(SipServerEvent::OnRegisterValidate(group_id.clone(), username, hashed_password));
+                    processor::register::RegisterProcessorAction::Validate(digest, nonce, username, realm, hashed_password) => {
+                        self.actions.push(SipServerEvent::OnRegisterValidate(group_id.clone(), digest, nonce, username, realm, hashed_password));
                     }
                 },
             }

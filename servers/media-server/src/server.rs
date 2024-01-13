@@ -135,11 +135,11 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         self.token_verifier.clone()
     }
 
-    pub fn signer(&self) -> Arc<dyn SessionTokenSigner + Send + Sync> {
+    fn signer(&self) -> Arc<dyn SessionTokenSigner + Send + Sync> {
         self.token_signer.clone()
     }
 
-    fn generate_conn_id(&self) -> String {
+    pub fn generate_conn_id(&self) -> String {
         let mut counter = self.conn_counter.write();
         *counter += 1;
         self.token_signer.sign_conn_id(&MediaConnId {
@@ -148,7 +148,7 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         })
     }
 
-    fn generate_session_uuid(&self) -> u64 {
+    pub fn generate_session_uuid(&self) -> u64 {
         let mut counter = self.session_counter.write();
         *counter += 1;
         let uuid = ClusterSessionUuid::new(self.node_id as u16, self.timer.now_ms() as u32, *counter as u16);

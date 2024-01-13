@@ -2,6 +2,11 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, net::SocketAddr};
 
 use async_std::channel::{bounded, Receiver, Sender};
 
+pub struct VirtualSocketContext {
+    pub remote_addr: SocketAddr,
+    pub username: Option<String>,
+}
+
 pub enum VirtualSocketError {
     ChannelFull,
     ChannelClosed,
@@ -12,9 +17,14 @@ pub struct VirtualSocket<ID: Debug + Clone, MSG> {
     main_tx: Sender<(ID, Option<(Option<SocketAddr>, MSG)>)>,
     rx: Receiver<MSG>,
     closed: bool,
+    ctx: VirtualSocketContext,
 }
 
 impl<ID: Debug + Clone, MSG> VirtualSocket<ID, MSG> {
+    pub fn ctx(&self) -> &VirtualSocketContext {
+        &self.ctx
+    }
+
     pub fn send_to(&self, dest: Option<SocketAddr>, msg: MSG) -> Result<(), VirtualSocketError> {
         self.main_tx.try_send((self.id.clone(), Some((dest, msg)))).map_err(|_| VirtualSocketError::ChannelFull)
     }
@@ -59,7 +69,7 @@ impl<ID, MSG> Default for VirtualSocketPlane<ID, MSG> {
 }
 
 impl<ID: Debug + Clone + Hash + Eq, MSG> VirtualSocketPlane<ID, MSG> {
-    pub fn new_socket(&mut self, id: ID) -> VirtualSocket<ID, MSG> {
+    pub fn new_socket(&mut self, id: ID, ctx: VirtualSocketContext) -> VirtualSocket<ID, MSG> {
         log::info!("Create socket for {:?}", id);
         let (tx, rx) = bounded(1000);
         self.sockets.insert(id.clone(), tx);
@@ -68,6 +78,7 @@ impl<ID: Debug + Clone + Hash + Eq, MSG> VirtualSocketPlane<ID, MSG> {
             main_tx: self.main_tx.clone(),
             rx,
             closed: false,
+            ctx,
         }
     }
 

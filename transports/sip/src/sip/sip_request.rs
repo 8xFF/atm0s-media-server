@@ -112,6 +112,10 @@ impl SipRequest {
         &self.raw.method
     }
 
+    pub fn digest_uri(&self) -> String {
+        self.raw.uri().to_string()
+    }
+
     pub fn body_str(&self) -> String {
         String::from_utf8_lossy(&self.raw.body).to_string()
     }

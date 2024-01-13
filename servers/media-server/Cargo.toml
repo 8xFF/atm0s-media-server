@@ -25,7 +25,6 @@ log = { workspace = true }
 poem = { version = "1.3", features = ["embed"] }
 poem-openapi = { version = "3.0", features = ["swagger-ui", "static-files"] }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "std"] }
 rust-embed = { version = "8.2", optional = true }
 rsip = { version = "0.4.0", optional = true }
@@ -33,13 +32,21 @@ metrics-dashboard = { version = "0.1.3", features = ["system"] }
 metrics = "0.21.1"
 nats = { version = "0.24.1", optional = true }
 prost = { workspace = true, optional = true }
+reqwest = { version = "0.11.23", features = ["default-tls", "json"], optional = true }
+md5 = {version = "0.7.0", optional = true }
+
+[dev-dependencies]
+md5 = "0.7.0"
 
 [features]
 default = ["embed-samples", "gateway", "webrtc", "rtmp", "sip", "connector", "token_generate"]
 embed-samples = ["rust-embed"]
 webrtc = ["transport-webrtc"]
 rtmp = ["transport-rtmp"]
-sip = ["rsip", "transport-sip"]
+sip = ["rsip", "transport-sip", "reqwest", "md5"]
 gateway = []
 connector = ["nats", "prost"]
 token_generate = []
+
+[examples]
+name = "simple_sip_calling_service"

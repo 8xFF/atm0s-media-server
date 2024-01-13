@@ -1,23 +1,22 @@
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use async_std::{channel::bounded, stream::StreamExt};
-use cluster::{Cluster, ClusterEndpoint};
+use cluster::{
+    rpc::sip::{SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest},
+    Cluster, ClusterEndpoint,
+};
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     EndpointRpcIn, EndpointRpcOut,
 };
 use futures::{select, FutureExt};
 use media_utils::{ErrorDebugger, SystemTimer, Timer};
-use rsip::{
-    typed::{From, To},
-    Auth, Host, HostWithPort, Param, Uri,
-};
 use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
-use transport_sip::{SipServerSocket, SipServerSocketError, SipServerSocketMessage, SipTransportIn, SipTransportOut};
+use transport_sip::{GroupId, SipServerSocket, SipServerSocketError, SipServerSocketMessage, SipTransportIn, SipTransportOut};
 
 use crate::server::MediaServerContext;
 
-use super::{sip_in_session::SipInSession, sip_out_session::SipOutSession, InternalControl};
+use super::{hooks::HooksSender, sip_in_session::SipInSession, sip_out_session::SipOutSession, InternalControl};
 
 type RmIn = EndpointRpcIn;
 type RrIn = RemoteTrackRpcIn;
@@ -61,7 +60,11 @@ enum SipTransport {
     Out(SipTransportOut),
 }
 
-pub async fn start_server<C, CR>(mut cluster: C, ctx: MediaServerContext<InternalControl>, sip_addr: SocketAddr)
+enum InternalCmd {
+    RegisterResult(String, GroupId, bool),
+}
+
+pub async fn start_server<C, CR>(mut cluster: C, ctx: MediaServerContext<InternalControl>, sip_addr: SocketAddr, hook_sender: HooksSender)
 where
     C: Cluster<CR> + 'static,
     CR: ClusterEndpoint + 'static,
@@ -108,98 +111,129 @@ where
     });
 
     let timer = Arc::new(SystemTimer());
-    let mut users = HashMap::new();
+    let (internal_tx, internal_rx) = bounded::<InternalCmd>(100);
+    let mut sessions = HashMap::new();
+
     loop {
-        match sip_server.recv().await {
-            Ok(event) => match event {
-                SipServerSocketMessage::RegisterValidate(session, username, hashed_password) => {
-                    users.insert(username, session.0);
-                    sip_server.accept_register(session, true);
-                }
-                SipServerSocketMessage::InCall(socket, req) => {
-                    let tx = tx.clone();
-                    let timer = timer.clone();
+        select! {
+            e = sip_server.recv().fuse() => match e {
+                Ok(event) => match event {
+                    SipServerSocketMessage::RegisterValidate(group_id, digest, nonce, username, realm, hashed_password) => {
+                        log::info!("Register validate {} {}", username, hashed_password);
+                        let session_id = ctx.generate_conn_id();
+                        let hook_sender = hook_sender.clone();
+                        let internal_tx = internal_tx.clone();
+                        async_std::task::spawn(async move {
+                            let res = hook_sender.hook_register(SipIncomingRegisterRequest {
+                                username,
+                                session_id: session_id.clone(),
+                                realm,
+                            }).await;
 
-                    let from_user = req.from.uri.user().expect("").to_string();
-                    let to_user = req.to.uri.user().expect("").to_string();
-                    let room_id = format!("{from_user}-{to_user}-{}", timer.now_ms());
-                    let mut transport_in = match SipTransportIn::new(timer.now_ms(), sip_addr, socket, req).await {
-                        Ok(transport) => transport,
-                        Err(e) => {
-                            log::error!("Can not create transport {:?}", e);
-                            continue;
-                        }
-                    };
+                            let accept = match res {
+                                Ok(res) => match (res.success, res.ha1) {
+                                    (true, Some(ha1)) => {
+                                        let hd2 = md5::compute(format!("REGISTER:{}", digest));
+                                        let hd2_str = format!("{:x}", hd2);
+                                        let response = md5::compute(format!("{}:{}:{}", ha1, nonce, hd2_str));
+                                        let response_str = format!("{:x}", response);
+                                        log::info!("Register local calculated md5 hash: {}:{}:{} => {} vs {}", ha1, nonce, hd2_str, response_str, hashed_password);
+                                        hashed_password.eq(&response_str)
+                                    }
+                                    _ => {
+                                        log::info!("Register validate failed");
+                                        false
+                                    }
+                                },
+                                Err(e) => {
+                                    log::error!("Error on hook register {:?}", e);
+                                    false
+                                }
+                            };
 
-                    let transport_out: Option<SipTransportOut> = match users.get(&to_user) {
-                        Some(addr) => {
-                            if let Ok(socket) = sip_server.create_call(&room_id, *addr) {
-                                let call_id = room_id.clone().into();
-                                let local_from = From {
-                                    display_name: None,
-                                    uri: Uri {
-                                        scheme: Some(rsip::Scheme::Sip),
-                                        auth: Some(Auth {
-                                            user: from_user.clone(),
-                                            password: None,
-                                        }),
-                                        host_with_port: HostWithPort {
-                                            host: Host::Domain(sip_addr.ip().to_string().into()),
-                                            port: Some(sip_addr.port().into()),
-                                        },
-                                        ..Default::default()
-                                    },
-                                    params: vec![Param::Transport(rsip::Transport::Udp), Param::Tag(timer.now_ms().to_string().into())],
-                                };
-                                let remote_to = To {
-                                    display_name: None,
-                                    uri: Uri {
-                                        scheme: Some(rsip::Scheme::Sip),
-                                        auth: Some(Auth {
-                                            user: to_user.clone(),
-                                            password: None,
-                                        }),
-                                        host_with_port: HostWithPort {
-                                            host: Host::Domain(addr.ip().to_string().into()),
-                                            port: Some(addr.port().into()),
-                                        },
-                                        ..Default::default()
-                                    },
-                                    params: vec![],
-                                };
-                                SipTransportOut::new(timer.now_ms(), sip_addr, call_id, local_from, remote_to, socket).await.ok()
-                            } else {
-                                None
+                            internal_tx.send(InternalCmd::RegisterResult(session_id, group_id, accept)).await.log_error("should send");
+                        });
+                    }
+                    SipServerSocketMessage::InCall(socket, req) => {
+                        let tx = tx.clone();
+                        let timer = timer.clone();
+                        let hook_sender = hook_sender.clone();
+                        let from_number = req.from.uri.user().expect("").to_string();
+                        let to_number = req.to.uri.user().expect("").to_string();
+                        let call_id = req.call_id.to_string();
+                        let hook_req = SipIncomingInviteRequest {
+                            source: socket.ctx().remote_addr.to_string(),
+                            username: socket.ctx().username.clone(),
+                            from_number: from_number.clone(),
+                            to_number: to_number.clone(),
+                            call_id: call_id,
+                            node_id: 0, //TODO
+                        };
+
+                        let mut transport_in = match SipTransportIn::new(timer.now_ms(), sip_addr, socket, req).await {
+                            Ok(transport) => transport,
+                            Err(e) => {
+                                log::error!("Can not create transport {:?}", e);
+                                continue;
                             }
-                        }
-                        None => None,
-                    };
+                        };
 
-                    async_std::task::spawn(async move {
-                        if let Some(transport_out) = transport_out {
-                            log::info!("[SipInCall] joined to {room_id} {from_user}");
-                            transport_in.accept(timer.now_ms()).log_error("should accept");
-                            tx.send((SipTransport::In(transport_in), room_id.clone(), from_user)).await.log_error("should send");
-                            tx.send((SipTransport::Out(transport_out), room_id, to_user)).await.log_error("should send");
-                        } else {
-                            log::info!("[SipInCall] rejected");
-                            transport_in.reject(timer.now_ms()).log_error("should reject");
-                            run_transport(&mut transport_in, timer).await;
-                            log::info!("[SipInCall] ended after rejected");
-                        }
-                    });
-                }
-                SipServerSocketMessage::Continue => {}
+                        async_std::task::spawn(async move {
+                            match hook_sender.hook_invite(hook_req).await {
+                                Ok(hook_res) => {
+                                    if let Some(room_id) = hook_res.room_id {
+                                        match hook_res.strategy {
+                                            SipIncomingInviteStrategy::Accept => {
+                                                log::info!("[SipInCall] joined to {room_id} {from_number}");
+                                                transport_in.accept(timer.now_ms()).log_error("should accept");
+                                                tx.send((SipTransport::In(transport_in), room_id.clone(), from_number)).await.log_error("should send");
+                                            }
+                                            SipIncomingInviteStrategy::Reject => {
+                                                transport_in.reject(timer.now_ms()).log_error("should reject");
+                                            }
+                                            SipIncomingInviteStrategy::WaitOtherPeers => {
+                                                todo!()
+                                            }
+                                        }
+                                    } else {
+                                        transport_in.reject(timer.now_ms()).log_error("should reject");
+                                    }
+                                }
+                                Err(e) => {
+                                    log::error!("Error on hook invite {:?}", e);
+                                    transport_in.reject(timer.now_ms()).log_error("should reject");
+                                }
+                            }
+                        });
+                    }
+                    SipServerSocketMessage::Continue => {}
+                },
+                Err(e) => match e {
+                    SipServerSocketError::MessageParseError => {
+                        log::warn!("Can not parse request");
+                    }
+                    SipServerSocketError::NetworkError(e) => {
+                        log::error!("Network error {:?}", e);
+                        return;
+                    }
+                },
             },
-            Err(e) => match e {
-                SipServerSocketError::MessageParseError => {
-                    log::warn!("Can not parse request");
-                }
-                SipServerSocketError::NetworkError(e) => {
-                    log::error!("Network error {:?}", e);
+            e = internal_rx.recv().fuse() => match e {
+                Ok(event) => match event {
+                    InternalCmd::RegisterResult(session_id, group_id, result) => {
+                        if result {
+                            sip_server.accept_register(&group_id);
+                            sessions.insert(session_id, group_id);
+                        } else {
+                            sip_server.reject_register(&group_id);
+                        }
+                    }
+                },
+                Err(e) => {
+                    log::error!("Internal error {:?}", e);
                     return;
                 }
-            },
+            }
         }
     }
 }

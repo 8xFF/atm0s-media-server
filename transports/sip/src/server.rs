@@ -1,4 +1,8 @@
-use std::{collections::VecDeque, net::SocketAddr, time::Duration};
+use std::{
+    collections::{HashMap, VecDeque},
+    net::SocketAddr,
+    time::Duration,
+};
 
 use async_std::{net::UdpSocket, stream::Interval};
 use futures::{select, FutureExt, StreamExt};
@@ -9,7 +13,7 @@ use media_utils::{SystemTimer, Timer};
 use crate::{
     sip_request::SipRequest,
     sip_response::SipResponse,
-    virtual_socket::{VirtualSocket, VirtualSocketPlane},
+    virtual_socket::{VirtualSocket, VirtualSocketContext, VirtualSocketPlane},
     GroupId, SipCore, SipMessage, SipServerEvent,
 };
 
@@ -21,8 +25,13 @@ pub enum SipServerSocketError {
 
 pub enum SipServerSocketMessage {
     Continue,
-    RegisterValidate(GroupId, String, String),
+    RegisterValidate(GroupId, String, String, String, String, String),
     InCall(VirtualSocket<GroupId, SipMessage>, SipRequest),
+}
+
+struct RemoteInfo {
+    username: String,
+    accepted: bool,
 }
 
 pub struct SipServerSocket {
@@ -31,6 +40,7 @@ pub struct SipServerSocket {
     sip_core: SipCore,
     timer: SystemTimer,
     interval: Interval,
+    remote_users: HashMap<SocketAddr, RemoteInfo>,
     virtual_socket_plane: VirtualSocketPlane<GroupId, SipMessage>,
 }
 
@@ -43,29 +53,59 @@ impl SipServerSocket {
             sip_core: SipCore::new(),
             timer: SystemTimer(),
             interval: async_std::stream::interval(Duration::from_millis(100)),
+            remote_users: HashMap::new(),
             virtual_socket_plane: Default::default(),
         }
     }
 
-    pub fn accept_register(&mut self, session: GroupId, accept: bool) {
-        self.sip_core.reply_register_validate(session, accept);
+    pub fn accept_register(&mut self, session: &GroupId) {
+        if let Some(remote_info) = self.remote_users.get_mut(&session.0) {
+            remote_info.accepted = true;
+        }
+        self.sip_core.reply_register_validate(session, true);
+    }
+
+    pub fn reject_register(&mut self, session: &GroupId) {
+        self.remote_users.remove(&session.0);
+        self.sip_core.reply_register_validate(session, false);
     }
 
     pub fn create_call(&mut self, call_id: &str, dest: SocketAddr) -> Result<VirtualSocket<GroupId, SipMessage>, SipServerSocketError> {
         let group_id = GroupId(dest, call_id.to_string().into());
         self.sip_core.open_out_call(&group_id);
-        Ok(self.virtual_socket_plane.new_socket(group_id))
+        Ok(self.virtual_socket_plane.new_socket(group_id, VirtualSocketContext { remote_addr: dest, username: None }))
     }
 
     pub async fn recv(&mut self) -> Result<SipServerSocketMessage, SipServerSocketError> {
         while let Some(output) = self.sip_core.pop_action() {
             match output {
-                SipServerEvent::OnRegisterValidate(group, username, hashed_password) => {
-                    return Ok(SipServerSocketMessage::RegisterValidate(group, username, hashed_password));
+                SipServerEvent::OnRegisterValidate(group, digest, nonce, username, realm, hashed_password) => {
+                    log::info!("Register validate {} {}", username, hashed_password);
+                    self.remote_users.insert(
+                        group.0,
+                        RemoteInfo {
+                            username: username.clone(),
+                            accepted: false,
+                        },
+                    );
+                    return Ok(SipServerSocketMessage::RegisterValidate(group, digest, nonce, username, realm, hashed_password));
                 }
                 SipServerEvent::OnInCallStarted(group_id, req) => {
                     log::info!("InCall started {:?}", group_id);
-                    let socket = self.virtual_socket_plane.new_socket(group_id);
+                    let ctx = VirtualSocketContext {
+                        remote_addr: group_id.0,
+                        username: match self.remote_users.get(&group_id.0) {
+                            Some(remote_info) => {
+                                if remote_info.accepted {
+                                    Some(remote_info.username.clone())
+                                } else {
+                                    None
+                                }
+                            }
+                            None => None,
+                        },
+                    };
+                    let socket = self.virtual_socket_plane.new_socket(group_id, ctx);
                     return Ok(SipServerSocketMessage::InCall(socket, req));
                 }
                 SipServerEvent::OnInCallRequest(group_id, req) => {
@@ -78,8 +118,9 @@ impl SipServerSocket {
                     self.virtual_socket_plane.forward(&group_id, SipMessage::Response(res));
                 }
                 SipServerEvent::SendRes(dest, res) => {
-                    log::debug!("Send res to {} {}", dest, res.raw.status_code());
-                    if let Err(e) = self.main_socket.send_to(&res.to_bytes(), dest).await {
+                    let buf = res.to_bytes();
+                    log::debug!("Send res to {} {}", dest, String::from_utf8(buf.to_vec()).unwrap());
+                    if let Err(e) = self.main_socket.send_to(&buf, dest).await {
                         log::error!("Sending udp to {dest} error {:?}", e);
                     }
                 }
