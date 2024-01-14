@@ -278,7 +278,12 @@ impl ClusterEndpoint for ClusterEndpointSdn {
                             self.kv_sdk.hset(self.room_streams_map_key, sub_key, value.clone(), Some(10000));
                             //set in peer hashmap
                             self.kv_sdk.hset(self.peer_key(&self.peer_id), sub_key, value, Some(10000));
-                            log::info!("[Atm0sClusterEndpoint] add track {} {track_name} => track_uuid {channel_uuid} track_id {track_id}, set sub-key in hash {} and {}", self.peer_id, self.room_streams_map_key, self.peer_key(&self.peer_id));
+                            log::info!(
+                                "[Atm0sClusterEndpoint] add track {} {track_name} => track_uuid {channel_uuid} track_id {track_id}, set sub-key in hash {} and {}",
+                                self.peer_id,
+                                self.room_streams_map_key,
+                                self.peer_key(&self.peer_id)
+                            );
                         } else {
                             log::warn!(
                                 "[Atm0sClusterEndpoint] add track but already exist {} {track_name} => track_uuid {channel_uuid} track_id {track_id}",
@@ -316,7 +321,12 @@ impl ClusterEndpoint for ClusterEndpointSdn {
 
                             //del in peer hashmap
                             self.kv_sdk.hdel(self.peer_key(&self.peer_id), sub_key);
-                            log::info!("[Atm0sClusterEndpoint] delete track {} {track_name} => track_uuid {channel_uuid} track_id {track_id}, del sub-key in hash {} and {}", self.peer_id, self.room_streams_map_key, self.peer_key(&self.peer_id));
+                            log::info!(
+                                "[Atm0sClusterEndpoint] delete track {} {track_name} => track_uuid {channel_uuid} track_id {track_id}, del sub-key in hash {} and {}",
+                                self.peer_id,
+                                self.room_streams_map_key,
+                                self.peer_key(&self.peer_id)
+                            );
                         } else {
                             log::warn!(
                                 "[Atm0sClusterEndpoint] delete track but not found {} {track_name} => track_uuid {channel_uuid} track_id {track_id}",
