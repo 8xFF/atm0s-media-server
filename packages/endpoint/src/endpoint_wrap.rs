@@ -61,6 +61,7 @@ where
             Box::new(middleware::logger::MediaEndpointEventLogger::new()),
             Box::new(middleware::mix_minus::MixMinusEndpointMiddleware::new(
                 room,
+                peer,
                 DEFAULT_MIX_MINUS_NAME,
                 mix_minus_mode,
                 DEFAULT_MIX_MINUS_VIRTUAL_TRACK_ID,
