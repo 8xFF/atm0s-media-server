@@ -18,10 +18,13 @@ use media_utils::{AutoCancelTask, ErrorDebugger, StringCompression, SystemTimer,
 use metrics_dashboard::build_dashboard_route;
 use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
-use transport::MediaKind;
-use transport_webrtc::{SdkTransportLifeCycle, SdpBoxRewriteScope, WhepTransportLifeCycle, WhipTransportLifeCycle};
+use transport::{MediaKind, TrackId};
+use transport_webrtc::{SdpBoxRewriteScope, TransportNoDatachannelLifeCycle, TransportWithDatachannelLifeCycle};
 
-use crate::{rpc::http::HttpRpcServer, server::webrtc::session::run_webrtc_endpoint};
+use crate::{
+    rpc::http::HttpRpcServer,
+    server::webrtc::{middleware::WhepAutoAttachMediaTrackMiddleware, session::run_webrtc_endpoint},
+};
 
 #[cfg(feature = "embed-samples")]
 use crate::rpc::http::EmbeddedFilesEndpoint;
@@ -46,8 +49,11 @@ pub enum InternalControl {
     ForceClose(Sender<()>),
 }
 
+mod middleware;
 mod rpc;
 mod session;
+
+const WHEP_LOCAL_AUDIO_TRACK_ID: TrackId = 0;
 
 /// Media Server Webrtc
 #[derive(Parser, Debug)]
@@ -171,7 +177,7 @@ where
                     }
                 };
                 log::info!("[MediaServer] on whip connection from {} {}", room, peer);
-                let life_cycle = WhipTransportLifeCycle::new(timer.now_ms());
+                let life_cycle = TransportNoDatachannelLifeCycle::new(timer.now_ms());
                 match run_webrtc_endpoint(
                     ctx.clone(),
                     &mut cluster,
@@ -201,7 +207,8 @@ where
                     ],
                     None,
                     MixMinusAudioMode::Disabled,
-                    0,
+                    vec![],
+                    vec![],
                 )
                 .await
                 {
@@ -252,7 +259,7 @@ where
                 whep_counter += 1;
 
                 log::info!("[MediaServer] on whep connection from {} {}", room, peer);
-                let life_cycle = WhepTransportLifeCycle::new(timer.now_ms());
+                let life_cycle = TransportNoDatachannelLifeCycle::new(timer.now_ms());
                 match run_webrtc_endpoint(
                     ctx.clone(),
                     &mut cluster,
@@ -266,8 +273,9 @@ where
                     &sdp,
                     vec![],
                     Some(SdpBoxRewriteScope::OnlyTrack),
-                    MixMinusAudioMode::Disabled,
-                    0,
+                    MixMinusAudioMode::AllAudioStreams,
+                    vec![Some(WHEP_LOCAL_AUDIO_TRACK_ID)],
+                    vec![Box::new(WhepAutoAttachMediaTrackMiddleware::default())],
                 )
                 .await
                 {
@@ -313,7 +321,7 @@ where
                 };
                 let param = req.param();
                 log::info!("[MediaServer] on webrtc connection from {} {}", param.room, param.peer);
-                let life_cycle = SdkTransportLifeCycle::new(timer.now_ms());
+                let life_cycle = TransportWithDatachannelLifeCycle::new(timer.now_ms());
                 match run_webrtc_endpoint(
                     ctx.clone(),
                     &mut cluster,
@@ -328,7 +336,8 @@ where
                     param.senders.clone(),
                     Some(SdpBoxRewriteScope::StreamAndTrack),
                     param.mix_minus_audio,
-                    3,
+                    vec![None, None, None],
+                    vec![],
                 )
                 .await
                 {

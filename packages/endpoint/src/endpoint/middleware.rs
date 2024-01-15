@@ -6,6 +6,8 @@ use crate::{
     EndpointRpcIn, EndpointRpcOut,
 };
 
+use super::internal::MediaEndpointInternalControl;
+
 pub mod logger;
 pub mod mix_minus;
 
@@ -13,6 +15,7 @@ pub mod mix_minus;
 pub enum MediaEndpointMiddlewareOutput {
     Endpoint(TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>),
     Cluster(ClusterEndpointOutgoingEvent),
+    Control(MediaEndpointInternalControl),
 }
 
 pub trait MediaEndpointMiddleware: Send + Sync {

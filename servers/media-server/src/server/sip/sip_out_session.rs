@@ -4,7 +4,7 @@ use cluster::{BitrateControlMode, Cluster, ClusterEndpoint, ClusterEndpointPubli
 use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
 use media_utils::ErrorDebugger;
-use transport_sip::SipTransportOut;
+use transport_sip::{SipTransportOut, LOCAL_TRACK_AUDIO_MAIN};
 
 use super::InternalControl;
 
@@ -28,7 +28,8 @@ impl<E: ClusterEndpoint> SipOutSession<E> {
             ClusterEndpointSubscribeScope::Full,
             BitrateControlMode::DynamicWithConsumers,
             MixMinusAudioMode::AllAudioStreams,
-            1,
+            vec![Some(LOCAL_TRACK_AUDIO_MAIN)],
+            vec![],
         );
         endpoint_pre.check().map_err(|_e| SipOutSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);

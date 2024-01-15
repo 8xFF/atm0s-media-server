@@ -3,6 +3,7 @@ use media_utils::ServerError;
 use transport::Transport;
 
 use crate::{
+    endpoint::middleware::MediaEndpointMiddleware,
     rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     MediaEndpoint,
 };
@@ -15,7 +16,8 @@ pub struct MediaEndpointPreconditional {
     sub_scope: ClusterEndpointSubscribeScope,
     bitrate_mode: BitrateControlMode,
     mix_minus_mode: MixMinusAudioMode,
-    mix_minus_size: usize,
+    mix_minus_slots: Vec<Option<u16>>,
+    middlewares: Vec<Box<dyn MediaEndpointMiddleware>>,
 }
 
 impl MediaEndpointPreconditional {
@@ -27,7 +29,8 @@ impl MediaEndpointPreconditional {
         sub_scope: ClusterEndpointSubscribeScope,
         bitrate_mode: BitrateControlMode,
         mix_minus_mode: MixMinusAudioMode,
-        mix_minus_size: usize,
+        mix_minus_slots: Vec<Option<u16>>,
+        middlewares: Vec<Box<dyn MediaEndpointMiddleware>>,
     ) -> Self {
         Self {
             room: room.into(),
@@ -37,7 +40,8 @@ impl MediaEndpointPreconditional {
             pub_scope,
             bitrate_mode,
             mix_minus_mode,
-            mix_minus_size,
+            mix_minus_slots,
+            middlewares,
         }
     }
 
@@ -51,7 +55,17 @@ impl MediaEndpointPreconditional {
         cluster: C,
     ) -> MediaEndpoint<T, E, C> {
         MediaEndpoint::new(
-            transport, cluster, &self.room, &self.peer, self.protocol, self.sub_scope, self.pub_scope, self.bitrate_mode, self.mix_minus_mode, self.mix_minus_size,
+            transport,
+            cluster,
+            &self.room,
+            &self.peer,
+            self.protocol,
+            self.sub_scope,
+            self.pub_scope,
+            self.bitrate_mode,
+            self.mix_minus_mode,
+            &self.mix_minus_slots,
+            self.middlewares,
         )
     }
 }

@@ -2,21 +2,22 @@ use std::collections::{HashMap, VecDeque};
 
 use cluster::{
     rpc::general::MediaSessionProtocol, BitrateControlMode, ClusterEndpointIncomingEvent, ClusterEndpointMeta, ClusterEndpointOutgoingEvent, ClusterEndpointPublishScope,
-    ClusterEndpointSubscribeScope, ClusterStateEndpointState,
+    ClusterEndpointSubscribeScope, ClusterStateEndpointState, ClusterTrackStats,
 };
 use transport::{MediaKind, TrackId, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
 
 use crate::{
-    middleware::MediaEndpointMiddleware,
-    rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, PeerInfo, RemoteTrackRpcIn, RemoteTrackRpcOut, TrackInfo},
-    MediaEndpointMiddlewareOutput, RpcResponse,
+    rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, PeerInfo, ReceiverLayerLimit, RemoteTrackRpcIn, RemoteTrackRpcOut, TrackInfo},
+    RpcResponse,
 };
 
 use self::{
-    bitrate_allocator::BitrateAllocationAction,
-    local_track::{LocalTrack, LocalTrackInternalOutputEvent, LocalTrackOutput},
+    bitrate_allocator::{BitrateAllocationAction, BitrateAllocator},
+    local_track::{LocalTrack, LocalTrackOutput},
     remote_track::{RemoteTrack, RemoteTrackOutput},
 };
+
+use super::middleware::{MediaEndpointMiddleware, MediaEndpointMiddlewareOutput};
 
 const DEFAULT_BITRATE_OUT_BPS: u32 = 3_000_000; //3Mbps
 const MAX_BITRATE_IN_BPS: u32 = 3_000_000; //3Mbps
@@ -25,6 +26,19 @@ mod bitrate_allocator;
 mod bitrate_limiter;
 mod local_track;
 mod remote_track;
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum MediaEndpointInternalLocalTrackControl {
+    SourceSet { priority: u16 },
+    SourceStats { stats: ClusterTrackStats },
+    SourceRemove,
+    Limit { limit: ReceiverLayerLimit },
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum MediaEndpointInternalControl {
+    LocalTrack(u16, MediaEndpointInternalLocalTrackControl),
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MediaEndpointInternalEvent {
@@ -162,6 +176,31 @@ impl MediaEndpointInternal {
 
         self.bitrate_allocator.tick();
         self.pop_internal(now_ms);
+    }
+
+    pub fn on_control(&mut self, _now_ms: u64, event: MediaEndpointInternalControl) {
+        match event {
+            MediaEndpointInternalControl::LocalTrack(track_id, event) => {
+                Self::process_local_track_control(&mut self.bitrate_allocator, track_id, event);
+            }
+        }
+    }
+
+    fn process_local_track_control(bitrate_allocator: &mut BitrateAllocator, track_id: TrackId, event: MediaEndpointInternalLocalTrackControl) {
+        match event {
+            MediaEndpointInternalLocalTrackControl::SourceSet { priority } => {
+                bitrate_allocator.add_local_track(track_id, priority);
+            }
+            MediaEndpointInternalLocalTrackControl::SourceStats { stats } => {
+                bitrate_allocator.update_source_bitrate(track_id, stats);
+            }
+            MediaEndpointInternalLocalTrackControl::SourceRemove => {
+                bitrate_allocator.remove_local_track(track_id);
+            }
+            MediaEndpointInternalLocalTrackControl::Limit { limit } => {
+                bitrate_allocator.update_local_track_limit(track_id, limit);
+            }
+        }
     }
 
     pub fn on_transport(&mut self, now_ms: u64, event: TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>) {
@@ -366,24 +405,10 @@ impl MediaEndpointInternal {
             while let Some(action) = track.pop_action() {
                 has_event = true;
                 match action {
-                    LocalTrackOutput::Internal(event) => match event {
-                        LocalTrackInternalOutputEvent::SourceSet(priority) => {
-                            self.bitrate_allocator.add_local_track(*track_id, priority);
-                            should_pop_bitrate_allocation = true;
-                        }
-                        LocalTrackInternalOutputEvent::SourceStats(stats) => {
-                            self.bitrate_allocator.update_source_bitrate(*track_id, stats);
-                            should_pop_bitrate_allocation = true;
-                        }
-                        LocalTrackInternalOutputEvent::SourceRemove => {
-                            self.bitrate_allocator.remove_local_track(*track_id);
-                            should_pop_bitrate_allocation = true;
-                        }
-                        LocalTrackInternalOutputEvent::Limit(limit) => {
-                            self.bitrate_allocator.update_local_track_limit(*track_id, limit);
-                            should_pop_bitrate_allocation = true;
-                        }
-                    },
+                    LocalTrackOutput::Control(event) => {
+                        should_pop_bitrate_allocation = true;
+                        Self::process_local_track_control(&mut self.bitrate_allocator, *track_id, event);
+                    }
                     LocalTrackOutput::Transport(event) => {
                         self.output_actions.push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LocalTrackEvent(*track_id, event)));
                     }
@@ -423,24 +448,9 @@ impl MediaEndpointInternal {
         while let Some(action) = track.pop_action() {
             has_event = true;
             match action {
-                LocalTrackOutput::Internal(event) => match event {
-                    LocalTrackInternalOutputEvent::SourceSet(priority) => {
-                        self.bitrate_allocator.add_local_track(track_id, priority);
-                        self.pop_bitrate_allocation_action(now_ms);
-                    }
-                    LocalTrackInternalOutputEvent::SourceStats(stats) => {
-                        self.bitrate_allocator.update_source_bitrate(track_id, stats);
-                        self.pop_bitrate_allocation_action(now_ms);
-                    }
-                    LocalTrackInternalOutputEvent::SourceRemove => {
-                        self.bitrate_allocator.remove_local_track(track_id);
-                        self.pop_bitrate_allocation_action(now_ms);
-                    }
-                    LocalTrackInternalOutputEvent::Limit(limit) => {
-                        self.bitrate_allocator.update_local_track_limit(track_id, limit);
-                        self.pop_bitrate_allocation_action(now_ms);
-                    }
-                },
+                LocalTrackOutput::Control(event) => {
+                    self.on_control(now_ms, MediaEndpointInternalControl::LocalTrack(track_id, event));
+                }
                 LocalTrackOutput::Transport(event) => {
                     self.output_actions.push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::LocalTrackEvent(track_id, event)));
                 }
@@ -511,6 +521,11 @@ impl MediaEndpointInternal {
                     MediaEndpointMiddlewareOutput::Cluster(event) => {
                         self.output_actions.push_back(MediaInternalAction::Cluster(event));
                     }
+                    MediaEndpointMiddlewareOutput::Control(event) => match event {
+                        MediaEndpointInternalControl::LocalTrack(track_id, event) => {
+                            Self::process_local_track_control(&mut self.bitrate_allocator, track_id, event);
+                        }
+                    },
                 }
             }
         }
@@ -582,7 +597,7 @@ mod tests {
     };
 
     use crate::{
-        endpoint_wrap::internal::{MediaEndpointInternalEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS},
+        endpoint::internal::{MediaEndpointInternalEvent, MediaInternalAction, DEFAULT_BITRATE_OUT_BPS},
         rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverSwitch, RemotePeer, RemoteStream, TrackInfo},
         EndpointRpcIn, EndpointRpcOut, RpcRequest, RpcResponse,
     };

@@ -32,7 +32,8 @@ impl<E: ClusterEndpoint> RtmpSession<E> {
             ClusterEndpointSubscribeScope::Manual,
             BitrateControlMode::MaxBitrateOnly,
             MixMinusAudioMode::Disabled,
-            0,
+            vec![],
+            vec![],
         );
         endpoint_pre.check().map_err(|_e| RtmpSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);

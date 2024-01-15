@@ -10,17 +10,16 @@ use rsip::{
     Host, HostWithPort, Uri,
 };
 use transport::{
-    MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError, TransportStateEvent,
+    LocalTrackOutgoingEvent, MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError,
+    TransportStateEvent,
 };
-
-const TRACK_AUDIO_MAIN: u16 = 1;
 
 use crate::{
     processor::{call_in::CallInProcessor, Processor, ProcessorAction},
     rtp_engine::{RtpEngine, RtpEngineError},
     sip_request::SipRequest,
     virtual_socket::VirtualSocket,
-    GroupId, SipMessage,
+    GroupId, SipMessage, LOCAL_TRACK_AUDIO_MAIN, REMOTE_TRACK_AUDIO_MAIN,
 };
 
 type RmIn = EndpointRpcIn;
@@ -76,7 +75,16 @@ impl SipTransportIn {
         self.actions.push_back(TransportIncomingEvent::State(TransportStateEvent::Connected));
         self.actions.push_back(TransportIncomingEvent::RemoteTrackAdded(
             "audio_main".to_string(),
-            TRACK_AUDIO_MAIN,
+            REMOTE_TRACK_AUDIO_MAIN,
+            TrackMeta {
+                kind: MediaKind::Audio,
+                sample_rate: MediaSampleRate::Hz48000,
+                label: None,
+            },
+        ));
+        self.actions.push_back(TransportIncomingEvent::LocalTrackAdded(
+            "audio_0".to_string(),
+            LOCAL_TRACK_AUDIO_MAIN,
             TrackMeta {
                 kind: MediaKind::Audio,
                 sample_rate: MediaSampleRate::Hz48000,
@@ -104,7 +112,18 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportIn {
         Ok(())
     }
 
-    fn on_event(&mut self, _now_ms: u64, _event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError> {
+    fn on_event(&mut self, _now_ms: u64, event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError> {
+        match event {
+            TransportOutgoingEvent::LocalTrackEvent(track_id, event) => match event {
+                LocalTrackOutgoingEvent::MediaPacket(pkt) => {
+                    if track_id == LOCAL_TRACK_AUDIO_MAIN {
+                        self.rtp_engine.send(pkt);
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
         Ok(())
     }
 
@@ -149,8 +168,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportIn {
             }
             event = self.rtp_engine.recv().fuse() => {
                 let rtp = event.ok_or_else(|| TransportError::NetworkError)?;
-                log::info!("Got rtp packet: {}", rtp.seq_no);
-                let event = TransportIncomingEvent::RemoteTrackEvent(TRACK_AUDIO_MAIN, RemoteTrackIncomingEvent::MediaPacket(rtp));
+                let event = TransportIncomingEvent::RemoteTrackEvent(REMOTE_TRACK_AUDIO_MAIN, RemoteTrackIncomingEvent::MediaPacket(rtp));
                 self.actions.push_back(event);
                 Ok(TransportIncomingEvent::Continue)
             }

@@ -3,10 +3,11 @@ use cluster::{
     rpc::{general::MediaSessionProtocol, webrtc::WebrtcConnectRequestSender},
     BitrateControlMode, Cluster, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode,
 };
-use endpoint::{MediaEndpoint, MediaEndpointOutput, MediaEndpointPreconditional};
+use endpoint::{MediaEndpoint, MediaEndpointMiddleware, MediaEndpointOutput, MediaEndpointPreconditional};
 use futures::{select, FutureExt};
 use media_utils::{ErrorDebugger, ServerError};
 use std::time::Duration;
+use transport::TrackId;
 use transport_webrtc::{SdpBoxRewriteScope, TransportLifeCycle, WebrtcTransport, WebrtcTransportEvent};
 
 use crate::server::MediaServerContext;
@@ -40,9 +41,10 @@ impl<E: ClusterEndpoint, L: TransportLifeCycle> WebrtcSession<E, L> {
         sdp_rewrite: Option<SdpBoxRewriteScope>,
         rx: Receiver<InternalControl>,
         mix_minus_mode: MixMinusAudioMode,
-        mix_minus_size: usize,
+        mix_minus_slots: Vec<Option<TrackId>>,
+        middlewares: Vec<Box<dyn MediaEndpointMiddleware>>,
     ) -> Result<(Self, String), WebrtcSessionError> {
-        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, protocol, pub_scope, sub_scope, bitrate_mode, mix_minus_mode, mix_minus_size);
+        let mut endpoint_pre = MediaEndpointPreconditional::new(room, peer, protocol, pub_scope, sub_scope, bitrate_mode, mix_minus_mode, mix_minus_slots, middlewares);
         endpoint_pre.check().map_err(|_e| WebrtcSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
         let mut transport = WebrtcTransport::new(life_cycle, sdp_rewrite).await.map_err(|_| WebrtcSessionError::NetworkError)?;
@@ -116,7 +118,8 @@ pub(crate) async fn run_webrtc_endpoint<C, CE, L>(
     senders: Vec<WebrtcConnectRequestSender>,
     sdp_rewrite: Option<SdpBoxRewriteScope>,
     mix_minus_mode: MixMinusAudioMode,
-    mix_minus_size: usize,
+    mix_minus_slots: Vec<Option<TrackId>>,
+    middlewares: Vec<Box<dyn MediaEndpointMiddleware>>,
 ) -> Result<(String, String), ServerError>
 where
     C: Cluster<CE> + 'static,
@@ -125,7 +128,7 @@ where
 {
     let (rx, conn_id, old_tx) = context.create_peer(room, peer, None);
     let (mut session, answer_sdp) = match WebrtcSession::new(
-        room, peer, protocol, pub_scope, sub_scope, bitrate_mode, life_cycle, cluster, offer_sdp, senders, sdp_rewrite, rx, mix_minus_mode, mix_minus_size,
+        room, peer, protocol, pub_scope, sub_scope, bitrate_mode, life_cycle, cluster, offer_sdp, senders, sdp_rewrite, rx, mix_minus_mode, mix_minus_slots, middlewares,
     )
     .await
     {

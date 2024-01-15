@@ -22,10 +22,7 @@ use self::{
     track_info_queue::TrackInfoQueue,
     utils::to_transport_kind,
 };
-use crate::{
-    transport::{internal::rpc::rpc_internal_to_string, life_cycle::TransportLifeCycleAction},
-    TransportLifeCycle,
-};
+use crate::{transport::internal::rpc::rpc_internal_to_string, TransportLifeCycle};
 
 use super::WebrtcTransportEvent;
 
@@ -135,9 +132,6 @@ where
     }
 
     pub fn on_endpoint_event(&mut self, now_ms: u64, event: TransportOutgoingEvent<EndpointRpcOut, RemoteTrackRpcOut, LocalTrackRpcOut>) -> Result<(), TransportError> {
-        self.life_cycle.on_endpoint_event(now_ms, &event);
-        self.pop_life_cycle();
-
         match event {
             TransportOutgoingEvent::LocalTrackEvent(track_id, event) => match event {
                 LocalTrackOutgoingEvent::MediaPacket(pkt) => {
@@ -365,14 +359,7 @@ where
 
     fn pop_life_cycle(&mut self) {
         while let Some(out) = self.life_cycle.pop_action() {
-            match out {
-                TransportLifeCycleAction::ToEndpoint(out) => {
-                    self.endpoint_actions.push_back(Ok(out));
-                }
-                TransportLifeCycleAction::TransportError(err) => {
-                    self.endpoint_actions.push_back(Err(err));
-                }
-            }
+            self.endpoint_actions.push_back(out.map(|state| TransportIncomingEvent::State(state)));
         }
     }
 }
@@ -390,12 +377,12 @@ mod test {
     use str0m::media::{Direction, MediaKind};
     use transport::{MediaPacket, TransportIncomingEvent};
 
-    use crate::{transport::internal::Str0mInput, SdkTransportLifeCycle};
+    use crate::{transport::internal::Str0mInput, TransportWithDatachannelLifeCycle};
 
     use super::WebrtcTransportInternal;
 
-    fn create_connected_internal() -> WebrtcTransportInternal<SdkTransportLifeCycle> {
-        let mut internal = WebrtcTransportInternal::new(SdkTransportLifeCycle::new(0));
+    fn create_connected_internal() -> WebrtcTransportInternal<TransportWithDatachannelLifeCycle> {
+        let mut internal = WebrtcTransportInternal::new(TransportWithDatachannelLifeCycle::new(0));
 
         // we need wait both webrtc and datachannel connected
         internal.on_str0m_event(100, Str0mInput::Connected).unwrap();
@@ -478,7 +465,7 @@ mod test {
 
     #[test]
     fn simple_flow_webrtc_connect_timeout() {
-        let mut internal = WebrtcTransportInternal::new(SdkTransportLifeCycle::new(0));
+        let mut internal = WebrtcTransportInternal::new(TransportWithDatachannelLifeCycle::new(0));
 
         internal.on_tick(9999).unwrap();
         assert_eq!(internal.endpoint_action(), None);
@@ -510,7 +497,7 @@ mod test {
 
     #[test]
     fn outgoing_rpc_must_wait_connected() {
-        let mut internal = WebrtcTransportInternal::new(SdkTransportLifeCycle::new(0));
+        let mut internal = WebrtcTransportInternal::new(TransportWithDatachannelLifeCycle::new(0));
 
         internal
             .on_endpoint_event(10, transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo::new_audio("test", "track", None))))

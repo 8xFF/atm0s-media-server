@@ -60,6 +60,17 @@ impl ClusterTrackMeta {
             label: None,
         }
     }
+
+    pub fn default_video() -> Self {
+        Self {
+            kind: MediaKind::Video,
+            scaling: ClusterTrackScalingType::Single,
+            layers: vec![],
+            status: ClusterTrackStatus::Connected,
+            active: true,
+            label: None,
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]

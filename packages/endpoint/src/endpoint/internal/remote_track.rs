@@ -143,7 +143,7 @@ impl RemoteTrack {
 #[cfg(test)]
 mod tests {
     use crate::{
-        endpoint_wrap::internal::remote_track::RemoteTrackOutput,
+        endpoint::internal::remote_track::RemoteTrackOutput,
         rpc::{RemoteTrackRpcIn, RemoteTrackRpcOut, SenderToggle},
         RpcRequest, RpcResponse,
     };
