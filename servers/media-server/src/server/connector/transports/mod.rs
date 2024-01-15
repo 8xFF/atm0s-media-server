@@ -11,9 +11,9 @@ pub enum ParseURIError {
 }
 
 #[async_trait]
-pub trait ConnectorTransporter<M: Message>: Send + Sync {
+pub trait ConnectorTransporter<M: Message + TryFrom<Vec<u8>>>: Send + Sync {
     async fn close(&mut self) -> Result<(), io::Error>;
-    async fn poll(&mut self) -> Result<(), io::Error>;
+    async fn send(&mut self, data: M) -> Result<(), io::Error>;
 }
 
 pub fn parse_uri(uri: &str) -> Result<(String, String), ParseURIError> {

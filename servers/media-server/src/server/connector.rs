@@ -16,10 +16,12 @@ use protocol::media_event_logs::MediaEndpointLogRequest;
 
 use crate::rpc::http::HttpRpcServer;
 
+mod queue;
 mod rpc;
 mod transports;
 
 use self::{
+    queue::TransporterQueue,
     rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, InternalControl, RpcEvent},
     transports::nats::NatsTransporter,
     transports::{parse_uri, ConnectorTransporter},
@@ -66,13 +68,9 @@ where
     if let Err(err) = yaque::recovery::recover(_opts.backup_path.clone()) {
         log::warn!("Error trying to recover queue: {:?}", err);
     }
-    let (mut tx, rx) = yaque::channel(_opts.backup_path.clone()).map_err(|e| {
-        log::error!("Error creating queue: {:?}", e);
-        "Error creating queue"
-    })?;
-    let mut transporter: Box<dyn ConnectorTransporter<MediaEndpointLogRequest>> = match protocol.as_str() {
+    let transporter: Box<dyn ConnectorTransporter<MediaEndpointLogRequest>> = match protocol.as_str() {
         "nats" => {
-            let nats = NatsTransporter::<MediaEndpointLogRequest>::new(_opts.mq_uri.clone(), _opts.mq_channel.clone(), rx)
+            let nats = NatsTransporter::<MediaEndpointLogRequest>::new(_opts.mq_uri.clone(), _opts.mq_channel.clone())
                 .await
                 .expect("Nats should be connected");
             Box::new(nats)
@@ -82,10 +80,17 @@ where
             return Err("Unsupported transporter");
         }
     };
+    let (mut transporter_queue, mut queue_sender) = match TransporterQueue::new(&_opts.backup_path, transporter) {
+        Ok((queue, tx)) => (queue, tx),
+        Err(err) => {
+            log::error!("Error creating queue: {:?}", err);
+            return Err("Error creating queue");
+        }
+    };
 
     async_std::task::spawn(async move {
         loop {
-            if let Err(e) = transporter.poll().await {
+            if let Err(e) = transporter_queue.poll().await {
                 log::error!("msg queue transport error {:?}", e);
                 panic!("msg queue transport error, should restart");
             }
@@ -127,7 +132,7 @@ where
 
                 let data = req.param();
 
-                if let Err(e) = tx.try_send(data.encode_to_vec()) {
+                if let Err(e) = queue_sender.try_send(data.encode_to_vec()) {
                     log::error!("Error sending message: {:?}", e);
                 }
 
