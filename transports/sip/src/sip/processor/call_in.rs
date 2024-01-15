@@ -91,7 +91,7 @@ impl CallInProcessor {
     pub fn accept(&mut self, now_ms: u64, body: Option<(ContentType, Vec<u8>)>) -> Result<(), super::ProcessorError> {
         match &mut self.state {
             State::Connecting { transaction } => {
-                log::info!("[CallInProcessor] accept call {:?}", body);
+                log::info!("[CallInProcessor] accept call");
                 transaction.on_event(now_ms, ServerInviteTransactionEvent::Status(StatusCode::OK, body));
                 self.process_transaction(now_ms);
                 Ok(())

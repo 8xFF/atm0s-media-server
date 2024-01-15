@@ -85,7 +85,7 @@ where
     C: Cluster<CE> + 'static,
     CE: ClusterEndpoint + 'static,
 {
-    let (rx, conn_id, old_tx) = context.create_peer(room, peer);
+    let (rx, conn_id, old_tx) = context.create_peer(room, peer, None);
     log::info!("[MediaServer] on rtmp connection from {} {}", room, peer);
 
     let mut session = match RtmpSession::new(&room, &peer, cluster, conn, rx).await {

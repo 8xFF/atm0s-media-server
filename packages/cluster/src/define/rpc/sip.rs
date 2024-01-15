@@ -59,8 +59,7 @@ pub struct SipIncomingInviteRequest {
     pub username: Option<String>,
     pub from_number: String,
     pub to_number: String,
-    pub call_id: String,
-    pub node_id: NodeId,
+    pub conn_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Enum, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]

@@ -123,7 +123,7 @@ where
     CE: ClusterEndpoint + 'static,
     L: TransportLifeCycle + 'static,
 {
-    let (rx, conn_id, old_tx) = context.create_peer(room, peer);
+    let (rx, conn_id, old_tx) = context.create_peer(room, peer, None);
     let (mut session, answer_sdp) = match WebrtcSession::new(
         room, peer, protocol, pub_scope, sub_scope, bitrate_mode, life_cycle, cluster, offer_sdp, senders, sdp_rewrite, rx, mix_minus_mode, mix_minus_size,
     )

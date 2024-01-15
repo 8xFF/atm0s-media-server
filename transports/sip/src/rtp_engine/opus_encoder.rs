@@ -9,9 +9,9 @@ pub struct OpusEncoder {
 impl OpusEncoder {
     pub fn new() -> Self {
         let mut encoder = Encoder::new(48000, opus::Channels::Mono, opus::Application::Voip).expect("Should create encoder");
-        encoder.set_bitrate(opus::Bitrate::Bits(20000));
-        encoder.set_inband_fec(true);
-        encoder.set_vbr(true);
+        encoder.set_bitrate(opus::Bitrate::Bits(20000)).expect("Should set opus_enc bitrate");
+        encoder.set_inband_fec(true).expect("Should set opus_enc inband_fec");
+        encoder.set_vbr(true).expect("Should set opus_enc vbr");
         Self { encoder }
     }
 

@@ -17,7 +17,7 @@ fn hook_register(req: Json<SipIncomingRegisterRequest>) -> Json<SipIncomingRegis
 fn hook_invite(req: Json<SipIncomingInviteRequest>) -> Json<SipIncomingInviteResponse> {
     log::info!("hook_invite: {:?}", req);
     Json(SipIncomingInviteResponse {
-        room_id: Some("room_id".to_string()),
+        room_id: Some("demo".to_string()),
         strategy: cluster::rpc::sip::SipIncomingInviteStrategy::Accept,
     })
 }

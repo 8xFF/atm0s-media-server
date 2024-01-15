@@ -1,8 +1,13 @@
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
-use async_std::{channel::bounded, stream::StreamExt};
+use async_std::{channel::bounded, prelude::FutureExt as _, stream::StreamExt};
 use cluster::{
-    rpc::sip::{SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest},
+    rpc::{
+        gateway::NodeHealthcheckResponse,
+        general::MediaEndpointCloseResponse,
+        sip::{SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest},
+        RpcEmitter, RpcEndpoint, RpcRequest,
+    },
     Cluster, ClusterEndpoint,
 };
 use endpoint::{
@@ -14,9 +19,15 @@ use media_utils::{ErrorDebugger, SystemTimer, Timer};
 use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
 use transport_sip::{GroupId, SipServerSocket, SipServerSocketError, SipServerSocketMessage, SipTransportIn, SipTransportOut};
 
-use crate::server::MediaServerContext;
+use crate::{rpc::http::HttpRpcServer, server::MediaServerContext};
 
-use super::{hooks::HooksSender, sip_in_session::SipInSession, sip_out_session::SipOutSession, InternalControl};
+use super::{
+    hooks::HooksSender,
+    rpc::{cluster::SipClusterRpc, RpcEvent},
+    sip_in_session::SipInSession,
+    sip_out_session::SipOutSession,
+    InternalControl,
+};
 
 type RmIn = EndpointRpcIn;
 type RrIn = RemoteTrackRpcIn;
@@ -56,34 +67,51 @@ async fn run_transport<T: Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut>>(
 }
 
 enum SipTransport {
-    In(SipTransportIn),
-    Out(SipTransportOut),
+    In(SipTransportIn, String),
+    Out(SipTransportOut, String),
 }
 
 enum InternalCmd {
     RegisterResult(String, GroupId, bool),
 }
 
-pub async fn start_server<C, CR>(mut cluster: C, ctx: MediaServerContext<InternalControl>, sip_addr: SocketAddr, hook_sender: HooksSender)
-where
+pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
+    mut cluster: C,
+    ctx: MediaServerContext<InternalControl>,
+    sip_addr: SocketAddr,
+    hook_sender: HooksSender,
+    mut http_server: HttpRpcServer<RpcEvent>,
+    mut rpc_endpoint: SipClusterRpc<RPC, REQ, EMITTER>,
+) where
     C: Cluster<CR> + 'static,
     CR: ClusterEndpoint + 'static,
+    RPC: RpcEndpoint<REQ, EMITTER>,
+    REQ: RpcRequest + Send + 'static,
+    EMITTER: RpcEmitter + Send + 'static,
 {
     let mut sip_server = SipServerSocket::new(sip_addr).await;
     let (tx, rx) = bounded::<(SipTransport, String, String)>(100);
 
+    let ctx_c = ctx.clone();
     async_std::task::spawn(async move {
         while let Ok((transport, room_id, peer_id)) = rx.recv().await {
             log::info!("[MediaServer] on sip connection from {} {}", room_id, peer_id);
             match transport {
-                SipTransport::In(transport) => {
-                    let mut session = match SipInSession::new(&room_id, &peer_id, &mut cluster, transport).await {
+                SipTransport::In(transport, conn_id) => {
+                    let (rx, conn_id, old_tx) = ctx_c.create_peer(&room_id, &peer_id, Some(conn_id));
+                    let mut session = match SipInSession::new(&room_id, &peer_id, &mut cluster, transport, rx).await {
                         Ok(res) => res,
                         Err(e) => {
                             log::error!("Error on create sip session: {:?}", e);
                             return;
                         }
                     };
+
+                    if let Some(old_tx) = old_tx {
+                        let (tx, rx) = async_std::channel::bounded(1);
+                        old_tx.send(InternalControl::ForceClose(tx)).await.log_error("Should send");
+                        rx.recv().timeout(Duration::from_secs(1)).await.log_error("Should ok");
+                    }
 
                     async_std::task::spawn(async move {
                         log::info!("[MediaServer] start loop for sip endpoint");
@@ -91,14 +119,21 @@ where
                         log::info!("[MediaServer] stop loop for sip endpoint");
                     });
                 }
-                SipTransport::Out(transport) => {
-                    let mut session = match SipOutSession::new(&room_id, &peer_id, &mut cluster, transport).await {
+                SipTransport::Out(transport, conn_id) => {
+                    let (rx, conn_id, old_tx) = ctx_c.create_peer(&room_id, &peer_id, Some(conn_id));
+                    let mut session = match SipOutSession::new(&room_id, &peer_id, &mut cluster, transport, rx).await {
                         Ok(res) => res,
                         Err(e) => {
                             log::error!("Error on create sip session: {:?}", e);
                             return;
                         }
                     };
+
+                    if let Some(old_tx) = old_tx {
+                        let (tx, rx) = async_std::channel::bounded(1);
+                        old_tx.send(InternalControl::ForceClose(tx)).await.log_error("Should send");
+                        rx.recv().timeout(Duration::from_secs(1)).await.log_error("Should ok");
+                    }
 
                     async_std::task::spawn(async move {
                         log::info!("[MediaServer] start loop for sip endpoint");
@@ -115,7 +150,13 @@ where
     let mut sessions = HashMap::new();
 
     loop {
-        select! {
+        let rpc = select! {
+            rpc = http_server.recv().fuse() => {
+                rpc
+            },
+            rpc = rpc_endpoint.recv().fuse() => {
+                rpc
+            },
             e = sip_server.recv().fuse() => match e {
                 Ok(event) => match event {
                     SipServerSocketMessage::RegisterValidate(group_id, digest, nonce, username, realm, hashed_password) => {
@@ -153,6 +194,7 @@ where
 
                             internal_tx.send(InternalCmd::RegisterResult(session_id, group_id, accept)).await.log_error("should send");
                         });
+                        continue;
                     }
                     SipServerSocketMessage::InCall(socket, req) => {
                         let tx = tx.clone();
@@ -160,14 +202,13 @@ where
                         let hook_sender = hook_sender.clone();
                         let from_number = req.from.uri.user().expect("").to_string();
                         let to_number = req.to.uri.user().expect("").to_string();
-                        let call_id = req.call_id.to_string();
+                        let conn_id = ctx.generate_conn_id();
                         let hook_req = SipIncomingInviteRequest {
                             source: socket.ctx().remote_addr.to_string(),
                             username: socket.ctx().username.clone(),
                             from_number: from_number.clone(),
                             to_number: to_number.clone(),
-                            call_id: call_id,
-                            node_id: 0, //TODO
+                            conn_id: conn_id.clone(),
                         };
 
                         let mut transport_in = match SipTransportIn::new(timer.now_ms(), sip_addr, socket, req).await {
@@ -186,10 +227,11 @@ where
                                             SipIncomingInviteStrategy::Accept => {
                                                 log::info!("[SipInCall] joined to {room_id} {from_number}");
                                                 transport_in.accept(timer.now_ms()).log_error("should accept");
-                                                tx.send((SipTransport::In(transport_in), room_id.clone(), from_number)).await.log_error("should send");
+                                                tx.send((SipTransport::In(transport_in, conn_id), room_id.clone(), from_number)).await.log_error("should send");
                                             }
                                             SipIncomingInviteStrategy::Reject => {
                                                 transport_in.reject(timer.now_ms()).log_error("should reject");
+                                                run_transport(&mut transport_in, timer).await;
                                             }
                                             SipIncomingInviteStrategy::WaitOtherPeers => {
                                                 todo!()
@@ -197,26 +239,32 @@ where
                                         }
                                     } else {
                                         transport_in.reject(timer.now_ms()).log_error("should reject");
+                                        run_transport(&mut transport_in, timer).await;
                                     }
                                 }
                                 Err(e) => {
                                     log::error!("Error on hook invite {:?}", e);
                                     transport_in.reject(timer.now_ms()).log_error("should reject");
+                                    run_transport(&mut transport_in, timer).await;
                                 }
                             }
                         });
+                        continue;
                     }
-                    SipServerSocketMessage::Continue => {}
+                    SipServerSocketMessage::Continue => {
+                        continue;
+                    }
                 },
                 Err(e) => match e {
                     SipServerSocketError::MessageParseError => {
                         log::warn!("Can not parse request");
+                        continue;
                     }
                     SipServerSocketError::NetworkError(e) => {
                         log::error!("Network error {:?}", e);
                         return;
                     }
-                },
+                }
             },
             e = internal_rx.recv().fuse() => match e {
                 Ok(event) => match event {
@@ -227,6 +275,7 @@ where
                         } else {
                             sip_server.reject_register(&group_id);
                         }
+                        continue;
                     }
                 },
                 Err(e) => {
@@ -234,6 +283,36 @@ where
                     return;
                 }
             }
+        };
+        match rpc {
+            Some(event) => match event {
+                RpcEvent::NodeHeathcheck(req) => {
+                    req.answer(Ok(NodeHealthcheckResponse { success: true }));
+                }
+                RpcEvent::InviteOutgoingClient(req) => {
+                    todo!()
+                }
+                RpcEvent::InviteOutgoingServer(req) => {
+                    todo!()
+                }
+                RpcEvent::MediaEndpointClose(req) => {
+                    if let Some(old_tx) = ctx.get_conn(&req.param().conn_id) {
+                        async_std::task::spawn(async move {
+                            let (tx, rx) = async_std::channel::bounded(1);
+                            old_tx.send(InternalControl::ForceClose(tx.clone())).await.log_error("need send");
+                            if let Ok(e) = rx.recv().timeout(Duration::from_secs(1)).await {
+                                let control_res = e.map_err(|_e| "INTERNAL_QUEUE_ERROR");
+                                req.answer(control_res.map(|_| MediaEndpointCloseResponse { success: true }));
+                            } else {
+                                req.answer(Err("REQUEST_TIMEOUT"));
+                            }
+                        });
+                    } else {
+                        req.answer(Err("NOT_FOUND"));
+                    }
+                }
+            },
+            None => {}
         }
     }
 }

@@ -1,26 +1,39 @@
+use async_std::channel::Sender;
 use clap::Parser;
 use cluster::{
-    rpc::{RpcEmitter, RpcEndpoint, RpcRequest},
+    rpc::{
+        general::{NodeInfo, ServerType},
+        RpcEmitter, RpcEndpoint, RpcRequest,
+    },
     Cluster, ClusterEndpoint,
 };
+use metrics_dashboard::build_dashboard_route;
+use poem::{web::Json, Route};
+use poem_openapi::OpenApiService;
 use std::net::SocketAddr;
+
+use crate::rpc::http::HttpRpcServer;
+
+use self::rpc::{cluster::SipClusterRpc, http::SipHttpApis, RpcEvent};
 
 use super::MediaServerContext;
 
 mod hooks;
 mod rpc;
-mod server_udp;
 mod sip_in_session;
 mod sip_out_session;
+mod sip_server;
 
-pub enum InternalControl {}
+pub enum InternalControl {
+    ForceClose(Sender<()>),
+}
 
 /// RTMP Media Server
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct SipArgs {
-    /// Sip listen addr
-    #[arg(env, long, default_value = "0.0.0.0:5060")]
+    /// Sip listen addr, must is a specific addr, not 0.0.0.0
+    #[arg(env, long)]
     pub addr: SocketAddr,
 
     /// Max conn
@@ -32,7 +45,7 @@ pub struct SipArgs {
     pub hook_url: String,
 }
 
-pub async fn run_sip_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: SipArgs, ctx: MediaServerContext<InternalControl>, mut cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_sip_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: SipArgs, ctx: MediaServerContext<InternalControl>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -40,7 +53,31 @@ where
     REQ: RpcRequest + Send + 'static,
     EMITTER: RpcEmitter + Send + 'static,
 {
+    let rpc_endpoint = SipClusterRpc::new(rpc_endpoint);
+    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
+
+    let api_service = OpenApiService::new(SipHttpApis, "Sip Server", "1.0.0").server("http://localhost:3000");
+    let ui = api_service.swagger_ui();
+    let spec = api_service.spec();
+    let node_info = NodeInfo {
+        node_id: cluster.node_id(),
+        address: format!("{}", cluster.node_addr()),
+        server_type: ServerType::SIP,
+    };
+
+    let route = Route::new()
+        .nest("/", api_service)
+        .nest("/dashboard/", build_dashboard_route())
+        .nest("/ui/", ui)
+        .at("/node-info/", poem::endpoint::make_sync(move |_| Json(node_info.clone())))
+        .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()));
+
+    // Init media-server related metrics
+    ctx.init_metrics();
+
+    http_server.start(route, ctx.clone()).await;
+
     let hook_sender = hooks::HooksSender::new(&opts.hook_url);
-    server_udp::start_server(cluster, ctx, opts.addr, hook_sender).await;
+    sip_server::start_server(cluster, ctx, opts.addr, hook_sender, http_server, rpc_endpoint).await;
     Ok(())
 }

@@ -124,7 +124,7 @@ impl RtpEngine {
                     port: addr.port(),
                     num_of_ports: None,
                     proto: ProtoType::RtpAvp,
-                    fmt: "110 8 0 101".to_string(),
+                    fmt: "8 101".to_string(),
                 },
                 info: None,
                 connections: vec![],
@@ -159,7 +159,7 @@ impl RtpEngine {
         let rtp = rtp_rs::RtpPacketBuilder::new()
             .payload_type(8)
             .sequence(pkt.seq_no.into())
-            .timestamp(pkt.time.into())
+            .timestamp((pkt.time / 6).into())
             .payload(&self.buf[0..size])
             .build()
             .expect("Should build rtp packet");
@@ -178,7 +178,8 @@ impl RtpEngine {
                         self.resampler.from_8k_to_48k(&self.g711_frame, &mut self.opus_frame);
                         let size = self.opus_encoder.encode(&self.opus_frame, &mut self.buf2).expect("Should encode");
 
-                        let pkt = MediaPacket::simple_audio(rtp.sequence_number().into(), rtp.timestamp(), self.buf2[0..size].to_vec());
+                        let mut pkt = MediaPacket::simple_audio(rtp.sequence_number().into(), rtp.timestamp().wrapping_mul(6), self.buf2[0..size].to_vec());
+                        pkt.ext_vals.audio_level = Some(-30); //TODO calculate audio level
                         break Some(pkt);
                     }
                 }

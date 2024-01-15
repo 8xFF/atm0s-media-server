@@ -28,7 +28,6 @@ pub struct RegisterProcessor {
     started_ms: u64,
     actions: VecDeque<ProcessorAction<RegisterProcessorAction>>,
     req: SipRequest,
-    nonce: String,
 }
 
 impl RegisterProcessor {
@@ -37,7 +36,6 @@ impl RegisterProcessor {
             started_ms: now_ms,
             actions: VecDeque::new(),
             req: init_req,
-            nonce: random_nonce(),
         }
     }
 
@@ -66,7 +64,7 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
             if let Ok(auth) = authorization.clone().into_typed() {
                 self.actions.push_back(ProcessorAction::LogicOutput(RegisterProcessorAction::Validate(
                     auth.uri.to_string(),
-                    self.nonce.clone(),
+                    auth.nonce,
                     auth.username,
                     REALM.to_string(),
                     auth.response,
@@ -77,7 +75,7 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
                 res.raw.headers.push(
                     rsip::typed::WwwAuthenticate {
                         realm: REALM.into(),
-                        nonce: self.nonce.clone().into(),
+                        nonce: random_nonce().into(),
                         algorithm: Some(rsip::headers::auth::Algorithm::Md5),
                         qop: None,
                         stale: None,
@@ -94,7 +92,7 @@ impl Processor<RegisterProcessorAction> for RegisterProcessor {
             res.raw.headers.push(
                 rsip::typed::WwwAuthenticate {
                     realm: REALM.into(),
-                    nonce: self.nonce.clone().into(),
+                    nonce: random_nonce().into(),
                     algorithm: Some(rsip::headers::auth::Algorithm::Md5),
                     qop: None,
                     stale: None,

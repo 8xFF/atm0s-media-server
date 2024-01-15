@@ -87,9 +87,9 @@ impl<InternalControl> MediaServerContext<InternalControl> {
 
     /// Insert pair (Room, Peer) to store
     /// Return (event receiver, connection id, old pair sender), old pair sender can be used to force close old session
-    pub fn create_peer(&self, room: &str, peer: &str) -> (Receiver<InternalControl>, String, Option<Sender<InternalControl>>) {
+    pub fn create_peer(&self, room: &str, peer: &str, conn_id: Option<String>) -> (Receiver<InternalControl>, String, Option<Sender<InternalControl>>) {
         let peer = PeerIdentity::new(room, peer);
-        let conn_id = self.generate_conn_id();
+        let conn_id = conn_id.unwrap_or_else(|| self.generate_conn_id());
         let (tx, rx) = bounded(10);
         let mut peers = self.peers.write();
         let mut conns = self.conns.write();

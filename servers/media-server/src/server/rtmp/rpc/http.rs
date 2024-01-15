@@ -7,22 +7,12 @@ use poem::{
     web::{Data, Path},
     Result,
 };
-use poem_openapi::{payload::Json, Object, OpenApi};
-use serde::{Deserialize, Serialize};
+use poem_openapi::{payload::Json, OpenApi};
 
 use crate::rpc::http::RpcReqResHttp;
 use crate::server::MediaServerContext;
 
 use super::RpcEvent;
-
-#[derive(Debug, Serialize, Deserialize, Object)]
-pub struct WebrtcSdp {
-    pub node_id: u32,
-    pub conn_id: String,
-    pub sdp: String,
-    /// This is use for provide proof of Price
-    pub service_token: Option<String>,
-}
 
 pub struct RtmpHttpApis;
 

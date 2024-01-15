@@ -59,6 +59,7 @@ impl SipServerSocket {
     }
 
     pub fn accept_register(&mut self, session: &GroupId) {
+        log::info!("Accept register {:?}", session);
         if let Some(remote_info) = self.remote_users.get_mut(&session.0) {
             remote_info.accepted = true;
         }
@@ -66,6 +67,7 @@ impl SipServerSocket {
     }
 
     pub fn reject_register(&mut self, session: &GroupId) {
+        log::info!("Reject register {:?}", session);
         self.remote_users.remove(&session.0);
         self.sip_core.reply_register_validate(session, false);
     }
@@ -109,24 +111,31 @@ impl SipServerSocket {
                     return Ok(SipServerSocketMessage::InCall(socket, req));
                 }
                 SipServerEvent::OnInCallRequest(group_id, req) => {
-                    self.virtual_socket_plane.forward(&group_id, SipMessage::Request(req));
+                    self.virtual_socket_plane
+                        .forward(&group_id, SipMessage::Request(req))
+                        .expect("Should forward to correct virtual socket");
                 }
                 SipServerEvent::OnOutCallRequest(group_id, req) => {
-                    self.virtual_socket_plane.forward(&group_id, SipMessage::Request(req));
+                    self.virtual_socket_plane
+                        .forward(&group_id, SipMessage::Request(req))
+                        .expect("Should forward to correct virtual socket");
                 }
                 SipServerEvent::OnOutCallResponse(group_id, res) => {
-                    self.virtual_socket_plane.forward(&group_id, SipMessage::Response(res));
+                    self.virtual_socket_plane
+                        .forward(&group_id, SipMessage::Response(res))
+                        .expect("Should forward to correct virtual socket");
                 }
                 SipServerEvent::SendRes(dest, res) => {
                     let buf = res.to_bytes();
-                    log::debug!("Send res to {} {}", dest, String::from_utf8(buf.to_vec()).unwrap());
+                    log::info!("Send res to {} {}", dest, String::from_utf8_lossy(&buf));
                     if let Err(e) = self.main_socket.send_to(&buf, dest).await {
                         log::error!("Sending udp to {dest} error {:?}", e);
                     }
                 }
                 SipServerEvent::SendReq(dest, req) => {
-                    log::debug!("Send req to {} {}", dest, req.method());
-                    if let Err(e) = self.main_socket.send_to(&req.to_bytes(), dest).await {
+                    let buf = req.to_bytes();
+                    log::debug!("Send req to {} {}", dest, String::from_utf8_lossy(&buf));
+                    if let Err(e) = self.main_socket.send_to(&buf, dest).await {
                         log::error!("Sending udp to {dest} error {:?}", e);
                     }
                 }
@@ -145,11 +154,11 @@ impl SipServerSocket {
                         match msg {
                             Some((dest, msg)) => {
                                 let dest = dest.unwrap_or(group_id.0);
-                                log::info!("Send to {} {}", dest, msg);
+                                log::info!("Group {:?} send to {} {}", group_id, dest, msg);
                                 out_msgs.push_back((dest, msg));
                             },
                             None => {
-                                log::info!("Close socket {:?}", group_id);
+                                log::info!("Group {:?} close socket", group_id);
                                 self.virtual_socket_plane.close_socket(&group_id);
                                 self.sip_core.close_in_call(&group_id);
                                 self.sip_core.close_out_call(&group_id);
@@ -165,7 +174,7 @@ impl SipServerSocket {
                         log::info!("Ping from {}", addr);
                     }
                     Ok((len, addr)) => {
-                        log::debug!("Recv from {}\n{}", addr, String::from_utf8(self.buf[..len].to_vec()).unwrap());
+                        log::info!("Recv from {}\n{}", addr, String::from_utf8(self.buf[..len].to_vec()).unwrap());
                         let req = match rsip::SipMessage::try_from(&self.buf[..len]) {
                             Ok(req) => req,
                             Err(e) => {
@@ -215,7 +224,7 @@ impl SipServerSocket {
 
         while let Some((dest, msg)) = out_msgs.pop_front() {
             let buf = msg.to_bytes();
-            log::debug!("Send to {}\n{}", dest, String::from_utf8(buf.to_vec()).unwrap());
+            log::info!("Send to {}\n{}", dest, String::from_utf8_lossy(&buf));
             if let Err(e) = self.main_socket.send_to(&buf, dest).await {
                 log::error!("Sending udp to {dest} error {:?}", e);
             }

@@ -10,7 +10,9 @@ use rsip::{
     typed::{Contact, From, To},
     Host, HostWithPort, Uri,
 };
-use transport::{Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError, TransportStateEvent};
+use transport::{
+    MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError, TransportStateEvent,
+};
 
 use crate::{
     processor::{
@@ -28,6 +30,8 @@ type RlIn = LocalTrackRpcIn;
 type RmOut = EndpointRpcOut;
 type RrOut = RemoteTrackRpcOut;
 type RlOut = LocalTrackRpcOut;
+
+const TRACK_AUDIO_MAIN: u16 = 1;
 
 pub struct SipTransportOut {
     rtp_engine: RtpEngine,
@@ -110,6 +114,17 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportOut {
                                     .map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
                             }
                         }
+
+                        self.actions.push_back(TransportIncomingEvent::State(TransportStateEvent::Connected));
+                        self.actions.push_back(TransportIncomingEvent::RemoteTrackAdded(
+                            "audio_main".to_string(),
+                            TRACK_AUDIO_MAIN,
+                            TrackMeta {
+                                kind: MediaKind::Audio,
+                                sample_rate: MediaSampleRate::Hz48000,
+                                label: None,
+                            },
+                        ));
                     }
                 },
             }
@@ -119,7 +134,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportOut {
             return Ok(event);
         }
 
-        let rtp_out = select! {
+        select! {
             event = self.socket.recv().fuse() => {
                 let msg = event.map_err(|_e| TransportError::NetworkError)?;
                 match msg {
@@ -130,21 +145,15 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportOut {
                         self.logic.on_res(now_ms, res).map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
                     }
                 }
-                None
+                Ok(TransportIncomingEvent::Continue)
             }
             event = self.rtp_engine.recv().fuse() => {
                 let rtp = event.ok_or_else(|| TransportError::NetworkError)?;
-                //TODO send to cluster insteand of echoback
-                Some(rtp)
+                let event = TransportIncomingEvent::RemoteTrackEvent(TRACK_AUDIO_MAIN, RemoteTrackIncomingEvent::MediaPacket(rtp));
+                self.actions.push_back(event);
+                Ok(TransportIncomingEvent::Continue)
             }
-        };
-
-        //TODO don't echoback
-        if let Some(rtp) = rtp_out {
-            self.rtp_engine.send(rtp).await;
         }
-
-        Ok(TransportIncomingEvent::Continue)
     }
 
     async fn close(&mut self) {
