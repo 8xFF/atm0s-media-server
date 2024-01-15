@@ -50,7 +50,7 @@ pub struct ConnectorArgs {
     pub max_conn: u64,
 }
 
-pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: ConnectorArgs, ctx: MediaServerContext<InternalControl>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: ConnectorArgs, ctx: MediaServerContext<InternalControl>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -60,17 +60,14 @@ where
 {
     let mut rpc_endpoint = ConnectorClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
-    let (protocol, _) = parse_uri(&_opts.mq_uri).map_err(|e| {
+    let (protocol, _) = parse_uri(&opts.mq_uri).map_err(|e| {
         log::error!("Error parsing MQ URI: {:?}", e);
         "Error parsing MQ URI"
     })?;
 
-    if let Err(err) = yaque::recovery::recover(_opts.backup_path.clone()) {
-        log::warn!("Error trying to recover queue: {:?}", err);
-    }
     let transporter: Box<dyn ConnectorTransporter<MediaEndpointLogRequest>> = match protocol.as_str() {
         "nats" => {
-            let nats = NatsTransporter::<MediaEndpointLogRequest>::new(_opts.mq_uri.clone(), _opts.mq_channel.clone())
+            let nats = NatsTransporter::<MediaEndpointLogRequest>::new(opts.mq_uri.clone(), opts.mq_channel.clone())
                 .await
                 .expect("Nats should be connected");
             Box::new(nats)
@@ -80,7 +77,7 @@ where
             return Err("Unsupported transporter");
         }
     };
-    let (mut transporter_queue, mut queue_sender) = match TransporterQueue::new(&_opts.backup_path, transporter) {
+    let (mut transporter_queue, mut queue_sender) = match TransporterQueue::new(&opts.backup_path, transporter) {
         Ok((queue, tx)) => (queue, tx),
         Err(err) => {
             log::error!("Error creating queue: {:?}", err);
