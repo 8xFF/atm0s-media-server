@@ -106,6 +106,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportOut {
                 }
                 ProcessorAction::LogicOutput(out) => match out {
                     CallOutProcessorAction::Accepted(body) => {
+                        log::info!("Accepted");
                         if let Some((_typ, body)) = body {
                             if let Ok(sdp) = String::from_utf8(body) {
                                 self.rtp_engine

@@ -7,6 +7,7 @@ use std::{
 use async_std::{net::UdpSocket, stream::Interval};
 use futures::{select, FutureExt, StreamExt};
 use media_utils::{SystemTimer, Timer};
+use rsip::headers::CallId;
 
 //TODO implement simple firewall here for blocking some ip addresses
 
@@ -72,10 +73,10 @@ impl SipServerSocket {
         self.sip_core.reply_register_validate(session, false);
     }
 
-    pub fn create_call(&mut self, call_id: &str, dest: SocketAddr) -> Result<VirtualSocket<GroupId, SipMessage>, SipServerSocketError> {
+    pub fn create_call(&mut self, call_id: &CallId, dest: SocketAddr) -> VirtualSocket<GroupId, SipMessage> {
         let group_id = GroupId(dest, call_id.to_string().into());
         self.sip_core.open_out_call(&group_id);
-        Ok(self.virtual_socket_plane.new_socket(group_id, VirtualSocketContext { remote_addr: dest, username: None }))
+        self.virtual_socket_plane.new_socket(group_id, VirtualSocketContext { remote_addr: dest, username: None })
     }
 
     pub async fn recv(&mut self) -> Result<SipServerSocketMessage, SipServerSocketError> {

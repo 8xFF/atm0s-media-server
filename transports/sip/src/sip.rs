@@ -90,6 +90,7 @@ impl SipCore {
     }
 
     pub fn open_out_call(&mut self, group_id: &GroupId) {
+        log::info!("create out call {:?}", group_id);
         self.invite_out_groups.insert(group_id.clone(), ());
     }
 
@@ -138,6 +139,7 @@ impl SipCore {
                     self.actions.push(SipServerEvent::OnOutCallRequest(group_id, req));
                     Ok(())
                 } else {
+                    log::info!("on_req not found {:?}, {:?}", group_id, self.invite_out_groups);
                     Err(SipServerError::ProcessorNotFound)
                 }
             }
@@ -153,6 +155,7 @@ impl SipCore {
             self.actions.push(SipServerEvent::OnOutCallResponse(group_id, res));
             Ok(())
         } else {
+            log::info!("on_res not found {:?}, {:?}", group_id, self.invite_out_groups);
             Err(SipServerError::ProcessorNotFound)
         }
     }

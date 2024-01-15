@@ -440,6 +440,7 @@ dependencies = [
  "poem",
  "poem-openapi",
  "prost",
+ "rand 0.8.5",
  "reqwest",
  "rsip",
  "rust-embed",

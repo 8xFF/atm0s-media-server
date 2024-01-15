@@ -1,4 +1,3 @@
-use atm0s_sdn::NodeId;
 use poem_openapi::{Enum, Object};
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
@@ -12,6 +11,7 @@ pub struct SipOutgoingAuth {
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct SipOutgoingInviteClientRequest {
     pub room_id: String,
+    pub dest_session_id: String,
     pub from_number: String,
     pub server_alias: String,
     pub hook_uri: String,
@@ -30,8 +30,7 @@ pub struct SipOutgoingInviteServerRequest {
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct SipOutgoingInviteResponse {
-    pub call_id: String,
-    pub status: String,
+    pub session_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]

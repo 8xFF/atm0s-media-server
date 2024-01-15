@@ -5,7 +5,7 @@ use cluster::{
     rpc::{
         gateway::NodeHealthcheckResponse,
         general::MediaEndpointCloseResponse,
-        sip::{SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest},
+        sip::{SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest, SipOutgoingInviteResponse},
         RpcEmitter, RpcEndpoint, RpcRequest,
     },
     Cluster, ClusterEndpoint,
@@ -16,10 +16,30 @@ use endpoint::{
 };
 use futures::{select, FutureExt};
 use media_utils::{ErrorDebugger, SystemTimer, Timer};
+use rsip::{
+    headers::CallId,
+    typed::{From, To},
+    Auth, Host, HostWithPort, Param, Uri,
+};
 use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
 use transport_sip::{GroupId, SipServerSocket, SipServerSocketError, SipServerSocketMessage, SipTransportIn, SipTransportOut};
 
 use crate::{rpc::http::HttpRpcServer, server::MediaServerContext};
+
+fn random_call_id() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let mut res = String::new();
+    for _ in 0..16 {
+        res.push_str(&format!("{:x}", rng.gen::<u8>()));
+    }
+    res
+}
+
+struct ClientInfo {
+    username: String,
+    addr: SocketAddr,
+}
 
 use super::{
     hooks::HooksSender,
@@ -72,7 +92,7 @@ enum SipTransport {
 }
 
 enum InternalCmd {
-    RegisterResult(String, GroupId, bool),
+    RegisterResult(String, String, GroupId, bool),
 }
 
 pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
@@ -166,7 +186,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                         let internal_tx = internal_tx.clone();
                         async_std::task::spawn(async move {
                             let res = hook_sender.hook_register(SipIncomingRegisterRequest {
-                                username,
+                                username: username.clone(),
                                 session_id: session_id.clone(),
                                 realm,
                             }).await;
@@ -192,7 +212,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                                 }
                             };
 
-                            internal_tx.send(InternalCmd::RegisterResult(session_id, group_id, accept)).await.log_error("should send");
+                            internal_tx.send(InternalCmd::RegisterResult(session_id, username, group_id, accept)).await.log_error("should send");
                         });
                         continue;
                     }
@@ -268,10 +288,13 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
             },
             e = internal_rx.recv().fuse() => match e {
                 Ok(event) => match event {
-                    InternalCmd::RegisterResult(session_id, group_id, result) => {
+                    InternalCmd::RegisterResult(session_id, username, group_id, result) => {
                         if result {
                             sip_server.accept_register(&group_id);
-                            sessions.insert(session_id, group_id);
+                            sessions.insert(session_id, ClientInfo {
+                                username,
+                                addr: group_id.0,
+                            });
                         } else {
                             sip_server.reject_register(&group_id);
                         }
@@ -290,7 +313,59 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                     req.answer(Ok(NodeHealthcheckResponse { success: true }));
                 }
                 RpcEvent::InviteOutgoingClient(req) => {
-                    todo!()
+                    let dest_session_id = req.param().dest_session_id.clone();
+                    if let Some(client_info) = sessions.get(&dest_session_id) {
+                        let param = req.param().clone();
+                        let call_id: CallId = random_call_id().into();
+                        let socket = sip_server.create_call(&call_id, client_info.addr);
+                        let to_user = client_info.username.clone();
+                        let local_from = From {
+                            display_name: None,
+                            uri: Uri {
+                                scheme: Some(rsip::Scheme::Sip),
+                                auth: Some(Auth {
+                                    user: param.from_number.clone(),
+                                    password: None,
+                                }),
+                                host_with_port: HostWithPort {
+                                    host: Host::Domain(sip_addr.ip().to_string().into()),
+                                    port: Some(sip_addr.port().into()),
+                                },
+                                ..Default::default()
+                            },
+                            params: vec![Param::Transport(rsip::Transport::Udp), Param::Tag(timer.now_ms().to_string().into())],
+                        };
+                        let remote_to = To {
+                            display_name: None,
+                            uri: Uri {
+                                scheme: Some(rsip::Scheme::Sip),
+                                auth: Some(Auth {
+                                    user: to_user.clone(),
+                                    password: None,
+                                }),
+                                host_with_port: HostWithPort {
+                                    host: Host::Domain(client_info.addr.ip().to_string().into()),
+                                    port: Some(client_info.addr.port().into()),
+                                },
+                                ..Default::default()
+                            },
+                            params: vec![],
+                        };
+
+                        let conn_id = ctx.generate_conn_id();
+                        let tx = tx.clone();
+                        let timer = timer.clone();
+                        async_std::task::spawn(async move {
+                            if let Ok(transport) = SipTransportOut::new(timer.now_ms(), sip_addr, call_id.clone().into(), local_from, remote_to, socket).await {
+                                req.answer(Ok(SipOutgoingInviteResponse { session_id: conn_id.clone() }));
+                                tx.send((SipTransport::Out(transport, conn_id), param.room_id, to_user)).await.log_error("should send");
+                            } else {
+                                req.answer(Err("INTERNAL_ERROR"));
+                            }
+                        });
+                    } else {
+                        req.answer(Err("NOT_FOUND"));
+                    }
                 }
                 RpcEvent::InviteOutgoingServer(req) => {
                     todo!()
