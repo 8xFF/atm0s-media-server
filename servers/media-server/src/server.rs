@@ -135,10 +135,6 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         self.token_verifier.clone()
     }
 
-    fn signer(&self) -> Arc<dyn SessionTokenSigner + Send + Sync> {
-        self.token_signer.clone()
-    }
-
     pub fn generate_conn_id(&self) -> String {
         let mut counter = self.conn_counter.write();
         *counter += 1;

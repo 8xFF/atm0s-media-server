@@ -8,7 +8,7 @@ use cluster::{
         webrtc::{WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT,
     },
-    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    Cluster, ClusterEndpoint, MEDIA_SERVER_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{SystemTimer, Timer};

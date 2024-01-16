@@ -47,9 +47,8 @@ use std::{collections::VecDeque, net::SocketAddr};
 
 use rsip::{
     headers::{CallId, ContentType},
-    message::HeadersExt,
     typed::{Allow, Contact, From, MediaType, To},
-    Auth, Method, Param,
+    Method, Param,
 };
 
 use crate::{sip::utils::generate_random_string, sip_request::SipRequest, sip_response::SipResponse};
@@ -99,6 +98,7 @@ pub enum ClientInviteTransactionAction {
     Terminated(Terminated),
 }
 
+#[allow(unused)]
 pub struct ClientInviteTransaction {
     call_id: CallId,
     local_contact: Contact,
@@ -233,7 +233,7 @@ impl ClientInviteTransaction {
         }
     }
 
-    fn on_terminated(&mut self, state: (), now_ms: u64, event: ClientInviteTransactionEvent) {}
+    fn on_terminated(&mut self, _state: (), _now_ms: u64, _event: ClientInviteTransactionEvent) {}
 
     fn create_invite_request(call_id: CallId, local_contact: Contact, local_from: From, remote_to: To, local_sdp: &str) -> SipRequest {
         let body = local_sdp.as_bytes().to_vec();
@@ -279,11 +279,11 @@ impl ClientInviteTransaction {
             uri: self.origin_request.raw.uri.clone(),
             version: rsip::Version::V2,
             headers: rsip::Headers::from(vec![
-                rsip::Header::Via(self.origin_request.raw.via_header().expect("Should have via").clone().into()),
+                rsip::Header::Via(self.origin_request.via.clone().into()),
                 rsip::Header::MaxForwards(rsip::headers::MaxForwards::from(70)),
-                rsip::Header::From(self.origin_request.raw.from_header().expect("Should have from").clone().into()),
-                rsip::Header::To(for_res.raw.to_header().expect("Should have to").clone().into()),
-                rsip::Header::CallId(self.origin_request.raw.call_id_header().expect("Should has call_id header").clone().into()),
+                rsip::Header::From(self.origin_request.from.clone().into()),
+                rsip::Header::To(for_res.to.clone().into()),
+                rsip::Header::CallId(self.origin_request.call_id.clone().into()),
                 rsip::Header::CSeq(rsip::typed::CSeq { seq: 1, method: rsip::Method::Ack }.into()),
                 rsip::Header::ContentLength(rsip::headers::ContentLength::from(0)),
                 rsip::Header::UserAgent(rsip::headers::UserAgent::default()),

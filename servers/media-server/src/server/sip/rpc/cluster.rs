@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 
-use cluster::rpc::{RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_SIP_INVITE_OUTGOING_CLIENT, RPC_SIP_INVITE_OUTGOING_SERVER};
+use cluster::rpc::{
+    gateway::{NodeHealthcheckRequest, NodeHealthcheckResponse},
+    RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_NODE_HEALTHCHECK, RPC_SIP_INVITE_OUTGOING_CLIENT, RPC_SIP_INVITE_OUTGOING_SERVER,
+};
 
 use super::RpcEvent;
 
@@ -22,6 +25,11 @@ impl<RPC: RpcEndpoint<Req, Emitter>, Req: RpcRequest, Emitter: RpcEmitter> SipCl
         loop {
             let event = self.rpc.recv().await?;
             match event.cmd() {
+                RPC_NODE_HEALTHCHECK => {
+                    if let Some(req) = event.parse::<NodeHealthcheckRequest, _>() {
+                        req.answer(Ok(NodeHealthcheckResponse { success: true }));
+                    }
+                }
                 RPC_MEDIA_ENDPOINT_CLOSE => {
                     if let Some(req) = event.parse() {
                         return Some(RpcEvent::MediaEndpointClose(req));

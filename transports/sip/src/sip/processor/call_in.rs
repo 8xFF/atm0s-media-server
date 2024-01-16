@@ -169,7 +169,7 @@ impl CallInProcessor {
             },
             version: rsip::Version::V2,
             headers: Headers::from(vec![
-                rsip::Header::Via(headers::Via::from(format!("SIP/2.0/UDP sip-proxy.8xff.live:5060;branch=z9hG4bK-{}", generate_random_string(8)))),
+                rsip::Header::Via(headers::Via::from(format!("SIP/2.0/UDP sip.media-server.8xff.io:5060;branch=z9hG4bK-{}", generate_random_string(8)))),
                 rsip::Header::MaxForwards(headers::MaxForwards::from(70)),
                 rsip::Header::From(headers::From::from(self.init_req.to.to_string())),
                 rsip::Header::To(headers::To::from(self.init_req.from.to_string())),

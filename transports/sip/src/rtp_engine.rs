@@ -1,6 +1,5 @@
 use std::{
     net::{IpAddr, SocketAddr},
-    os::fd::FromRawFd,
     str::FromStr,
 };
 

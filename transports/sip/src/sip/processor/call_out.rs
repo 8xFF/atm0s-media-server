@@ -32,6 +32,7 @@ pub enum CallOutProcessorAction {
     Accepted(Option<(ContentType, Vec<u8>)>),
 }
 
+#[allow(unused)]
 pub struct CallOutProcessor {
     state: State,
     local_contact: Contact,
@@ -131,7 +132,7 @@ impl CallOutProcessor {
             },
             version: rsip::Version::V2,
             headers: Headers::from(vec![
-                rsip::Header::Via(headers::Via::from(format!("SIP/2.0/UDP sip-proxy.8xff.live:5060;branch=z9hG4bK-{}", generate_random_string(8)))),
+                rsip::Header::Via(headers::Via::from(format!("SIP/2.0/UDP sip.media-server.8xff.io:5060;branch=z9hG4bK-{}", generate_random_string(8)))),
                 rsip::Header::MaxForwards(headers::MaxForwards::from(70)),
                 rsip::Header::From(self.local_from.clone().into()),
                 rsip::Header::To(self.remote_to.clone().into()),
@@ -146,7 +147,7 @@ impl CallOutProcessor {
 }
 
 impl Processor<CallOutProcessorAction> for CallOutProcessor {
-    fn start(&mut self, now_ms: u64) -> Result<(), ProcessorError> {
+    fn start(&mut self, _now_ms: u64) -> Result<(), ProcessorError> {
         Ok(())
     }
 

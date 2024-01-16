@@ -3,7 +3,6 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 use async_std::{channel::bounded, prelude::FutureExt as _, stream::StreamExt};
 use cluster::{
     rpc::{
-        gateway::NodeHealthcheckResponse,
         general::MediaEndpointCloseResponse,
         sip::{SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest, SipOutgoingInviteResponse},
         RpcEmitter, RpcEndpoint, RpcRequest,
@@ -118,7 +117,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
             log::info!("[MediaServer] on sip connection from {} {}", room_id, peer_id);
             match transport {
                 SipTransport::In(transport, conn_id) => {
-                    let (rx, conn_id, old_tx) = ctx_c.create_peer(&room_id, &peer_id, Some(conn_id));
+                    let (rx, _conn_id, old_tx) = ctx_c.create_peer(&room_id, &peer_id, Some(conn_id));
                     let mut session = match SipInSession::new(&room_id, &peer_id, &mut cluster, transport, rx).await {
                         Ok(res) => res,
                         Err(e) => {
@@ -140,7 +139,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                     });
                 }
                 SipTransport::Out(transport, conn_id) => {
-                    let (rx, conn_id, old_tx) = ctx_c.create_peer(&room_id, &peer_id, Some(conn_id));
+                    let (rx, _conn_id, old_tx) = ctx_c.create_peer(&room_id, &peer_id, Some(conn_id));
                     let mut session = match SipOutSession::new(&room_id, &peer_id, &mut cluster, transport, rx).await {
                         Ok(res) => res,
                         Err(e) => {
@@ -309,9 +308,6 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
         };
         match rpc {
             Some(event) => match event {
-                RpcEvent::NodeHeathcheck(req) => {
-                    req.answer(Ok(NodeHealthcheckResponse { success: true }));
-                }
                 RpcEvent::InviteOutgoingClient(req) => {
                     let dest_session_id = req.param().dest_session_id.clone();
                     if let Some(client_info) = sessions.get(&dest_session_id) {
@@ -367,7 +363,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                         req.answer(Err("NOT_FOUND"));
                     }
                 }
-                RpcEvent::InviteOutgoingServer(req) => {
+                RpcEvent::InviteOutgoingServer(_req) => {
                     todo!()
                 }
                 RpcEvent::MediaEndpointClose(req) => {

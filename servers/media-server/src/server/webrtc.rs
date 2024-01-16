@@ -4,7 +4,7 @@ use async_std::{channel::Sender, prelude::FutureExt as _};
 use clap::Parser;
 use cluster::{
     rpc::{
-        gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
+        gateway::{NodePing, NodePong, ServiceInfo},
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         webrtc::{WebrtcConnectRequestSender, WebrtcConnectResponse, WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         whep::WhepConnectResponse,
@@ -149,9 +149,6 @@ where
         };
 
         match rpc {
-            RpcEvent::NodeHeathcheck(req) => {
-                req.answer(Ok(NodeHealthcheckResponse { success: true }));
-            }
             RpcEvent::WhipConnect(req) => {
                 let s_token = if let Some(s_token) = req.param().verify(ctx.verifier().deref()) {
                     s_token

@@ -39,7 +39,6 @@ impl TrackInfoQueue {
                 name: name.to_string(),
                 uuid: uuid.to_string(),
             }),
-            _ => {}
         }
     }
 

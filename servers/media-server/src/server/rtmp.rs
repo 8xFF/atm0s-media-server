@@ -11,7 +11,7 @@ use cluster::{
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{AutoCancelTask, ErrorDebugger};
@@ -168,10 +168,10 @@ where
                     )
                     .await
                     {
-                        Ok(conn_id) => {
+                        Ok(_conn_id) => {
                             //TODO send conn_id to hook
                         }
-                        Err(err) => {
+                        Err(_err) => {
                             //TODO send err to hook
                         }
                     }
@@ -183,9 +183,6 @@ where
         };
 
         match rpc {
-            RpcEvent::NodeHeathcheck(req) => {
-                req.answer(Ok(NodeHealthcheckResponse { success: true }));
-            }
             RpcEvent::MediaEndpointClose(req) => {
                 if let Some(old_tx) = ctx.get_conn(&req.param().conn_id) {
                     async_std::task::spawn(async move {

@@ -14,7 +14,6 @@ use super::InternalControl;
 #[derive(Debug)]
 pub(super) enum RtmpSessionError {
     PreconditionError,
-    NetworkError,
 }
 
 pub(super) struct RtmpSession<E: ClusterEndpoint> {

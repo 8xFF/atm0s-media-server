@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 
-use cluster::rpc::{RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING};
+use cluster::rpc::{
+    gateway::{NodeHealthcheckRequest, NodeHealthcheckResponse},
+    RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_HEALTHCHECK, RPC_NODE_PING,
+};
 
 use super::RpcEvent;
 
@@ -22,6 +25,11 @@ impl<RPC: RpcEndpoint<Req, Emitter>, Req: RpcRequest, Emitter: RpcEmitter> Gatew
         loop {
             let event = self.rpc.recv().await?;
             match event.cmd() {
+                RPC_NODE_HEALTHCHECK => {
+                    if let Some(req) = event.parse::<NodeHealthcheckRequest, _>() {
+                        req.answer(Ok(NodeHealthcheckResponse { success: true }));
+                    }
+                }
                 RPC_NODE_PING => {
                     if let Some(req) = event.parse() {
                         return Some(RpcEvent::NodePing(req));

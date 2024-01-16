@@ -1,4 +1,5 @@
 use async_std::channel::Sender;
+use cluster::rpc::gateway::NodeHealthcheckRequest;
 use cluster::rpc::general::MediaEndpointCloseRequest;
 use cluster::rpc::general::MediaEndpointCloseResponse;
 use media_utils::Response;
@@ -18,6 +19,16 @@ pub struct RtmpHttpApis;
 
 #[OpenApi]
 impl RtmpHttpApis {
+    /// get node health
+    #[oai(path = "/health", method = "get")]
+    async fn health(&self, Data(_ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>) -> Result<Json<Response<String>>> {
+        Ok(Json(Response {
+            status: true,
+            error: None,
+            data: Some("OK".to_string()),
+        }))
+    }
+
     /// delete Rtmp conn
     #[oai(path = "/rtmp/conn/:conn_id", method = "delete")]
     async fn conn_rtmp_delete(&self, Data(ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>, conn_id: Path<String>) -> Result<Json<Response<String>>> {

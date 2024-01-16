@@ -16,6 +16,16 @@ pub struct SipHttpApis;
 
 #[OpenApi]
 impl SipHttpApis {
+    /// get node health
+    #[oai(path = "/health", method = "get")]
+    async fn health(&self, Data(_ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>) -> Result<Json<Response<String>>> {
+        Ok(Json(Response {
+            status: true,
+            error: None,
+            data: Some("OK".to_string()),
+        }))
+    }
+
     /// invite a client
     #[oai(path = "/sip/invite/client", method = "post")]
     async fn invite_session(
