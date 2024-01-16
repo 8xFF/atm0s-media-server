@@ -1,49 +1,45 @@
-use std::marker::PhantomData;
+use std::{io, marker::PhantomData, time::Duration};
 
 use async_trait::async_trait;
 use prost::Message;
 
 use super::ConnectorTransporter;
 
-pub struct NatsTransporter<M: Message> {
-    pub conn: nats::asynk::Connection,
-    pub subject: String,
-    pub sub: Option<nats::asynk::Subscription>,
+pub struct NatsTransporter<M: Message + Clone + TryFrom<Vec<u8>>> {
+    conn: nats::asynk::Connection,
+    subject: String,
     _tmp: PhantomData<M>,
 }
 
-impl<M: Message> NatsTransporter<M> {
-    pub async fn new(uri: String, subject: String) -> Result<Self, String> {
-        let res = nats::asynk::connect(&uri).await;
-
-        let conn = match res {
-            Ok(conn) => conn,
-            Err(e) => {
-                return Err(e.to_string());
-            }
-        };
-
+impl<M: Message + Clone + TryFrom<Vec<u8>>> NatsTransporter<M> {
+    pub async fn new(uri: String, subject: String) -> Result<Self, io::Error> {
+        log::info!("Connecting to NATS server: {}", uri);
         Ok(Self {
-            conn,
+            conn: nats::asynk::Options::new()
+                .retry_on_failed_connect()
+                .max_reconnects(999999999) //big value ensure nats will auto reconnect forever in theory
+                .reconnect_delay_callback(|c| Duration::from_millis(std::cmp::min((c * 100) as u64, 10000))) //max wait 10s
+                .disconnect_callback(|| log::warn!("connection has been lost"))
+                .reconnect_callback(|| log::warn!("connection has been reestablished"))
+                .close_callback(|| panic!("connection has been closed")) //this should not happend
+                .connect(uri)
+                .await?,
             subject,
-            sub: None,
             _tmp: Default::default(),
         })
     }
 }
 
 #[async_trait]
-impl<M: Message> ConnectorTransporter<M> for NatsTransporter<M> {
-    async fn send(&self, data: &M) -> Result<(), String> {
-        let data: Vec<u8> = data.encode_to_vec();
-        self.conn.publish(&self.subject, data).await.map_err(|e| e.to_string())?;
-        return Ok(());
+impl<M: Message + Clone + TryFrom<Vec<u8>>> ConnectorTransporter<M> for NatsTransporter<M> {
+    async fn send(&mut self, data: M) -> Result<(), io::Error> {
+        let data = data.encode_to_vec();
+        self.conn.publish(&self.subject, data).await?;
+        Ok(())
     }
 
-    async fn close(&mut self) -> Result<(), String> {
-        if let Some(sub) = self.sub.take() {
-            let _ = sub.unsubscribe().await.map_err(|e: std::io::Error| e.to_string())?;
-        }
+    async fn close(&mut self) -> Result<(), io::Error> {
+        self.conn.close().await?;
         Ok(())
     }
 }
