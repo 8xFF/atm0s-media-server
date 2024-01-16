@@ -1,20 +1,20 @@
 <p align="center">
- <a href="https://github.com/8xFF/decentralized-media-server/actions">
-  <img src="https://github.com/8xFF/decentralized-media-server/actions/workflows/rust.yml/badge.svg?branch=master">
+ <a href="https://github.com/8xFF/atm0s-media-server/actions">
+  <img src="https://github.com/8xFF/atm0s-media-server/actions/workflows/rust.yml/badge.svg?branch=master">
  </a>
- <a href="https://codecov.io/gh/8xff/decentralized-media-server">
-  <img src="https://codecov.io/gh/8xff/decentralized-media-server/branch/master/graph/badge.svg">
+ <a href="https://codecov.io/gh/8xff/atm0s-media-server">
+  <img src="https://codecov.io/gh/8xff/atm0s-media-server/branch/master/graph/badge.svg">
  </a>
- <a href="https://deps.rs/repo/github/8xff/decentralized-sdn">
-  <img src="https://deps.rs/repo/github/8xff/decentralized-sdn/status.svg">
- </a>
-<!--  <a href="https://crates.io/crates/8xff-media-server">
+<!--  <a href="https://deps.rs/repo/github/8xff/atm0s-media-server">
+  <img src="https://deps.rs/repo/github/8xff/atm0s-media-server/status.svg">
+ </a> -->
+<!--  <a href="https://crates.io/crates/atm0s-media-server">
   <img src="https://img.shields.io/crates/v/8xff-sdn.svg">
  </a> -->
-<!--  <a href="https://docs.rs/8xff-media-server">
+<!--  <a href="https://docs.rs/atm0s-media-server">
   <img src="https://docs.rs/8xff-sdn/badge.svg">
  </a> -->
- <a href="https://github.com/8xFF/decentralized-media-server/blob/master/LICENSE">
+ <a href="https://github.com/8xFF/atm0s-media-server/blob/master/LICENSE">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
  </a>
  <a href="https://discord.gg/qXr5zxsJWp">
@@ -196,11 +196,11 @@ TODO: Diagram
 ## Contributing
 The project is continuously being improved and updated. We are always looking for ways to make it better, whether that's through optimizing performance, adding new features, or fixing bugs. We welcome contributions from the community and are always looking for new ideas and suggestions. If you find it interesting or believe it could be helpful, we welcome your contributions to the codebase or consider starring the repository to show your support and motivate our team!
 
-For more information, you can join our [Discord channel](https://discord.gg/tJ6dxBRk)
+For more information, you can join our [Discord channel](https://discord.gg/qXr5zxsJWp)
 
 ## Roadmap
-The first version will be released together with [our SDN](https://github.com/8xFF/decentralized-sdn) at the end of 2023.
-Details on our roadmap can be seen [TBA]().
+The first version will be released together with [our Overlay Network](https://github.com/8xFF/atm0s-sdn).
+Details on our roadmap can be seen [Roadmap](https://github.com/8xFF/atm0s-media-server/issues/69).
 
 ## License
 

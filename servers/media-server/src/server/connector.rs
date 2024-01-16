@@ -11,14 +11,17 @@ use futures::{select, FutureExt};
 use metrics_dashboard::build_dashboard_route;
 use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
+use prost::Message;
 use protocol::media_event_logs::MediaEndpointLogRequest;
 
 use crate::rpc::http::HttpRpcServer;
 
+mod queue;
 mod rpc;
 mod transports;
 
 use self::{
+    queue::TransporterQueue,
     rpc::{cluster::ConnectorClusterRpc, http::ConnectorHttpApis, InternalControl, RpcEvent},
     transports::nats::NatsTransporter,
     transports::{parse_uri, ConnectorTransporter},
@@ -38,12 +41,16 @@ pub struct ConnectorArgs {
     #[arg(env, long, default_value = "atm0s/event_log")]
     mq_channel: String,
 
+    /// Filebase backup path for logs
+    #[arg(env, long, default_value = ".atm0s/data/connector-queue")]
+    backup_path: String,
+
     /// Max conn
     #[arg(env, long, default_value_t = 100)]
     pub max_conn: u64,
 }
 
-pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: ConnectorArgs, ctx: MediaServerContext<InternalControl>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: ConnectorArgs, ctx: MediaServerContext<InternalControl>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -53,26 +60,39 @@ where
 {
     let mut rpc_endpoint = ConnectorClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
-    let (protocol, _) = parse_uri(&_opts.mq_uri).map_err(|e| {
+    let (protocol, _) = parse_uri(&opts.mq_uri).map_err(|e| {
         log::error!("Error parsing MQ URI: {:?}", e);
         "Error parsing MQ URI"
     })?;
-    let transporter: Result<Box<dyn ConnectorTransporter<MediaEndpointLogRequest>>, String> = match protocol.as_str() {
+
+    let transporter: Box<dyn ConnectorTransporter<MediaEndpointLogRequest>> = match protocol.as_str() {
         "nats" => {
-            let nats = NatsTransporter::new(_opts.mq_uri.clone(), _opts.mq_channel.clone()).await;
-            match nats {
-                Ok(nats) => Ok(Box::new(nats)),
-                Err(e) => {
-                    log::error!("Error creating Nats transporter: {:?}", e);
-                    return Err("Error creating Nats transporter");
-                }
-            }
+            let nats = NatsTransporter::<MediaEndpointLogRequest>::new(opts.mq_uri.clone(), opts.mq_channel.clone())
+                .await
+                .expect("Nats should be connected");
+            Box::new(nats)
         }
         _ => {
             log::error!("Unsupported transporter");
             return Err("Unsupported transporter");
         }
     };
+    let (mut transporter_queue, mut queue_sender) = match TransporterQueue::new(&opts.backup_path, transporter) {
+        Ok((queue, tx)) => (queue, tx),
+        Err(err) => {
+            log::error!("Error creating queue: {:?}", err);
+            return Err("Error creating queue");
+        }
+    };
+
+    async_std::task::spawn(async move {
+        loop {
+            if let Err(e) = transporter_queue.poll().await {
+                log::error!("msg queue transport error {:?}", e);
+                panic!("msg queue transport error, should restart");
+            }
+        }
+    });
 
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
@@ -106,13 +126,13 @@ where
         match rpc {
             RpcEvent::MediaEndpointLog(req) => {
                 log::info!("On media endpoint log {:?}", req.param());
-                if let Ok(ref transport) = transporter {
-                    let data = req.param();
 
-                    if let Err(e) = transport.send(data).await {
-                        log::error!("Error sending message: {:?}", e);
-                    }
+                let data = req.param();
+
+                if let Err(e) = queue_sender.try_send(data.encode_to_vec()) {
+                    log::error!("Error sending message: {:?}", e);
                 }
+
                 req.answer(Ok(MediaEndpointLogResponse {}));
             }
         }

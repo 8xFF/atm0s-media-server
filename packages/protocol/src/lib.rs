@@ -20,6 +20,14 @@ pub mod media_event_logs {
         }
     }
 
+    impl TryFrom<Vec<u8>> for MediaEndpointLogRequest {
+        type Error = prost::DecodeError;
+
+        fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+            Self::decode(value.as_slice())
+        }
+    }
+
     impl From<MediaEndpointLogEvent> for Vec<u8> {
         fn from(val: MediaEndpointLogEvent) -> Self {
             let mut buf = vec![];
