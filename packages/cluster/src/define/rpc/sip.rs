@@ -13,8 +13,8 @@ pub struct SipOutgoingInviteClientRequest {
     pub room_id: String,
     pub dest_session_id: String,
     pub from_number: String,
-    pub server_alias: String,
-    pub hook_uri: String,
+    pub server_alias: Option<String>,
+    pub hook_uri: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
@@ -34,7 +34,7 @@ pub struct SipOutgoingInviteResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
-pub struct SipIncomingRegisterRequest {
+pub struct SipIncomingAuthRequest {
     pub username: String,
     pub realm: String,
     pub session_id: String,
@@ -47,9 +47,33 @@ pub struct SipIncomingRegisterRequest {
 ///
 /// Therefore we need to return HA1 to the sip server
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
-pub struct SipIncomingRegisterResponse {
+pub struct SipIncomingAuthResponse {
     pub success: bool,
     pub ha1: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
+pub struct SipIncomingRegisterRequest {
+    pub username: String,
+    pub realm: String,
+    pub session_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
+pub struct SipIncomingRegisterResponse {
+    pub success: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
+pub struct SipIncomingUnregisterRequest {
+    pub username: String,
+    pub realm: String,
+    pub session_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
+pub struct SipIncomingUnregisterResponse {
+    pub success: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]

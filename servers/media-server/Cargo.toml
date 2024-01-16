@@ -48,6 +48,3 @@ sip = ["rsip", "transport-sip", "reqwest", "md5"]
 gateway = []
 connector = ["nats", "prost"]
 token_generate = []
-
-[examples]
-name = "simple_sip_calling_service"

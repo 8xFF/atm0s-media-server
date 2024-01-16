@@ -4,7 +4,7 @@ use async_std::{channel::bounded, prelude::FutureExt as _, stream::StreamExt};
 use cluster::{
     rpc::{
         general::MediaEndpointCloseResponse,
-        sip::{SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest, SipOutgoingInviteResponse},
+        sip::{SipIncomingAuthRequest, SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest, SipOutgoingInviteResponse},
         RpcEmitter, RpcEndpoint, RpcRequest,
     },
     Cluster, ClusterEndpoint,
@@ -184,10 +184,10 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                         let hook_sender = hook_sender.clone();
                         let internal_tx = internal_tx.clone();
                         async_std::task::spawn(async move {
-                            let res = hook_sender.hook_register(SipIncomingRegisterRequest {
+                            let res = hook_sender.hook_auth(SipIncomingAuthRequest {
                                 username: username.clone(),
                                 session_id: session_id.clone(),
-                                realm,
+                                realm: realm.clone(),
                             }).await;
 
                             let accept = match res {
@@ -211,7 +211,14 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                                 }
                             };
 
-                            internal_tx.send(InternalCmd::RegisterResult(session_id, username, group_id, accept)).await.log_error("should send");
+                            internal_tx.send(InternalCmd::RegisterResult(session_id.clone(), username.clone(), group_id, accept)).await.log_error("should send");
+                            if accept {
+                                hook_sender.hook_register(SipIncomingRegisterRequest {
+                                    username,
+                                    session_id,
+                                    realm,
+                                }).await.log_error("Should send register hook");
+                            }
                         });
                         continue;
                     }
@@ -253,7 +260,10 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                                                 run_transport(&mut transport_in, timer).await;
                                             }
                                             SipIncomingInviteStrategy::WaitOtherPeers => {
-                                                todo!()
+                                                log::info!("[SipInCall] joined to {room_id} {from_number}");
+                                                //TODO switch to accept after other peers joined
+                                                transport_in.accept(timer.now_ms()).log_error("should accept");
+                                                tx.send((SipTransport::In(transport_in, conn_id), room_id.clone(), from_number)).await.log_error("should send");
                                             }
                                         }
                                     } else {

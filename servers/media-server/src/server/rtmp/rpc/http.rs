@@ -1,5 +1,4 @@
 use async_std::channel::Sender;
-use cluster::rpc::gateway::NodeHealthcheckRequest;
 use cluster::rpc::general::MediaEndpointCloseRequest;
 use cluster::rpc::general::MediaEndpointCloseResponse;
 use media_utils::Response;

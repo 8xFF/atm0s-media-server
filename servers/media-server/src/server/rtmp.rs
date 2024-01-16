@@ -7,7 +7,7 @@ use async_std::{channel::Sender, prelude::FutureExt as _};
 use clap::Parser;
 use cluster::{
     rpc::{
-        gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
+        gateway::{NodePing, NodePong, ServiceInfo},
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },

@@ -1,5 +1,4 @@
 use ::cluster::rpc::{
-    gateway::{NodeHealthcheckRequest, NodeHealthcheckResponse},
     general::{MediaEndpointCloseRequest, MediaEndpointCloseResponse},
     RpcReqRes,
 };

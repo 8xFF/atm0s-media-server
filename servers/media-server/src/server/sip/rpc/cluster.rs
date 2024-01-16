@@ -17,6 +17,7 @@ impl<RPC: RpcEndpoint<Req, Emitter>, Req: RpcRequest, Emitter: RpcEmitter> SipCl
         Self { _tmp: Default::default(), rpc }
     }
 
+    #[allow(unused)]
     pub fn emitter(&mut self) -> Emitter {
         self.rpc.emitter()
     }
