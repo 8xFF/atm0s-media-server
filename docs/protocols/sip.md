@@ -1,4 +1,4 @@
-# SIP Transport integration: Working in process
+# SIP Transport integration: PoC Working
 
 Currently implement is incomplete and only finished most important parts, it working as PoC.
 
