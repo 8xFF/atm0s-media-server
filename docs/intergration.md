@@ -1,8 +1,8 @@
-# Intergration
+# Integration
 
-We support intergration with other system by:
+We support integration with other systems through the following methods:
 
-- Token generate logic and client SDK.
-- HTTP API: for manage, kick, make call ..
-- Handle events over message queue, currently only Nats is support but it can easy to add more type.
-- Handle SIP intergrate with Hooks: Auth, Register, Unregister, Invite
+- Token generation logic and client SDK.
+- HTTP API: for managing, kicking, and making calls.
+- Handling events over a message queue. Currently, only Nats is supported, but it can easily be expanded to support more types.
+- Handling SIP integration with Hooks: Auth, Register, Unregister, and Invite.

@@ -61,7 +61,7 @@ impl SipServerSocket {
 
     pub fn accept_register(&mut self, session: &GroupId) {
         log::info!("Accept register {:?}", session);
-        if let Some(remote_info) = self.remote_users.get_mut(&session.0) {
+        if let Some(remote_info) = self.remote_users.get_mut(&session.addr()) {
             remote_info.accepted = true;
         }
         self.sip_core.reply_register_validate(session, true);
@@ -69,12 +69,12 @@ impl SipServerSocket {
 
     pub fn reject_register(&mut self, session: &GroupId) {
         log::info!("Reject register {:?}", session);
-        self.remote_users.remove(&session.0);
+        self.remote_users.remove(&session.addr());
         self.sip_core.reply_register_validate(session, false);
     }
 
     pub fn create_call(&mut self, call_id: &CallId, dest: SocketAddr) -> VirtualSocket<GroupId, SipMessage> {
-        let group_id = GroupId(dest, call_id.to_string().into());
+        let group_id = GroupId::from_raw(dest, &call_id);
         self.sip_core.open_out_call(&group_id);
         self.virtual_socket_plane.new_socket(group_id, VirtualSocketContext { remote_addr: dest, username: None })
     }
@@ -85,7 +85,7 @@ impl SipServerSocket {
                 SipServerEvent::OnRegisterValidate(group, digest, nonce, username, realm, hashed_password) => {
                     log::info!("Register validate {} {}", username, hashed_password);
                     self.remote_users.insert(
-                        group.0,
+                        group.addr(),
                         RemoteInfo {
                             username: username.clone(),
                             accepted: false,
@@ -96,8 +96,8 @@ impl SipServerSocket {
                 SipServerEvent::OnInCallStarted(group_id, req) => {
                     log::info!("InCall started {:?}", group_id);
                     let ctx = VirtualSocketContext {
-                        remote_addr: group_id.0,
-                        username: match self.remote_users.get(&group_id.0) {
+                        remote_addr: group_id.addr(),
+                        username: match self.remote_users.get(&group_id.addr()) {
                             Some(remote_info) => {
                                 if remote_info.accepted {
                                     Some(remote_info.username.clone())
@@ -154,7 +154,7 @@ impl SipServerSocket {
                     Some((group_id, msg)) => {
                         match msg {
                             Some((dest, msg)) => {
-                                let dest = dest.unwrap_or(group_id.0);
+                                let dest = dest.unwrap_or(group_id.addr());
                                 log::info!("Group {:?} send to {} {}", group_id, dest, msg);
                                 out_msgs.push_back((dest, msg));
                             },
@@ -168,7 +168,7 @@ impl SipServerSocket {
                     },
                     None => {}
                 }
-            }
+            },
             e = self.main_socket.recv_from(&mut self.buf).fuse() => {
                 match e {
                     Ok((0..=4, addr)) => {

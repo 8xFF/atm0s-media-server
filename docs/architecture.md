@@ -1,48 +1,37 @@
 # Server architecture
 
-This document explain architecture of media-server and also architecture of each protocols.
+This document explains the architecture of the media-server and also the architecture of each protocol.
 
-### Entire is decentralized pub-sub and key-value
+## Entirely decentralized pub-sub and key-value
 
-The media-server is designed as a global cluster in mind, where each media track is a global pubsub channel. This make us easier in scaling and also increase stability with decentralized architecture. Now we have a streaming system without single point of failed.
+The media-server is designed as a global cluster, where each media track is a global pubsub channel. This decentralized architecture allows for easier scalability and increased stability. With this design, we have a streaming system that doesn't rely on a single point of failure.
 
-All server modules are trying to design with SAN I/O, but some parts are success some parts are not, we are trying to refactor to make it more stable and performane.
+All server modules are designed with SAN I/O in mind, but some parts are more successful than others. We are continuously working on refactoring to improve stability and performance.
 
-More about pub-sub and how we create decentralized streaming server can found here: [Smart-Routing](https://github.com/8xFF/atm0s-sdn/blob/master/docs/smart_routing.md)
+For more information about pub-sub and how we create a decentralized streaming server, please refer to the [Smart-Routing](https://github.com/8xFF/atm0s-sdn/blob/master/docs/smart_routing.md) documentation.
 
-### Terms
+## Terms
 
-We have terms
+We use the following terms in our architecture:
 
-- Gateway
-- Media Server
-- SessionId
-- Transport
-- Endpoint
-- ConnId
+- Gateway: Holds a list of resources. There are two types of gateways: zone level gateways, which hold all servers within their zone, and global gateways, which hold all zone gateways. Gateways act as routers, directing user requests to the best or destination node based on the request type and params.
+- Media Server: The server responsible for handling media tracks and streams.
+- SessionId: A unique identifier assigned to each user across all nodes. Currently, only SIP uses SessionId.
+- Transport: Manages the connection between a user and an Endpoint using protocols such as WebRTC, Whip, Whep, Rtmp, or SIP. Each connection is identified by a ConnId.
+- Endpoint: Represents a user joined to a room. Each Endpoint is identified by a ConnId and is bound to a pair of (room_id, peer_id).
+- ConnId: The identifier for a connection between a user and an Endpoint.
+- Server: Manages multiple Endpoints.
 
-The relate between each terms is described as bellow:
+## Multi transport-protocols
 
-- Gateway holding list of resources. We have 2 type of gateways, first is zone level gateway which hold all servers inside it's zone. Second is global gateway, which hold all zone gateways. Gateway act as router for routing each user request to best node, or destination node base on type of requests.
-- Each Users when connected to a server will have unique SessionId across all nodes (currently only SIP using it)
-- Each Users joined to a room will be an Endpoint
-- The connection between User and Endpoint is managed by a Transport like WebRTC, Whip, Whep, Rtmp, or SIP. This connection is identify by ConnId
-- Each Server manage mutiple Endpoints
+The transport layer supports two types of streams:
 
-### Endpoint
+- RPC streams: Used for controlling and event firing.
+- Media streams: Used for audio/video send/receive.
 
-Endpoint will be identified by ConnId, and is binding to a pair (room_id, peer_id)
+Currently, we are implementing the following transport protocols:
 
-### Multi transport-protocols
-
-Currently transport will have 2 type of streams
-
-- RPC streams: for controling, event firing
-- Media streams: for audio/video send/recv
-
-Currently we implementing some transport protocols as below list:
-
-- [WebRTC](./protocols/webrtc.md) first citicen
+- [WebRTC](./protocols/webrtc.md)
 - [Whip/Whep](./protocols/whip-whep.md)
 - [RTMP](./protocols/rtmp.md)
 - [SIP](./protocols/sip.md)

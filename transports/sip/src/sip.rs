@@ -1,7 +1,10 @@
 use std::{collections::HashMap, fmt::Display, net::SocketAddr};
 
 use bytes::Bytes;
-use rsip::Method;
+use rsip::{
+    headers::{CallId, UntypedHeader},
+    Method,
+};
 
 use crate::processor::Processor;
 
@@ -9,7 +12,6 @@ use self::{
     processor::{register::RegisterProcessor, ProcessorAction, ProcessorError},
     sip_request::SipRequest,
     sip_response::SipResponse,
-    utils::CallId2,
 };
 
 mod data;
@@ -20,7 +22,27 @@ mod transaction;
 mod utils;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub struct GroupId(pub SocketAddr, pub CallId2);
+pub struct GroupId(SocketAddr, String);
+
+impl GroupId {
+    pub fn from_raw(from: SocketAddr, call_id: &CallId) -> Self {
+        Self(from, call_id.value().to_string())
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.0
+    }
+
+    pub fn call_id(&self) -> &str {
+        &self.1
+    }
+}
+
+impl Display for GroupId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.0, self.1)
+    }
+}
 
 pub enum SipMessage {
     Request(SipRequest),

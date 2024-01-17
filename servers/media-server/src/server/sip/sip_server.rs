@@ -302,7 +302,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                             sip_server.accept_register(&group_id);
                             sessions.insert(session_id, ClientInfo {
                                 username,
-                                addr: group_id.0,
+                                addr: group_id.addr(),
                             });
                         } else {
                             sip_server.reject_register(&group_id);

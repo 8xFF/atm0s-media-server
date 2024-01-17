@@ -1,11 +1,9 @@
 # SIP Transport integration: PoC Working
 
-Currently implement is incomplete and only finished most important parts, it working as PoC.
+The current implementation is incomplete and only finished the most important parts, it is working as a PoC.
 
-- It can handle incoming call to join an room or reject. It can make outgoing call and put it to a room.
-- Audio process is done with OPUS and PCMA transcode.
-
-We have reference hooks server in above.
+- It can handle incoming calls to join a room or reject them. It can make outgoing calls and put them in a room.
+- Audio processing is done with OPUS and PCMA transcoding.
 
 ### Checklist
 
@@ -29,7 +27,7 @@ Call
 - [ ] Call RING
 - [ ] Call BUSY
 - [ ] Call CANCEL
-- [ ] Call END after all other members leaved
+- [ ] Call END after all other members have left
 
 Hooks
 
