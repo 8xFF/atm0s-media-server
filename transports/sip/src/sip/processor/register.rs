@@ -39,7 +39,7 @@ impl RegisterProcessor {
         }
     }
 
-    pub fn accept(&mut self, accept: bool) {
+    pub fn response(&mut self, accept: bool) {
         if accept {
             let mut res = self.req.build_response(StatusCode::OK, None);
             res.raw
@@ -53,7 +53,7 @@ impl RegisterProcessor {
                 .headers
                 .push(rsip::Header::Allow(Allow(vec![Method::Invite, Method::Ack, Method::Cancel, Method::Options, Method::Bye]).into()));
             self.actions.push_back(ProcessorAction::SendResponse(None, res));
-            self.actions.push_back(ProcessorAction::Finished(Err("WrongUser".into())));
+            self.actions.push_back(ProcessorAction::Finished(Err("Rejected".into())));
         }
     }
 }

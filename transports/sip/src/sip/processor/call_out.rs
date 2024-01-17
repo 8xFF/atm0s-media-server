@@ -117,22 +117,22 @@ impl CallOutProcessor {
     }
 
     fn create_request(&self, method: Method, cseq: headers::CSeq) -> SipRequest {
-        //TODO fix with real hostname
         let request = rsip::Request {
             method,
             uri: rsip::Uri {
                 scheme: Some(Scheme::Sip),
                 auth: None,
-                host_with_port: HostWithPort {
-                    host: "proxy.atm0s.live".into(),
-                    port: None,
-                },
+                host_with_port: self.local_contact.uri.host_with_port.clone(),
                 params: vec![],
                 headers: vec![],
             },
             version: rsip::Version::V2,
             headers: Headers::from(vec![
-                rsip::Header::Via(headers::Via::from(format!("SIP/2.0/UDP sip.media-server.8xff.io:5060;branch=z9hG4bK-{}", generate_random_string(8)))),
+                rsip::Header::Via(headers::Via::from(format!(
+                    "SIP/2.0/UDP {};branch=z9hG4bK-{}",
+                    self.local_contact.uri.host_with_port,
+                    generate_random_string(8)
+                ))),
                 rsip::Header::MaxForwards(headers::MaxForwards::from(70)),
                 rsip::Header::From(self.local_from.clone().into()),
                 rsip::Header::To(self.remote_to.clone().into()),

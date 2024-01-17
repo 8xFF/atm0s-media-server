@@ -106,7 +106,7 @@ impl SipCore {
 
     pub fn reply_register_validate(&mut self, group_id: &GroupId, accept: bool) {
         if let Some(processor) = self.register_processors.get_mut(group_id) {
-            processor.accept(accept);
+            processor.response(accept);
             self.process_register_processor(group_id);
         }
     }
