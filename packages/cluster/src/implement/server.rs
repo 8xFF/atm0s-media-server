@@ -31,7 +31,7 @@ pub(crate) enum NodeSdkEvent {
 }
 
 pub struct ServerSdnConfig {
-    pub static_key: String,
+    pub secret: String,
     pub seeds: Vec<NodeAddr>,
 }
 
@@ -51,7 +51,7 @@ impl ServerSdn {
         let mut node_addr_builder = NodeAddrBuilder::new(node_id);
         let udp_socket = UdpTransport::prepare(port, &mut node_addr_builder).await;
         let tcp_listener = TcpTransport::prepare(port, &mut node_addr_builder).await;
-        let secure = Arc::new(atm0s_sdn::StaticKeySecure::new(&config.static_key));
+        let secure = Arc::new(atm0s_sdn::StaticKeySecure::new(&config.secret));
         let udp = UdpTransport::new(node_addr_builder.addr(), udp_socket, secure.clone());
         let tcp = TcpTransport::new(node_addr_builder.addr(), tcp_listener, secure);
 
