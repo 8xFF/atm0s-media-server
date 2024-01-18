@@ -251,7 +251,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                                     if let Some(room_id) = hook_res.room_id {
                                         match hook_res.strategy {
                                             SipIncomingInviteStrategy::Accept => {
-                                                log::info!("[SipInCall] joined to {room_id} {from_number}");
+                                                log::info!("[SipInCall] accept then join to {room_id} {from_number}");
                                                 transport_in.accept(timer.now_ms()).log_error("should accept");
                                                 tx.send((SipTransport::In(transport_in, conn_id), room_id.clone(), from_number)).await.log_error("should send");
                                             }
@@ -260,9 +260,8 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                                                 run_transport(&mut transport_in, timer).await;
                                             }
                                             SipIncomingInviteStrategy::WaitOtherPeers => {
-                                                log::info!("[SipInCall] joined to {room_id} {from_number}");
-                                                //TODO switch to accept after other peers joined
-                                                transport_in.accept(timer.now_ms()).log_error("should accept");
+                                                log::info!("[SipInCall] join to {room_id} {from_number}");
+                                                transport_in.ringing(timer.now_ms()).log_error("should accept");
                                                 tx.send((SipTransport::In(transport_in, conn_id), room_id.clone(), from_number)).await.log_error("should send");
                                             }
                                         }

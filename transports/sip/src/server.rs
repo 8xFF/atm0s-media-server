@@ -116,6 +116,11 @@ impl SipServerSocket {
                         .forward(&group_id, SipMessage::Request(req))
                         .expect("Should forward to correct virtual socket");
                 }
+                SipServerEvent::OnInCallResponse(group_id, res) => {
+                    self.virtual_socket_plane
+                        .forward(&group_id, SipMessage::Response(res))
+                        .expect("Should forward to correct virtual socket");
+                }
                 SipServerEvent::OnOutCallRequest(group_id, req) => {
                     self.virtual_socket_plane
                         .forward(&group_id, SipMessage::Request(req))
@@ -140,7 +145,6 @@ impl SipServerSocket {
                         log::error!("Sending udp to {dest} error {:?}", e);
                     }
                 }
-                _ => {}
             }
         }
 

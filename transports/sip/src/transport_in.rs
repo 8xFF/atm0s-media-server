@@ -5,9 +5,10 @@ use endpoint::{
     EndpointRpcIn, EndpointRpcOut,
 };
 use futures::{select, FutureExt};
+use media_utils::ErrorDebugger;
 use rsip::{
     typed::{Contact, ContentType, MediaType},
-    Host, HostWithPort, Uri,
+    Auth, Host, HostWithPort, Uri,
 };
 use transport::{
     LocalTrackOutgoingEvent, MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError,
@@ -40,6 +41,7 @@ impl SipTransportIn {
     pub async fn new(now_ms: u64, bind_addr: SocketAddr, socket: VirtualSocket<GroupId, SipMessage>, req: SipRequest) -> Result<Self, RtpEngineError> {
         let local_contact = Contact {
             uri: Uri {
+                auth: req.to.uri.user().map(|u| Auth { user: u.to_string(), password: None }),
                 scheme: Some(rsip::Scheme::Sip),
                 host_with_port: HostWithPort {
                     host: Host::IpAddr(bind_addr.ip()),
@@ -98,11 +100,6 @@ impl SipTransportIn {
         self.logic.reject(now_ms).map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
         Ok(())
     }
-
-    pub fn end(&mut self, now_ms: u64) -> Result<(), TransportError> {
-        self.logic.end(now_ms).map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -112,13 +109,19 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportIn {
         Ok(())
     }
 
-    fn on_event(&mut self, _now_ms: u64, event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError> {
+    fn on_event(&mut self, now_ms: u64, event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError> {
         match event {
             TransportOutgoingEvent::LocalTrackEvent(track_id, event) => match event {
                 LocalTrackOutgoingEvent::MediaPacket(pkt) => {
                     if track_id == LOCAL_TRACK_AUDIO_MAIN {
                         self.rtp_engine.send(pkt);
                     }
+                }
+                _ => {}
+            },
+            TransportOutgoingEvent::Rpc(rpc) => match rpc {
+                EndpointRpcOut::ConnectionAcceptRequest => {
+                    self.accept(now_ms).log_error("Should accept call");
                 }
                 _ => {}
             },
@@ -175,7 +178,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportIn {
         }
     }
 
-    async fn close(&mut self) {
-        self.socket.close().await;
+    async fn close(&mut self, now_ms: u64) {
+        self.logic.close(now_ms);
     }
 }

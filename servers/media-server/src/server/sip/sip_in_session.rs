@@ -6,6 +6,7 @@ use futures::{select, FutureExt};
 use media_utils::ErrorDebugger;
 use transport_sip::{SipTransportIn, LOCAL_TRACK_AUDIO_MAIN};
 
+use super::middleware::sip_incall::SipIncallMiddleware;
 use super::InternalControl;
 
 #[derive(Debug)]
@@ -29,7 +30,7 @@ impl<E: ClusterEndpoint> SipInSession<E> {
             BitrateControlMode::DynamicWithConsumers,
             MixMinusAudioMode::AllAudioStreams,
             vec![Some(LOCAL_TRACK_AUDIO_MAIN)],
-            vec![],
+            vec![Box::new(SipIncallMiddleware::new(peer))],
         );
         endpoint_pre.check().map_err(|_e| SipInSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
@@ -51,7 +52,6 @@ impl<E: ClusterEndpoint> SipInSession<E> {
                         MediaEndpointOutput::ConnectionCloseRequest => {
                             log::info!("Connection close request");
                             self.endpoint.close().await;
-                            return None;
                         }
                     }
                     Some(())

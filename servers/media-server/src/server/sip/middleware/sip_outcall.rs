@@ -8,7 +8,7 @@ use endpoint::{
     rpc::{LocalTrackRpcIn, RemoteTrackRpcIn},
     EndpointRpcIn, MediaEndpointInternalControl, MediaEndpointMiddleware, MediaEndpointMiddlewareOutput,
 };
-use transport::{MediaKind, TransportIncomingEvent};
+use transport::TransportIncomingEvent;
 
 enum State {
     New,
@@ -20,7 +20,7 @@ pub struct SipOutcallMiddleware {
     peer: String,
     state: State,
     actions: VecDeque<endpoint::MediaEndpointMiddlewareOutput>,
-    remote_tracks: HashMap<(String, String), ()>,
+    remote_peers: HashMap<String, ()>,
 }
 
 impl SipOutcallMiddleware {
@@ -29,7 +29,7 @@ impl SipOutcallMiddleware {
             peer: peer.to_string(),
             state: State::New,
             actions: VecDeque::new(),
-            remote_tracks: HashMap::new(),
+            remote_peers: HashMap::new(),
         }
     }
 }
@@ -49,18 +49,19 @@ impl MediaEndpointMiddleware for SipOutcallMiddleware {
 
     fn on_cluster(&mut self, _now_ms: u64, event: &ClusterEndpointIncomingEvent) -> bool {
         match event {
-            ClusterEndpointIncomingEvent::PeerTrackAdded(peer, track, meta) => {
-                log::info!("[SipOutcallMiddleware] peer track added: {} {}", peer, track);
-                if peer != &self.peer && matches!(meta.kind, MediaKind::Audio) {
-                    self.remote_tracks.insert((peer.clone(), track.clone()), ());
+            ClusterEndpointIncomingEvent::PeerAdded(peer, _meta) => {
+                log::info!("[SipOutcallMiddleware] peer added: {}", peer);
+                if peer != &self.peer {
+                    self.remote_peers.insert(peer.clone(), ());
+                    self.state = State::Talking;
                 }
             }
-            ClusterEndpointIncomingEvent::PeerTrackRemoved(peer, track) => {
-                log::info!("[SipOutcallMiddleware] peer track removed: {} {}", peer, track);
+            ClusterEndpointIncomingEvent::PeerRemoved(peer) => {
+                log::info!("[SipOutcallMiddleware] peer removed: {}", peer);
                 if peer != &self.peer {
-                    self.remote_tracks.remove(&(peer.clone(), track.clone()));
-                    if self.remote_tracks.is_empty() {
-                        log::info!("[SipOutcallMiddleware] last peer track removed => end call");
+                    self.remote_peers.remove(peer);
+                    if self.remote_peers.is_empty() {
+                        log::info!("[SipOutcallMiddleware] last peer removed => end call");
                         self.state = State::End;
                         self.actions.push_back(MediaEndpointMiddlewareOutput::Control(MediaEndpointInternalControl::ConnectionCloseRequest));
                     }

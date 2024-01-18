@@ -265,7 +265,7 @@ impl ClientInviteTransaction {
                 rsip::Header::Allow(Allow(vec![Method::Invite, Method::Ack, Method::Cancel, Method::Options, Method::Bye]).into()),
                 rsip::Header::ContentLength(rsip::headers::ContentLength::from(body.len() as u32)),
                 rsip::Header::ContentType(rsip::typed::ContentType(MediaType::Sdp(vec![])).into()),
-                rsip::Header::UserAgent(rsip::headers::UserAgent::default()),
+                rsip::Header::UserAgent(rsip::headers::UserAgent::from("8xff-sip-media-server")),
             ]),
             body,
         };
@@ -286,7 +286,7 @@ impl ClientInviteTransaction {
                 rsip::Header::CallId(self.origin_request.call_id.clone().into()),
                 rsip::Header::CSeq(rsip::typed::CSeq { seq: 1, method: rsip::Method::Ack }.into()),
                 rsip::Header::ContentLength(rsip::headers::ContentLength::from(0)),
-                rsip::Header::UserAgent(rsip::headers::UserAgent::default()),
+                rsip::Header::UserAgent(rsip::headers::UserAgent::from("8xff-sip-media-server")),
             ]),
             body: vec![],
         };

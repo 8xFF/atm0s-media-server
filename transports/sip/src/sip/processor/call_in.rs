@@ -127,6 +127,20 @@ impl CallInProcessor {
         }
     }
 
+    /// Auto determine the state and send REJECT or BYE
+    pub fn close(&mut self, now_ms: u64) {
+        match &self.state {
+            State::Connecting { .. } => {
+                self.reject(now_ms).expect("Should ok");
+            }
+            State::InCall { .. } => {
+                self.end(now_ms).expect("Should ok");
+            }
+            State::Bye { .. } => {}
+            State::End => {}
+        }
+    }
+
     fn process_transaction(&mut self, now_ms: u64) {
         let transaction = match &mut self.state {
             State::Connecting { transaction } => transaction,
@@ -175,6 +189,8 @@ impl CallInProcessor {
                 rsip::Header::To(headers::To::from(self.init_req.from.to_string())),
                 rsip::Header::CallId(self.init_req.call_id.clone()),
                 rsip::Header::CSeq(cseq),
+                rsip::Header::Contact(self.local_contact.clone().into()),
+                rsip::Header::UserAgent(headers::UserAgent::from("8xff-sip-media-server")),
                 rsip::Header::ContentLength(headers::ContentLength::from(0)),
             ]),
             body: vec![],
@@ -209,6 +225,7 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
                     //TODO avoid texting error
                     self.actions.push_back(ProcessorAction::Finished(Err("TIMEOUT".to_string())));
                 } else if now_ms >= *timer_resend_res {
+                    log::warn!("[CallInProcessor] resend BYE");
                     *timer_resend_res = now_ms + T1;
                     let req = self.create_request(Method::Bye, typed::CSeq { seq: 1, method: Method::Bye }.into());
                     self.actions.push_back(ProcessorAction::SendRequest(self.remote_contact_addr, req));
@@ -260,6 +277,7 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
     }
 
     fn on_res(&mut self, _now_ms: u64, res: crate::sip_response::SipResponse) -> Result<(), super::ProcessorError> {
+        log::info!("[CallInProcessor] on_res {:?}", res);
         match &mut self.state {
             State::Bye { .. } => {
                 if res.cseq.method == Method::Bye {

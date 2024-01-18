@@ -142,7 +142,7 @@ where
 
     pub async fn close(&mut self) {
         log::info!("[EndpointWrap] close request");
-        self.transport.close().await;
+        self.transport.close(self.timer.now_ms()).await;
     }
 }
 

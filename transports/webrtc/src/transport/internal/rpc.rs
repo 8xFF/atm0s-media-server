@@ -44,6 +44,7 @@ pub fn rpc_to_string(rpc: EndpointRpcOut) -> String {
         EndpointRpcOut::TrackRemoved(res) => event_to_json("stream_removed", res),
         EndpointRpcOut::SubscribePeerRes(res) => serde_json::to_string(&res).expect("should serialize json"),
         EndpointRpcOut::UnsubscribePeerRes(res) => serde_json::to_string(&res).expect("should serialize json"),
+        EndpointRpcOut::ConnectionAcceptRequest => event_to_json("connection_accepted", ""),
     }
 }
 

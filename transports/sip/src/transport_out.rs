@@ -8,7 +8,7 @@ use futures::{select, FutureExt};
 use rsip::{
     headers::CallId,
     typed::{Contact, From, To},
-    Host, HostWithPort, Uri,
+    Auth, Host, HostWithPort, Uri,
 };
 use transport::{
     LocalTrackOutgoingEvent, MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError,
@@ -43,6 +43,7 @@ impl SipTransportOut {
     pub async fn new(now_ms: u64, bind_addr: SocketAddr, call_id: CallId, local_from: From, remote_to: To, socket: VirtualSocket<GroupId, SipMessage>) -> Result<Self, RtpEngineError> {
         let local_contact = Contact {
             uri: Uri {
+                auth: local_from.uri.user().map(|u| Auth { user: u.to_string(), password: None }),
                 scheme: Some(rsip::Scheme::Sip),
                 host_with_port: HostWithPort {
                     host: Host::IpAddr(bind_addr.ip()),
@@ -176,7 +177,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportOut {
         }
     }
 
-    async fn close(&mut self) {
-        self.socket.close().await;
+    async fn close(&mut self, now_ms: u64) {
+        self.logic.close(now_ms);
     }
 }

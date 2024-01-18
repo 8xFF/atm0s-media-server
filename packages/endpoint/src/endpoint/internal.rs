@@ -38,6 +38,8 @@ pub enum MediaEndpointInternalLocalTrackControl {
 #[derive(Debug, PartialEq, Eq)]
 pub enum MediaEndpointInternalControl {
     LocalTrack(u16, MediaEndpointInternalLocalTrackControl),
+    ConnectionAcceptRequest,
+    ConnectionCloseRequest,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -182,6 +184,12 @@ impl MediaEndpointInternal {
         match event {
             MediaEndpointInternalControl::LocalTrack(track_id, event) => {
                 Self::process_local_track_control(&mut self.bitrate_allocator, track_id, event);
+            }
+            MediaEndpointInternalControl::ConnectionAcceptRequest => {
+                self.push_rpc(EndpointRpcOut::ConnectionAcceptRequest);
+            }
+            MediaEndpointInternalControl::ConnectionCloseRequest => {
+                self.push_internal(MediaEndpointInternalEvent::ConnectionCloseRequest);
             }
         }
     }
@@ -524,6 +532,13 @@ impl MediaEndpointInternal {
                     MediaEndpointMiddlewareOutput::Control(event) => match event {
                         MediaEndpointInternalControl::LocalTrack(track_id, event) => {
                             Self::process_local_track_control(&mut self.bitrate_allocator, track_id, event);
+                        }
+                        MediaEndpointInternalControl::ConnectionAcceptRequest => {
+                            self.output_actions
+                                .push_back(MediaInternalAction::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::ConnectionAcceptRequest)));
+                        }
+                        MediaEndpointInternalControl::ConnectionCloseRequest => {
+                            self.output_actions.push_back(MediaInternalAction::Internal(MediaEndpointInternalEvent::ConnectionCloseRequest));
                         }
                     },
                 }

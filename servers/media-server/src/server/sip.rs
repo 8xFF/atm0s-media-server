@@ -19,6 +19,7 @@ use self::rpc::{cluster::SipClusterRpc, http::SipHttpApis, RpcEvent};
 use super::MediaServerContext;
 
 mod hooks;
+mod middleware;
 mod rpc;
 mod sip_in_session;
 mod sip_out_session;

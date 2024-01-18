@@ -6,6 +6,7 @@ use futures::{select, FutureExt};
 use media_utils::ErrorDebugger;
 use transport_sip::{SipTransportOut, LOCAL_TRACK_AUDIO_MAIN};
 
+use super::middleware::sip_outcall::SipOutcallMiddleware;
 use super::InternalControl;
 
 #[derive(Debug)]
@@ -29,7 +30,7 @@ impl<E: ClusterEndpoint> SipOutSession<E> {
             BitrateControlMode::DynamicWithConsumers,
             MixMinusAudioMode::AllAudioStreams,
             vec![Some(LOCAL_TRACK_AUDIO_MAIN)],
-            vec![],
+            vec![Box::new(SipOutcallMiddleware::new(peer))],
         );
         endpoint_pre.check().map_err(|_e| SipOutSessionError::PreconditionError)?;
         let room = cluster.build(room, peer);
@@ -51,7 +52,6 @@ impl<E: ClusterEndpoint> SipOutSession<E> {
                         MediaEndpointOutput::ConnectionCloseRequest => {
                             log::info!("Connection close request");
                             self.endpoint.close().await;
-                            return None;
                         }
                     }
                     Some(())

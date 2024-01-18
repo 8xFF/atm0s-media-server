@@ -184,6 +184,7 @@ pub enum EndpointRpcOut {
     TrackRemoved(TrackInfo),
     SubscribePeerRes(RpcResponse<bool>),
     UnsubscribePeerRes(RpcResponse<bool>),
+    ConnectionAcceptRequest, //Use for calling style rooms
 }
 
 #[derive(Debug, PartialEq, Eq)]
