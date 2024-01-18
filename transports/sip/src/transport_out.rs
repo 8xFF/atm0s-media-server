@@ -8,7 +8,7 @@ use futures::{select, FutureExt};
 use rsip::{
     headers::CallId,
     typed::{Contact, From, To},
-    Auth, Host, HostWithPort, Uri,
+    Auth, Host, HostWithPort, Param, Uri,
 };
 use transport::{
     LocalTrackOutgoingEvent, MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError,
@@ -49,6 +49,7 @@ impl SipTransportOut {
                     host: Host::IpAddr(bind_addr.ip()),
                     port: Some(bind_addr.port().into()),
                 },
+                params: vec![Param::Transport(rsip::Transport::Udp)],
                 ..Default::default()
             },
             display_name: None,

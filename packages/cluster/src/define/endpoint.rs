@@ -70,8 +70,8 @@ impl Default for ClusterEndpointPublishScope {
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ClusterEndpointMeta {
-    state: ClusterStateEndpointState,
-    protocol: MediaSessionProtocol,
+    pub state: ClusterStateEndpointState,
+    pub protocol: MediaSessionProtocol,
 }
 
 impl ClusterEndpointMeta {

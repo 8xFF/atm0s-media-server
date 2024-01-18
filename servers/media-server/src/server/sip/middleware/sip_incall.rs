@@ -63,25 +63,24 @@ impl MediaEndpointMiddleware for SipIncallMiddleware {
 
     fn on_cluster(&mut self, _now_ms: u64, event: &ClusterEndpointIncomingEvent) -> bool {
         match event {
-            ClusterEndpointIncomingEvent::PeerAdded(peer, _meta) => {
-                log::info!("[SipIncallMiddleware] peer added: {}", peer);
+            ClusterEndpointIncomingEvent::PeerAdded(peer, meta) => {
                 if peer != &self.peer {
-                    self.remote_peers.insert(peer.to_string(), ());
-                    if matches!(self.state, State::WaitEndpoint { .. }) {
-                        log::info!("[SipIncallMiddleware] first peer added => accept call");
-                        self.state = State::Talking;
-                        self.actions.push_back(MediaEndpointMiddlewareOutput::Control(MediaEndpointInternalControl::ConnectionAcceptRequest));
-                    }
+                    self.remote_peers.insert(peer.clone(), ());
                 }
             }
             ClusterEndpointIncomingEvent::PeerRemoved(peer) => {
-                log::info!("[SipIncallMiddleware] peer removed: {}", peer);
+                if self.remote_peers.remove(peer).is_some() && self.remote_peers.is_empty() {
+                    log::info!("[SipIncallMiddleware] last remote peer removed => end call");
+                    self.state = State::End;
+                    self.actions.push_back(MediaEndpointMiddlewareOutput::Control(MediaEndpointInternalControl::ConnectionCloseRequest));
+                }
+            }
+            ClusterEndpointIncomingEvent::PeerTrackAdded(peer, _track, _meta) => {
                 if peer != &self.peer {
-                    self.remote_peers.remove(peer);
-                    if self.remote_peers.is_empty() {
-                        log::info!("[SipIncallMiddleware] last peer track removed => end call");
-                        self.state = State::End;
-                        self.actions.push_back(MediaEndpointMiddlewareOutput::Control(MediaEndpointInternalControl::ConnectionCloseRequest));
+                    if matches!(self.state, State::WaitEndpoint { .. }) {
+                        log::info!("[SipIncallMiddleware] first remote track added => accept call");
+                        self.state = State::Talking;
+                        self.actions.push_back(MediaEndpointMiddlewareOutput::Control(MediaEndpointInternalControl::ConnectionAcceptRequest));
                     }
                 }
             }

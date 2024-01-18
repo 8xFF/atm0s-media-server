@@ -3,7 +3,7 @@ use std::{collections::VecDeque, net::SocketAddr};
 use rsip::{
     headers::{self, typed, ContentType},
     typed::Contact,
-    Headers, Method, Scheme, StatusCode,
+    Headers, Method, Param, Scheme, StatusCode,
 };
 
 use crate::{
@@ -171,10 +171,10 @@ impl CallInProcessor {
         let request = rsip::Request {
             method,
             uri: rsip::Uri {
-                scheme: Some(Scheme::Sip),
-                auth: None,
+                scheme: Some(rsip::Scheme::Sip),
+                auth: self.local_contact.uri.auth.clone(),
                 host_with_port: self.local_contact.uri.host_with_port.clone(),
-                params: vec![],
+                params: vec![Param::Transport(rsip::Transport::Udp)],
                 headers: vec![],
             },
             version: rsip::Version::V2,
@@ -277,7 +277,6 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
     }
 
     fn on_res(&mut self, _now_ms: u64, res: crate::sip_response::SipResponse) -> Result<(), super::ProcessorError> {
-        log::info!("[CallInProcessor] on_res {:?}", res);
         match &mut self.state {
             State::Bye { .. } => {
                 if res.cseq.method == Method::Bye {

@@ -50,20 +50,23 @@ impl MediaEndpointMiddleware for SipOutcallMiddleware {
     fn on_cluster(&mut self, _now_ms: u64, event: &ClusterEndpointIncomingEvent) -> bool {
         match event {
             ClusterEndpointIncomingEvent::PeerAdded(peer, _meta) => {
-                log::info!("[SipOutcallMiddleware] peer added: {}", peer);
                 if peer != &self.peer {
                     self.remote_peers.insert(peer.clone(), ());
-                    self.state = State::Talking;
                 }
             }
             ClusterEndpointIncomingEvent::PeerRemoved(peer) => {
-                log::info!("[SipOutcallMiddleware] peer removed: {}", peer);
+                if self.remote_peers.remove(peer).is_some() && self.remote_peers.is_empty() {
+                    log::info!("[SipOutcallMiddleware] last remote peer removed => end call");
+                    self.state = State::End;
+                    self.actions.push_back(MediaEndpointMiddlewareOutput::Control(MediaEndpointInternalControl::ConnectionCloseRequest));
+                }
+            }
+            ClusterEndpointIncomingEvent::PeerTrackAdded(peer, _track, _meta) => {
                 if peer != &self.peer {
-                    self.remote_peers.remove(peer);
-                    if self.remote_peers.is_empty() {
-                        log::info!("[SipOutcallMiddleware] last peer removed => end call");
-                        self.state = State::End;
-                        self.actions.push_back(MediaEndpointMiddlewareOutput::Control(MediaEndpointInternalControl::ConnectionCloseRequest));
+                    if matches!(self.state, State::New { .. }) {
+                        log::info!("[SipIutcallMiddleware] first remote track added => accept call");
+                        self.state = State::Talking;
+                        self.actions.push_back(MediaEndpointMiddlewareOutput::Control(MediaEndpointInternalControl::ConnectionAcceptRequest));
                     }
                 }
             }

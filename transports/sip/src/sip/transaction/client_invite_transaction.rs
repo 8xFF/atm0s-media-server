@@ -104,7 +104,7 @@ pub struct ClientInviteTransaction {
     local_contact: Contact,
     local_from: From,
     remote_to: To,
-    origin_request: SipRequest,
+    pub(crate) origin_request: SipRequest,
     state: State,
     actions: VecDeque<ClientInviteTransactionAction>,
 }

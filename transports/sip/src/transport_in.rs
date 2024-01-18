@@ -8,7 +8,7 @@ use futures::{select, FutureExt};
 use media_utils::ErrorDebugger;
 use rsip::{
     typed::{Contact, ContentType, MediaType},
-    Auth, Host, HostWithPort, Uri,
+    Auth, Host, HostWithPort, Param, Uri,
 };
 use transport::{
     LocalTrackOutgoingEvent, MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError,
@@ -47,6 +47,7 @@ impl SipTransportIn {
                     host: Host::IpAddr(bind_addr.ip()),
                     port: Some(bind_addr.port().into()),
                 },
+                params: vec![Param::Transport(rsip::Transport::Udp)],
                 ..Default::default()
             },
             display_name: None,
