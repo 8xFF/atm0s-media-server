@@ -9,7 +9,7 @@ use endpoint::{
     rpc::{LocalTrackRpcIn, RemoteTrackRpcIn},
     EndpointRpcIn, MediaEndpointInternalControl, MediaEndpointMiddleware, MediaEndpointMiddlewareOutput,
 };
-use transport::{MediaKind, TransportIncomingEvent};
+use transport::TransportIncomingEvent;
 
 const WAIT_TIMEOUT_MS: u64 = 30000;
 
@@ -63,7 +63,7 @@ impl MediaEndpointMiddleware for SipIncallMiddleware {
 
     fn on_cluster(&mut self, _now_ms: u64, event: &ClusterEndpointIncomingEvent) -> bool {
         match event {
-            ClusterEndpointIncomingEvent::PeerAdded(peer, meta) => {
+            ClusterEndpointIncomingEvent::PeerAdded(peer, _meta) => {
                 log::info!("[SipIncallMiddleware] peer added: {}", peer);
                 if peer != &self.peer {
                     self.remote_peers.insert(peer.to_string(), ());
