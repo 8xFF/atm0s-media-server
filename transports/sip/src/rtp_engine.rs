@@ -51,7 +51,7 @@ pub struct RtpEngine {
 }
 
 impl RtpEngine {
-    pub async fn new(bind_ip: IpAddr) -> Self {
+    pub fn new(bind_ip: IpAddr) -> Self {
         let socket_sync = std::net::UdpSocket::bind(SocketAddr::new(bind_ip, 0)).expect("Should open port");
         Self {
             buf: [0; 2048],
@@ -73,7 +73,7 @@ impl RtpEngine {
         self.socket.local_addr().expect("Should get local addr")
     }
 
-    pub async fn process_remote_sdp(&mut self, sdp: &str) -> Result<(), RtpEngineError> {
+    pub fn process_remote_sdp(&mut self, sdp: &str) -> Result<(), RtpEngineError> {
         let sdp = sdp_rs::SessionDescription::from_str(sdp).map_err(|_| RtpEngineError::InvalidSdp)?;
         let mut dest_addr = sdp.origin.unicast_address;
         let first = sdp.media_descriptions.first().ok_or(RtpEngineError::MissingMedia)?;
@@ -81,7 +81,7 @@ impl RtpEngine {
             dest_addr = conn.connection_address.base;
         }
         let dest_port = first.media.port;
-        self.socket.connect(SocketAddr::from((dest_addr, dest_port))).await.map_err(|e| {
+        self.socket_sync.connect(SocketAddr::from((dest_addr, dest_port))).map_err(|e| {
             log::error!("[RtpEngine] connect to {dest_addr}:{dest_port} error {:?}", e);
             RtpEngineError::SocketError
         })?;

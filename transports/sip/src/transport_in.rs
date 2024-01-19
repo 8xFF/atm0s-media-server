@@ -38,7 +38,7 @@ pub struct SipTransportIn {
 }
 
 impl SipTransportIn {
-    pub async fn new(now_ms: u64, bind_addr: SocketAddr, socket: VirtualSocket<GroupId, SipMessage>, req: SipRequest) -> Result<Self, RtpEngineError> {
+    pub fn new(now_ms: u64, bind_addr: SocketAddr, socket: VirtualSocket<GroupId, SipMessage>, req: SipRequest) -> Result<Self, RtpEngineError> {
         let local_contact = Contact {
             uri: Uri {
                 auth: req.to.uri.user().map(|u| Auth { user: u.to_string(), password: None }),
@@ -53,9 +53,9 @@ impl SipTransportIn {
             display_name: None,
             params: vec![],
         };
-        let mut rtp_engine = RtpEngine::new(bind_addr.ip()).await;
+        let mut rtp_engine = RtpEngine::new(bind_addr.ip());
         log::info!("Create transport {}", req.body_str());
-        rtp_engine.process_remote_sdp(&req.body_str()).await?;
+        rtp_engine.process_remote_sdp(&req.body_str())?;
         Ok(Self {
             rtp_engine,
             socket,

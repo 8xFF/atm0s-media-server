@@ -40,7 +40,7 @@ pub struct SipTransportOut {
 }
 
 impl SipTransportOut {
-    pub async fn new(now_ms: u64, bind_addr: SocketAddr, call_id: CallId, local_from: From, remote_to: To, socket: VirtualSocket<GroupId, SipMessage>) -> Result<Self, RtpEngineError> {
+    pub fn new(now_ms: u64, bind_addr: SocketAddr, call_id: CallId, local_from: From, remote_to: To, socket: VirtualSocket<GroupId, SipMessage>) -> Result<Self, RtpEngineError> {
         let local_contact = Contact {
             uri: Uri {
                 auth: local_from.uri.user().map(|u| Auth { user: u.to_string(), password: None }),
@@ -55,7 +55,7 @@ impl SipTransportOut {
             display_name: None,
             params: vec![],
         };
-        let mut rtp_engine = RtpEngine::new(bind_addr.ip()).await;
+        let mut rtp_engine = RtpEngine::new(bind_addr.ip());
 
         Ok(Self {
             logic: CallOutProcessor::new(now_ms, local_contact, call_id, local_from, remote_to, &rtp_engine.create_local_sdp()),
@@ -123,7 +123,6 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportOut {
                             if let Ok(sdp) = String::from_utf8(body) {
                                 self.rtp_engine
                                     .process_remote_sdp(&sdp)
-                                    .await
                                     .map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
                             }
                         }

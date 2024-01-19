@@ -1,6 +1,10 @@
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
-use async_std::{channel::bounded, prelude::FutureExt as _, stream::StreamExt};
+use async_std::{
+    channel::{bounded, Sender},
+    prelude::FutureExt as _,
+    stream::StreamExt,
+};
 use cluster::{
     rpc::{
         general::MediaEndpointCloseResponse,
@@ -21,7 +25,7 @@ use rsip::{
     Auth, Host, HostWithPort, Param, Uri,
 };
 use transport::{Transport, TransportIncomingEvent, TransportStateEvent};
-use transport_sip::{GroupId, SipServerSocket, SipServerSocketError, SipServerSocketMessage, SipTransportIn, SipTransportOut};
+use transport_sip::{sip_request::SipRequest, GroupId, SipMessage, SipServerSocket, SipServerSocketError, SipServerSocketMessage, SipTransportIn, SipTransportOut, VirtualSocket};
 
 use crate::{rpc::http::HttpRpcServer, server::MediaServerContext};
 
@@ -82,6 +86,125 @@ async fn run_transport<T: Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut>>(
                 }
             }
         }
+    }
+}
+
+fn run_incomming_call(
+    sip_addr: SocketAddr,
+    hook_sender: HooksSender,
+    socket: VirtualSocket<GroupId, SipMessage>,
+    req: SipRequest,
+    ctx: &MediaServerContext<InternalControl>,
+    timer: Arc<dyn Timer>,
+    tx: Sender<(SipTransport, String, String)>,
+) {
+    let from_number = req.from.uri.user().expect("").to_string();
+    let to_number = req.to.uri.user().expect("").to_string();
+    let conn_id = ctx.generate_conn_id();
+    let hook_req = SipIncomingInviteRequest {
+        source: socket.ctx().remote_addr.to_string(),
+        username: socket.ctx().username.clone(),
+        from_number: from_number.clone(),
+        to_number: to_number.clone(),
+        conn_id: conn_id.clone(),
+    };
+
+    let mut transport_in = match SipTransportIn::new(timer.now_ms(), sip_addr, socket, req) {
+        Ok(transport) => transport,
+        Err(e) => {
+            log::error!("Can not create transport {:?}", e);
+            return;
+        }
+    };
+
+    async_std::task::spawn(async move {
+        match hook_sender.hook_invite(hook_req).await {
+            Ok(hook_res) => {
+                if let Some(room_id) = hook_res.room_id {
+                    match hook_res.strategy {
+                        SipIncomingInviteStrategy::Accept => {
+                            log::info!("[SipInCall] accept then join to {room_id} {from_number}");
+                            transport_in.accept(timer.now_ms()).log_error("should accept");
+                            tx.send((SipTransport::In(transport_in, conn_id), room_id.clone(), from_number)).await.log_error("should send");
+                        }
+                        SipIncomingInviteStrategy::Reject => {
+                            transport_in.reject(timer.now_ms()).log_error("should reject");
+                            run_transport(&mut transport_in, timer).await;
+                        }
+                        SipIncomingInviteStrategy::WaitOtherPeers => {
+                            log::info!("[SipInCall] join to {room_id} {from_number}");
+                            transport_in.ringing(timer.now_ms()).log_error("should accept");
+                            tx.send((SipTransport::In(transport_in, conn_id), room_id.clone(), from_number)).await.log_error("should send");
+                        }
+                    }
+                } else {
+                    transport_in.reject(timer.now_ms()).log_error("should reject");
+                    run_transport(&mut transport_in, timer).await;
+                }
+            }
+            Err(e) => {
+                log::error!("Error on hook invite {:?}", e);
+                transport_in.reject(timer.now_ms()).log_error("should reject");
+                run_transport(&mut transport_in, timer).await;
+            }
+        }
+    });
+}
+
+fn run_outgoing_call(
+    sip_addr: SocketAddr,
+    sip_server: &mut SipServerSocket,
+    room_id: String,
+    from_number: String,
+    to_number: String,
+    to_addr: SocketAddr,
+    ctx: &MediaServerContext<InternalControl>,
+    timer: Arc<dyn Timer>,
+    tx: Sender<(SipTransport, String, String)>,
+) -> Result<SipOutgoingInviteResponse, &'static str> {
+    let call_id: CallId = random_call_id().into();
+    let socket = sip_server.create_call(&call_id, to_addr);
+
+    let local_from = From {
+        display_name: None,
+        uri: Uri {
+            scheme: Some(rsip::Scheme::Sip),
+            auth: Some(Auth { user: from_number, password: None }),
+            host_with_port: HostWithPort {
+                host: Host::Domain(sip_addr.ip().to_string().into()),
+                port: Some(sip_addr.port().into()),
+            },
+            ..Default::default()
+        },
+        params: vec![Param::Transport(rsip::Transport::Udp), Param::Tag(timer.now_ms().to_string().into())],
+    };
+    let remote_to = To {
+        display_name: None,
+        uri: Uri {
+            scheme: Some(rsip::Scheme::Sip),
+            auth: Some(Auth {
+                user: to_number.clone(),
+                password: None,
+            }),
+            host_with_port: HostWithPort {
+                host: Host::Domain(to_addr.ip().to_string().into()),
+                port: Some(to_addr.port().into()),
+            },
+            ..Default::default()
+        },
+        params: vec![],
+    };
+
+    let conn_id = ctx.generate_conn_id();
+    if let Ok(transport) = SipTransportOut::new(timer.now_ms(), sip_addr, call_id.clone().into(), local_from, remote_to, socket) {
+        let session_id = conn_id.clone();
+        async_std::task::spawn(async move {
+            tx.send((SipTransport::Out(transport, conn_id), room_id, to_number)).await.log_error("should send");
+        });
+
+        Ok(SipOutgoingInviteResponse { session_id })
+    } else {
+        Err("INTERNAL_ERROR")
     }
 }
 
@@ -223,60 +346,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                         continue;
                     }
                     SipServerSocketMessage::InCall(socket, req) => {
-                        let tx = tx.clone();
-                        let timer = timer.clone();
-                        let hook_sender = hook_sender.clone();
-                        let from_number = req.from.uri.user().expect("").to_string();
-                        let to_number = req.to.uri.user().expect("").to_string();
-                        let conn_id = ctx.generate_conn_id();
-                        let hook_req = SipIncomingInviteRequest {
-                            source: socket.ctx().remote_addr.to_string(),
-                            username: socket.ctx().username.clone(),
-                            from_number: from_number.clone(),
-                            to_number: to_number.clone(),
-                            conn_id: conn_id.clone(),
-                        };
-
-                        let mut transport_in = match SipTransportIn::new(timer.now_ms(), sip_addr, socket, req).await {
-                            Ok(transport) => transport,
-                            Err(e) => {
-                                log::error!("Can not create transport {:?}", e);
-                                continue;
-                            }
-                        };
-
-                        async_std::task::spawn(async move {
-                            match hook_sender.hook_invite(hook_req).await {
-                                Ok(hook_res) => {
-                                    if let Some(room_id) = hook_res.room_id {
-                                        match hook_res.strategy {
-                                            SipIncomingInviteStrategy::Accept => {
-                                                log::info!("[SipInCall] accept then join to {room_id} {from_number}");
-                                                transport_in.accept(timer.now_ms()).log_error("should accept");
-                                                tx.send((SipTransport::In(transport_in, conn_id), room_id.clone(), from_number)).await.log_error("should send");
-                                            }
-                                            SipIncomingInviteStrategy::Reject => {
-                                                transport_in.reject(timer.now_ms()).log_error("should reject");
-                                                run_transport(&mut transport_in, timer).await;
-                                            }
-                                            SipIncomingInviteStrategy::WaitOtherPeers => {
-                                                log::info!("[SipInCall] join to {room_id} {from_number}");
-                                                transport_in.ringing(timer.now_ms()).log_error("should accept");
-                                                tx.send((SipTransport::In(transport_in, conn_id), room_id.clone(), from_number)).await.log_error("should send");
-                                            }
-                                        }
-                                    } else {
-                                        transport_in.reject(timer.now_ms()).log_error("should reject");
-                                        run_transport(&mut transport_in, timer).await;
-                                    }
-                                }
-                                Err(e) => {
-                                    log::error!("Error on hook invite {:?}", e);
-                                    transport_in.reject(timer.now_ms()).log_error("should reject");
-                                    run_transport(&mut transport_in, timer).await;
-                                }
-                            }
-                        });
+                        run_incomming_call(sip_addr, hook_sender.clone(), socket, req, &ctx, timer.clone(), tx.clone());
                         continue;
                     }
                     SipServerSocketMessage::Continue => {
@@ -321,59 +391,26 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                     let dest_session_id = req.param().dest_session_id.clone();
                     if let Some(client_info) = sessions.get(&dest_session_id) {
                         let param = req.param().clone();
-                        let call_id: CallId = random_call_id().into();
-                        let socket = sip_server.create_call(&call_id, client_info.addr);
-                        let to_user = client_info.username.clone();
-                        let local_from = From {
-                            display_name: None,
-                            uri: Uri {
-                                scheme: Some(rsip::Scheme::Sip),
-                                auth: Some(Auth {
-                                    user: param.from_number.clone(),
-                                    password: None,
-                                }),
-                                host_with_port: HostWithPort {
-                                    host: Host::Domain(sip_addr.ip().to_string().into()),
-                                    port: Some(sip_addr.port().into()),
-                                },
-                                ..Default::default()
-                            },
-                            params: vec![Param::Transport(rsip::Transport::Udp), Param::Tag(timer.now_ms().to_string().into())],
-                        };
-                        let remote_to = To {
-                            display_name: None,
-                            uri: Uri {
-                                scheme: Some(rsip::Scheme::Sip),
-                                auth: Some(Auth {
-                                    user: to_user.clone(),
-                                    password: None,
-                                }),
-                                host_with_port: HostWithPort {
-                                    host: Host::Domain(client_info.addr.ip().to_string().into()),
-                                    port: Some(client_info.addr.port().into()),
-                                },
-                                ..Default::default()
-                            },
-                            params: vec![],
-                        };
+                        let room_id = param.room_id;
+                        let from_number = param.from_number.clone();
+                        let to_number = client_info.username.clone();
+                        let to_addr = client_info.addr;
 
-                        let conn_id = ctx.generate_conn_id();
-                        let tx = tx.clone();
-                        let timer = timer.clone();
-                        async_std::task::spawn(async move {
-                            if let Ok(transport) = SipTransportOut::new(timer.now_ms(), sip_addr, call_id.clone().into(), local_from, remote_to, socket).await {
-                                req.answer(Ok(SipOutgoingInviteResponse { session_id: conn_id.clone() }));
-                                tx.send((SipTransport::Out(transport, conn_id), param.room_id, to_user)).await.log_error("should send");
-                            } else {
-                                req.answer(Err("INTERNAL_ERROR"));
-                            }
-                        });
+                        req.answer(run_outgoing_call(sip_addr, &mut sip_server, room_id, from_number, to_number, to_addr, &ctx, timer.clone(), tx.clone()));
                     } else {
                         req.answer(Err("NOT_FOUND"));
                     }
                 }
-                RpcEvent::InviteOutgoingServer(_req) => {
-                    todo!()
+                RpcEvent::InviteOutgoingServer(req) => {
+                    let param = req.param().clone();
+                    let room_id = param.room_id;
+                    let from_number = param.from_number;
+                    let to_number = param.to_number;
+                    if let Ok(to_addr) = param.dest_addr.parse() {
+                        req.answer(run_outgoing_call(sip_addr, &mut sip_server, room_id, from_number, to_number, to_addr, &ctx, timer.clone(), tx.clone()));
+                    } else {
+                        req.answer(Err("INVALID_DEST_ADDR"));
+                    }
                 }
                 RpcEvent::MediaEndpointClose(req) => {
                     if let Some(old_tx) = ctx.get_conn(&req.param().conn_id) {
