@@ -3242,6 +3242,7 @@ dependencies = [
  "regex",
  "rfc7239",
  "rust-embed",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -3251,6 +3252,7 @@ dependencies = [
  "thiserror",
  "time",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "tokio-util 0.7.10",
  "tracing",
@@ -4566,6 +4568,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.48",
+]
+
+[[package]]
+name = "tokio-rustls"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
+dependencies = [
+ "rustls",
+ "tokio",
 ]
 
 [[package]]
