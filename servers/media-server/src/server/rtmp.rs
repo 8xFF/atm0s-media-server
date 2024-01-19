@@ -11,7 +11,7 @@ use cluster::{
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{AutoCancelTask, ErrorDebugger};
@@ -60,7 +60,14 @@ pub struct RtmpArgs {
     pub max_conn: u64,
 }
 
-pub async fn run_rtmp_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: RtmpArgs, ctx: MediaServerContext<InternalControl>, mut cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_rtmp_server<C, CR, RPC, REQ, EMITTER>(
+    http_port: u16,
+    http_tls: bool,
+    opts: RtmpArgs,
+    ctx: MediaServerContext<InternalControl>,
+    mut cluster: C,
+    rpc_endpoint: RPC,
+) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -70,7 +77,7 @@ where
 {
     let mut rtmp_tcp_server = server_tcp::RtmpServer::new(opts.port).await;
     let mut rpc_endpoint = RtmpClusterRpc::new(rpc_endpoint);
-    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
+    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
 
     let api_service = OpenApiService::new(RtmpHttpApis, "Rtmp Server", "1.0.0").server("http://localhost:3000");
     let ui = api_service.swagger_ui();

@@ -8,7 +8,7 @@ use cluster::{
         webrtc::{WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT,
     },
-    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    Cluster, ClusterEndpoint, MEDIA_SERVER_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{SystemTimer, Timer};
@@ -51,7 +51,7 @@ const GATEWAY_SESSIONS_CONNECT_ERROR: &str = "gateway.sessions.connect.error";
 #[command(author, version, about, long_about = None)]
 pub struct GatewayArgs {}
 
-pub async fn run_gateway_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: GatewayArgs, ctx: MediaServerContext<()>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_gateway_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, http_tls: bool, _opts: GatewayArgs, ctx: MediaServerContext<()>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -61,7 +61,7 @@ where
 {
     let node_id = cluster.node_id();
     let mut rpc_endpoint = GatewayClusterRpc::new(rpc_endpoint);
-    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
+    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
 
     let timer = Arc::new(SystemTimer());
     let api_service = OpenApiService::new(GatewayHttpApis, "Gateway Server", "1.0.0").server("http://localhost:3000");
