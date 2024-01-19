@@ -149,7 +149,7 @@ impl SipRequest {
         headers.push(rsip::Header::CSeq(self.cseq.clone().into()));
         let body_len = body.as_ref().map(|(_, body)| body.len()).unwrap_or(0);
         headers.push(rsip::Header::ContentLength(ContentLength::from(body_len as u32)));
-        headers.push(rsip::Header::UserAgent(UserAgent::default()));
+        headers.push(rsip::Header::UserAgent(UserAgent::from("8xff-sip-media-server")));
 
         if let Some((content_type, _)) = &body {
             headers.push(rsip::Header::ContentType(content_type.clone()));

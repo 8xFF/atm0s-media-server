@@ -44,9 +44,10 @@ impl Context {
     }
 
     pub fn unregister_user(&self, username: &str, session_id: &str) {
-        if let Some(s) = self.users.lock().get(username) {
+        let mut users = self.users.lock();
+        if let Some(s) = users.get(username) {
             if s == session_id {
-                self.users.lock().remove(username);
+                users.remove(username);
             }
         }
     }

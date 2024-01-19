@@ -8,7 +8,7 @@ use async_std::{
 use cluster::{
     rpc::{
         general::MediaEndpointCloseResponse,
-        sip::{SipIncomingAuthRequest, SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest, SipOutgoingInviteResponse},
+        sip::{SipIncomingAuthRequest, SipIncomingInviteRequest, SipIncomingInviteStrategy, SipIncomingRegisterRequest, SipIncomingUnregisterRequest, SipOutgoingInviteResponse},
         RpcEmitter, RpcEndpoint, RpcRequest,
     },
     Cluster, ClusterEndpoint,
@@ -39,6 +39,14 @@ fn random_call_id() -> String {
     res
 }
 
+struct ClientSockInfo {
+    username: String,
+    realm: String,
+    ha1_hash: String,
+    session_id: String,
+    last_ts: u64,
+}
+
 struct ClientInfo {
     username: String,
     addr: SocketAddr,
@@ -59,7 +67,7 @@ type RmOut = EndpointRpcOut;
 type RrOut = RemoteTrackRpcOut;
 type RlOut = LocalTrackRpcOut;
 
-async fn run_transport<T: Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut>>(transport: &mut T, timer: Arc<dyn Timer>) {
+async fn run_transport<T: Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut>>(transport: &mut T, timer: &Arc<dyn Timer>) {
     let mut interval = async_std::stream::interval(Duration::from_millis(100));
     loop {
         select! {
@@ -81,7 +89,7 @@ async fn run_transport<T: Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut>>(
                     }
                     Err(e) => {
                         log::error!("Transport error {:?}", e);
-                        return;
+                        break;
                     }
                 }
             }
@@ -118,7 +126,15 @@ fn run_incomming_call(
     };
 
     async_std::task::spawn(async move {
-        match hook_sender.hook_invite(hook_req).await {
+        let hook_res = loop {
+            select! {
+                _ = run_transport(&mut transport_in, &timer).fuse() => {
+                    return;
+                },
+                e = hook_sender.hook_invite(hook_req).fuse() => break e,
+            }
+        };
+        match hook_res {
             Ok(hook_res) => {
                 if let Some(room_id) = hook_res.room_id {
                     match hook_res.strategy {
@@ -129,7 +145,7 @@ fn run_incomming_call(
                         }
                         SipIncomingInviteStrategy::Reject => {
                             transport_in.reject(timer.now_ms()).log_error("should reject");
-                            run_transport(&mut transport_in, timer).await;
+                            run_transport(&mut transport_in, &timer).await;
                         }
                         SipIncomingInviteStrategy::WaitOtherPeers => {
                             log::info!("[SipInCall] join to {room_id} {from_number}");
@@ -139,13 +155,13 @@ fn run_incomming_call(
                     }
                 } else {
                     transport_in.reject(timer.now_ms()).log_error("should reject");
-                    run_transport(&mut transport_in, timer).await;
+                    run_transport(&mut transport_in, &timer).await;
                 }
             }
             Err(e) => {
                 log::error!("Error on hook invite {:?}", e);
                 transport_in.reject(timer.now_ms()).log_error("should reject");
-                run_transport(&mut transport_in, timer).await;
+                run_transport(&mut transport_in, &timer).await;
             }
         }
     });
@@ -214,7 +230,7 @@ enum SipTransport {
 }
 
 enum InternalCmd {
-    RegisterResult(String, String, GroupId, bool),
+    RegisterResult(String, String, String, Option<String>, GroupId, bool),
 }
 
 pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
@@ -288,7 +304,9 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
     });
 
     let timer = Arc::new(SystemTimer());
+    let mut tick = async_std::stream::interval(Duration::from_millis(100));
     let (internal_tx, internal_rx) = bounded::<InternalCmd>(100);
+    let mut client_sockets = HashMap::<SocketAddr, ClientSockInfo>::new();
     let mut sessions = HashMap::new();
 
     loop {
@@ -299,50 +317,90 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
             rpc = rpc_endpoint.recv().fuse() => {
                 rpc
             },
+            _ = tick.next().fuse() => {
+                let timeout_clients = client_sockets.iter().filter_map(|(addr, info)| {
+                    if timer.now_ms() - info.last_ts > 180000 {
+                        Some(addr.clone())
+                    } else {
+                        None
+                    }
+                }).collect::<Vec<_>>();
+                for addr in timeout_clients {
+                    if let Some(slot) = client_sockets.remove(&addr) {
+                        log::info!("Remove timeout client socket {}", addr);
+                        sessions.remove(&slot.session_id);
+                        let hook_sender = hook_sender.clone();
+                        async_std::task::spawn(async move {
+                            hook_sender.hook_unregister(SipIncomingUnregisterRequest {
+                                username: slot.username,
+                                session_id: slot.session_id,
+                                realm: slot.realm,
+                            }).await.log_error("Should send hook_unregister");
+                        });
+                    }
+                }
+                continue;
+            },
             e = sip_server.recv().fuse() => match e {
                 Ok(event) => match event {
                     SipServerSocketMessage::RegisterValidate(group_id, digest, nonce, username, realm, hashed_password) => {
-                        log::info!("Register validate {} {}", username, hashed_password);
-                        let session_id = ctx.generate_conn_id();
-                        let hook_sender = hook_sender.clone();
-                        let internal_tx = internal_tx.clone();
-                        async_std::task::spawn(async move {
-                            let res = hook_sender.hook_auth(SipIncomingAuthRequest {
-                                username: username.clone(),
-                                session_id: session_id.clone(),
-                                realm: realm.clone(),
-                            }).await;
-
-                            let accept = match res {
-                                Ok(res) => match (res.success, res.ha1) {
-                                    (true, Some(ha1)) => {
-                                        let hd2 = md5::compute(format!("REGISTER:{}", digest));
-                                        let hd2_str = format!("{:x}", hd2);
-                                        let response = md5::compute(format!("{}:{}:{}", ha1, nonce, hd2_str));
-                                        let response_str = format!("{:x}", response);
-                                        log::info!("Register local calculated md5 hash: {}:{}:{} => {} vs {}", ha1, nonce, hd2_str, response_str, hashed_password);
-                                        hashed_password.eq(&response_str)
-                                    }
-                                    _ => {
-                                        log::info!("Register validate failed");
-                                        false
-                                    }
-                                },
-                                Err(e) => {
-                                    log::error!("Error on hook register {:?}", e);
-                                    false
-                                }
-                            };
-
-                            internal_tx.send(InternalCmd::RegisterResult(session_id.clone(), username.clone(), group_id, accept)).await.log_error("should send");
-                            if accept {
-                                hook_sender.hook_register(SipIncomingRegisterRequest {
-                                    username,
-                                    session_id,
-                                    realm,
-                                }).await.log_error("Should send register hook");
+                        if let Some(slot) = client_sockets.get_mut(&group_id.addr()) {
+                            log::info!("Register validate {} {} for cached user", username, hashed_password);
+                            let hd2 = md5::compute(format!("REGISTER:{}", digest));
+                            let hd2_str = format!("{:x}", hd2);
+                            let response = md5::compute(format!("{}:{}:{}", slot.ha1_hash, nonce, hd2_str));
+                            let response_str = format!("{:x}", response);
+                            log::info!("Register local calculated md5 hash: {}:{}:{} => {} vs {}", slot.ha1_hash, nonce, hd2_str, response_str, hashed_password);
+                            if hashed_password.eq(&response_str) {
+                                slot.last_ts = timer.now_ms();
+                                sip_server.accept_register(&group_id);
+                            } else {
+                                sip_server.reject_register(&group_id);
                             }
-                        });
+                        } else {
+                            log::info!("Register validate {} {}", username, hashed_password);
+                            let session_id = ctx.generate_conn_id();
+                            let hook_sender = hook_sender.clone();
+                            let internal_tx = internal_tx.clone();
+                            async_std::task::spawn(async move {
+                                log::info!("Register validate {} {} send hook_auth", username, hashed_password);
+                                let res = hook_sender.hook_auth(SipIncomingAuthRequest {
+                                    username: username.clone(),
+                                    session_id: session_id.clone(),
+                                    realm: realm.clone(),
+                                }).await;
+
+                                let (ha1_hash, accept) = match res {
+                                    Ok(res) => match (res.success, res.ha1) {
+                                        (true, Some(ha1)) => {
+                                            let hd2 = md5::compute(format!("REGISTER:{}", digest));
+                                            let hd2_str = format!("{:x}", hd2);
+                                            let response = md5::compute(format!("{}:{}:{}", ha1, nonce, hd2_str));
+                                            let response_str = format!("{:x}", response);
+                                            log::info!("Register local calculated md5 hash: {}:{}:{} => {} vs {}", ha1, nonce, hd2_str, response_str, hashed_password);
+                                            (Some(ha1), hashed_password.eq(&response_str))
+                                        }
+                                        _ => {
+                                            log::info!("Register validate failed");
+                                            (None, false)
+                                        }
+                                    },
+                                    Err(e) => {
+                                        log::error!("Error on hook register {:?}", e);
+                                        (None, false)
+                                    }
+                                };
+
+                                internal_tx.send(InternalCmd::RegisterResult(session_id.clone(), username.clone(), realm.clone(), ha1_hash, group_id, accept)).await.log_error("should send");
+                                if accept {
+                                    hook_sender.hook_register(SipIncomingRegisterRequest {
+                                        username,
+                                        session_id,
+                                        realm,
+                                    }).await.log_error("Should send register hook");
+                                }
+                            });
+                        }
                         continue;
                     }
                     SipServerSocketMessage::InCall(socket, req) => {
@@ -366,13 +424,24 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
             },
             e = internal_rx.recv().fuse() => match e {
                 Ok(event) => match event {
-                    InternalCmd::RegisterResult(session_id, username, group_id, result) => {
+                    InternalCmd::RegisterResult(session_id, username, realm, ha1_hash, group_id, result) => {
                         if result {
+                            if let Some(slot) = client_sockets.get_mut(&group_id.addr()) {
+                                slot.last_ts = timer.now_ms();
+                            } else {
+                                client_sockets.insert(group_id.addr(), ClientSockInfo {
+                                    ha1_hash: ha1_hash.expect(""),
+                                    username: username.clone(),
+                                    realm: realm.clone(),
+                                    session_id: session_id.clone(),
+                                    last_ts: timer.now_ms(),
+                                });
+                                sessions.insert(session_id, ClientInfo {
+                                    username,
+                                    addr: group_id.addr(),
+                                });
+                            }
                             sip_server.accept_register(&group_id);
-                            sessions.insert(session_id, ClientInfo {
-                                username,
-                                addr: group_id.addr(),
-                            });
                         } else {
                             sip_server.reject_register(&group_id);
                         }

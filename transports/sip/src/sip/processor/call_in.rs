@@ -3,7 +3,7 @@ use std::{collections::VecDeque, net::SocketAddr};
 use rsip::{
     headers::{self, typed, ContentType},
     typed::Contact,
-    Headers, Method, Param, Scheme, StatusCode,
+    Headers, Method, Param, StatusCode,
 };
 
 use crate::{

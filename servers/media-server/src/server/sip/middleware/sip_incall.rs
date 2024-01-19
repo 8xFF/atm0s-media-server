@@ -63,7 +63,7 @@ impl MediaEndpointMiddleware for SipIncallMiddleware {
 
     fn on_cluster(&mut self, _now_ms: u64, event: &ClusterEndpointIncomingEvent) -> bool {
         match event {
-            ClusterEndpointIncomingEvent::PeerAdded(peer, meta) => {
+            ClusterEndpointIncomingEvent::PeerAdded(peer, _meta) => {
                 if peer != &self.peer {
                     self.remote_peers.insert(peer.clone(), ());
                 }
