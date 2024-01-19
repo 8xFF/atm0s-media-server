@@ -46,7 +46,14 @@ pub struct SipArgs {
     pub hook_url: String,
 }
 
-pub async fn run_sip_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: SipArgs, ctx: MediaServerContext<InternalControl>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_sip_server<C, CR, RPC, REQ, EMITTER>(
+    http_port: u16,
+    http_tls: bool,
+    opts: SipArgs,
+    ctx: MediaServerContext<InternalControl>,
+    cluster: C,
+    rpc_endpoint: RPC,
+) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -55,7 +62,7 @@ where
     EMITTER: RpcEmitter + Send + 'static,
 {
     let rpc_endpoint = SipClusterRpc::new(rpc_endpoint);
-    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
+    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
 
     let api_service = OpenApiService::new(SipHttpApis, "Sip Server", "1.0.0").server("/");
     let ui = api_service.swagger_ui();

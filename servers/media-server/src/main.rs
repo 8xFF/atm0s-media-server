@@ -130,7 +130,7 @@ async fn main() {
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.token));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
-            if let Err(e) = run_sip_server(args.http_port, opts, ctx, cluster, rpc_endpoint).await {
+            if let Err(e) = run_sip_server(args.http_port, args.http_tls, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[RtmpServer] error {}", e);
             }
         }
