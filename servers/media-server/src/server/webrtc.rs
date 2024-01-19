@@ -64,7 +64,14 @@ pub struct WebrtcArgs {
     pub max_conn: u64,
 }
 
-pub async fn run_webrtc_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: WebrtcArgs, ctx: MediaServerContext<InternalControl>, mut cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_webrtc_server<C, CR, RPC, REQ, EMITTER>(
+    http_port: u16,
+    http_tls: bool,
+    _opts: WebrtcArgs,
+    ctx: MediaServerContext<InternalControl>,
+    mut cluster: C,
+    rpc_endpoint: RPC,
+) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -74,7 +81,7 @@ where
 {
     let timer = SystemTimer();
     let mut rpc_endpoint = WebrtcClusterRpc::new(rpc_endpoint);
-    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
+    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
         address: format!("{}", cluster.node_addr()),

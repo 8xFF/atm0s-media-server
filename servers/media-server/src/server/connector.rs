@@ -50,7 +50,14 @@ pub struct ConnectorArgs {
     pub max_conn: u64,
 }
 
-pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: ConnectorArgs, ctx: MediaServerContext<InternalControl>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_connector_server<C, CR, RPC, REQ, EMITTER>(
+    http_port: u16,
+    http_tls: bool,
+    opts: ConnectorArgs,
+    ctx: MediaServerContext<InternalControl>,
+    cluster: C,
+    rpc_endpoint: RPC,
+) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -59,7 +66,7 @@ where
     EMITTER: RpcEmitter + Send + 'static,
 {
     let mut rpc_endpoint = ConnectorClusterRpc::new(rpc_endpoint);
-    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
+    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
     let (protocol, _) = parse_uri(&opts.mq_uri).map_err(|e| {
         log::error!("Error parsing MQ URI: {:?}", e);
         "Error parsing MQ URI"
