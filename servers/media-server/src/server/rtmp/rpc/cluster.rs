@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 
-use cluster::rpc::{RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE};
+use cluster::rpc::{
+    gateway::{NodeHealthcheckRequest, NodeHealthcheckResponse},
+    RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_NODE_HEALTHCHECK,
+};
 
 use super::RpcEvent;
 
@@ -20,16 +23,20 @@ impl<RPC: RpcEndpoint<Req, Emitter>, Req: RpcRequest, Emitter: RpcEmitter> RtmpC
 
     pub async fn recv(&mut self) -> Option<RpcEvent> {
         loop {
-            let event = self.rpc.recv().await?;
-            match event.cmd() {
+            let req = self.rpc.recv().await?;
+            match req.cmd() {
+                RPC_NODE_HEALTHCHECK => {
+                    if let Some(req) = req.parse::<NodeHealthcheckRequest, _>() {
+                        req.answer(Ok(NodeHealthcheckResponse { success: true }));
+                    }
+                }
                 RPC_MEDIA_ENDPOINT_CLOSE => {
-                    if let Some(req) = event.parse() {
+                    if let Some(req) = req.parse() {
                         return Some(RpcEvent::MediaEndpointClose(req));
                     }
                 }
-
                 _ => {
-                    event.error("NOT_SUPPORTED_CMD");
+                    req.error("NOT_SUPPORTED_CMD");
                 }
             }
         }

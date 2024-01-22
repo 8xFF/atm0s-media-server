@@ -87,9 +87,9 @@ impl<InternalControl> MediaServerContext<InternalControl> {
 
     /// Insert pair (Room, Peer) to store
     /// Return (event receiver, connection id, old pair sender), old pair sender can be used to force close old session
-    pub fn create_peer(&self, room: &str, peer: &str) -> (Receiver<InternalControl>, String, Option<Sender<InternalControl>>) {
+    pub fn create_peer(&self, room: &str, peer: &str, conn_id: Option<String>) -> (Receiver<InternalControl>, String, Option<Sender<InternalControl>>) {
         let peer = PeerIdentity::new(room, peer);
-        let conn_id = self.generate_conn_id();
+        let conn_id = conn_id.unwrap_or_else(|| self.generate_conn_id());
         let (tx, rx) = bounded(10);
         let mut peers = self.peers.write();
         let mut conns = self.conns.write();
@@ -135,11 +135,7 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         self.token_verifier.clone()
     }
 
-    pub fn signer(&self) -> Arc<dyn SessionTokenSigner + Send + Sync> {
-        self.token_signer.clone()
-    }
-
-    fn generate_conn_id(&self) -> String {
+    pub fn generate_conn_id(&self) -> String {
         let mut counter = self.conn_counter.write();
         *counter += 1;
         self.token_signer.sign_conn_id(&MediaConnId {
@@ -148,7 +144,7 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         })
     }
 
-    fn generate_session_uuid(&self) -> u64 {
+    pub fn generate_session_uuid(&self) -> u64 {
         let mut counter = self.session_counter.write();
         *counter += 1;
         let uuid = ClusterSessionUuid::new(self.node_id as u16, self.timer.now_ms() as u32, *counter as u16);

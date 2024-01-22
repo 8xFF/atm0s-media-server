@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    implement::types::to_room_streams_map_key,
     rpc::{connector::MediaEndpointLogResponse, RPC_MEDIA_ENDPOINT_LOG},
     ClusterEndpoint, ClusterEndpointError, ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterRemoteTrackIncomingEvent,
     ClusterRemoteTrackOutgoingEvent, ClusterTrackUuid, CONNECTOR_SERVICE,
@@ -14,7 +15,7 @@ use futures::{select, FutureExt};
 use media_utils::{hash_str, ErrorDebugger};
 use transport::RequestKeyframeKind;
 
-use super::types::{from_room_value, to_room_key, to_room_value, TrackData};
+use super::types::{from_peer_value, from_stream_value, to_peer_sub_key, to_peer_value, to_room_peers_map_key, to_stream_sub_key, to_stream_value, TrackData};
 
 #[repr(u8)]
 enum TrackFeedbackType {
@@ -37,51 +38,69 @@ impl TryFrom<u8> for TrackFeedbackType {
 pub struct ClusterEndpointSdn {
     room_id: String,
     peer_id: String,
-    room_key: u64,
+    room_peers_map_key: u64,
+    room_streams_map_key: u64,
     sub_uuid: u64,
     pubsub_sdk: PubsubSdk,
     kv_sdk: KeyValueSdk,
-    kv_tx: Sender<(KeyId, SubKeyId, Option<ValueType>, KeyVersion, KeySource)>,
-    kv_rx: Receiver<(KeyId, SubKeyId, Option<ValueType>, KeyVersion, KeySource)>,
+    kv_peers_tx: Sender<(KeyId, SubKeyId, Option<ValueType>, KeyVersion, KeySource)>,
+    kv_peers_rx: Receiver<(KeyId, SubKeyId, Option<ValueType>, KeyVersion, KeySource)>,
+    kv_streams_tx: Sender<(KeyId, SubKeyId, Option<ValueType>, KeyVersion, KeySource)>,
+    kv_streams_rx: Receiver<(KeyId, SubKeyId, Option<ValueType>, KeyVersion, KeySource)>,
     data_tx: Sender<(LocalSubId, NodeId, ChannelUuid, Bytes)>,
     data_rx: Receiver<(LocalSubId, NodeId, ChannelUuid, Bytes)>,
     data_fb_tx: Sender<Feedback>,
     data_fb_rx: Receiver<Feedback>,
     consumer_map: HashMap<u64, u16>,
     track_sub_map: HashMap<u16, HashMap<ClusterTrackUuid, ConsumerRaw>>,
-    room_sub: Option<()>,
+    room_peers_sub: Option<()>,
+    room_streams_sub: Option<()>,
     peer_sub: HashMap<String, ()>,
     track_pub: HashMap<ChannelUuid, (u16, PublisherRaw)>,
+    remote_peer_cached: HashMap<u64, String>,
     remote_track_cached: HashMap<u64, (String, String)>,
     rpc_emitter: RpcEmitter,
 }
 
 impl ClusterEndpointSdn {
     pub(crate) fn new(room_id: &str, peer_id: &str, pubsub_sdk: PubsubSdk, kv_sdk: KeyValueSdk, rpc_emitter: RpcEmitter) -> Self {
-        let (kv_tx, kv_rx) = bounded(100);
+        let (kv_peers_tx, kv_peers_rx) = bounded(100);
+        let (kv_streams_tx, kv_streams_rx) = bounded(100);
         let (data_tx, data_rx) = bounded(1000);
         let (data_fb_tx, data_fb_rx) = bounded(100);
-        let room_key = hash_str(room_id);
-        log::info!("[Atm0sClusterEndpoint] create endpoint {}/{} room_key {}", room_id, peer_id, room_key);
+        let room_streams_map_key = to_room_streams_map_key(room_id);
+        let room_peers_map_key = to_room_peers_map_key(room_id);
+        log::info!(
+            "[Atm0sClusterEndpoint] create endpoint {}/{} room_peers_key {}, room_streams_key {}",
+            room_id,
+            peer_id,
+            room_streams_map_key,
+            room_peers_map_key
+        );
 
         Self {
             room_id: room_id.to_string(),
             peer_id: peer_id.to_string(),
-            room_key,
+            room_streams_map_key,
+            room_peers_map_key,
             sub_uuid: hash_str(&format!("{}/{}", room_id, peer_id)),
             pubsub_sdk,
             kv_sdk,
-            kv_tx,
-            kv_rx,
+            kv_peers_tx,
+            kv_peers_rx,
+            kv_streams_tx,
+            kv_streams_rx,
             data_tx,
             data_rx,
             data_fb_tx,
             data_fb_rx,
             track_sub_map: Default::default(),
             consumer_map: Default::default(),
-            room_sub: None,
+            room_peers_sub: None,
+            room_streams_sub: None,
             peer_sub: Default::default(),
             track_pub: Default::default(),
+            remote_peer_cached: Default::default(),
             remote_track_cached: Default::default(),
             rpc_emitter,
         }
@@ -96,38 +115,71 @@ impl ClusterEndpointSdn {
 impl ClusterEndpoint for ClusterEndpointSdn {
     fn on_event(&mut self, event: ClusterEndpointOutgoingEvent) -> Result<(), ClusterEndpointError> {
         match event {
-            ClusterEndpointOutgoingEvent::SubscribeRoom => {
-                if self.peer_sub.is_empty() && self.room_sub.is_none() {
-                    log::warn!("[Atm0sClusterEndpoint] sub room");
-                    self.kv_sdk.hsubscribe_raw(self.room_key, self.sub_uuid, Some(10000), self.kv_tx.clone());
-                    self.room_sub = Some(());
+            ClusterEndpointOutgoingEvent::InfoSet(meta) => {
+                let (sub_key, value) = to_peer_value(&self.peer_id, meta);
+                self.kv_sdk.hset(self.room_peers_map_key, sub_key, value.clone(), Some(10000));
+                Ok(())
+            }
+            ClusterEndpointOutgoingEvent::InfoUpdate(meta) => {
+                let (sub_key, value) = to_peer_value(&self.peer_id, meta);
+                self.kv_sdk.hset(self.room_peers_map_key, sub_key, value.clone(), Some(10000));
+                Ok(())
+            }
+            ClusterEndpointOutgoingEvent::InfoRemove => {
+                self.kv_sdk.hdel(self.room_peers_map_key, to_peer_sub_key(&self.peer_id));
+                Ok(())
+            }
+            ClusterEndpointOutgoingEvent::SubscribeRoomPeers => {
+                if self.room_peers_sub.is_none() {
+                    log::info!("[Atm0sClusterEndpoint] sub room peers {}", self.room_peers_map_key);
+                    self.kv_sdk.hsubscribe_raw(self.room_peers_map_key, self.sub_uuid, Some(10000), self.kv_peers_tx.clone());
+                    self.room_peers_sub = Some(());
+                } else {
+                    log::warn!("[Atm0sClusterEndpoint] sub room peers but already exist");
+                }
+                Ok(())
+            }
+            ClusterEndpointOutgoingEvent::UnsubscribeRoomPeers => {
+                if self.room_peers_sub.take().is_some() {
+                    log::info!("[Atm0sClusterEndpoint] unsub room peers {}", self.room_peers_map_key);
+                    self.kv_sdk.hunsubscribe_raw(self.room_peers_map_key, self.sub_uuid);
+                } else {
+                    log::warn!("[Atm0sClusterEndpoint] unsub room peers but not found");
+                }
+                Ok(())
+            }
+            ClusterEndpointOutgoingEvent::SubscribeRoomStreams => {
+                if self.peer_sub.is_empty() && self.room_streams_sub.is_none() {
+                    log::info!("[Atm0sClusterEndpoint] sub room streams {}", self.room_streams_map_key);
+                    self.kv_sdk.hsubscribe_raw(self.room_streams_map_key, self.sub_uuid, Some(10000), self.kv_streams_tx.clone());
+                    self.room_streams_sub = Some(());
                 } else {
                     log::warn!("[Atm0sClusterEndpoint] sub room but already exist");
                 }
                 Ok(())
             }
-            ClusterEndpointOutgoingEvent::UnsubscribeRoom => {
-                if self.peer_sub.is_empty() && self.room_sub.take().is_some() {
-                    log::warn!("[Atm0sClusterEndpoint] unsub room");
-                    self.kv_sdk.hunsubscribe_raw(self.room_key, self.sub_uuid);
+            ClusterEndpointOutgoingEvent::UnsubscribeRoomStreams => {
+                if self.peer_sub.is_empty() && self.room_streams_sub.take().is_some() {
+                    log::info!("[Atm0sClusterEndpoint] unsub room streams {}", self.room_streams_map_key);
+                    self.kv_sdk.hunsubscribe_raw(self.room_streams_map_key, self.sub_uuid);
                 } else {
                     log::warn!("[Atm0sClusterEndpoint] unsub room but not found");
                 }
                 Ok(())
             }
-            ClusterEndpointOutgoingEvent::SubscribePeer(peer_id) => {
-                if self.room_sub.is_none() && !self.peer_sub.contains_key(&peer_id) {
-                    log::warn!("[Atm0sClusterEndpoint] sub peer {}", peer_id);
-                    self.kv_sdk.hsubscribe_raw(self.peer_key(&peer_id), self.sub_uuid, Some(10000), self.kv_tx.clone());
+            ClusterEndpointOutgoingEvent::SubscribeSinglePeer(peer_id) => {
+                if self.room_streams_sub.is_none() && !self.peer_sub.contains_key(&peer_id) {
+                    log::warn!("[Atm0sClusterEndpoint] sub peer streams {}, key {}", peer_id, self.peer_key(&peer_id));
+                    self.kv_sdk.hsubscribe_raw(self.peer_key(&peer_id), self.sub_uuid, Some(10000), self.kv_streams_tx.clone());
                     self.peer_sub.insert(peer_id, ());
                 } else {
                     log::warn!("[Atm0sClusterEndpoint] sub peer but already exist {peer_id}");
                 }
                 Ok(())
             }
-            ClusterEndpointOutgoingEvent::UnsubscribePeer(peer_id) => {
-                if self.room_sub.is_none() && self.peer_sub.remove(&peer_id).is_some() {
-                    log::warn!("[Atm0sClusterEndpoint] unsub peer {}", peer_id);
+            ClusterEndpointOutgoingEvent::UnsubscribeSinglePeer(peer_id) => {
+                if self.room_streams_sub.is_none() && self.peer_sub.remove(&peer_id).is_some() {
+                    log::warn!("[Atm0sClusterEndpoint] unsub peer streams {}, key {}", peer_id, self.peer_key(&peer_id));
                     self.kv_sdk.hunsubscribe_raw(self.peer_key(&peer_id), self.sub_uuid);
                 } else {
                     log::warn!("[Atm0sClusterEndpoint] unsub peer but not found {peer_id}");
@@ -219,15 +271,20 @@ impl ClusterEndpoint for ClusterEndpointSdn {
                 match event {
                     ClusterRemoteTrackOutgoingEvent::TrackAdded(track_name, track_meta) => {
                         if !self.track_pub.contains_key(&channel_uuid) {
-                            let (sub_key, value) = to_room_value(&self.peer_id, &track_name, track_meta);
+                            let (sub_key, value) = to_stream_value(&self.peer_id, &track_name, track_meta);
                             self.track_pub
                                 .insert(channel_uuid, (track_id, self.pubsub_sdk.create_publisher_raw(channel_uuid, self.data_fb_tx.clone())));
 
                             //set in room hashmap
-                            self.kv_sdk.hset(self.room_key, sub_key, value.clone(), Some(10000));
+                            self.kv_sdk.hset(self.room_streams_map_key, sub_key, value.clone(), Some(10000));
                             //set in peer hashmap
                             self.kv_sdk.hset(self.peer_key(&self.peer_id), sub_key, value, Some(10000));
-                            log::info!("[Atm0sClusterEndpoint] add track {} {track_name} => track_uuid {channel_uuid} track_id {track_id}", self.peer_id);
+                            log::info!(
+                                "[Atm0sClusterEndpoint] add track {} {track_name} => track_uuid {channel_uuid} track_id {track_id}, set sub-key in hash {} and {}",
+                                self.peer_id,
+                                self.room_streams_map_key,
+                                self.peer_key(&self.peer_id)
+                            );
                         } else {
                             log::warn!(
                                 "[Atm0sClusterEndpoint] add track but already exist {} {track_name} => track_uuid {channel_uuid} track_id {track_id}",
@@ -258,14 +315,19 @@ impl ClusterEndpoint for ClusterEndpointSdn {
                     }
                     ClusterRemoteTrackOutgoingEvent::TrackRemoved(track_name) => {
                         if self.track_pub.remove(&channel_uuid).is_some() {
-                            let sub_key = to_room_key(&self.peer_id, &track_name);
+                            let sub_key = to_stream_sub_key(&self.peer_id, &track_name);
 
                             //del in room hashmap
-                            self.kv_sdk.hdel(self.room_key, sub_key);
+                            self.kv_sdk.hdel(self.room_streams_map_key, sub_key);
 
                             //del in peer hashmap
                             self.kv_sdk.hdel(self.peer_key(&self.peer_id), sub_key);
-                            log::info!("[Atm0sClusterEndpoint] delete track {} {track_name} => track_uuid {channel_uuid} track_id {track_id}", self.peer_id);
+                            log::info!(
+                                "[Atm0sClusterEndpoint] delete track {} {track_name} => track_uuid {channel_uuid} track_id {track_id}, del sub-key in hash {} and {}",
+                                self.peer_id,
+                                self.room_streams_map_key,
+                                self.peer_key(&self.peer_id)
+                            );
                         } else {
                             log::warn!(
                                 "[Atm0sClusterEndpoint] delete track but not found {} {track_name} => track_uuid {channel_uuid} track_id {track_id}",
@@ -283,7 +345,7 @@ impl ClusterEndpoint for ClusterEndpointSdn {
                     emitter
                         .request::<_, MediaEndpointLogResponse>(CONNECTOR_SERVICE, RouteRule::ToService(0), RPC_MEDIA_ENDPOINT_LOG, event, 5000)
                         .await
-                        .log_error("Should ok");
+                        .log_error("Should send event to Connector Service");
                 });
                 Ok(())
             }
@@ -293,15 +355,41 @@ impl ClusterEndpoint for ClusterEndpointSdn {
     async fn recv(&mut self) -> Result<ClusterEndpointIncomingEvent, ClusterEndpointError> {
         loop {
             select! {
-                event = self.kv_rx.recv().fuse() => match event {
+                event = self.kv_peers_rx.recv().fuse() => match event {
+                    Ok((_key, sub_key, value, _ver, _source)) => {
+                        if sub_key == to_peer_sub_key(&self.peer_id) { //update myself => don't care
+                            continue;
+                        }
+                        if let Some(value) = value { //add or update
+                            if let Some((peer, meta)) = from_peer_value(sub_key, &value) {
+                                if self.remote_peer_cached.insert(sub_key, peer.clone()).is_some() {
+                                    log::info!("[Atm0sClusterEndpoint] on room update peer {}", peer);
+                                    return Ok(ClusterEndpointIncomingEvent::PeerUpdated(peer, meta));
+                                } else {
+                                    log::info!("[Atm0sClusterEndpoint] on room add peer {}", peer);
+                                    return Ok(ClusterEndpointIncomingEvent::PeerAdded(peer, meta));
+                                }
+                            }
+                        } else { //delete
+                            if let Some(peer) = self.remote_peer_cached.remove(&sub_key) {
+                                log::info!("[Atm0sClusterEndpoint] on room remove peer {}", peer);
+                                return Ok(ClusterEndpointIncomingEvent::PeerRemoved(peer));
+                            }
+                        }
+                    }
+                    Err(_e) => {
+                        return Err(ClusterEndpointError::InternalError);
+                    }
+                },
+                event = self.kv_streams_rx.recv().fuse() => match event {
                     Ok((_key, sub_key, value, _ver, _source)) => {
                         if let Some(value) = value { //add or update
-                            if let Some((peer, track, meta)) = from_room_value(sub_key, &value) {
+                            if let Some((peer, track, meta)) = from_stream_value(sub_key, &value) {
                                 if self.remote_track_cached.insert(sub_key, (peer.clone(), track.clone())).is_some() {
-                                    log::info!("[Atm0sClusterEndpoint] on room update {} {}", peer, track);
+                                    log::info!("[Atm0sClusterEndpoint] on room update stream {} {}", peer, track);
                                     return Ok(ClusterEndpointIncomingEvent::PeerTrackUpdated(peer, track, meta));
                                 } else {
-                                    log::info!("[Atm0sClusterEndpoint] on room add {} {}", peer, track);
+                                    log::info!("[Atm0sClusterEndpoint] on room add stream {} {}", peer, track);
                                     return Ok(ClusterEndpointIncomingEvent::PeerTrackAdded(peer, track, meta));
                                 }
                             }
@@ -376,7 +464,7 @@ impl Drop for ClusterEndpointSdn {
         assert_eq!(self.track_sub_map.len(), 0);
         assert_eq!(self.peer_sub.len(), 0);
         assert_eq!(self.track_pub.len(), 0);
-        assert_eq!(self.room_sub, None);
+        assert_eq!(self.room_streams_sub, None);
     }
 }
 

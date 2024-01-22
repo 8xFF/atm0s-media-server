@@ -1,8 +1,14 @@
-use crate::{ClusterTrackMeta, ClusterTrackStats};
+use crate::{ClusterEndpointMeta, ClusterTrackMeta, ClusterTrackStats};
 use bytes::Bytes;
 use media_utils::hash_str;
 use serde::{Deserialize, Serialize};
 use transport::MediaPacket;
+
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct RoomPeer {
+    peer: String,
+    meta: ClusterEndpointMeta,
+}
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct RoomStream {
@@ -11,13 +17,41 @@ pub struct RoomStream {
     meta: ClusterTrackMeta,
 }
 
-pub fn to_room_key(peer: &str, track: &str) -> u64 {
+pub fn to_room_peers_map_key(room: &str) -> u64 {
+    hash_str(&format!("{room}/peers"))
+}
+
+pub fn to_room_streams_map_key(room: &str) -> u64 {
+    hash_str(&format!("{room}/streams"))
+}
+
+pub fn to_peer_sub_key(peer: &str) -> u64 {
+    hash_str(peer)
+}
+
+pub fn to_peer_value(peer: &str, meta: ClusterEndpointMeta) -> (u64, Vec<u8>) {
+    (
+        to_peer_sub_key(peer),
+        bincode::serialize(&RoomPeer { peer: peer.to_string(), meta }).expect("should serialize").to_vec(),
+    )
+}
+
+pub fn from_peer_value(key: u64, data: &[u8]) -> Option<(String, ClusterEndpointMeta)> {
+    let data = bincode::deserialize::<RoomPeer>(data).ok()?;
+    if key == hash_str(&data.peer) {
+        Some((data.peer, data.meta))
+    } else {
+        None
+    }
+}
+
+pub fn to_stream_sub_key(peer: &str, track: &str) -> u64 {
     hash_str(&format!("{peer}/{track}"))
 }
 
-pub fn to_room_value(peer: &str, track: &str, meta: ClusterTrackMeta) -> (u64, Vec<u8>) {
+pub fn to_stream_value(peer: &str, track: &str, meta: ClusterTrackMeta) -> (u64, Vec<u8>) {
     (
-        hash_str(&format!("{peer}/{track}")),
+        to_stream_sub_key(peer, track),
         bincode::serialize(&RoomStream {
             peer: peer.to_string(),
             track: track.to_string(),
@@ -28,7 +62,7 @@ pub fn to_room_value(peer: &str, track: &str, meta: ClusterTrackMeta) -> (u64, V
     )
 }
 
-pub fn from_room_value(key: u64, data: &[u8]) -> Option<(String, String, ClusterTrackMeta)> {
+pub fn from_stream_value(key: u64, data: &[u8]) -> Option<(String, String, ClusterTrackMeta)> {
     let data = bincode::deserialize::<RoomStream>(data).ok()?;
     if key == hash_str(&format!("{}/{}", data.peer, data.track)) {
         Some((data.peer, data.track, data.meta))
@@ -69,7 +103,7 @@ mod tests {
         let peer = "peer1";
         let track = "track1";
         let expected = 0x251D560B3DE7BBFF;
-        assert_eq!(to_room_key(peer, track), expected);
+        assert_eq!(to_stream_sub_key(peer, track), expected);
     }
 
     #[test]
@@ -85,7 +119,7 @@ mod tests {
         })
         .expect("should serialize")
         .to_vec();
-        assert_eq!(to_room_value(peer, track, meta), (expected_key, expected_value));
+        assert_eq!(to_stream_value(peer, track, meta), (expected_key, expected_value));
     }
 
     #[test]
@@ -102,7 +136,7 @@ mod tests {
         })
         .expect("should serialize")
         .to_vec();
-        assert_eq!(from_room_value(key, &value), expected);
+        assert_eq!(from_stream_value(key, &value), expected);
     }
 
     #[test]
@@ -120,4 +154,6 @@ mod tests {
         let expected = Bytes::from(bincode::serialize(&track_data).unwrap());
         assert_eq!(TryInto::<Bytes>::try_into(track_data).unwrap(), expected);
     }
+
+    //TODO test peer data
 }

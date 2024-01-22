@@ -6,11 +6,11 @@ use protocol::media_event_logs::{
 };
 use transport::{TransportError, TransportIncomingEvent, TransportStateEvent};
 
-use crate::{MediaEndpointMiddleware, MediaEndpointMiddlewareOutput};
+use super::{MediaEndpointMiddleware, MediaEndpointMiddlewareOutput};
 
 pub struct MediaEndpointEventLogger {
     started_ms: Option<u64>,
-    outputs: VecDeque<crate::MediaEndpointMiddlewareOutput>,
+    outputs: VecDeque<MediaEndpointMiddlewareOutput>,
 }
 
 impl MediaEndpointEventLogger {
@@ -136,8 +136,8 @@ impl MediaEndpointMiddleware for MediaEndpointEventLogger {
         false
     }
 
-    fn pop_action(&mut self, _now_ms: u64) -> Option<crate::MediaEndpointMiddlewareOutput> {
-        self.outputs.pop_back()
+    fn pop_action(&mut self, _now_ms: u64) -> Option<MediaEndpointMiddlewareOutput> {
+        self.outputs.pop_front()
     }
 
     fn before_drop(&mut self, _now_ms: u64) {}
@@ -148,10 +148,37 @@ mod tests {
     use protocol::media_event_logs::session_event::*;
 
     #[test]
+    fn test_on_transport_connecting() {
+        let mut logger = MediaEndpointEventLogger::new();
+        logger.on_start(0);
+        assert_eq!(
+            logger.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Cluster(cluster::ClusterEndpointOutgoingEvent::MediaEndpointLog(
+                MediaEndpointLogRequest {
+                    event: Some(MediaEndpointLogEvent::SessionEvent(SessionEvent {
+                        ip: "127.0.0.1".to_string(),
+                        version: None,
+                        location: None,
+                        token: vec![],
+                        ts: 0,
+                        session_uuid: 0,
+                        event: Some(Event::Connecting(SessionConnecting {
+                            user_agent: "TODO".to_string(),
+                            remote: None
+                        })),
+                    })),
+                }
+            )))
+        );
+    }
+
+    #[test]
     fn test_on_transport_connected() {
         let mut logger = MediaEndpointEventLogger::new();
         let event = TransportIncomingEvent::State(TransportStateEvent::Connected);
         logger.on_start(0);
+        logger.pop_action(0); //pop connecting
+
         logger.on_transport(1000, &event);
         assert_eq!(
             logger.pop_action(0),
@@ -174,8 +201,10 @@ mod tests {
     #[test]
     fn test_on_transport_reconnecting() {
         let mut logger = MediaEndpointEventLogger::new();
-        let event = TransportIncomingEvent::State(TransportStateEvent::Reconnecting);
         logger.on_start(0);
+        logger.pop_action(0); //pop connecting
+
+        let event = TransportIncomingEvent::State(TransportStateEvent::Reconnecting);
         logger.on_transport(1000, &event);
         assert_eq!(
             logger.pop_action(0),
@@ -198,8 +227,10 @@ mod tests {
     #[test]
     fn test_on_transport_reconnected() {
         let mut logger = MediaEndpointEventLogger::new();
-        let event = TransportIncomingEvent::State(TransportStateEvent::Reconnected);
         logger.on_start(0);
+        logger.pop_action(0); //pop connecting
+
+        let event = TransportIncomingEvent::State(TransportStateEvent::Reconnected);
         logger.on_transport(1000, &event);
         assert_eq!(
             logger.pop_action(0),
@@ -222,8 +253,10 @@ mod tests {
     #[test]
     fn test_on_transport_disconnected() {
         let mut logger = MediaEndpointEventLogger::new();
-        let event = TransportIncomingEvent::State(TransportStateEvent::Disconnected);
         logger.on_start(0);
+        logger.pop_action(0); //pop connecting
+
+        let event = TransportIncomingEvent::State(TransportStateEvent::Disconnected);
         logger.on_transport(1000, &event);
         assert_eq!(
             logger.pop_action(0),
@@ -252,8 +285,10 @@ mod tests {
     #[test]
     fn test_on_transport_error_connect_error() {
         let mut logger = MediaEndpointEventLogger::new();
-        let error = TransportError::ConnectError(transport::ConnectErrorReason::Timeout);
         logger.on_start(0);
+        logger.pop_action(0); //pop connecting
+
+        let error = TransportError::ConnectError(transport::ConnectErrorReason::Timeout);
         logger.on_transport_error(1000, &error);
         assert_eq!(
             logger.pop_action(0),

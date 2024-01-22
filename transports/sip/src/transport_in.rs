@@ -5,18 +5,22 @@ use endpoint::{
     EndpointRpcIn, EndpointRpcOut,
 };
 use futures::{select, FutureExt};
+use media_utils::ErrorDebugger;
 use rsip::{
     typed::{Contact, ContentType, MediaType},
-    Host, HostWithPort, Uri,
+    Auth, Host, HostWithPort, Param, Uri,
 };
-use transport::{MediaKind, MediaSampleRate, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError, TransportStateEvent};
+use transport::{
+    LocalTrackOutgoingEvent, MediaKind, MediaSampleRate, RemoteTrackIncomingEvent, TrackMeta, Transport, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportRuntimeError,
+    TransportStateEvent,
+};
 
 use crate::{
     processor::{call_in::CallInProcessor, Processor, ProcessorAction},
     rtp_engine::{RtpEngine, RtpEngineError},
     sip_request::SipRequest,
     virtual_socket::VirtualSocket,
-    GroupId, SipMessage,
+    GroupId, SipMessage, LOCAL_TRACK_AUDIO_MAIN, REMOTE_TRACK_AUDIO_MAIN,
 };
 
 type RmIn = EndpointRpcIn;
@@ -34,22 +38,24 @@ pub struct SipTransportIn {
 }
 
 impl SipTransportIn {
-    pub async fn new(now_ms: u64, bind_addr: SocketAddr, socket: VirtualSocket<GroupId, SipMessage>, req: SipRequest) -> Result<Self, RtpEngineError> {
+    pub fn new(now_ms: u64, bind_addr: SocketAddr, socket: VirtualSocket<GroupId, SipMessage>, req: SipRequest) -> Result<Self, RtpEngineError> {
         let local_contact = Contact {
             uri: Uri {
+                auth: req.to.uri.user().map(|u| Auth { user: u.to_string(), password: None }),
                 scheme: Some(rsip::Scheme::Sip),
                 host_with_port: HostWithPort {
                     host: Host::IpAddr(bind_addr.ip()),
                     port: Some(bind_addr.port().into()),
                 },
+                params: vec![Param::Transport(rsip::Transport::Udp)],
                 ..Default::default()
             },
             display_name: None,
             params: vec![],
         };
-        let mut rtp_engine = RtpEngine::new(bind_addr.ip()).await;
+        let mut rtp_engine = RtpEngine::new(bind_addr.ip());
         log::info!("Create transport {}", req.body_str());
-        rtp_engine.process_remote_sdp(&req.body_str()).await?;
+        rtp_engine.process_remote_sdp(&req.body_str())?;
         Ok(Self {
             rtp_engine,
             socket,
@@ -65,14 +71,23 @@ impl SipTransportIn {
 
     pub fn accept(&mut self, now_ms: u64) -> Result<(), TransportError> {
         let local_sdp = self.rtp_engine.create_local_sdp();
-        log::info!("Will accept now {}", local_sdp);
+        log::info!("Will accept now, local_sdp: {}", local_sdp);
         self.logic
             .accept(now_ms, Some((ContentType(MediaType::Sdp(vec![])).into(), local_sdp.as_bytes().to_vec())))
             .map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
         self.actions.push_back(TransportIncomingEvent::State(TransportStateEvent::Connected));
         self.actions.push_back(TransportIncomingEvent::RemoteTrackAdded(
             "audio_main".to_string(),
-            0,
+            REMOTE_TRACK_AUDIO_MAIN,
+            TrackMeta {
+                kind: MediaKind::Audio,
+                sample_rate: MediaSampleRate::Hz48000,
+                label: None,
+            },
+        ));
+        self.actions.push_back(TransportIncomingEvent::LocalTrackAdded(
+            "audio_0".to_string(),
+            LOCAL_TRACK_AUDIO_MAIN,
             TrackMeta {
                 kind: MediaKind::Audio,
                 sample_rate: MediaSampleRate::Hz48000,
@@ -86,11 +101,6 @@ impl SipTransportIn {
         self.logic.reject(now_ms).map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
         Ok(())
     }
-
-    pub fn end(&mut self, now_ms: u64) -> Result<(), TransportError> {
-        self.logic.end(now_ms).map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -100,7 +110,24 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportIn {
         Ok(())
     }
 
-    fn on_event(&mut self, _now_ms: u64, _event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError> {
+    fn on_event(&mut self, now_ms: u64, event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError> {
+        match event {
+            TransportOutgoingEvent::LocalTrackEvent(track_id, event) => match event {
+                LocalTrackOutgoingEvent::MediaPacket(pkt) => {
+                    if track_id == LOCAL_TRACK_AUDIO_MAIN {
+                        self.rtp_engine.send(pkt);
+                    }
+                }
+                _ => {}
+            },
+            TransportOutgoingEvent::Rpc(rpc) => match rpc {
+                EndpointRpcOut::ConnectionAcceptRequest => {
+                    self.accept(now_ms).log_error("Should accept call");
+                }
+                _ => {}
+            },
+            _ => {}
+        }
         Ok(())
     }
 
@@ -130,7 +157,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportIn {
             return Ok(event);
         }
 
-        let rtp_out = select! {
+        select! {
             event = self.socket.recv().fuse() => {
                 let msg = event.map_err(|_e| TransportError::NetworkError)?;
                 match msg {
@@ -141,24 +168,18 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for SipTransportIn {
                         self.logic.on_res(now_ms, res).map_err(|_| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
                     }
                 }
-                None
+                Ok(TransportIncomingEvent::Continue)
             }
             event = self.rtp_engine.recv().fuse() => {
                 let rtp = event.ok_or_else(|| TransportError::NetworkError)?;
-                //TODO send to cluster insteand of echoback
-                Some(rtp)
+                let event = TransportIncomingEvent::RemoteTrackEvent(REMOTE_TRACK_AUDIO_MAIN, RemoteTrackIncomingEvent::MediaPacket(rtp));
+                self.actions.push_back(event);
+                Ok(TransportIncomingEvent::Continue)
             }
-        };
-
-        //TODO don't echoback
-        if let Some(rtp) = rtp_out {
-            self.rtp_engine.send(rtp).await;
         }
-
-        Ok(TransportIncomingEvent::Continue)
     }
 
-    async fn close(&mut self) {
-        self.socket.close().await;
+    async fn close(&mut self, now_ms: u64) {
+        self.logic.close(now_ms);
     }
 }

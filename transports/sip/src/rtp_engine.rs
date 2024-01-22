@@ -4,6 +4,7 @@ use std::{
 };
 
 use async_std::net::UdpSocket;
+use media_utils::ErrorDebugger;
 use sdp_rs::{
     lines::{
         self,
@@ -39,6 +40,7 @@ pub struct RtpEngine {
     buf: [u8; 2048],
     buf2: [u8; 2048],
     socket: UdpSocket,
+    socket_sync: std::net::UdpSocket,
     opus_frame: audio_frame::AudioFrameMono<960, 48000>,
     g711_frame: audio_frame::AudioFrameMono<160, 8000>,
     resampler: resample::Resampler,
@@ -49,13 +51,15 @@ pub struct RtpEngine {
 }
 
 impl RtpEngine {
-    pub async fn new(bind_ip: IpAddr) -> Self {
+    pub fn new(bind_ip: IpAddr) -> Self {
+        let socket_sync = std::net::UdpSocket::bind(SocketAddr::new(bind_ip, 0)).expect("Should open port");
         Self {
             buf: [0; 2048],
             buf2: [0; 2048],
             g711_frame: Default::default(),
             opus_frame: Default::default(),
-            socket: UdpSocket::bind(SocketAddr::new(bind_ip, 0)).await.expect("Should open port"),
+            socket: socket_sync.try_clone().expect("Should clone udp socket").try_into().expect("Should convert to async socket"),
+            socket_sync,
             opus_encoder: opus_encoder::OpusEncoder::new(),
             opus_decoder: opus_decoder::OpusDecoder::new(),
             g711_encoder: g711_encoder::G711Encoder::new(g711::G711Codec::Alaw),
@@ -69,7 +73,7 @@ impl RtpEngine {
         self.socket.local_addr().expect("Should get local addr")
     }
 
-    pub async fn process_remote_sdp(&mut self, sdp: &str) -> Result<(), RtpEngineError> {
+    pub fn process_remote_sdp(&mut self, sdp: &str) -> Result<(), RtpEngineError> {
         let sdp = sdp_rs::SessionDescription::from_str(sdp).map_err(|_| RtpEngineError::InvalidSdp)?;
         let mut dest_addr = sdp.origin.unicast_address;
         let first = sdp.media_descriptions.first().ok_or(RtpEngineError::MissingMedia)?;
@@ -77,7 +81,7 @@ impl RtpEngine {
             dest_addr = conn.connection_address.base;
         }
         let dest_port = first.media.port;
-        self.socket.connect(SocketAddr::from((dest_addr, dest_port))).await.map_err(|e| {
+        self.socket_sync.connect(SocketAddr::from((dest_addr, dest_port))).map_err(|e| {
             log::error!("[RtpEngine] connect to {dest_addr}:{dest_port} error {:?}", e);
             RtpEngineError::SocketError
         })?;
@@ -124,7 +128,7 @@ impl RtpEngine {
                     port: addr.port(),
                     num_of_ports: None,
                     proto: ProtoType::RtpAvp,
-                    fmt: "110 8 0 101".to_string(),
+                    fmt: "8 101".to_string(),
                 },
                 info: None,
                 connections: vec![],
@@ -151,7 +155,7 @@ impl RtpEngine {
         sdp.to_string()
     }
 
-    pub async fn send(&mut self, pkt: MediaPacket) {
+    pub fn send(&mut self, pkt: MediaPacket) {
         self.opus_decoder.decode(&pkt.payload, &mut self.opus_frame);
         self.resampler.from_48k_to_8k(&self.opus_frame, &mut self.g711_frame);
         let size = self.g711_encoder.encode(&self.g711_frame, &mut self.buf).expect("Should encode");
@@ -159,12 +163,12 @@ impl RtpEngine {
         let rtp = rtp_rs::RtpPacketBuilder::new()
             .payload_type(8)
             .sequence(pkt.seq_no.into())
-            .timestamp(pkt.time.into())
+            .timestamp((pkt.time / 6).into())
             .payload(&self.buf[0..size])
             .build()
             .expect("Should build rtp packet");
 
-        self.socket.send(&rtp).await.expect("Should send data");
+        self.socket_sync.send(&rtp).log_error("Should send rtp packet");
     }
 
     pub async fn recv(&mut self) -> Option<MediaPacket> {
@@ -178,7 +182,8 @@ impl RtpEngine {
                         self.resampler.from_8k_to_48k(&self.g711_frame, &mut self.opus_frame);
                         let size = self.opus_encoder.encode(&self.opus_frame, &mut self.buf2).expect("Should encode");
 
-                        let pkt = MediaPacket::simple_audio(rtp.sequence_number().into(), rtp.timestamp(), self.buf2[0..size].to_vec());
+                        let mut pkt = MediaPacket::simple_audio(rtp.sequence_number().into(), rtp.timestamp().wrapping_mul(6), self.buf2[0..size].to_vec());
+                        pkt.ext_vals.audio_level = Some(-30); //TODO calculate audio level
                         break Some(pkt);
                     }
                 }

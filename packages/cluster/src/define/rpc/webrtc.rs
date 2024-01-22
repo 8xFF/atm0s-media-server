@@ -1,11 +1,12 @@
 use std::fmt::Debug;
 
-use crate::{MediaSessionToken, VerifyObject};
+use crate::{ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MediaSessionToken, VerifyObject};
 
-use super::super::media::{EndpointSubscribeScope, MixMinusAudioMode, PayloadType, RemoteBitrateControlMode};
+use super::super::media::{BitrateControlMode, MixMinusAudioMode, PayloadType};
 use poem_openapi::Object;
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
+use transport::MediaKind;
 
 #[derive(Serialize, Deserialize, Debug, Object, PartialEq, Eq, Clone)]
 pub struct WebrtcConnectRequestReceivers {
@@ -15,8 +16,7 @@ pub struct WebrtcConnectRequestReceivers {
 
 #[derive(Serialize, Deserialize, Debug, Object, PartialEq, Eq, Clone)]
 pub struct WebrtcConnectRequestSender {
-    //TODO switch to enum
-    pub kind: String,
+    pub kind: MediaKind,
     pub name: String,
     pub uuid: String,
     pub label: String,
@@ -31,16 +31,21 @@ pub struct WebrtcConnectRequest {
     pub version: Option<String>,
     pub room: String,
     pub peer: String,
-    pub sub_scope: Option<EndpointSubscribeScope>,
+    #[serde(default = "ClusterEndpointSubscribeScope::default")]
+    pub sub_scope: ClusterEndpointSubscribeScope,
+    #[serde(default = "ClusterEndpointPublishScope::default")]
+    pub pub_scope: ClusterEndpointPublishScope,
     pub token: String,
-    pub mix_minus_audio: Option<MixMinusAudioMode>,
+    #[serde(default = "MixMinusAudioMode::default")]
+    pub mix_minus_audio: MixMinusAudioMode,
     pub join_now: Option<bool>,
     pub codecs: Option<Vec<PayloadType>>,
     pub receivers: WebrtcConnectRequestReceivers,
     pub sdp: Option<String>,
     pub compressed_sdp: Option<Vec<u8>>,
     pub senders: Vec<WebrtcConnectRequestSender>,
-    pub remote_bitrate_control_mode: Option<RemoteBitrateControlMode>,
+    #[serde(default = "BitrateControlMode::default")]
+    pub remote_bitrate_control_mode: BitrateControlMode,
 }
 
 impl VerifyObject for WebrtcConnectRequest {
@@ -49,8 +54,10 @@ impl VerifyObject for WebrtcConnectRequest {
         if token.protocol != crate::rpc::general::MediaSessionProtocol::Webrtc {
             return None;
         }
-        if token.room != self.room {
-            return None;
+        if let Some(room) = &token.room {
+            if !room.eq(&self.room) {
+                return None;
+            }
         }
         if let Some(peer) = &token.peer {
             if !peer.eq(&self.peer) {
@@ -79,13 +86,13 @@ pub struct WebrtcRemoteIceResponse {
     pub success: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct WebrtcPatchRequest {
     pub conn_id: String,
     pub sdp: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, IntoVecU8, TryFromSliceU8)]
 pub struct WebrtcPatchResponse {
-    pub sdp: String,
+    pub ice_restart_sdp: Option<String>,
 }

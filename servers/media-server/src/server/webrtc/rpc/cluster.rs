@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 
-use cluster::rpc::{RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_NODE_HEALTHCHECK, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT};
+use cluster::rpc::{
+    gateway::{NodeHealthcheckRequest, NodeHealthcheckResponse},
+    RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_NODE_HEALTHCHECK, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT,
+};
 
 use super::RpcEvent;
 
@@ -24,8 +27,8 @@ impl<RPC: RpcEndpoint<Req, Emitter>, Req: RpcRequest, Emitter: RpcEmitter> Webrt
             log::info!("[MediaServer][Webrtc] on request {}", event.cmd());
             match event.cmd() {
                 RPC_NODE_HEALTHCHECK => {
-                    if let Some(req) = event.parse() {
-                        return Some(RpcEvent::NodeHeathcheck(req));
+                    if let Some(req) = event.parse::<NodeHealthcheckRequest, _>() {
+                        req.answer(Ok(NodeHealthcheckResponse { success: true }));
                     }
                 }
                 RPC_WEBRTC_CONNECT => {

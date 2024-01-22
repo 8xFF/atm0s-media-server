@@ -179,6 +179,13 @@ The stream codec should be configured with h264, without B-frames, and with the 
 
 ![Monitoring](./docs/imgs/demo-rtmp-config.png)
 
+### Testing with remote server
+
+Some samples required access to microphone and camera permission, therefore it need to run with https if you want to test with some remote servers. We have 2 options for that:
+
+- Running gateway or media-server under a reverse proxy like NGINX for providing https
+- Start gateway or media-server with `--http-tls` for switching to self-signed https server.
+
 ## Live Demos
 
   - SDK demos: [TBA]()

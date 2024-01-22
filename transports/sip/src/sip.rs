@@ -1,7 +1,10 @@
 use std::{collections::HashMap, fmt::Display, net::SocketAddr};
 
 use bytes::Bytes;
-use rsip::Method;
+use rsip::{
+    headers::{CallId, UntypedHeader},
+    Method,
+};
 
 use crate::processor::Processor;
 
@@ -9,7 +12,6 @@ use self::{
     processor::{register::RegisterProcessor, ProcessorAction, ProcessorError},
     sip_request::SipRequest,
     sip_response::SipResponse,
-    utils::CallId2,
 };
 
 mod data;
@@ -19,7 +21,28 @@ pub mod sip_response;
 mod transaction;
 mod utils;
 
-pub type GroupId = (SocketAddr, CallId2);
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub struct GroupId(SocketAddr, String);
+
+impl GroupId {
+    pub fn from_raw(from: SocketAddr, call_id: &CallId) -> Self {
+        Self(from, call_id.value().to_string())
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.0
+    }
+
+    pub fn call_id(&self) -> &str {
+        &self.1
+    }
+}
+
+impl Display for GroupId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.0, self.1)
+    }
+}
 
 pub enum SipMessage {
     Request(SipRequest),
@@ -52,7 +75,7 @@ pub enum SipServerError {
 
 #[derive(Debug)]
 pub enum SipServerEvent {
-    OnRegisterValidate(GroupId, String),
+    OnRegisterValidate(GroupId, String, String, String, String, String),
     OnInCallStarted(GroupId, SipRequest),
     OnInCallRequest(GroupId, SipRequest),
     OnInCallResponse(GroupId, SipResponse),
@@ -81,14 +104,15 @@ impl SipCore {
 
     pub fn on_tick(&mut self, _now_ms: u64) {}
 
-    pub fn reply_register_validate(&mut self, group_id: GroupId, accept: bool) {
-        if let Some(processor) = self.register_processors.get_mut(&group_id) {
-            processor.accept(accept);
-            self.process_register_processor(&group_id);
+    pub fn reply_register_validate(&mut self, group_id: &GroupId, accept: bool) {
+        if let Some(processor) = self.register_processors.get_mut(group_id) {
+            processor.response(accept);
+            self.process_register_processor(group_id);
         }
     }
 
     pub fn open_out_call(&mut self, group_id: &GroupId) {
+        log::info!("create out call {:?}", group_id);
         self.invite_out_groups.insert(group_id.clone(), ());
     }
 
@@ -103,7 +127,7 @@ impl SipCore {
     pub fn on_req(&mut self, now_ms: u64, from: SocketAddr, req: SipRequest) -> Result<(), SipServerError> {
         match req.method() {
             Method::Register => {
-                let group_id: (SocketAddr, CallId2) = (from, req.call_id.clone().into());
+                let group_id = GroupId(from, req.call_id.clone().into());
                 match self.register_processors.entry(group_id.clone()) {
                     std::collections::hash_map::Entry::Occupied(mut entry) => {
                         entry.get_mut().on_req(now_ms, req).map_err(|e| SipServerError::ProcessorError(e))?;
@@ -118,7 +142,7 @@ impl SipCore {
                 Ok(())
             }
             Method::Invite => {
-                let group_id: (SocketAddr, CallId2) = (from, req.call_id.clone().into());
+                let group_id = GroupId(from, req.call_id.clone().into());
                 if let Some(_) = self.invite_in_groups.get(&group_id) {
                     self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
                     Ok(())
@@ -129,7 +153,7 @@ impl SipCore {
                 }
             }
             _ => {
-                let group_id: (SocketAddr, CallId2) = (from, req.call_id.clone().into());
+                let group_id = GroupId(from, req.call_id.clone().into());
                 if let Some(_) = self.invite_in_groups.get(&group_id) {
                     self.actions.push(SipServerEvent::OnInCallRequest(group_id, req));
                     Ok(())
@@ -137,6 +161,7 @@ impl SipCore {
                     self.actions.push(SipServerEvent::OnOutCallRequest(group_id, req));
                     Ok(())
                 } else {
+                    log::info!("on_req not found {:?}, {:?}", group_id, self.invite_out_groups);
                     Err(SipServerError::ProcessorNotFound)
                 }
             }
@@ -144,7 +169,7 @@ impl SipCore {
     }
 
     pub fn on_res(&mut self, _now_ms: u64, from: SocketAddr, res: SipResponse) -> Result<(), SipServerError> {
-        let group_id: (SocketAddr, CallId2) = (from, res.call_id.clone().into());
+        let group_id = GroupId(from, res.call_id.clone().into());
         if let Some(_) = self.invite_in_groups.get(&group_id) {
             self.actions.push(SipServerEvent::OnInCallResponse(group_id, res));
             Ok(())
@@ -152,6 +177,7 @@ impl SipCore {
             self.actions.push(SipServerEvent::OnOutCallResponse(group_id, res));
             Ok(())
         } else {
+            log::info!("on_res not found {:?}, {:?}", group_id, self.invite_out_groups);
             Err(SipServerError::ProcessorNotFound)
         }
     }
@@ -160,7 +186,7 @@ impl SipCore {
         self.actions.pop()
     }
 
-    fn process_register_processor(&mut self, group_id: &(SocketAddr, CallId2)) -> Option<()> {
+    fn process_register_processor(&mut self, group_id: &GroupId) -> Option<()> {
         let processor = self.register_processors.get_mut(group_id)?;
         while let Some(action) = processor.pop_action() {
             match action {
@@ -175,8 +201,8 @@ impl SipCore {
                     self.actions.push(SipServerEvent::SendRes(remote_addr.unwrap_or(group_id.0), res));
                 }
                 ProcessorAction::LogicOutput(action) => match action {
-                    processor::register::RegisterProcessorAction::Validate(username) => {
-                        self.actions.push(SipServerEvent::OnRegisterValidate(group_id.clone(), username));
+                    processor::register::RegisterProcessorAction::Validate(digest, nonce, username, realm, hashed_password) => {
+                        self.actions.push(SipServerEvent::OnRegisterValidate(group_id.clone(), digest, nonce, username, realm, hashed_password));
                     }
                 },
             }

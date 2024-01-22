@@ -7,11 +7,11 @@ use async_std::{channel::Sender, prelude::FutureExt as _};
 use clap::Parser;
 use cluster::{
     rpc::{
-        gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
+        gateway::{NodePing, NodePong, ServiceInfo},
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{AutoCancelTask, ErrorDebugger};
@@ -60,7 +60,14 @@ pub struct RtmpArgs {
     pub max_conn: u64,
 }
 
-pub async fn run_rtmp_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, opts: RtmpArgs, ctx: MediaServerContext<InternalControl>, mut cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_rtmp_server<C, CR, RPC, REQ, EMITTER>(
+    http_port: u16,
+    http_tls: bool,
+    opts: RtmpArgs,
+    ctx: MediaServerContext<InternalControl>,
+    mut cluster: C,
+    rpc_endpoint: RPC,
+) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -70,7 +77,7 @@ where
 {
     let mut rtmp_tcp_server = server_tcp::RtmpServer::new(opts.port).await;
     let mut rpc_endpoint = RtmpClusterRpc::new(rpc_endpoint);
-    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
+    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
 
     let api_service = OpenApiService::new(RtmpHttpApis, "Rtmp Server", "1.0.0").server("http://localhost:3000");
     let ui = api_service.swagger_ui();
@@ -157,21 +164,21 @@ where
                         continue;
                     };
 
-                    log::info!("[RtmpMediaServer] new rtmp connection from {}/{:?}", s_token.room, s_token.peer);
+                    log::info!("[RtmpMediaServer] new rtmp connection from {:?}/{:?}", s_token.room, s_token.peer);
 
                     match run_rtmp_endpoint(
                         ctx.clone(),
                         &mut cluster,
-                        &s_token.room,
+                        &s_token.room.expect("Should have room"),
                         &s_token.peer.expect("Should have peer"),
                         conn,
                     )
                     .await
                     {
-                        Ok(conn_id) => {
+                        Ok(_conn_id) => {
                             //TODO send conn_id to hook
                         }
-                        Err(err) => {
+                        Err(_err) => {
                             //TODO send err to hook
                         }
                     }
@@ -183,9 +190,6 @@ where
         };
 
         match rpc {
-            RpcEvent::NodeHeathcheck(req) => {
-                req.answer(Ok(NodeHealthcheckResponse { success: true }));
-            }
             RpcEvent::MediaEndpointClose(req) => {
                 if let Some(old_tx) = ctx.get_conn(&req.param().conn_id) {
                     async_std::task::spawn(async move {

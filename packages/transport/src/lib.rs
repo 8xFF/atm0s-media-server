@@ -64,6 +64,8 @@ pub struct TransportStats {
 #[derive(PartialEq, Eq, Debug)]
 pub enum ConnectErrorReason {
     Timeout,
+    ///This is used with SIP transport if the SIP server return 4xx or 5xx
+    Rejected,
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -104,5 +106,5 @@ pub trait Transport<E, RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> {
     fn on_event(&mut self, now_ms: u64, event: TransportOutgoingEvent<RmOut, RrOut, RlOut>) -> Result<(), TransportError>;
     fn on_custom_event(&mut self, now_ms: u64, event: E) -> Result<(), TransportError>;
     async fn recv(&mut self, now_ms: u64) -> Result<TransportIncomingEvent<RmIn, RrIn, RlIn>, TransportError>;
-    async fn close(&mut self);
+    async fn close(&mut self, now_ms: u64);
 }

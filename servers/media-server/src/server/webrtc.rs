@@ -4,24 +4,27 @@ use async_std::{channel::Sender, prelude::FutureExt as _};
 use clap::Parser;
 use cluster::{
     rpc::{
-        gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
-        general::{MediaEndpointCloseResponse, NodeInfo, ServerType},
+        gateway::{NodePing, NodePong, ServiceInfo},
+        general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         webrtc::{WebrtcConnectRequestSender, WebrtcConnectResponse, WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         whep::WhepConnectResponse,
         whip::WhipConnectResponse,
         RpcEmitter, RpcEndpoint, RpcReqRes, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode, RemoteBitrateControlMode, VerifyObject, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    BitrateControlMode, Cluster, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode, VerifyObject, INNER_GATEWAY_SERVICE,
 };
-use endpoint::BitrateLimiterType;
 use futures::{select, FutureExt};
 use media_utils::{AutoCancelTask, ErrorDebugger, StringCompression, SystemTimer, Timer};
 use metrics_dashboard::build_dashboard_route;
 use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
-use transport_webrtc::{SdkTransportLifeCycle, SdpBoxRewriteScope, WhepTransportLifeCycle, WhipTransportLifeCycle};
+use transport::{MediaKind, TrackId};
+use transport_webrtc::{SdpBoxRewriteScope, TransportNoDatachannelLifeCycle, TransportWithDatachannelLifeCycle};
 
-use crate::{rpc::http::HttpRpcServer, server::webrtc::session::run_webrtc_endpoint};
+use crate::{
+    rpc::http::HttpRpcServer,
+    server::webrtc::{middleware::WhepAutoAttachMediaTrackMiddleware, session::run_webrtc_endpoint},
+};
 
 #[cfg(feature = "embed-samples")]
 use crate::rpc::http::EmbeddedFilesEndpoint;
@@ -46,8 +49,11 @@ pub enum InternalControl {
     ForceClose(Sender<()>),
 }
 
+mod middleware;
 mod rpc;
 mod session;
+
+const WHEP_LOCAL_AUDIO_TRACK_ID: TrackId = 0;
 
 /// Media Server Webrtc
 #[derive(Parser, Debug)]
@@ -58,7 +64,14 @@ pub struct WebrtcArgs {
     pub max_conn: u64,
 }
 
-pub async fn run_webrtc_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, _opts: WebrtcArgs, ctx: MediaServerContext<InternalControl>, mut cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+pub async fn run_webrtc_server<C, CR, RPC, REQ, EMITTER>(
+    http_port: u16,
+    http_tls: bool,
+    _opts: WebrtcArgs,
+    ctx: MediaServerContext<InternalControl>,
+    mut cluster: C,
+    rpc_endpoint: RPC,
+) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -68,7 +81,7 @@ where
 {
     let timer = SystemTimer();
     let mut rpc_endpoint = WebrtcClusterRpc::new(rpc_endpoint);
-    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port);
+    let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
     let node_info = NodeInfo {
         node_id: cluster.node_id(),
         address: format!("{}", cluster.node_addr()),
@@ -143,9 +156,6 @@ where
         };
 
         match rpc {
-            RpcEvent::NodeHeathcheck(req) => {
-                req.answer(Ok(NodeHealthcheckResponse { success: true }));
-            }
             RpcEvent::WhipConnect(req) => {
                 let s_token = if let Some(s_token) = req.param().verify(ctx.verifier().deref()) {
                     s_token
@@ -153,7 +163,7 @@ where
                     req.answer(Err("INVALID_TOKEN"));
                     continue;
                 };
-                let room = s_token.room;
+                let room = s_token.room.expect("should have");
                 let peer = s_token.peer.unwrap_or("publisher".to_string());
                 let (sdp, is_compress) = match (&req.param().sdp, &req.param().compressed_sdp) {
                     (Some(sdp), _) => (sdp.clone(), false),
@@ -171,26 +181,28 @@ where
                     }
                 };
                 log::info!("[MediaServer] on whip connection from {} {}", room, peer);
-                let life_cycle = WhipTransportLifeCycle::new(timer.now_ms());
+                let life_cycle = TransportNoDatachannelLifeCycle::new(timer.now_ms());
                 match run_webrtc_endpoint(
                     ctx.clone(),
                     &mut cluster,
                     life_cycle,
-                    EndpointSubscribeScope::RoomManual,
-                    BitrateLimiterType::MaxBitrateOnly,
+                    MediaSessionProtocol::Whip,
+                    ClusterEndpointPublishScope::Full,
+                    ClusterEndpointSubscribeScope::Manual,
+                    BitrateControlMode::MaxBitrateOnly,
                     &room,
                     &peer,
                     &sdp,
                     vec![
                         WebrtcConnectRequestSender {
-                            kind: "audio".to_string(),
+                            kind: MediaKind::Audio,
                             name: "audio_main".to_string(),
                             label: "audio_main".to_string(),
                             uuid: "audio_main".to_string(),
                             screen: None,
                         },
                         WebrtcConnectRequestSender {
-                            kind: "video".to_string(),
+                            kind: MediaKind::Video,
                             name: "video_main".to_string(),
                             label: "video_main".to_string(),
                             uuid: "video_main".to_string(),
@@ -199,7 +211,8 @@ where
                     ],
                     None,
                     MixMinusAudioMode::Disabled,
-                    0,
+                    vec![],
+                    vec![],
                 )
                 .await
                 {
@@ -230,7 +243,7 @@ where
                     req.answer(Err("INVALID_TOKEN"));
                     continue;
                 };
-                let room = s_token.room;
+                let room = s_token.room.expect("should have");
                 let peer = s_token.peer.unwrap_or_else(|| format!("whep-{}", whep_counter));
                 let (sdp, is_compress) = match (&req.param().sdp, &req.param().compressed_sdp) {
                     (Some(sdp), _) => (sdp.clone(), false),
@@ -250,20 +263,23 @@ where
                 whep_counter += 1;
 
                 log::info!("[MediaServer] on whep connection from {} {}", room, peer);
-                let life_cycle = WhepTransportLifeCycle::new(timer.now_ms());
+                let life_cycle = TransportNoDatachannelLifeCycle::new(timer.now_ms());
                 match run_webrtc_endpoint(
                     ctx.clone(),
                     &mut cluster,
                     life_cycle,
-                    EndpointSubscribeScope::RoomAuto,
-                    BitrateLimiterType::MaxBitrateOnly,
+                    MediaSessionProtocol::Whep,
+                    ClusterEndpointPublishScope::StreamOnly,
+                    ClusterEndpointSubscribeScope::Full,
+                    BitrateControlMode::MaxBitrateOnly,
                     &room,
                     &peer,
                     &sdp,
                     vec![],
                     Some(SdpBoxRewriteScope::OnlyTrack),
-                    MixMinusAudioMode::Disabled,
-                    0,
+                    MixMinusAudioMode::AllAudioStreams,
+                    vec![Some(WHEP_LOCAL_AUDIO_TRACK_ID)],
+                    vec![Box::new(WhepAutoAttachMediaTrackMiddleware::default())],
                 )
                 .await
                 {
@@ -309,24 +325,23 @@ where
                 };
                 let param = req.param();
                 log::info!("[MediaServer] on webrtc connection from {} {}", param.room, param.peer);
-                let sub_scope = param.sub_scope.unwrap_or(EndpointSubscribeScope::RoomAuto);
-                let life_cycle = SdkTransportLifeCycle::new(timer.now_ms());
+                let life_cycle = TransportWithDatachannelLifeCycle::new(timer.now_ms());
                 match run_webrtc_endpoint(
                     ctx.clone(),
                     &mut cluster,
                     life_cycle,
-                    sub_scope,
-                    match param.remote_bitrate_control_mode {
-                        Some(RemoteBitrateControlMode::MaxBitrateOnly) => BitrateLimiterType::MaxBitrateOnly,
-                        _ => BitrateLimiterType::DynamicWithConsumers,
-                    },
+                    MediaSessionProtocol::Webrtc,
+                    param.pub_scope,
+                    param.sub_scope,
+                    param.remote_bitrate_control_mode,
                     &param.room,
                     &param.peer,
                     &sdp,
                     param.senders.clone(),
                     Some(SdpBoxRewriteScope::StreamAndTrack),
-                    param.mix_minus_audio.unwrap_or(MixMinusAudioMode::Disabled),
-                    3,
+                    param.mix_minus_audio,
+                    vec![None, None, None],
+                    vec![],
                 )
                 .await
                 {

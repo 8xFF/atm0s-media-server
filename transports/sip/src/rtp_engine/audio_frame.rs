@@ -10,6 +10,7 @@ impl<const S: usize, const R: usize> Default for AudioFrameMono<S, R> {
 }
 
 impl<const S: usize, const R: usize> AudioFrameMono<S, R> {
+    #[allow(unused)]
     pub fn new(data: [i16; S]) -> Self {
         Self { data, samples: 0 }
     }
@@ -26,6 +27,7 @@ impl<const S: usize, const R: usize> AudioFrameMono<S, R> {
         &mut self.data
     }
 
+    #[allow(unused)]
     pub fn sample_rate(&self) -> usize {
         R
     }

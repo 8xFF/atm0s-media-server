@@ -5,7 +5,7 @@ use crate::rpc::general::MediaSessionProtocol;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MediaSessionToken {
-    pub room: String,
+    pub room: Option<String>,
     pub peer: Option<String>,
     pub protocol: MediaSessionProtocol,
     pub publish: bool,
