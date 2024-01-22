@@ -176,7 +176,7 @@ impl TokenGenerateHttpApis {
 
     #[oai(path = "/app/sip_session", method = "post")]
     async fn create_sip_session(&self, Data(data): Data<&DataContainer>, app_secret: Query<String>, body: Json<CreateSipSessionRequest>) -> Result<Json<Response<TokenInfo>>> {
-        if !app_secret.0.eq(&data.1.token) {
+        if !app_secret.0.eq(&data.1.secret) {
             return Ok(Json(Response {
                 success: false,
                 error: Some("INVALID_TOKEN".to_string()),
