@@ -10,7 +10,7 @@ pub fn to_transport_kind(value: MediaKind) -> transport::MediaKind {
 /// Convert a SDP patch to ICE candidates.
 /// When received:
 ///
-/// ```
+/// ```ignore
 /// a=ice-ufrag:EsAw
 /// a=ice-pwd:P2uYro0UCOQ4zxjKXaWCBui1
 /// a=group:BUNDLE 0 1
@@ -25,7 +25,7 @@ pub fn to_transport_kind(value: MediaKind) -> transport::MediaKind {
 ///
 /// Should return list of ICE candidates:
 ///
-/// ```
+/// ```ignore
 /// [
 ///    "candidate:1387637174 1 udp 2122260223 192.0.2.1 61764 typ host generation 0 ufrag EsAw network-id 1",
 ///    ....
