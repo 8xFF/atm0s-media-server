@@ -1,16 +1,16 @@
 use std::collections::VecDeque;
 
-use cluster::{ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterTrackStats};
+use cluster::{ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent};
 use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, RequestKeyframeKind, TrackId, TrackMeta};
 
 use crate::{
-    rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverLayerLimit},
+    rpc::{LocalTrackRpcIn, LocalTrackRpcOut},
     RpcResponse,
 };
 
 use self::{scalable_filter::ScalablePacketFilter, source_stats_gen::SourceStatsGenerator};
 
-use super::bitrate_allocator::LocalTrackTarget;
+use super::{bitrate_allocator::LocalTrackTarget, MediaEndpointInternalLocalTrackControl};
 
 mod scalable_filter;
 mod source_stats_gen;
@@ -31,16 +31,8 @@ impl LocalTrackSource {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum LocalTrackInternalOutputEvent {
-    SourceSet(u16),
-    SourceStats(ClusterTrackStats),
-    SourceRemove,
-    Limit(ReceiverLayerLimit),
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub enum LocalTrackOutput {
-    Internal(LocalTrackInternalOutputEvent),
+    Control(MediaEndpointInternalLocalTrackControl),
     Transport(LocalTrackOutgoingEvent<LocalTrackRpcOut>),
     Cluster(ClusterLocalTrackOutgoingEvent),
 }
@@ -95,17 +87,17 @@ impl LocalTrack {
             ClusterLocalTrackIncomingEvent::MediaPacket(_track_uuid, pkt) => {
                 if let Some(stats) = self.source_stats_generator.on_pkt(&pkt) {
                     log::info!("[LocalTrack {}] auto generate stats {:?}", self.track_name, stats);
-                    self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceStats(stats)));
+                    self.out_actions.push_back(LocalTrackOutput::Control(MediaEndpointInternalLocalTrackControl::SourceStats { stats }));
                 }
 
                 if let Some(pkt) = self.filter.process(now_ms, pkt) {
-                    log::debug!("[LocalTrack {}] media from cluster pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
+                    log::info!("[LocalTrack {}] media from cluster pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
                     self.out_actions.push_back(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::MediaPacket(pkt)));
                 }
             }
             ClusterLocalTrackIncomingEvent::MediaStats(_track_uuid, stats) => {
                 log::info!("[LocalTrack {}] stats {:?}", self.track_name, stats);
-                self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceStats(stats)));
+                self.out_actions.push_back(LocalTrackOutput::Control(MediaEndpointInternalLocalTrackControl::SourceStats { stats }));
                 self.source_stats_generator.arrived_stats();
             }
         }
@@ -133,7 +125,8 @@ impl LocalTrack {
                     }
 
                     if self.track_meta.kind.is_video() {
-                        self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceSet(req.data.priority)));
+                        self.out_actions
+                            .push_back(LocalTrackOutput::Control(MediaEndpointInternalLocalTrackControl::SourceSet { priority: req.data.priority }));
                     }
                     self.out_actions
                         .push_back(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::SwitchRes(RpcResponse::success(
@@ -141,7 +134,8 @@ impl LocalTrack {
                         )))));
                 }
                 LocalTrackRpcIn::Limit(req) => {
-                    self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::Limit(req.data.limit)));
+                    self.out_actions
+                        .push_back(LocalTrackOutput::Control(MediaEndpointInternalLocalTrackControl::Limit { limit: req.data.limit }));
                     self.out_actions
                         .push_back(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::LimitRes(RpcResponse::success(
                             req.req_id, true,
@@ -154,7 +148,7 @@ impl LocalTrack {
                         self.out_actions
                             .push_back(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::Unsubscribe(old_source.peer, old_source.track)));
                         if self.track_meta.kind.is_video() {
-                            self.out_actions.push_back(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceRemove));
+                            self.out_actions.push_back(LocalTrackOutput::Control(MediaEndpointInternalLocalTrackControl::SourceRemove));
                         }
                     }
                     self.out_actions
@@ -187,7 +181,7 @@ mod tests {
     use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, RequestKeyframeKind, TrackMeta};
 
     use crate::{
-        endpoint_wrap::internal::local_track::{LocalTrackInternalOutputEvent, LocalTrackOutput},
+        endpoint::internal::{local_track::LocalTrackOutput, MediaEndpointInternalLocalTrackControl},
         rpc::{LocalTrackRpcIn, LocalTrackRpcOut, ReceiverDisconnect, ReceiverSwitch, RemoteStream},
         RpcRequest, RpcResponse,
     };
@@ -236,7 +230,7 @@ mod tests {
             track.pop_action(),
             Some(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::Subscribe("peer2".into(), "video_main".into())))
         );
-        assert_eq!(track.pop_action(), Some(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceSet(priority))));
+        assert_eq!(track.pop_action(), Some(LocalTrackOutput::Control(MediaEndpointInternalLocalTrackControl::SourceSet { priority })));
         assert_eq!(
             track.pop_action(),
             Some(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::SwitchRes(RpcResponse::success(1, true)))))
@@ -265,7 +259,7 @@ mod tests {
             track.pop_action(),
             Some(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::Subscribe("peer3".into(), "video_main".into())))
         );
-        assert_eq!(track.pop_action(), Some(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceSet(priority))));
+        assert_eq!(track.pop_action(), Some(LocalTrackOutput::Control(MediaEndpointInternalLocalTrackControl::SourceSet { priority })));
         assert_eq!(
             track.pop_action(),
             Some(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::SwitchRes(RpcResponse::success(2, true)))))
@@ -283,7 +277,7 @@ mod tests {
             track.pop_action(),
             Some(LocalTrackOutput::Cluster(ClusterLocalTrackOutgoingEvent::Unsubscribe("peer3".into(), "video_main".into())))
         );
-        assert_eq!(track.pop_action(), Some(LocalTrackOutput::Internal(LocalTrackInternalOutputEvent::SourceRemove)));
+        assert_eq!(track.pop_action(), Some(LocalTrackOutput::Control(MediaEndpointInternalLocalTrackControl::SourceRemove)));
         assert_eq!(
             track.pop_action(),
             Some(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::Rpc(LocalTrackRpcOut::DisconnectRes(RpcResponse::success(

@@ -39,6 +39,16 @@ pub struct GatewayHttpApis;
 
 #[OpenApi]
 impl GatewayHttpApis {
+    /// get node health
+    #[oai(path = "/health", method = "get")]
+    async fn health(&self, Data(_ctx): Data<&DataContainer>) -> Result<Json<Response<String>>> {
+        Ok(Json(Response {
+            status: true,
+            error: None,
+            data: Some("OK".to_string()),
+        }))
+    }
+
     /// connect whip endpoint
     #[oai(path = "/whip/endpoint", method = "post")]
     async fn create_whip(

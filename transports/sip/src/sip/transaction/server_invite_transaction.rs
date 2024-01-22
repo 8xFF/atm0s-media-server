@@ -188,7 +188,7 @@ impl ServerInviteTransaction {
             ServerInviteTransactionEvent::Timer => {
                 if let Some(timeout) = state.tu_100_timer {
                     if now_ms >= timeout {
-                        log::info!("[ServerInviteTransacstion:on_proceeding] send 100 Trying");
+                        log::info!("[ServerInviteTransacstion:on_proceeding] send Provisional: Trying 100");
                         self.response(StatusCode::Trying, None);
                         state.tu_100_timer = None;
                         self.state = State::Proceeding(state);
@@ -198,10 +198,12 @@ impl ServerInviteTransaction {
             ServerInviteTransactionEvent::Req(_req) => {}
             ServerInviteTransactionEvent::Status(status, body) => {
                 if matches!(status.kind(), StatusCodeKind::Provisional) {
+                    log::info!("[ServerInviteTransacstion:on_proceeding] send Provisional: {}", status);
                     state.tu_100_timer = None;
                     self.state = State::Proceeding(state);
                     self.response(status, body);
                 } else if let 300..=699 = status.code() {
+                    log::info!("[ServerInviteTransacstion:on_proceeding] send Other: {}", status);
                     self.state = State::Completed(Completed {
                         code: status.clone(),
                         timer_g: now_ms + T1,
@@ -210,6 +212,7 @@ impl ServerInviteTransaction {
                     });
                     self.response(status, body);
                 } else if matches!(status.kind(), StatusCodeKind::Successful) {
+                    log::info!("[ServerInviteTransacstion:on_proceeding] send Successful: {}", status);
                     state.tu_100_timer = None;
                     self.state = State::Terminated;
                     self.response(status, body.clone());

@@ -284,7 +284,7 @@ mod tests {
     use cluster::ClusterTrackStats;
     use transport::TrackId;
 
-    use crate::{endpoint_wrap::internal::DEFAULT_BITRATE_OUT_BPS, rpc::ReceiverLayerLimit};
+    use crate::{endpoint::internal::DEFAULT_BITRATE_OUT_BPS, rpc::ReceiverLayerLimit};
 
     use super::{get_next_bitrate, BitrateAllocationAction, BitrateAllocator, LocalTrackTarget, SINGLE_STREAM_BASED_BITRATE};
 

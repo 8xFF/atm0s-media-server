@@ -1,22 +1,20 @@
 use std::sync::Arc;
 
 use async_std::stream::StreamExt;
-use cluster::{ClusterEndpoint, EndpointSubscribeScope, MixMinusAudioMode};
+use cluster::{rpc::general::MediaSessionProtocol, BitrateControlMode, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode};
 use futures::{select, FutureExt};
 use media_utils::Timer;
 use transport::{Transport, TransportError};
 
 use crate::{
-    endpoint_wrap::internal::{MediaEndpointInternalEvent, MediaInternalAction},
-    middleware,
+    endpoint::internal::{MediaEndpointInternalEvent, MediaInternalAction},
     rpc::{EndpointRpcIn, EndpointRpcOut, LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
-    MediaEndpointMiddleware,
 };
 
-use self::internal::MediaEndpointInternal;
+use self::{internal::MediaEndpointInternal, middleware::MediaEndpointMiddleware};
 
-mod internal;
-pub use internal::BitrateLimiterType;
+pub mod internal;
+pub mod middleware;
 
 const DEFAULT_MIX_MINUS_NAME: &str = "default";
 const DEFAULT_MIX_MINUS_VIRTUAL_TRACK_ID: u16 = 200;
@@ -49,24 +47,28 @@ where
         cluster: C,
         room: &str,
         peer: &str,
-        sub_scope: EndpointSubscribeScope,
-        bitrate_type: BitrateLimiterType,
+        protocol: MediaSessionProtocol,
+        sub_scope: ClusterEndpointSubscribeScope,
+        pub_scope: ClusterEndpointPublishScope,
+        bitrate_mode: BitrateControlMode,
         mix_minus_mode: MixMinusAudioMode,
-        mix_minus_size: usize,
+        mix_minus_slots: &[Option<u16>],
+        mut middlewares: Vec<Box<dyn MediaEndpointMiddleware>>,
     ) -> Self {
         log::info!("[EndpointWrap] create");
         let timer = Arc::new(media_utils::SystemTimer());
-        let middlewares: Vec<Box<dyn MediaEndpointMiddleware>> = vec![
-            Box::new(middleware::logger::MediaEndpointEventLogger::new()),
-            Box::new(middleware::mix_minus::MixMinusEndpointMiddleware::new(
+        middlewares.push(Box::new(middleware::logger::MediaEndpointEventLogger::new()));
+        if mix_minus_mode != MixMinusAudioMode::Disabled {
+            middlewares.push(Box::new(middleware::mix_minus::MixMinusEndpointMiddleware::new(
                 room,
+                peer,
                 DEFAULT_MIX_MINUS_NAME,
                 mix_minus_mode,
                 DEFAULT_MIX_MINUS_VIRTUAL_TRACK_ID,
-                mix_minus_size,
-            )),
-        ];
-        let mut internal = MediaEndpointInternal::new(room, peer, sub_scope, bitrate_type, middlewares);
+                mix_minus_slots,
+            )));
+        }
+        let mut internal = MediaEndpointInternal::new(room, peer, protocol, sub_scope, pub_scope, bitrate_mode, middlewares);
         internal.on_start(timer.now_ms());
 
         Self {
@@ -140,7 +142,7 @@ where
 
     pub async fn close(&mut self) {
         log::info!("[EndpointWrap] close request");
-        self.transport.close().await;
+        self.transport.close(self.timer.now_ms()).await;
     }
 }
 

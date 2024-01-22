@@ -87,7 +87,7 @@ impl ScalableFilter for H264SimulcastFilter {
 mod test {
     use transport::{H264Profile, H264Simulcast, MediaPacket, PayloadCodec};
 
-    use crate::endpoint_wrap::internal::local_track::scalable_filter::{FilterResult, ScalableFilter};
+    use crate::endpoint::internal::local_track::scalable_filter::{FilterResult, ScalableFilter};
 
     enum Input {
         // input (spatial, key_only) => need out request key

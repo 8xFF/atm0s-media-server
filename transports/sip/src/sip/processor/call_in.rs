@@ -3,7 +3,7 @@ use std::{collections::VecDeque, net::SocketAddr};
 use rsip::{
     headers::{self, typed, ContentType},
     typed::Contact,
-    Headers, HostWithPort, Method, Scheme, StatusCode,
+    Headers, Method, Param, StatusCode,
 };
 
 use crate::{
@@ -91,7 +91,7 @@ impl CallInProcessor {
     pub fn accept(&mut self, now_ms: u64, body: Option<(ContentType, Vec<u8>)>) -> Result<(), super::ProcessorError> {
         match &mut self.state {
             State::Connecting { transaction } => {
-                log::info!("[CallInProcessor] accept call {:?}", body);
+                log::info!("[CallInProcessor] accept call");
                 transaction.on_event(now_ms, ServerInviteTransactionEvent::Status(StatusCode::OK, body));
                 self.process_transaction(now_ms);
                 Ok(())
@@ -127,6 +127,20 @@ impl CallInProcessor {
         }
     }
 
+    /// Auto determine the state and send REJECT or BYE
+    pub fn close(&mut self, now_ms: u64) {
+        match &self.state {
+            State::Connecting { .. } => {
+                self.reject(now_ms).expect("Should ok");
+            }
+            State::InCall { .. } => {
+                self.end(now_ms).expect("Should ok");
+            }
+            State::Bye { .. } => {}
+            State::End => {}
+        }
+    }
+
     fn process_transaction(&mut self, now_ms: u64) {
         let transaction = match &mut self.state {
             State::Connecting { transaction } => transaction,
@@ -154,27 +168,29 @@ impl CallInProcessor {
     }
 
     fn create_request(&self, method: Method, cseq: headers::CSeq) -> SipRequest {
-        //TODO fix with real hostname
         let request = rsip::Request {
             method,
             uri: rsip::Uri {
-                scheme: Some(Scheme::Sip),
-                auth: None,
-                host_with_port: HostWithPort {
-                    host: "proxy.atm0s.live".into(),
-                    port: None,
-                },
-                params: vec![],
+                scheme: Some(rsip::Scheme::Sip),
+                auth: self.local_contact.uri.auth.clone(),
+                host_with_port: self.local_contact.uri.host_with_port.clone(),
+                params: vec![Param::Transport(rsip::Transport::Udp)],
                 headers: vec![],
             },
             version: rsip::Version::V2,
             headers: Headers::from(vec![
-                rsip::Header::Via(headers::Via::from(format!("SIP/2.0/UDP sip-proxy.8xff.live:5060;branch=z9hG4bK-{}", generate_random_string(8)))),
+                rsip::Header::Via(headers::Via::from(format!(
+                    "SIP/2.0/UDP {};branch=z9hG4bK-{}",
+                    self.local_contact.uri.host_with_port,
+                    generate_random_string(8)
+                ))),
                 rsip::Header::MaxForwards(headers::MaxForwards::from(70)),
                 rsip::Header::From(headers::From::from(self.init_req.to.to_string())),
                 rsip::Header::To(headers::To::from(self.init_req.from.to_string())),
                 rsip::Header::CallId(self.init_req.call_id.clone()),
                 rsip::Header::CSeq(cseq),
+                rsip::Header::Contact(self.local_contact.clone().into()),
+                rsip::Header::UserAgent(headers::UserAgent::from("8xff-sip-media-server")),
                 rsip::Header::ContentLength(headers::ContentLength::from(0)),
             ]),
             body: vec![],
@@ -209,6 +225,7 @@ impl Processor<CallInProcessorAction> for CallInProcessor {
                     //TODO avoid texting error
                     self.actions.push_back(ProcessorAction::Finished(Err("TIMEOUT".to_string())));
                 } else if now_ms >= *timer_resend_res {
+                    log::warn!("[CallInProcessor] resend BYE");
                     *timer_resend_res = now_ms + T1;
                     let req = self.create_request(Method::Bye, typed::CSeq { seq: 1, method: Method::Bye }.into());
                     self.actions.push_back(ProcessorAction::SendRequest(self.remote_contact_addr, req));

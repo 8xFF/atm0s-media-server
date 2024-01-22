@@ -1,3 +1,4 @@
+#[allow(unused)]
 pub enum G711Codec {
     Alaw,
     Ulaw,

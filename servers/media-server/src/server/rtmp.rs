@@ -7,7 +7,7 @@ use async_std::{channel::Sender, prelude::FutureExt as _};
 use clap::Parser;
 use cluster::{
     rpc::{
-        gateway::{NodeHealthcheckResponse, NodePing, NodePong, ServiceInfo},
+        gateway::{NodePing, NodePong, ServiceInfo},
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },
@@ -164,21 +164,21 @@ where
                         continue;
                     };
 
-                    log::info!("[RtmpMediaServer] new rtmp connection from {}/{:?}", s_token.room, s_token.peer);
+                    log::info!("[RtmpMediaServer] new rtmp connection from {:?}/{:?}", s_token.room, s_token.peer);
 
                     match run_rtmp_endpoint(
                         ctx.clone(),
                         &mut cluster,
-                        &s_token.room,
+                        &s_token.room.expect("Should have room"),
                         &s_token.peer.expect("Should have peer"),
                         conn,
                     )
                     .await
                     {
-                        Ok(conn_id) => {
+                        Ok(_conn_id) => {
                             //TODO send conn_id to hook
                         }
-                        Err(err) => {
+                        Err(_err) => {
                             //TODO send err to hook
                         }
                     }
@@ -190,9 +190,6 @@ where
         };
 
         match rpc {
-            RpcEvent::NodeHeathcheck(req) => {
-                req.answer(Ok(NodeHealthcheckResponse { success: true }));
-            }
             RpcEvent::MediaEndpointClose(req) => {
                 if let Some(old_tx) = ctx.get_conn(&req.param().conn_id) {
                     async_std::task::spawn(async move {

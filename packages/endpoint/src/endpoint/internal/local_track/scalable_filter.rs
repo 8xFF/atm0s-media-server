@@ -1,7 +1,7 @@
 use media_utils::{SeqRewrite, TsRewrite};
 use transport::{MediaPacket, PayloadCodec};
 
-use crate::endpoint_wrap::internal::bitrate_allocator::LocalTrackTarget;
+use crate::endpoint::internal::bitrate_allocator::LocalTrackTarget;
 
 use self::{h264_sim::H264SimulcastFilter, video_single::VideoSingleFilter, vp8_sim::Vp8SimulcastFilter, vp9_svc::Vp9SvcFilter};
 

@@ -1,17 +1,16 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    vec,
-};
+use std::collections::{HashMap, VecDeque};
 
 use audio_mixer::{AudioMixer, AudioMixerOutput};
 use cluster::{ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterTrackUuid, MixMinusAudioMode};
 use media_utils::{SeqRewrite, TsRewrite};
-use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, TrackId, TransportError, TransportIncomingEvent, TransportOutgoingEvent};
+use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaPacket, TrackId, TransportError, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
 
 use crate::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn},
-    EndpointRpcIn, EndpointRpcOut, MediaEndpointMiddleware, MediaEndpointMiddlewareOutput, RpcResponse,
+    EndpointRpcIn, EndpointRpcOut, RpcResponse,
 };
+
+use super::{MediaEndpointMiddleware, MediaEndpointMiddlewareOutput};
 
 const SEQ_MAX: u64 = 1 << 16;
 const TS_MAX: u64 = 1 << 32;
@@ -40,25 +39,59 @@ impl Default for Slot {
 pub struct MixMinusEndpointMiddleware {
     virtual_track_id: u16,
     room: String,
+    peer: String,
     name: String,
     mode: MixMinusAudioMode,
     mixer: AudioMixer<MediaPacket, ClusterTrackUuid>,
     output_slots: Vec<Slot>,
     outputs: VecDeque<MediaEndpointMiddlewareOutput>,
     current_subs: HashMap<(String, String), ()>,
+    connected: bool,
 }
 
 impl MixMinusEndpointMiddleware {
-    pub fn new(room: &str, name: &str, mode: MixMinusAudioMode, virtual_track_id: u16, outputs: usize) -> Self {
+    pub fn new(room: &str, peer: &str, name: &str, mode: MixMinusAudioMode, virtual_track_id: u16, outputs: &[Option<TrackId>]) -> Self {
         Self {
             virtual_track_id,
             room: room.to_string(),
+            peer: peer.to_string(),
             name: name.to_string(),
             mode,
-            mixer: AudioMixer::new(Box::new(|pkt| pkt.ext_vals.audio_level), audio_mixer::AudioMixerConfig { outputs }),
-            output_slots: vec![Default::default(); outputs],
+            mixer: AudioMixer::new(Box::new(|pkt| pkt.ext_vals.audio_level), audio_mixer::AudioMixerConfig { outputs: outputs.len() }),
+            output_slots: outputs
+                .iter()
+                .map(|track_id| Slot {
+                    track_id: track_id.clone(),
+                    ..Default::default()
+                })
+                .collect(),
             outputs: VecDeque::new(),
             current_subs: HashMap::new(),
+            connected: false,
+        }
+    }
+
+    fn add_source(&mut self, now_ms: u64, peer: &str, track: &str) {
+        if self.mixer.add_source(now_ms, ClusterTrackUuid::from_info(&self.room, peer, track)).is_some() {
+            self.current_subs.insert((peer.to_string(), track.to_string()), ());
+            if self.connected {
+                self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                    self.virtual_track_id,
+                    ClusterLocalTrackOutgoingEvent::Subscribe(peer.to_string(), track.to_string()),
+                )));
+            }
+        }
+    }
+
+    fn remove_source(&mut self, now_ms: u64, peer: &str, track: &str) {
+        if self.mixer.remove_source(now_ms, ClusterTrackUuid::from_info(&self.room, peer, track)).is_some() {
+            self.current_subs.remove(&(peer.to_string(), track.to_string()));
+            if self.connected {
+                self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                    self.virtual_track_id,
+                    ClusterLocalTrackOutgoingEvent::Unsubscribe(peer.to_string(), track.to_string()),
+                )));
+            }
         }
     }
 }
@@ -66,16 +99,6 @@ impl MixMinusEndpointMiddleware {
 impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
     fn on_start(&mut self, _now_ms: u64) {
         // current version sdk dont need to fire event, it auto subscribe to mix_minus_default_0,1,2
-        // for i in 0..self.output_slots.len() {
-        //     self.outputs
-        //         .push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(TrackInfo {
-        //             peer_hash: 0,
-        //             peer: "".to_string(),
-        //             kind: MediaKind::Audio,
-        //             track: format!("mix_minus_{}_{}", self.name, i),
-        //             state: None,
-        //         }))));
-        // }
     }
 
     fn on_tick(&mut self, now_ms: u64) {
@@ -84,6 +107,18 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
 
     fn on_transport(&mut self, now_ms: u64, event: &TransportIncomingEvent<EndpointRpcIn, RemoteTrackRpcIn, LocalTrackRpcIn>) -> bool {
         match event {
+            TransportIncomingEvent::State(state) => {
+                if state == &TransportStateEvent::Connected {
+                    self.connected = true;
+                    for (peer, track) in self.current_subs.keys() {
+                        self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                            self.virtual_track_id,
+                            ClusterLocalTrackOutgoingEvent::Subscribe(peer.to_string(), track.to_string()),
+                        )));
+                    }
+                }
+                false
+            }
             TransportIncomingEvent::LocalTrackEvent(track_id, LocalTrackIncomingEvent::Rpc(LocalTrackRpcIn::Switch(req))) => {
                 if req.data.remote.peer.is_empty() && req.data.remote.stream.starts_with(&format!("mix_minus_{}_", self.name)) {
                     //extract slot_index from mix_minus_{name}_slot_{index}
@@ -123,17 +158,11 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
             }
             TransportIncomingEvent::Rpc(EndpointRpcIn::MixMinusSourceAdd(req)) => {
                 if matches!(self.mode, MixMinusAudioMode::ManualAudioStreams) && req.data.id == self.name {
-                    let remote_peer = req.data.remote.peer.clone();
-                    let remote_stream = req.data.remote.stream.clone();
-                    self.mixer.add_source(now_ms, ClusterTrackUuid::from_info(&self.room, &remote_peer, &remote_stream));
                     self.outputs
                         .push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::MixMinusSourceAddRes(
                             RpcResponse::success(req.req_id, true),
                         ))));
-                    self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
-                        self.virtual_track_id,
-                        ClusterLocalTrackOutgoingEvent::Subscribe(remote_peer, remote_stream),
-                    )));
+                    self.add_source(now_ms, &req.data.remote.peer, &req.data.remote.stream);
                     true
                 } else {
                     false
@@ -141,17 +170,11 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
             }
             TransportIncomingEvent::Rpc(EndpointRpcIn::MixMinusSourceRemove(req)) => {
                 if matches!(self.mode, MixMinusAudioMode::ManualAudioStreams) && req.data.id == self.name {
-                    let remote_peer = req.data.remote.peer.clone();
-                    let remote_stream = req.data.remote.stream.clone();
-                    self.mixer.remove_source(now_ms, ClusterTrackUuid::from_info(&self.room, &remote_peer, &remote_stream));
                     self.outputs
                         .push_back(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::Rpc(EndpointRpcOut::MixMinusSourceRemoveRes(
                             RpcResponse::success(req.req_id, true),
                         ))));
-                    self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
-                        self.virtual_track_id,
-                        ClusterLocalTrackOutgoingEvent::Unsubscribe(remote_peer, remote_stream),
-                    )));
+                    self.remove_source(now_ms, &req.data.remote.peer, &req.data.remote.stream);
                     true
                 } else {
                     false
@@ -168,26 +191,20 @@ impl MediaEndpointMiddleware for MixMinusEndpointMiddleware {
     fn on_cluster(&mut self, now_ms: u64, event: &ClusterEndpointIncomingEvent) -> bool {
         match event {
             ClusterEndpointIncomingEvent::PeerTrackAdded(peer, track, meta) => {
+                if peer.eq(&self.peer) {
+                    return false;
+                }
                 if matches!(self.mode, MixMinusAudioMode::AllAudioStreams) && meta.kind.is_audio() {
-                    if self.mixer.add_source(now_ms, ClusterTrackUuid::from_info(&self.room, peer, track)).is_some() {
-                        self.current_subs.insert((peer.clone(), track.clone()), ());
-                        self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
-                            self.virtual_track_id,
-                            ClusterLocalTrackOutgoingEvent::Subscribe(peer.clone(), track.clone()),
-                        )));
-                    }
+                    self.add_source(now_ms, peer, track);
                 }
                 false
             }
             ClusterEndpointIncomingEvent::PeerTrackRemoved(peer, track) => {
+                if peer.eq(&self.peer) {
+                    return false;
+                }
                 if matches!(self.mode, MixMinusAudioMode::AllAudioStreams) {
-                    if self.mixer.remove_source(now_ms, ClusterTrackUuid::from_info(&self.room, peer, track)).is_some() {
-                        self.current_subs.remove(&(peer.clone(), track.clone()));
-                        self.outputs.push_back(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
-                            self.virtual_track_id,
-                            ClusterLocalTrackOutgoingEvent::Unsubscribe(peer.clone(), track.clone()),
-                        )));
-                    }
+                    self.remove_source(now_ms, peer, track);
                 }
                 false
             }
@@ -259,75 +276,125 @@ mod tests {
         ClusterEndpointIncomingEvent, ClusterEndpointOutgoingEvent, ClusterLocalTrackIncomingEvent, ClusterLocalTrackOutgoingEvent, ClusterTrackMeta, ClusterTrackScalingType, ClusterTrackStatus,
         ClusterTrackUuid, MixMinusAudioMode,
     };
-    use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaPacket, TransportIncomingEvent, TransportOutgoingEvent};
+    use transport::{LocalTrackIncomingEvent, LocalTrackOutgoingEvent, MediaKind, MediaPacket, TransportIncomingEvent, TransportOutgoingEvent, TransportStateEvent};
 
     use crate::{
+        endpoint::middleware::{MediaEndpointMiddleware, MediaEndpointMiddlewareOutput},
         rpc::{LocalTrackRpcIn, LocalTrackRpcOut, MixMinusSource, ReceiverDisconnect, ReceiverSwitch, RemoteStream},
-        EndpointRpcIn, EndpointRpcOut, MediaEndpointMiddleware, MediaEndpointMiddlewareOutput, RpcRequest, RpcResponse,
+        EndpointRpcIn, EndpointRpcOut, RpcRequest, RpcResponse,
     };
 
     use super::MixMinusEndpointMiddleware;
 
     #[test]
-    fn handle_track_and_view() {
-        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "default", MixMinusAudioMode::AllAudioStreams, 100, 3);
+    fn same_user_should_not_handle() {
+        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "user0", "default", MixMinusAudioMode::AllAudioStreams, 100, &[None, None, None]);
         mix_minus.on_start(0);
-
-        //should pop 3 track added
-        // assert_eq!(
-        //     mix_minus.pop_action(0),
-        //     Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
-        //         TrackInfo {
-        //             peer_hash: 0,
-        //             peer: "".to_string(),
-        //             kind: MediaKind::Audio,
-        //             track: "mix_minus_default_0".to_string(),
-        //             state: None,
-        //         }
-        //     ))))
-        // );
-        // assert_eq!(
-        //     mix_minus.pop_action(0),
-        //     Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
-        //         TrackInfo {
-        //             peer_hash: 0,
-        //             peer: "".to_string(),
-        //             kind: MediaKind::Audio,
-        //             track: "mix_minus_default_1".to_string(),
-        //             state: None,
-        //         }
-        //     ))))
-        // );
-        // assert_eq!(
-        //     mix_minus.pop_action(0),
-        //     Some(super::MediaEndpointMiddlewareOutput::Endpoint(transport::TransportOutgoingEvent::Rpc(EndpointRpcOut::TrackAdded(
-        //         TrackInfo {
-        //             peer_hash: 0,
-        //             peer: "".to_string(),
-        //             kind: MediaKind::Audio,
-        //             track: "mix_minus_default_2".to_string(),
-        //             state: None,
-        //         }
-        //     ))))
-        // );
+        mix_minus.on_transport(0, &TransportIncomingEvent::State(TransportStateEvent::Connected));
         assert_eq!(mix_minus.pop_action(0), None);
 
         //should auto subscribe if cluster audio track added
         assert_eq!(
             mix_minus.on_cluster(
                 0,
-                &ClusterEndpointIncomingEvent::PeerTrackAdded(
-                    "user1".to_string(),
-                    "audio_main".to_string(),
-                    ClusterTrackMeta {
-                        active: true,
-                        kind: MediaKind::Audio,
-                        label: None,
-                        layers: vec![],
-                        scaling: ClusterTrackScalingType::Single,
-                        status: ClusterTrackStatus::Connected,
-                    }
-                )
+                &ClusterEndpointIncomingEvent::PeerTrackAdded("user0".to_string(), "audio_main".to_string(), ClusterTrackMeta::default_audio())
+            ),
+            false
+        );
+
+        assert_eq!(mix_minus.pop_action(0), None);
+    }
+
+    /// This test for ensuring predefined subscribe over outputs slice will be used
+    #[test]
+    fn pre_config_subscribe() {
+        let virtual_track_id = 100;
+        let local_track_id = 10;
+        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "user0", "default", MixMinusAudioMode::AllAudioStreams, virtual_track_id, &[Some(local_track_id)]);
+        mix_minus.on_start(0);
+        mix_minus.on_transport(0, &TransportIncomingEvent::State(TransportStateEvent::Connected));
+        assert_eq!(mix_minus.pop_action(0), None);
+
+        //should auto subscribe if cluster audio track added
+        assert_eq!(
+            mix_minus.on_cluster(
+                0,
+                &ClusterEndpointIncomingEvent::PeerTrackAdded("user1".to_string(), "audio_main".to_string(), ClusterTrackMeta::default_audio())
+            ),
+            false
+        );
+        assert_eq!(
+            mix_minus.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                virtual_track_id,
+                ClusterLocalTrackOutgoingEvent::Subscribe("user1".to_string(), "audio_main".to_string()),
+            )))
+        );
+        assert_eq!(mix_minus.pop_action(0), None);
+
+        let user1_audio_uuid = ClusterTrackUuid::from_info("demo", "user1", "audio_main");
+        let mut user1_pkt = MediaPacket::simple_audio(1, 1000, vec![1]);
+        user1_pkt.ext_vals.audio_level = Some(50);
+
+        mix_minus.on_cluster(
+            0,
+            &ClusterEndpointIncomingEvent::LocalTrackEvent(virtual_track_id, ClusterLocalTrackIncomingEvent::MediaPacket(user1_audio_uuid, user1_pkt)),
+        );
+
+        let mut desired_pkt = MediaPacket::simple_audio(1, 0, vec![1]);
+        desired_pkt.ext_vals.audio_level = Some(50);
+
+        assert_eq!(
+            mix_minus.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Endpoint(TransportOutgoingEvent::LocalTrackEvent(
+                local_track_id,
+                LocalTrackOutgoingEvent::MediaPacket(desired_pkt),
+            )))
+        );
+        assert_eq!(mix_minus.pop_action(0), None);
+    }
+
+    #[test]
+    fn track_sub_should_wait_connected() {
+        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "user0", "default", MixMinusAudioMode::AllAudioStreams, 100, &[None, None, None]);
+        mix_minus.on_start(0);
+        assert_eq!(mix_minus.pop_action(0), None);
+
+        //should not subscribe because transport not connected
+        assert_eq!(
+            mix_minus.on_cluster(
+                0,
+                &ClusterEndpointIncomingEvent::PeerTrackAdded("user1".to_string(), "audio_main".to_string(), ClusterTrackMeta::default_audio())
+            ),
+            false
+        );
+        assert_eq!(mix_minus.pop_action(0), None);
+
+        //now connected then it should subscribe
+        mix_minus.on_transport(0, &TransportIncomingEvent::State(TransportStateEvent::Connected));
+
+        assert_eq!(
+            mix_minus.pop_action(0),
+            Some(MediaEndpointMiddlewareOutput::Cluster(ClusterEndpointOutgoingEvent::LocalTrackEvent(
+                100,
+                ClusterLocalTrackOutgoingEvent::Subscribe("user1".to_string(), "audio_main".to_string()),
+            )))
+        );
+        assert_eq!(mix_minus.pop_action(0), None);
+    }
+
+    #[test]
+    fn handle_track_and_view() {
+        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "user0", "default", MixMinusAudioMode::AllAudioStreams, 100, &[None, None, None]);
+        mix_minus.on_start(0);
+        mix_minus.on_transport(0, &TransportIncomingEvent::State(TransportStateEvent::Connected));
+        assert_eq!(mix_minus.pop_action(0), None);
+
+        //should auto subscribe if cluster audio track added
+        assert_eq!(
+            mix_minus.on_cluster(
+                0,
+                &ClusterEndpointIncomingEvent::PeerTrackAdded("user1".to_string(), "audio_main".to_string(), ClusterTrackMeta::default_audio())
             ),
             false
         );
@@ -344,18 +411,7 @@ mod tests {
         assert_eq!(
             mix_minus.on_cluster(
                 0,
-                &ClusterEndpointIncomingEvent::PeerTrackAdded(
-                    "user1".to_string(),
-                    "video_main".to_string(),
-                    ClusterTrackMeta {
-                        active: true,
-                        kind: MediaKind::Video,
-                        label: None,
-                        layers: vec![],
-                        scaling: ClusterTrackScalingType::Single,
-                        status: ClusterTrackStatus::Connected,
-                    }
-                )
+                &ClusterEndpointIncomingEvent::PeerTrackAdded("user1".to_string(), "video_main".to_string(), ClusterTrackMeta::default_video())
             ),
             false
         );
@@ -424,8 +480,9 @@ mod tests {
 
     #[test]
     fn handle_manual_mode() {
-        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "default", MixMinusAudioMode::ManualAudioStreams, 100, 3);
+        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "user0", "default", MixMinusAudioMode::ManualAudioStreams, 100, &[None, None, None]);
         mix_minus.on_start(0);
+        mix_minus.on_transport(0, &TransportIncomingEvent::State(TransportStateEvent::Connected));
 
         // assert!(mix_minus.pop_action(0).is_some()); //track added
         // assert!(mix_minus.pop_action(0).is_some()); //track added
@@ -436,18 +493,7 @@ mod tests {
         assert_eq!(
             mix_minus.on_cluster(
                 0,
-                &ClusterEndpointIncomingEvent::PeerTrackAdded(
-                    "user1".to_string(),
-                    "audio_main".to_string(),
-                    ClusterTrackMeta {
-                        active: true,
-                        kind: MediaKind::Audio,
-                        label: None,
-                        layers: vec![],
-                        scaling: ClusterTrackScalingType::Single,
-                        status: ClusterTrackStatus::Connected,
-                    }
-                )
+                &ClusterEndpointIncomingEvent::PeerTrackAdded("user1".to_string(), "audio_main".to_string(), ClusterTrackMeta::default_audio())
             ),
             false
         );
@@ -520,8 +566,9 @@ mod tests {
 
     #[test]
     fn should_continuos_pkt_seq_ts_when_switch_source() {
-        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "default", MixMinusAudioMode::AllAudioStreams, 100, 1);
+        let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "user0", "default", MixMinusAudioMode::AllAudioStreams, 100, &[None]);
         mix_minus.on_start(0);
+        mix_minus.on_transport(0, &TransportIncomingEvent::State(TransportStateEvent::Connected));
 
         // assert!(mix_minus.pop_action(0).is_some()); //track added
         assert_eq!(mix_minus.pop_action(0), None);

@@ -342,7 +342,7 @@ where
         return Ok(TransportIncomingEvent::Continue);
     }
 
-    async fn close(&mut self) {
+    async fn close(&mut self, _now_ms: u64) {
         self.internal.close();
     }
 }

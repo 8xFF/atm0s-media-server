@@ -37,53 +37,6 @@ pub fn rid_to_u16(rid: &Rid) -> TrackId {
     value
 }
 
-//TODO optimize this
-pub fn generate_mid(track_id: TrackId) -> Mid {
-    if track_id < 10 {
-        Mid::from_array([track_id as u8 + ZERO_CHAR, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32])
-    } else if track_id < 100 {
-        Mid::from_array([
-            (track_id / 10) as u8 + ZERO_CHAR,
-            (track_id % 10) as u8 + ZERO_CHAR,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-        ])
-    } else if track_id < 1000 {
-        Mid::from_array([
-            (track_id / 100) as u8 + ZERO_CHAR,
-            ((track_id % 100) / 10) as u8 + ZERO_CHAR,
-            (track_id % 10) as u8 + ZERO_CHAR,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-            32,
-        ])
-    } else {
-        panic!("not supported");
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

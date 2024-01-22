@@ -76,7 +76,14 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport {
                         .on_accept_request(request_id)
                         .map_err(|_e| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
                 }
-                ServerEvent::PublishRequest { request_id, app_name: _, stream_key } => {
+                ServerEvent::PublishRequest { request_id, app_name, stream_key } => {
+                    if app_name != "live" {
+                        self.session
+                            .on_reject_request(request_id, "WRONG_APP_NAME", "Only live app_name supported")
+                            .map_err(|_e: ServerSessionError| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
+                        return Ok(TransportIncomingEvent::Continue);
+                    }
+
                     self.session
                         .on_accept_request(request_id)
                         .map_err(|_e: ServerSessionError| TransportError::RuntimeError(TransportRuntimeError::ProtocolError))?;
@@ -136,7 +143,7 @@ impl Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> for RtmpTransport {
         Ok(TransportIncomingEvent::Continue)
     }
 
-    async fn close(&mut self) {
+    async fn close(&mut self, _now_ms: u64) {
         self.socket.close().await.log_error("Should close socket");
         self.actions.push_back(TransportIncomingEvent::State(TransportStateEvent::Disconnected));
     }

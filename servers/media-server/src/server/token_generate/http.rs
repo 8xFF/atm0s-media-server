@@ -38,21 +38,21 @@ pub struct TokenInfo {
 pub struct CreateRtmpSessionRequest {
     pub(crate) room: String,
     pub(crate) peer: String,
-    pub(crate) expires_in: Option<u64>,
+    pub(crate) expires_in: Option<u64>, //TODO check expire
 }
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Object)]
 pub struct CreateWhipSessionRequest {
     pub(crate) room: String,
     pub(crate) peer: String,
-    pub(crate) expires_in: Option<u64>,
+    pub(crate) expires_in: Option<u64>, //TODO check expire
 }
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Object)]
 pub struct CreateWhepSessionRequest {
     pub(crate) room: String,
     pub(crate) peer: Option<String>,
-    pub(crate) expires_in: Option<u64>,
+    pub(crate) expires_in: Option<u64>, //TODO check expire
 }
 
 #[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Object)]
@@ -61,7 +61,13 @@ pub struct CreateWebrtcSessionRequest {
     pub(crate) peer: Option<String>,
     pub(crate) publish: Option<bool>,
     pub(crate) subscribe: Option<bool>,
-    pub(crate) expires_in: Option<u64>,
+    pub(crate) expires_in: Option<u64>, //TODO check expire
+}
+
+#[derive(PartialEq, Eq, Debug, Serialize, Deserialize, Object)]
+pub struct CreateSipSessionRequest {
+    pub(crate) peer: String,
+    pub(crate) expires_in: Option<u64>, //TODO check expire
 }
 
 pub struct TokenGenerateHttpApis;
@@ -79,7 +85,7 @@ impl TokenGenerateHttpApis {
         }
 
         let token = data.1.signer.sign_media_session(&cluster::MediaSessionToken {
-            room: body.0.room,
+            room: Some(body.0.room),
             peer: Some(body.0.peer),
             protocol: cluster::rpc::general::MediaSessionProtocol::Rtmp,
             publish: true,
@@ -104,7 +110,7 @@ impl TokenGenerateHttpApis {
         }
 
         let token = data.1.signer.sign_media_session(&cluster::MediaSessionToken {
-            room: body.0.room,
+            room: Some(body.0.room),
             peer: Some(body.0.peer),
             protocol: cluster::rpc::general::MediaSessionProtocol::Whip,
             publish: true,
@@ -129,7 +135,7 @@ impl TokenGenerateHttpApis {
         }
 
         let token = data.1.signer.sign_media_session(&cluster::MediaSessionToken {
-            room: body.0.room,
+            room: Some(body.0.room),
             peer: body.0.peer,
             protocol: cluster::rpc::general::MediaSessionProtocol::Whep,
             publish: false,
@@ -154,11 +160,36 @@ impl TokenGenerateHttpApis {
         }
 
         let token = data.1.signer.sign_media_session(&cluster::MediaSessionToken {
-            room: body.0.room,
+            room: Some(body.0.room),
             peer: body.0.peer,
             protocol: cluster::rpc::general::MediaSessionProtocol::Webrtc,
             publish: body.0.publish.unwrap_or(true),
             subscribe: body.0.subscribe.unwrap_or(true),
+            ts: data.1.timer.now_ms(),
+        });
+        Ok(Json(Response {
+            success: true,
+            error: None,
+            data: Some(TokenInfo { token }),
+        }))
+    }
+
+    #[oai(path = "/app/sip_session", method = "post")]
+    async fn create_sip_session(&self, Data(data): Data<&DataContainer>, app_secret: Query<String>, body: Json<CreateSipSessionRequest>) -> Result<Json<Response<TokenInfo>>> {
+        if !app_secret.0.eq(&data.1.token) {
+            return Ok(Json(Response {
+                success: false,
+                error: Some("INVALID_TOKEN".to_string()),
+                data: None,
+            }));
+        }
+
+        let token = data.1.signer.sign_media_session(&cluster::MediaSessionToken {
+            room: None,
+            peer: Some(body.0.peer),
+            protocol: cluster::rpc::general::MediaSessionProtocol::Sip,
+            publish: true,
+            subscribe: true,
             ts: data.1.timer.now_ms(),
         });
         Ok(Json(Response {

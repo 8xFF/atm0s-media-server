@@ -2,8 +2,8 @@ use std::{collections::VecDeque, net::SocketAddr};
 
 use rsip::{
     headers::{self, CallId, ContentType},
-    typed::{self, Contact, From, To},
-    Headers, HostWithPort, Method, Scheme, StatusCode,
+    typed::{self, Contact, From, To, Via},
+    Headers, Method, Param, StatusCode,
 };
 
 use crate::{
@@ -32,27 +32,31 @@ pub enum CallOutProcessorAction {
     Accepted(Option<(ContentType, Vec<u8>)>),
 }
 
+#[allow(unused)]
 pub struct CallOutProcessor {
     state: State,
     local_contact: Contact,
+    via: Via,
     call_id: CallId,
     local_from: From,
     remote_to: To,
+    res_remote_to: Option<To>,
     remote_contact_addr: Option<SocketAddr>,
     actions: VecDeque<ProcessorAction<CallOutProcessorAction>>,
 }
 
 impl CallOutProcessor {
     pub fn new(now_ms: u64, local_contact: Contact, call_id: CallId, local_from: From, remote_to: To, sdp: &str) -> Self {
+        let transaction = ClientInviteTransaction::new(now_ms, call_id.clone(), local_contact.clone(), local_from.clone(), remote_to.clone(), sdp);
+        let via = transaction.origin_request.via.clone();
         Self {
-            state: State::Connecting {
-                transaction: ClientInviteTransaction::new(now_ms, call_id.clone(), local_contact.clone(), local_from.clone(), remote_to.clone(), sdp),
-                canceling: false,
-            },
+            state: State::Connecting { transaction, canceling: false },
             local_contact,
+            via,
             call_id,
             local_from,
             remote_to,
+            res_remote_to: None,
             remote_contact_addr: None,
             actions: VecDeque::new(),
         }
@@ -62,7 +66,7 @@ impl CallOutProcessor {
         match &mut self.state {
             State::Connecting { transaction: _, canceling } => {
                 *canceling = true;
-                let req = self.create_request(Method::Cancel, typed::CSeq { seq: 1, method: Method::Cancel }.into());
+                let req = self.create_request(Method::Cancel, typed::CSeq { seq: 2, method: Method::Cancel }.into());
                 self.actions.push_back(ProcessorAction::SendRequest(self.remote_contact_addr, req));
                 Ok(())
             }
@@ -73,7 +77,7 @@ impl CallOutProcessor {
     pub fn end(&mut self, now_ms: u64) -> Result<(), super::ProcessorError> {
         match &mut self.state {
             State::InCall { .. } => {
-                let req = self.create_request(Method::Bye, typed::CSeq { seq: 1, method: Method::Bye }.into());
+                let req = self.create_request(Method::Bye, typed::CSeq { seq: 2, method: Method::Bye }.into());
                 self.actions.push_back(ProcessorAction::SendRequest(self.remote_contact_addr, req));
                 self.state = State::Bye {
                     timer_resend_res: now_ms + T1,
@@ -82,6 +86,20 @@ impl CallOutProcessor {
                 Ok(())
             }
             _ => Err(super::ProcessorError::WrongState),
+        }
+    }
+
+    /// Auto determine the state and send CANCEL or BYE
+    pub fn close(&mut self, now_ms: u64) {
+        match &self.state {
+            State::Connecting { .. } => {
+                self.cancel(now_ms).expect("Should ok");
+            }
+            State::InCall { .. } => {
+                self.end(now_ms).expect("Should ok");
+            }
+            State::Bye { .. } => {}
+            State::End => {}
         }
     }
 
@@ -116,27 +134,34 @@ impl CallOutProcessor {
     }
 
     fn create_request(&self, method: Method, cseq: headers::CSeq) -> SipRequest {
-        //TODO fix with real hostname
+        let via = match method {
+            Method::Cancel => self.via.clone().into(),
+            _ => rsip::headers::Via::from(format!(
+                "SIP/2.0/UDP {}:{};branch=z9hG4bK-{}",
+                self.local_contact.uri.host(),
+                self.local_contact.uri.port().unwrap_or(&(5060.into())),
+                generate_random_string(8)
+            )),
+        };
         let request = rsip::Request {
             method,
             uri: rsip::Uri {
-                scheme: Some(Scheme::Sip),
-                auth: None,
-                host_with_port: HostWithPort {
-                    host: "proxy.atm0s.live".into(),
-                    port: None,
-                },
-                params: vec![],
+                scheme: Some(rsip::Scheme::Sip),
+                auth: self.remote_to.uri.auth.clone(),
+                host_with_port: self.remote_to.uri.host_with_port.clone(),
+                params: vec![Param::Transport(rsip::Transport::Udp)],
                 headers: vec![],
             },
             version: rsip::Version::V2,
             headers: Headers::from(vec![
-                rsip::Header::Via(headers::Via::from(format!("SIP/2.0/UDP sip-proxy.8xff.live:5060;branch=z9hG4bK-{}", generate_random_string(8)))),
+                rsip::Header::Via(via),
                 rsip::Header::MaxForwards(headers::MaxForwards::from(70)),
                 rsip::Header::From(self.local_from.clone().into()),
-                rsip::Header::To(self.remote_to.clone().into()),
+                rsip::Header::To(self.res_remote_to.clone().unwrap_or_else(|| self.remote_to.clone()).into()),
                 rsip::Header::CallId(self.call_id.clone()),
                 rsip::Header::CSeq(cseq),
+                rsip::Header::Contact(self.local_contact.clone().into()),
+                rsip::Header::UserAgent(headers::UserAgent::from("8xff-sip-media-server")),
                 rsip::Header::ContentLength(headers::ContentLength::from(0)),
             ]),
             body: vec![],
@@ -146,7 +171,7 @@ impl CallOutProcessor {
 }
 
 impl Processor<CallOutProcessorAction> for CallOutProcessor {
-    fn start(&mut self, now_ms: u64) -> Result<(), ProcessorError> {
+    fn start(&mut self, _now_ms: u64) -> Result<(), ProcessorError> {
         Ok(())
     }
 
@@ -163,8 +188,9 @@ impl Processor<CallOutProcessorAction> for CallOutProcessor {
                     //TODO avoid texting error
                     self.actions.push_back(ProcessorAction::Finished(Err("TIMEOUT".to_string())));
                 } else if now_ms >= *timer_resend_res {
+                    log::warn!("[CallInProcessor] resend BYE");
                     *timer_resend_res = now_ms + T1;
-                    let req = self.create_request(Method::Bye, typed::CSeq { seq: 1, method: Method::Bye }.into());
+                    let req = self.create_request(Method::Bye, typed::CSeq { seq: 2, method: Method::Bye }.into());
                     self.actions.push_back(ProcessorAction::SendRequest(self.remote_contact_addr, req));
                 }
             }
@@ -192,6 +218,7 @@ impl Processor<CallOutProcessorAction> for CallOutProcessor {
     }
 
     fn on_res(&mut self, now_ms: u64, res: SipResponse) -> Result<(), ProcessorError> {
+        self.res_remote_to = Some(res.to.clone());
         if let Some(contact) = res.header_contact() {
             if let Some(addr) = contact.uri.host_with_port.try_into().ok() {
                 self.remote_contact_addr = Some(addr);
