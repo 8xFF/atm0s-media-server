@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
 pub struct HttpContext {
-    pub token: String,
+    pub secret: String,
     pub timer: Arc<dyn Timer>,
     pub signer: Arc<dyn SessionTokenSigner + Send + Sync>,
 }
@@ -76,7 +76,7 @@ pub struct TokenGenerateHttpApis;
 impl TokenGenerateHttpApis {
     #[oai(path = "/app/rtmp_session", method = "post")]
     async fn create_rtmp_session(&self, Data(data): Data<&DataContainer>, app_secret: Query<String>, body: Json<CreateRtmpSessionRequest>) -> Result<Json<Response<TokenInfo>>> {
-        if !app_secret.0.eq(&data.1.token) {
+        if !app_secret.0.eq(&data.1.secret) {
             return Ok(Json(Response {
                 success: false,
                 error: Some("INVALID_TOKEN".to_string()),
@@ -101,7 +101,7 @@ impl TokenGenerateHttpApis {
 
     #[oai(path = "/app/whip_session", method = "post")]
     async fn create_whip_session(&self, Data(data): Data<&DataContainer>, app_secret: Query<String>, body: Json<CreateWhipSessionRequest>) -> Result<Json<Response<TokenInfo>>> {
-        if !app_secret.0.eq(&data.1.token) {
+        if !app_secret.0.eq(&data.1.secret) {
             return Ok(Json(Response {
                 success: false,
                 error: Some("INVALID_TOKEN".to_string()),
@@ -126,7 +126,7 @@ impl TokenGenerateHttpApis {
 
     #[oai(path = "/app/whep_session", method = "post")]
     async fn create_whep_session(&self, Data(data): Data<&DataContainer>, app_secret: Query<String>, body: Json<CreateWhepSessionRequest>) -> Result<Json<Response<TokenInfo>>> {
-        if !app_secret.0.eq(&data.1.token) {
+        if !app_secret.0.eq(&data.1.secret) {
             return Ok(Json(Response {
                 success: false,
                 error: Some("INVALID_TOKEN".to_string()),
@@ -151,7 +151,7 @@ impl TokenGenerateHttpApis {
 
     #[oai(path = "/app/webrtc_session", method = "post")]
     async fn create_webrtc_session(&self, Data(data): Data<&DataContainer>, app_secret: Query<String>, body: Json<CreateWebrtcSessionRequest>) -> Result<Json<Response<TokenInfo>>> {
-        if !app_secret.0.eq(&data.1.token) {
+        if !app_secret.0.eq(&data.1.secret) {
             return Ok(Json(Response {
                 success: false,
                 error: Some("INVALID_TOKEN".to_string()),
@@ -176,7 +176,7 @@ impl TokenGenerateHttpApis {
 
     #[oai(path = "/app/sip_session", method = "post")]
     async fn create_sip_session(&self, Data(data): Data<&DataContainer>, app_secret: Query<String>, body: Json<CreateSipSessionRequest>) -> Result<Json<Response<TokenInfo>>> {
-        if !app_secret.0.eq(&data.1.token) {
+        if !app_secret.0.eq(&data.1.secret) {
             return Ok(Json(Response {
                 success: false,
                 error: Some("INVALID_TOKEN".to_string()),

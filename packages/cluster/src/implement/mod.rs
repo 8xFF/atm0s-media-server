@@ -31,7 +31,7 @@ mod tests {
             0,
             100,
             ServerSdnConfig {
-                static_key: "static_key".to_string(),
+                secret: "static_key".to_string(),
                 seeds: vec![],
             },
         )
@@ -107,7 +107,7 @@ mod tests {
             0,
             100,
             ServerSdnConfig {
-                static_key: "static_key".to_string(),
+                secret: "static_key".to_string(),
                 seeds: vec![],
             },
         )
@@ -183,7 +183,7 @@ mod tests {
             0,
             100,
             ServerSdnConfig {
-                static_key: "static_key".to_string(),
+                secret: "static_key".to_string(),
                 seeds: vec![],
             },
         )
@@ -257,7 +257,7 @@ mod tests {
             0,
             100,
             ServerSdnConfig {
-                static_key: "static_key".to_string(),
+                secret: "static_key".to_string(),
                 seeds: vec![],
             },
         )

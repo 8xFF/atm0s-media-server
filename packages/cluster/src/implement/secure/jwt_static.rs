@@ -8,9 +8,9 @@ pub struct JwtStaticToken {
 }
 
 impl JwtStaticToken {
-    pub fn new(token: &str) -> Self {
+    pub fn new(secret: &str) -> Self {
         Self {
-            key: Hmac::new_from_slice(token.as_bytes()).expect("Should create HMAC key"),
+            key: Hmac::new_from_slice(secret.as_bytes()).expect("Should create HMAC key"),
         }
     }
 }
