@@ -14,14 +14,15 @@ use poem::{
     web::{Data, Path},
     Result,
 };
+use poem_openapi::payload::Response as HttpResponse;
 use poem_openapi::{payload::Json, Object, OpenApi};
 use serde::{Deserialize, Serialize};
 
-use crate::rpc::http::HttpResponse;
+use crate::rpc::http::CustomHttpResponse;
 use crate::rpc::http::RemoteIpAddr;
 use crate::rpc::http::TokenAuthorization;
 use crate::rpc::http::UserAgent;
-use crate::rpc::http::{ApplicationSdp, RpcReqResHttp};
+use crate::rpc::http::{ApplicationSdp, ApplicationSdpPatch, RpcReqResHttp};
 use crate::server::MediaServerContext;
 
 type DataContainer = (Sender<RpcEvent>, MediaServerContext<()>);
@@ -58,7 +59,7 @@ impl GatewayHttpApis {
         RemoteIpAddr(ip_addr): RemoteIpAddr,
         TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
-    ) -> Result<HttpResponse<ApplicationSdp<String>>> {
+    ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let string_zip = StringCompression::default();
         let req = WhipConnectRequest {
             session_uuid: data.1.generate_session_uuid(),
@@ -84,7 +85,7 @@ impl GatewayHttpApis {
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
         }?;
         log::info!("[HttpApis] Whip endpoint created with conn_id {} and sdp {}", res.conn_id, sdp);
-        Ok(HttpResponse {
+        Ok(CustomHttpResponse {
             code: StatusCode::CREATED,
             res: ApplicationSdp(sdp),
             headers: vec![("location", format!("/whip/conn/{}", res.conn_id))],
@@ -93,7 +94,7 @@ impl GatewayHttpApis {
 
     /// patch whip conn for trickle-ice
     #[oai(path = "/whip/conn/:conn_id", method = "patch")]
-    async fn conn_whip_patch(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>, body: ApplicationSdp<String>) -> Result<ApplicationSdp<String>> {
+    async fn conn_whip_patch(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
         log::info!("[HttpApis] patch whip endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WebrtcPatchRequest, WebrtcPatchResponse>::new(WebrtcPatchRequest { conn_id: conn_id.0, sdp: body.0 });
         data.0
@@ -102,8 +103,13 @@ impl GatewayHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whip endpoint patch with sdp {}", res.sdp);
-        Ok(ApplicationSdp(res.sdp))
+        if let Some(sdp) = res.ice_restart_sdp {
+            log::info!("[HttpApis] Whip endpoint patch with ice_restart");
+            Ok(HttpResponse::new(ApplicationSdpPatch(sdp)))
+        } else {
+            log::info!("[HttpApis] Whip endpoint patch without ice_restart");
+            Ok(HttpResponse::new(ApplicationSdpPatch("".to_string())).status(StatusCode::NO_CONTENT))
+        }
     }
 
     // /// post whip conn for action
@@ -140,7 +146,7 @@ impl GatewayHttpApis {
         RemoteIpAddr(ip_addr): RemoteIpAddr,
         TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
-    ) -> Result<HttpResponse<ApplicationSdp<String>>> {
+    ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let string_zip = StringCompression::default();
         let req = WhepConnectRequest {
             session_uuid: data.1.generate_session_uuid(),
@@ -165,7 +171,7 @@ impl GatewayHttpApis {
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
         }?;
         log::info!("[HttpApis] Whep endpoint created with conn_id {}", res.conn_id);
-        Ok(HttpResponse {
+        Ok(CustomHttpResponse {
             code: StatusCode::CREATED,
             res: ApplicationSdp(sdp),
             headers: vec![("location", format!("/whep/conn/{}", res.conn_id))],
@@ -174,7 +180,7 @@ impl GatewayHttpApis {
 
     /// patch whep conn for trickle-ice
     #[oai(path = "/whep/conn/:conn_id", method = "patch")]
-    async fn conn_whep_patch(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>, body: ApplicationSdp<String>) -> Result<ApplicationSdp<String>> {
+    async fn conn_whep_patch(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
         log::info!("[HttpApis] patch whep endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WebrtcPatchRequest, WebrtcPatchResponse>::new(WebrtcPatchRequest { conn_id: conn_id.0, sdp: body.0 });
         data.0
@@ -183,8 +189,13 @@ impl GatewayHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whep endpoint patch with sdp {}", res.sdp);
-        Ok(ApplicationSdp(res.sdp))
+        if let Some(sdp) = res.ice_restart_sdp {
+            log::info!("[HttpApis] Whep endpoint patch with ice_restart");
+            Ok(HttpResponse::new(ApplicationSdpPatch(sdp)))
+        } else {
+            log::info!("[HttpApis] Whep endpoint patch without ice_restart");
+            Ok(HttpResponse::new(ApplicationSdpPatch("".to_string())).status(StatusCode::NO_CONTENT))
+        }
     }
 
     // /// post whep conn for action

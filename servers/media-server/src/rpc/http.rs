@@ -15,7 +15,7 @@ mod user_agent;
 
 pub use authorization::TokenAuthorization;
 pub use embeded_endpoint::EmbeddedFilesEndpoint;
-pub use payload_sdp::{ApplicationSdp, HttpResponse};
+pub use payload_sdp::{ApplicationSdp, ApplicationSdpPatch, CustomHttpResponse};
 pub use remote_ip_addr::RemoteIpAddr;
 pub use rpc_req::RpcReqResHttp;
 pub use user_agent::UserAgent;
