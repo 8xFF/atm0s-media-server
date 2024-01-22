@@ -86,13 +86,13 @@ pub struct WebrtcRemoteIceResponse {
     pub success: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct WebrtcPatchRequest {
     pub conn_id: String,
     pub sdp: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, IntoVecU8, TryFromSliceU8)]
 pub struct WebrtcPatchResponse {
-    pub sdp: String,
+    pub ice_restart_sdp: Option<String>,
 }

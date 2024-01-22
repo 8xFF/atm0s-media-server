@@ -11,10 +11,11 @@ use poem::{
     web::{Data, Path},
     Result,
 };
-use poem_openapi::{payload::Json, Object, OpenApi};
+use poem_openapi::{payload::Json, payload::Response as HttpResponse, Object, OpenApi};
 use serde::{Deserialize, Serialize};
 
-use crate::rpc::http::{ApplicationSdp, HttpResponse, RemoteIpAddr, RpcReqResHttp, TokenAuthorization, UserAgent};
+use crate::rpc::http::ApplicationSdpPatch;
+use crate::rpc::http::{ApplicationSdp, CustomHttpResponse, RemoteIpAddr, RpcReqResHttp, TokenAuthorization, UserAgent};
 use crate::server::webrtc::InternalControl;
 use crate::server::MediaServerContext;
 
@@ -54,7 +55,7 @@ impl WebrtcHttpApis {
         RemoteIpAddr(ip_addr): RemoteIpAddr,
         TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
-    ) -> Result<HttpResponse<ApplicationSdp<String>>> {
+    ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         if let Some(s_token) = data.1.verifier().verify_media_session(&token.token) {
             if !s_token.protocol.eq(&cluster::rpc::general::MediaSessionProtocol::Whip) {
                 return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
@@ -86,7 +87,7 @@ impl WebrtcHttpApis {
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
         }?;
         log::info!("[HttpApis] Whip endpoint created with conn_id {}", res.conn_id);
-        Ok(HttpResponse {
+        Ok(CustomHttpResponse {
             code: StatusCode::CREATED,
             res: ApplicationSdp(sdp),
             headers: vec![("location", format!("/whip/conn/{}", res.conn_id))],
@@ -95,7 +96,7 @@ impl WebrtcHttpApis {
 
     /// patch whip conn for trickle-ice
     #[oai(path = "/whip/conn/:conn_id", method = "patch")]
-    async fn conn_whip_patch(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>, body: ApplicationSdp<String>) -> Result<ApplicationSdp<String>> {
+    async fn conn_whip_patch(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
         log::info!("[HttpApis] patch whip endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WebrtcPatchRequest, WebrtcPatchResponse>::new(WebrtcPatchRequest { conn_id: conn_id.0, sdp: body.0 });
         data.0
@@ -104,8 +105,13 @@ impl WebrtcHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whip endpoint patch with sdp {}", res.sdp);
-        Ok(ApplicationSdp(res.sdp))
+        if let Some(sdp) = res.ice_restart_sdp {
+            log::info!("[HttpApis] Whip endpoint patch with ice_restart");
+            Ok(HttpResponse::new(ApplicationSdpPatch(sdp)))
+        } else {
+            log::info!("[HttpApis] Whip endpoint patch without ice_restart");
+            Ok(HttpResponse::new(ApplicationSdpPatch("".to_string())).status(StatusCode::NO_CONTENT))
+        }
     }
 
     // /// post whip conn for action
@@ -142,7 +148,7 @@ impl WebrtcHttpApis {
         RemoteIpAddr(ip_addr): RemoteIpAddr,
         TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
-    ) -> Result<HttpResponse<ApplicationSdp<String>>> {
+    ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let s_token = if let Some(s_token) = data.1.verifier().verify_media_session(&token.token) {
             if !s_token.protocol.eq(&cluster::rpc::general::MediaSessionProtocol::Whep) {
                 return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
@@ -175,7 +181,7 @@ impl WebrtcHttpApis {
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
         }?;
         log::info!("[HttpApis] Whep endpoint created with conn_id {}", res.conn_id);
-        Ok(HttpResponse {
+        Ok(CustomHttpResponse {
             code: StatusCode::CREATED,
             res: ApplicationSdp(sdp),
             headers: vec![("location", format!("/whep/conn/{}", res.conn_id))],
@@ -184,7 +190,7 @@ impl WebrtcHttpApis {
 
     /// patch whep conn for trickle-ice
     #[oai(path = "/whep/conn/:conn_id", method = "patch")]
-    async fn conn_whep_patch(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>, body: ApplicationSdp<String>) -> Result<ApplicationSdp<String>> {
+    async fn conn_whep_patch(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
         log::info!("[HttpApis] patch whep endpoint with sdp {}", body.0);
         let (req, rx) = RpcReqResHttp::<WebrtcPatchRequest, WebrtcPatchResponse>::new(WebrtcPatchRequest { conn_id: conn_id.0, sdp: body.0 });
         data.0
@@ -193,8 +199,13 @@ impl WebrtcHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!("[HttpApis] Whep endpoint patch with sdp {}", res.sdp);
-        Ok(ApplicationSdp(res.sdp))
+        if let Some(sdp) = res.ice_restart_sdp {
+            log::info!("[HttpApis] Whep endpoint patch with ice_restart");
+            Ok(HttpResponse::new(ApplicationSdpPatch(sdp)))
+        } else {
+            log::info!("[HttpApis] Whep endpoint patch without ice_restart");
+            Ok(HttpResponse::new(ApplicationSdpPatch("".to_string())).status(StatusCode::NO_CONTENT))
+        }
     }
 
     // /// post whep conn for action

@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use cluster::rpc::webrtc::{WebrtcConnectRequestSender, WebrtcRemoteIceResponse};
+use cluster::rpc::webrtc::{WebrtcConnectRequestSender, WebrtcPatchResponse, WebrtcRemoteIceResponse};
 use endpoint::{
     rpc::{LocalTrackRpcIn, LocalTrackRpcOut, RemoteTrackRpcIn, RemoteTrackRpcOut},
     EndpointRpcIn, EndpointRpcOut,
@@ -22,7 +22,10 @@ use self::{
     track_info_queue::TrackInfoQueue,
     utils::to_transport_kind,
 };
-use crate::{transport::internal::rpc::rpc_internal_to_string, TransportLifeCycle};
+use crate::{
+    transport::internal::{rpc::rpc_internal_to_string, utils::sdp_patch_to_ices},
+    TransportLifeCycle,
+};
 
 use super::WebrtcTransportEvent;
 
@@ -186,7 +189,13 @@ where
                 self.str0m_actions.push_back(Str0mAction::RemoteIce(req.param().candidate.clone()));
                 req.answer(Ok(WebrtcRemoteIceResponse { success: true }));
             }
-            WebrtcTransportEvent::SdpPatch(req) => req.answer(Err("NOT_IMPLEMENTED")),
+            WebrtcTransportEvent::SdpPatch(req) => {
+                let sdp_str = req.param().sdp.as_str();
+                for ice in sdp_patch_to_ices(sdp_str) {
+                    self.str0m_actions.push_back(Str0mAction::RemoteIce(ice));
+                }
+                req.answer(Ok(WebrtcPatchResponse { ice_restart_sdp: None }));
+            }
         }
         Ok(())
     }
