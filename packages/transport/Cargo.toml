@@ -12,4 +12,4 @@ media-utils = { package = "atm0s-media-server-utils", path = "../media-utils", v
 async-trait = { workspace = true }
 async-std = { workspace = true }
 serde = { workspace = true }
-poem-openapi = { version = "3.0" }
+poem-openapi = { version = "4.0" }

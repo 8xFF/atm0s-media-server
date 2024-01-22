@@ -14,7 +14,7 @@ proc-macro = { package = "atm0s-media-server-proc-macro", path = "../proc-macro"
 atm0s-sdn = { version = "0.1.6", features = ["all"], optional = true  }
 async-trait = { workspace = true }
 serde = { workspace = true }
-poem-openapi = { version = "3.0" }
+poem-openapi = { version = "4.0" }
 bincode = { version = "1" }
 protocol = { package = "atm0s-media-server-protocol", path = "../protocol", version = "0.1.0" }
 
