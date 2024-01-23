@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use media_utils::F32;
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +16,8 @@ pub struct ServiceInfo {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, IntoVecU8, TryFromSliceU8)]
 pub struct NodePing {
     pub node_id: u32,
+    pub group: String,
+    pub location: Option<(F32<2>, F32<2>)>,
     pub webrtc: Option<ServiceInfo>,
     pub rtmp: Option<ServiceInfo>,
     pub sip: Option<ServiceInfo>,

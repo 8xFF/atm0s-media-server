@@ -8,7 +8,7 @@ mod server;
 use cluster::{
     atm0s_sdn::SystemTimer,
     implement::{NodeAddr, NodeId, ServerSdn, ServerSdnConfig},
-    CONNECTOR_SERVICE, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    CONNECTOR_SERVICE, GLOBAL_GATEWAY_SERVICE, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
 };
 
 #[cfg(feature = "connector")]
@@ -25,6 +25,8 @@ use server::token_generate::run_token_generate_server;
 use server::webrtc::run_webrtc_server;
 
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+use crate::server::gateway::GatewayMode;
 
 /// Media Server
 #[derive(Parser, Debug)]
@@ -99,7 +101,11 @@ async fn main() {
             use server::MediaServerContext;
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::<()>::new(args.node_id, 0, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, INNER_GATEWAY_SERVICE, config).await;
+            let rpc_service_id = match opts.mode {
+                GatewayMode::Inner => INNER_GATEWAY_SERVICE,
+                GatewayMode::Global => GLOBAL_GATEWAY_SERVICE,
+            };
+            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, rpc_service_id, config).await;
             if let Err(e) = run_gateway_server(args.http_port, args.http_tls, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[GatewayServer] error {}", e);
             }

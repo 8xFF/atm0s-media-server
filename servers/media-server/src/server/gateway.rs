@@ -3,15 +3,17 @@ use std::{sync::Arc, time::Duration};
 use async_std::stream::StreamExt;
 use clap::Parser;
 use cluster::{
+    implement::NodeId,
     rpc::{
+        gateway::{NodePing, NodePong},
         general::{MediaEndpointCloseRequest, MediaEndpointCloseResponse, NodeInfo, ServerType},
         webrtc::{WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
-        RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT,
+        RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_NODE_PING, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT,
     },
-    Cluster, ClusterEndpoint, MEDIA_SERVER_SERVICE,
+    Cluster, ClusterEndpoint, GLOBAL_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
 };
 use futures::{select, FutureExt};
-use media_utils::{SystemTimer, Timer};
+use media_utils::{SystemTimer, Timer, F32};
 use metrics::describe_counter;
 use metrics_dashboard::build_dashboard_route;
 use poem::{web::Json, Route};
@@ -37,6 +39,7 @@ use self::{
     rpc::{cluster::GatewayClusterRpc, http::GatewayHttpApis, RpcEvent},
 };
 
+pub use self::logic::GatewayMode;
 use super::MediaServerContext;
 
 mod logic;
@@ -49,9 +52,25 @@ const GATEWAY_SESSIONS_CONNECT_ERROR: &str = "gateway.sessions.connect.error";
 /// Media Server Webrtc
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
-pub struct GatewayArgs {}
+pub struct GatewayArgs {
+    /// Gateway mode
+    #[arg(value_enum, env, long, default_value_t = GatewayMode::Inner)]
+    pub mode: GatewayMode,
 
-pub async fn run_gateway_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, http_tls: bool, _opts: GatewayArgs, ctx: MediaServerContext<()>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
+    /// Gateway group, only set if mode is Inner
+    #[arg(env, long, default_value = "")]
+    pub group: String,
+
+    /// lat location
+    #[arg(env, long, default_value_t = 0.0)]
+    pub lat: f32,
+
+    /// lng location
+    #[arg(env, long, default_value_t = 0.0)]
+    pub lng: f32,
+}
+
+pub async fn run_gateway_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, http_tls: bool, opts: GatewayArgs, ctx: MediaServerContext<()>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
 where
     C: Cluster<CR> + Send + 'static,
     CR: ClusterEndpoint + Send + 'static,
@@ -89,8 +108,9 @@ where
 
     http_server.start(route, ctx.clone()).await;
     let mut tick = async_std::stream::interval(Duration::from_millis(100));
-    let mut gateway_logic = GatewayLogic::new();
+    let mut gateway_logic = GatewayLogic::new(opts.mode);
     let rpc_emitter = rpc_endpoint.emitter();
+    let mut gateway_feedback_tick = async_std::stream::interval(Duration::from_millis(2000));
 
     loop {
         let rpc = select! {
@@ -98,6 +118,13 @@ where
                 gateway_logic.on_tick(timer.now_ms());
                 continue;
             }
+            _ = gateway_feedback_tick.next().fuse() => {
+                if matches!(opts.mode, GatewayMode::Inner) {
+                    ping_global_gateway(&gateway_logic, &opts.group, (F32::<2>::new(opts.lat), F32::<2>::new(opts.lng)), node_id, &rpc_emitter);
+                }
+
+                continue;
+            },
             rpc = http_server.recv().fuse() => {
                 rpc.ok_or("HTTP_SERVER_ERROR")?
             },
@@ -200,4 +227,23 @@ where
             }
         }
     }
+}
+
+fn ping_global_gateway<EMITTER: RpcEmitter + Send + 'static>(logic: &GatewayLogic, group: &str, location: (F32<2>, F32<2>), node_id: NodeId, rpc_emitter: &EMITTER) {
+    let stats = logic.stats();
+    let req = NodePing {
+        node_id,
+        group: group.to_string(),
+        location: Some(location),
+        rtmp: stats.rtmp,
+        sip: stats.sip,
+        webrtc: stats.webrtc,
+    };
+
+    let rpc_emitter = rpc_emitter.clone();
+    async_std::task::spawn(async move {
+        if let Err(e) = rpc_emitter.request::<_, NodePong>(GLOBAL_GATEWAY_SERVICE, None, RPC_NODE_PING, req, 1000).await {
+            log::error!("[Gateway] ping global gateway error {:?}", e);
+        }
+    });
 }

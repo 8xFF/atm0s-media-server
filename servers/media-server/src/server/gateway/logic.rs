@@ -1,13 +1,27 @@
 use std::collections::HashMap;
 
+use clap::ValueEnum;
 use cluster::{
     implement::NodeId,
-    rpc::gateway::{NodePing, NodePong},
+    rpc::gateway::{NodePing, NodePong, ServiceInfo},
 };
+use media_utils::F32;
 
-use self::service::ServiceRegistry;
+mod global_registry;
+mod inner_registry;
 
-mod service;
+trait ServiceRegistry {
+    fn on_tick(&mut self, now_ms: u64);
+    fn on_ping(&mut self, now_ms: u64, group: &str, location: Option<(F32<2>, F32<2>)>, node_id: NodeId, usage: u8, live: u32, max: u32);
+    fn best_nodes(&mut self, location: Option<(F32<2>, F32<2>)>, max_usage: u8, max_usage_fallback: u8, size: usize) -> Vec<NodeId>;
+    fn stats(&self) -> ServiceInfo;
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug)]
+pub enum GatewayMode {
+    Global,
+    Inner,
+}
 
 /// Represents the type of service.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
@@ -17,15 +31,22 @@ pub enum ServiceType {
     Sip,
 }
 
+pub struct GatewayStats {
+    pub rtmp: Option<ServiceInfo>,
+    pub sip: Option<ServiceInfo>,
+    pub webrtc: Option<ServiceInfo>,
+}
+
 /// Represents the gateway logic for handling node pings and managing services.
 pub struct GatewayLogic {
-    services: HashMap<ServiceType, ServiceRegistry>,
+    mode: GatewayMode,
+    services: HashMap<ServiceType, Box<dyn ServiceRegistry>>,
 }
 
 impl GatewayLogic {
     /// Creates a new instance of `GatewayLogic`.
-    pub fn new() -> Self {
-        Self { services: Default::default() }
+    pub fn new(mode: GatewayMode) -> Self {
+        Self { mode, services: Default::default() }
     }
 
     /// Handles the tick event.
@@ -47,13 +68,13 @@ impl GatewayLogic {
     /// A `NodePong` struct with a success flag indicating the success of the ping operation.
     pub fn on_ping(&mut self, now_ms: u64, ping: &NodePing) -> NodePong {
         if let Some(meta) = &ping.webrtc {
-            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Webrtc, meta.usage, meta.live, meta.max);
+            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Webrtc, &ping.group, ping.location, meta.usage, meta.live, meta.max);
         }
         if let Some(meta) = &ping.rtmp {
-            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Rtmp, meta.usage, meta.live, meta.max);
+            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Rtmp, &ping.group, ping.location, meta.usage, meta.live, meta.max);
         }
         if let Some(meta) = &ping.sip {
-            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Sip, meta.usage, meta.live, meta.max);
+            self.on_node_ping_service(now_ms, ping.node_id, ServiceType::Sip, &ping.group, ping.location, meta.usage, meta.live, meta.max);
         }
         NodePong { success: true }
     }
@@ -70,8 +91,11 @@ impl GatewayLogic {
     /// # Returns
     ///
     /// A vector of `NodeId` representing the best nodes for the service.
-    pub fn best_nodes(&mut self, service: ServiceType, max_usage: u8, max_usage_fallback: u8, size: usize) -> Vec<NodeId> {
-        self.services.get_mut(&service).map(|s| s.best_nodes(max_usage, max_usage_fallback, size)).unwrap_or_else(|| vec![])
+    pub fn best_nodes(&mut self, location: Option<(F32<2>, F32<2>)>, service: ServiceType, max_usage: u8, max_usage_fallback: u8, size: usize) -> Vec<NodeId> {
+        self.services
+            .get_mut(&service)
+            .map(|s| s.best_nodes(location, max_usage, max_usage_fallback, size))
+            .unwrap_or_else(|| vec![])
     }
 
     /// Handles the ping event for a specific service of a node.
@@ -83,9 +107,34 @@ impl GatewayLogic {
     /// * `service` - The type of service.
     /// * `usage` - The usage value.
     /// * `max` - The maximum value.
-    fn on_node_ping_service(&mut self, now_ms: u64, node_id: NodeId, service: ServiceType, usage: u8, live: u32, max: u32) {
-        let service = self.services.entry(service).or_insert_with(move || ServiceRegistry::new(service));
-        service.on_ping(now_ms, node_id, usage, live, max);
+    fn on_node_ping_service(&mut self, now_ms: u64, node_id: NodeId, service: ServiceType, group: &str, location: Option<(F32<2>, F32<2>)>, usage: u8, live: u32, max: u32) {
+        let service = self.services.entry(service).or_insert_with(|| match self.mode {
+            GatewayMode::Global => Box::new(global_registry::ServiceGlobalRegistry::new(service)),
+            GatewayMode::Inner => Box::new(inner_registry::ServiceInnerRegistry::new(service)),
+        });
+        service.on_ping(now_ms, group, location, node_id, usage, live, max);
+    }
+
+    /// Returns the statistics for the gateway server.
+    ///
+    /// # Returns
+    ///
+    /// A `GatewayStats` struct containing the statistics for each service.
+    pub fn stats(&self) -> GatewayStats {
+        let rtmp = None;
+        let sip = None;
+        let mut webrtc = None;
+
+        for (service, registry) in &self.services {
+            match service {
+                ServiceType::Webrtc => webrtc = Some(registry.stats()),
+                // ServiceType::Rtmp => rtmp = Some(registry.stats()), //TODO support rtmp
+                // ServiceType::Sip => sip = Some(registry.stats()), //TODO support sip
+                _ => {}
+            }
+        }
+
+        GatewayStats { rtmp, sip, webrtc }
     }
 }
 
@@ -93,25 +142,27 @@ impl GatewayLogic {
 mod tests {
     use cluster::rpc::gateway::{NodePing, ServiceInfo};
 
-    use crate::server::gateway::logic::GatewayLogic;
+    use crate::server::gateway::logic::{GatewayLogic, GatewayMode};
 
     #[test]
     fn test_gateway_logic_creation() {
-        let gateway_logic = GatewayLogic::new();
+        let gateway_logic = GatewayLogic::new(GatewayMode::Inner);
         assert_eq!(gateway_logic.services.len(), 0);
     }
 
     #[test]
     fn test_on_tick_without_services() {
-        let mut gateway_logic = GatewayLogic::new();
+        let mut gateway_logic = GatewayLogic::new(GatewayMode::Inner);
         gateway_logic.on_tick(0);
     }
 
     #[test]
     fn test_on_ping_with_valid_node_ping() {
-        let mut gateway_logic = GatewayLogic::new();
+        let mut gateway_logic = GatewayLogic::new(GatewayMode::Inner);
         let node_ping = NodePing {
             node_id: 1,
+            group: "".to_string(),
+            location: None,
             webrtc: Some(ServiceInfo {
                 usage: 50,
                 live: 50,
@@ -136,9 +187,11 @@ mod tests {
 
     #[test]
     fn test_on_ping_with_no_services() {
-        let mut gateway_logic = GatewayLogic::new();
+        let mut gateway_logic = GatewayLogic::new(GatewayMode::Inner);
         let node_ping = NodePing {
             node_id: 1,
+            group: "".to_string(),
+            location: None,
             webrtc: None,
             rtmp: None,
             sip: None,

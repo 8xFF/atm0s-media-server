@@ -10,7 +10,7 @@ use cluster::{
     CONNECTOR_SERVICE, MEDIA_SERVER_SERVICE,
 };
 use futures::FutureExt as _;
-use media_utils::{ErrorDebugger, Timer};
+use media_utils::{ErrorDebugger, Timer, F32};
 use metrics::increment_counter;
 use protocol::media_event_logs::{
     session_event::{SessionRouted, SessionRouting, SessionRoutingError},
@@ -93,10 +93,10 @@ pub fn route_to_node<EMITTER, Req, Res>(
     version: &Option<String>,
     user_agent: &str,
     session_uuid: u64,
-    req: Box<dyn RpcReqRes<Req, Res> + Sync>,
+    req: Box<dyn RpcReqRes<Req, Res>>,
 ) where
     EMITTER: RpcEmitter + Send + Sync + 'static,
-    Req: Into<Vec<u8>> + Send + Sync + Clone + 'static,
+    Req: Into<Vec<u8>> + Send + Clone + 'static,
     Res: for<'a> TryFrom<&'a [u8]> + Send + 'static,
 {
     increment_counter!(GATEWAY_SESSIONS_CONNECT_COUNT);
@@ -107,17 +107,19 @@ pub fn route_to_node<EMITTER, Req, Res>(
     });
     emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
 
-    let nodes = gateway_logic.best_nodes(service, 60, 80, 3);
+    let location = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
+    let nodes = gateway_logic.best_nodes(location, service, 60, 80, 3);
     if !nodes.is_empty() {
         let rpc_emitter = emitter.clone();
         let ip: String = ip.to_string();
         let version = version.clone();
+        let param = req.param().clone();
         async_std::task::spawn(async move {
             log::info!("[Gateway] connect => ping nodes {:?}", nodes);
             let node_id = select_node(&rpc_emitter, &nodes).await;
             if let Some(node_id) = node_id {
                 log::info!("[Gateway] connect with selected node {:?}", node_id);
-                let res = rpc_emitter.request::<Req, Res>(MEDIA_SERVER_SERVICE, Some(node_id), cmd, req.param().clone(), 5000).await;
+                let res = rpc_emitter.request::<Req, Res>(MEDIA_SERVER_SERVICE, Some(node_id), cmd, param, 5000).await;
                 log::info!("[Gateway] webrtc connect res from media-server {:?}", res.as_ref().map(|_| ()));
                 let event = if res.is_err() {
                     increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
