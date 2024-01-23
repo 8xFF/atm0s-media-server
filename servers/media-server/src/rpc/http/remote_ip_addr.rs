@@ -1,9 +1,9 @@
-use std::ops::Deref;
+use std::{net::IpAddr, ops::Deref};
 
 use poem::{http::StatusCode, FromRequest, Request, RequestBody, Result};
 
 #[derive(Debug)]
-pub struct RemoteIpAddr(pub String);
+pub struct RemoteIpAddr(pub IpAddr);
 
 #[poem::async_trait]
 impl<'a> FromRequest<'a> for RemoteIpAddr {
@@ -12,14 +12,14 @@ impl<'a> FromRequest<'a> for RemoteIpAddr {
         if let Some(remote_addr) = headers.get("X-Forwarded-For") {
             let remote_addr = remote_addr.to_str().map_err(|_| poem::Error::from_string("Bad Request", StatusCode::BAD_REQUEST))?;
             let remote_addr = remote_addr.split(',').next().ok_or(poem::Error::from_string("Bad Request", StatusCode::BAD_REQUEST))?;
-            return Ok(RemoteIpAddr(remote_addr.into()));
+            return Ok(RemoteIpAddr(remote_addr.parse().unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST))));
         } else if let Some(remote_addr) = headers.get("X-Real-IP") {
             let remote_addr = remote_addr.to_str().map_err(|_| poem::Error::from_string("Bad Request", StatusCode::BAD_REQUEST))?;
-            return Ok(RemoteIpAddr(remote_addr.into()));
+            return Ok(RemoteIpAddr(remote_addr.parse().unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST))));
         } else {
             match req.remote_addr().deref() {
                 poem::Addr::SocketAddr(addr) => {
-                    return Ok(RemoteIpAddr(addr.ip().to_string()));
+                    return Ok(RemoteIpAddr(addr.ip()));
                 }
                 _ => {
                     return Err(poem::Error::from_string("Bad Request", StatusCode::BAD_REQUEST));

@@ -42,6 +42,7 @@ use self::{
 pub use self::logic::GatewayMode;
 use super::MediaServerContext;
 
+mod ip2location;
 mod logic;
 mod rpc;
 mod webrtc_route;
@@ -68,6 +69,10 @@ pub struct GatewayArgs {
     /// lng location
     #[arg(env, long, default_value_t = 0.0)]
     pub lng: f32,
+
+    /// maxmind geo-ip db file
+    #[arg(env, long, default_value = "./maxminddb-data/GeoLite2-City.mmdb")]
+    pub geoip_db: String,
 }
 
 pub async fn run_gateway_server<C, CR, RPC, REQ, EMITTER>(http_port: u16, http_tls: bool, opts: GatewayArgs, ctx: MediaServerContext<()>, cluster: C, rpc_endpoint: RPC) -> Result<(), &'static str>
@@ -81,6 +86,10 @@ where
     let node_id = cluster.node_id();
     let mut rpc_endpoint = GatewayClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
+    let ip2location = match opts.mode {
+        GatewayMode::Global => Some(ip2location::Ip2Location::new(&opts.geoip_db)),
+        GatewayMode::Inner => None,
+    };
 
     let timer = Arc::new(SystemTimer());
     let api_service = OpenApiService::new(GatewayHttpApis, "Gateway Server", "1.0.0").server("http://localhost:3000");
@@ -140,6 +149,7 @@ where
             }
             RpcEvent::WhipConnect(req) => {
                 log::info!("[Gateway] whip connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
+                let location = ip2location.as_ref().map(|f| f.get_location(&req.param().ip_addr)).flatten();
                 webrtc_route::route_to_node(
                     rpc_emitter.clone(),
                     timer.clone(),
@@ -147,7 +157,8 @@ where
                     node_id,
                     ServiceType::Webrtc,
                     RPC_WHIP_CONNECT,
-                    &req.param().ip_addr.clone(),
+                    req.param().ip_addr,
+                    location,
                     &None,
                     &req.param().user_agent.clone(),
                     req.param().session_uuid,
@@ -156,6 +167,7 @@ where
             }
             RpcEvent::WhepConnect(req) => {
                 log::info!("[Gateway] whep connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
+                let location = ip2location.as_ref().map(|f| f.get_location(&req.param().ip_addr)).flatten();
                 webrtc_route::route_to_node(
                     rpc_emitter.clone(),
                     timer.clone(),
@@ -163,7 +175,8 @@ where
                     node_id,
                     ServiceType::Webrtc,
                     RPC_WHEP_CONNECT,
-                    &req.param().ip_addr.clone(),
+                    req.param().ip_addr,
+                    location,
                     &None,
                     &req.param().user_agent.clone(),
                     req.param().session_uuid,
@@ -172,6 +185,7 @@ where
             }
             RpcEvent::WebrtcConnect(req) => {
                 log::info!("[Gateway] webrtc connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
+                let location = ip2location.as_ref().map(|f| f.get_location(&req.param().ip_addr)).flatten();
                 webrtc_route::route_to_node(
                     rpc_emitter.clone(),
                     timer.clone(),
@@ -179,10 +193,11 @@ where
                     node_id,
                     ServiceType::Webrtc,
                     RPC_WEBRTC_CONNECT,
-                    &req.param().ip_addr.clone().expect(""),
+                    req.param().ip_addr,
+                    location,
                     &req.param().version.clone(),
-                    &req.param().user_agent.clone().expect(""),
-                    req.param().session_uuid.expect(""),
+                    &req.param().user_agent.clone(),
+                    req.param().session_uuid.expect("Should assign session_uuid on gateway"),
                     req,
                 );
             }

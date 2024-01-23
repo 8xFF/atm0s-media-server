@@ -238,8 +238,8 @@ impl GatewayHttpApis {
             body.0.compressed_sdp = Some(string_zip.compress(&sdp));
         }
         body.0.session_uuid = Some(data.1.generate_session_uuid());
-        body.0.ip_addr = Some(ip_addr);
-        body.0.user_agent = Some(user_agent);
+        body.0.ip_addr = ip_addr;
+        body.0.user_agent = user_agent;
 
         if body.0.verify(data.1.verifier().deref()).is_none() {
             return Ok(Json(Response {

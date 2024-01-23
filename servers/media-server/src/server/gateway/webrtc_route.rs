@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::IpAddr, sync::Arc};
 
 use cluster::{
     implement::NodeId,
@@ -89,7 +89,8 @@ pub fn route_to_node<EMITTER, Req, Res>(
     gateway_node_id: NodeId,
     service: ServiceType,
     cmd: &'static str,
-    ip: &str,
+    ip: IpAddr,
+    location: Option<(F32<2>, F32<2>)>,
     version: &Option<String>,
     user_agent: &str,
     session_uuid: u64,
@@ -105,9 +106,8 @@ pub fn route_to_node<EMITTER, Req, Res>(
         user_agent: user_agent.to_string(),
         gateway_node_id,
     });
-    emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
+    emit_endpoint_event(&emitter, &timer, session_uuid, &ip.to_string(), version, event);
 
-    let location = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
     let nodes = gateway_logic.best_nodes(location, service, 60, 80, 3);
     if !nodes.is_empty() {
         let rpc_emitter = emitter.clone();
@@ -157,7 +157,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
             media_node_ids: vec![],
         });
 
-        emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
+        emit_endpoint_event(&emitter, &timer, session_uuid, &ip.to_string(), version, event);
 
         log::warn!("[Gateway] webrtc connect but media-server pool empty");
         req.answer(Err("NODE_POOL_EMPTY"));

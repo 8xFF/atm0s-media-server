@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, net::IpAddr};
 
 use crate::{ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MediaSessionToken, VerifyObject};
 
@@ -26,8 +26,8 @@ pub struct WebrtcConnectRequestSender {
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct WebrtcConnectRequest {
     pub session_uuid: Option<u64>,
-    pub ip_addr: Option<String>,
-    pub user_agent: Option<String>,
+    pub ip_addr: IpAddr,
+    pub user_agent: String,
     pub version: Option<String>,
     pub room: String,
     pub peer: String,
