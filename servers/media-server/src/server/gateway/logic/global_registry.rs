@@ -254,6 +254,6 @@ mod tests {
     fn test_distance_function() {
         let from = (F32::<2>::new(0.0), F32::<2>::new(0.0));
         let to = (F32::<2>::new(1.0), F32::<2>::new(1.0));
-        assert_eq!(lat_lng_distance(&from, &to), 157.24939);
+        assert_eq!(F32::<2>::new(lat_lng_distance(&from, &to)), F32::<2>::new(157.24939));
     }
 }
