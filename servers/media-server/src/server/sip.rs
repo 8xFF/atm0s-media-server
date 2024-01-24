@@ -64,7 +64,7 @@ where
     let rpc_endpoint = SipClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
 
-    let api_service = OpenApiService::new(SipHttpApis, "Sip Server", "1.0.0").server("/");
+    let api_service = OpenApiService::new(SipHttpApis, "Sip Server", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
     let node_info = NodeInfo {

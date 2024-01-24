@@ -33,6 +33,8 @@ pub(crate) enum NodeSdkEvent {
 pub struct ServerSdnConfig {
     pub secret: String,
     pub seeds: Vec<NodeAddr>,
+    pub local_tags: Vec<String>,
+    pub connect_tags: Vec<String>,
 }
 
 compose_transport!(UdpTcpTransport, udp: UdpTransport, tcp: TcpTransport);
@@ -64,8 +66,8 @@ impl ServerSdn {
         let manual = ManualBehavior::new(ManualBehaviorConf {
             node_id,
             node_addr: node_addr_builder.addr(),
-            local_tags: vec!["media-server".to_string()],
-            connect_tags: vec!["inner-gateway".to_string()],
+            local_tags: config.local_tags,
+            connect_tags: config.connect_tags,
             seeds: config.seeds,
         });
 

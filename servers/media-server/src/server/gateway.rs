@@ -5,12 +5,12 @@ use clap::Parser;
 use cluster::{
     implement::NodeId,
     rpc::{
-        gateway::{NodePing, NodePong},
-        general::{MediaEndpointCloseRequest, MediaEndpointCloseResponse, NodeInfo, ServerType},
+        gateway::{NodePing, NodePong, QueryBestNodesResponse},
+        general::{MediaEndpointCloseRequest, MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         webrtc::{WebrtcPatchRequest, WebrtcPatchResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_MEDIA_ENDPOINT_CLOSE, RPC_NODE_PING, RPC_WEBRTC_CONNECT, RPC_WEBRTC_ICE, RPC_WEBRTC_PATCH, RPC_WHEP_CONNECT, RPC_WHIP_CONNECT,
     },
-    Cluster, ClusterEndpoint, GLOBAL_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    Cluster, ClusterEndpoint, GLOBAL_GATEWAY_SERVICE, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{SystemTimer, Timer, F32};
@@ -92,7 +92,7 @@ where
     };
 
     let timer = Arc::new(SystemTimer());
-    let api_service = OpenApiService::new(GatewayHttpApis, "Gateway Server", "1.0.0").server("http://localhost:3000");
+    let api_service = OpenApiService::new(GatewayHttpApis, "Gateway Server", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
     let node_info = NodeInfo {
@@ -120,6 +120,10 @@ where
     let mut gateway_logic = GatewayLogic::new(opts.mode);
     let rpc_emitter = rpc_endpoint.emitter();
     let mut gateway_feedback_tick = async_std::stream::interval(Duration::from_millis(2000));
+    let dest_service_id = match opts.mode {
+        GatewayMode::Global => INNER_GATEWAY_SERVICE,
+        GatewayMode::Inner => MEDIA_SERVER_SERVICE,
+    };
 
     loop {
         let rpc = select! {
@@ -147,6 +151,23 @@ where
                 log::info!("[Gateway] node ping {:?}", req.param());
                 req.answer(Ok(gateway_logic.on_ping(timer.now_ms(), req.param())));
             }
+            RpcEvent::BestNodest(req) => {
+                log::info!("[Gateway] best nodes {:?}", req.param());
+                let nodes = gateway_logic.best_nodes(
+                    ip2location.as_ref().map(|f| f.get_location(&req.param().ip_addr)).flatten(),
+                    match req.param().protocol {
+                        MediaSessionProtocol::Rtmp => ServiceType::Rtmp,
+                        MediaSessionProtocol::Sip => ServiceType::Sip,
+                        MediaSessionProtocol::Webrtc => ServiceType::Webrtc,
+                        MediaSessionProtocol::Whip => ServiceType::Webrtc,
+                        MediaSessionProtocol::Whep => ServiceType::Webrtc,
+                    },
+                    60,
+                    80,
+                    req.param().size,
+                );
+                req.answer(Ok(QueryBestNodesResponse { nodes }));
+            }
             RpcEvent::WhipConnect(req) => {
                 log::info!("[Gateway] whip connect compressed_sdp: {:?}", req.param().compressed_sdp.as_ref().map(|sdp| sdp.len()));
                 let location = ip2location.as_ref().map(|f| f.get_location(&req.param().ip_addr)).flatten();
@@ -163,6 +184,7 @@ where
                     &req.param().user_agent.clone(),
                     req.param().session_uuid,
                     req,
+                    dest_service_id,
                 );
             }
             RpcEvent::WhepConnect(req) => {
@@ -181,6 +203,7 @@ where
                     &req.param().user_agent.clone(),
                     req.param().session_uuid,
                     req,
+                    dest_service_id,
                 );
             }
             RpcEvent::WebrtcConnect(req) => {
@@ -199,6 +222,7 @@ where
                     &req.param().user_agent.clone(),
                     req.param().session_uuid.expect("Should assign session_uuid on gateway"),
                     req,
+                    dest_service_id,
                 );
             }
             RpcEvent::WebrtcRemoteIce(req) => {

@@ -44,6 +44,10 @@ struct Args {
     #[arg(env, long, default_value_t = 0)]
     sdn_port: u16,
 
+    /// Sdn group
+    #[arg(env, long, default_value = "local")]
+    sdn_group: String,
+
     /// Current Node ID
     #[arg(env, long, default_value_t = 1)]
     node_id: NodeId,
@@ -83,9 +87,11 @@ async fn main() {
     }
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-    let config = ServerSdnConfig {
+    let mut config = ServerSdnConfig {
         secret: args.secret.clone(),
         seeds: args.seeds,
+        local_tags: vec![],
+        connect_tags: vec![],
     };
 
     match args.server {
@@ -99,6 +105,17 @@ async fn main() {
         #[cfg(feature = "gateway")]
         Servers::Gateway(opts) => {
             use server::MediaServerContext;
+            match opts.mode {
+                GatewayMode::Global => {
+                    config.local_tags = vec!["gateway-global".to_string()];
+                    config.connect_tags = vec!["gateway-global".to_string()];
+                }
+                GatewayMode::Inner => {
+                    config.local_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+                    config.connect_tags = vec!["gateway-global".to_string(), format!("gateway-inner-{}", args.sdn_group)];
+                }
+            }
+
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::<()>::new(args.node_id, 0, Arc::new(SystemTimer()), token.clone(), token);
             let rpc_service_id = match opts.mode {
@@ -113,6 +130,9 @@ async fn main() {
         #[cfg(feature = "webrtc")]
         Servers::Webrtc(opts) => {
             use server::MediaServerContext;
+            config.local_tags = vec![format!("media-webrtc-{}", args.sdn_group)];
+            config.connect_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
@@ -123,6 +143,9 @@ async fn main() {
         #[cfg(feature = "rtmp")]
         Servers::Rtmp(opts) => {
             use server::MediaServerContext;
+            config.local_tags = vec![format!("media-rtmp-{}", args.sdn_group)];
+            config.connect_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
@@ -133,6 +156,9 @@ async fn main() {
         #[cfg(feature = "sip")]
         Servers::Sip(opts) => {
             use server::MediaServerContext;
+            config.local_tags = vec![format!("media-sip-{}", args.sdn_group)];
+            config.connect_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
@@ -143,6 +169,9 @@ async fn main() {
         #[cfg(feature = "connector")]
         Servers::Connector(opts) => {
             use server::MediaServerContext;
+            config.local_tags = vec![format!("connector-{}", args.sdn_group)];
+            config.connect_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
             let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, CONNECTOR_SERVICE, config).await;

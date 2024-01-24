@@ -80,7 +80,7 @@ where
     let mut rpc_endpoint = RtmpClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
 
-    let api_service = OpenApiService::new(RtmpHttpApis, "Rtmp Server", "1.0.0").server("http://localhost:3000");
+    let api_service = OpenApiService::new(RtmpHttpApis, "Rtmp Server", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
     let node_info = NodeInfo {

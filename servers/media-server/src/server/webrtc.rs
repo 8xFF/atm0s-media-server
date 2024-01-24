@@ -88,7 +88,7 @@ where
         address: format!("{}", cluster.node_addr()),
         server_type: ServerType::WEBRTC,
     };
-    let api_service = OpenApiService::new(WebrtcHttpApis, "Webrtc Server", "1.0.0").server("/");
+    let api_service = OpenApiService::new(WebrtcHttpApis, "Webrtc Server", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
 

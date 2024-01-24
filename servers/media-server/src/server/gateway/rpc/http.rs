@@ -1,21 +1,20 @@
 use std::ops::Deref;
 
 use async_std::channel::Sender;
+use cluster::rpc::gateway::QueryBestNodesRequest;
+use cluster::rpc::gateway::QueryBestNodesResponse;
 use cluster::rpc::general::MediaEndpointCloseRequest;
 use cluster::rpc::general::MediaEndpointCloseResponse;
+use cluster::rpc::general::MediaSessionProtocol;
 use cluster::rpc::webrtc::*;
 use cluster::rpc::whep::*;
 use cluster::rpc::whip::*;
 use cluster::VerifyObject;
 use media_utils::Response;
 use media_utils::StringCompression;
-use poem::{
-    http::StatusCode,
-    web::{Data, Path},
-    Result,
-};
+use poem::{http::StatusCode, web::Data, Result};
 use poem_openapi::payload::Response as HttpResponse;
-use poem_openapi::{payload::Json, Object, OpenApi};
+use poem_openapi::{param::Path, payload::Json, Object, OpenApi};
 use serde::{Deserialize, Serialize};
 
 use crate::rpc::http::CustomHttpResponse;
@@ -48,6 +47,24 @@ impl GatewayHttpApis {
             error: None,
             data: Some("OK".to_string()),
         }))
+    }
+
+    /// get best nodes
+    #[oai(path = "/best/:protocol/:size", method = "get")]
+    async fn get_best(&self, Data(data): Data<&DataContainer>, RemoteIpAddr(ip_addr): RemoteIpAddr, protocol: Path<MediaSessionProtocol>, size: Path<usize>) -> Result<Json<QueryBestNodesResponse>> {
+        log::info!("[HttpApis] get best nodes for {:?} size {}", protocol.0, size.0);
+        let (req, rx) = RpcReqResHttp::<QueryBestNodesRequest, QueryBestNodesResponse>::new(QueryBestNodesRequest {
+            ip_addr,
+            protocol: protocol.0,
+            size: size.0,
+        });
+        data.0
+            .send(RpcEvent::BestNodest(Box::new(req)))
+            .await
+            .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        Ok(Json(res))
     }
 
     /// connect whip endpoint
