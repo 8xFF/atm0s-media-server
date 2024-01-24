@@ -434,7 +434,7 @@ dependencies = [
  "log",
  "maxminddb",
  "md5",
- "metrics",
+ "metrics 0.22.0",
  "metrics-dashboard",
  "nats",
  "parking_lot",
@@ -2636,13 +2636,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "metrics"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77b9e10a211c839210fd7f99954bda26e5f8e26ec686ad68da6a32df7c80e782"
+dependencies = [
+ "ahash",
+ "portable-atomic",
+]
+
+[[package]]
 name = "metrics-dashboard"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da1e357397821e17e0bdcb2eee645f5dac60259f0822284e114afce128764009"
 dependencies = [
  "async-trait",
- "metrics",
+ "metrics 0.21.1",
  "metrics-prometheus",
  "metrics-util",
  "poem",
@@ -2670,7 +2680,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "761cc41043c12faff8e58853f5381385c66d7f206ca2184190d0cc700d058a89"
 dependencies = [
  "arc-swap",
- "metrics",
+ "metrics 0.21.1",
  "metrics-util",
  "once_cell",
  "prometheus",
@@ -2690,7 +2700,7 @@ dependencies = [
  "crossbeam-utils",
  "hashbrown 0.13.1",
  "indexmap 1.9.3",
- "metrics",
+ "metrics 0.21.1",
  "num_cpus",
  "ordered-float",
  "quanta",
