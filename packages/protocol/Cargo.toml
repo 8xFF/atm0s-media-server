@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-protocol"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Cluster Protobuf definitions for atm0s-media-server"
 license = "MIT"
