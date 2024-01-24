@@ -12,10 +12,10 @@ impl<'a> FromRequest<'a> for RemoteIpAddr {
         if let Some(remote_addr) = headers.get("X-Forwarded-For") {
             let remote_addr = remote_addr.to_str().map_err(|_| poem::Error::from_string("Bad Request", StatusCode::BAD_REQUEST))?;
             let remote_addr = remote_addr.split(',').next().ok_or(poem::Error::from_string("Bad Request", StatusCode::BAD_REQUEST))?;
-            return Ok(RemoteIpAddr(remote_addr.parse().unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST))));
+            return Ok(RemoteIpAddr(remote_addr.parse().map_err(|_| poem::Error::from_string("Invalid IP address", StatusCode::BAD_REQUEST))?));
         } else if let Some(remote_addr) = headers.get("X-Real-IP") {
             let remote_addr = remote_addr.to_str().map_err(|_| poem::Error::from_string("Bad Request", StatusCode::BAD_REQUEST))?;
-            return Ok(RemoteIpAddr(remote_addr.parse().unwrap_or(IpAddr::V4(std::net::Ipv4Addr::LOCALHOST))));
+            return Ok(RemoteIpAddr(remote_addr.parse().map_err(|_| poem::Error::from_string("Invalid IP address", StatusCode::BAD_REQUEST))?));
         } else {
             match req.remote_addr().deref() {
                 poem::Addr::SocketAddr(addr) => {

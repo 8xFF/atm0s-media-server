@@ -9,7 +9,7 @@ pub struct Ip2Location {
 
 impl Ip2Location {
     pub fn new(database_city: &str) -> Self {
-        let city_reader = maxminddb::Reader::open_readfile(database_city).expect("Should open geoip database");
+        let city_reader = maxminddb::Reader::open_readfile(database_city).expect("Failed to open geoip database");
         Self { city_reader }
     }
 
