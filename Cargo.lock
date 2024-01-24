@@ -1721,9 +1721,9 @@ checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
 name = "fdk-aac"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3f3f988fa4114a728dbab7b64ef6d3adf5f4401f946c90dc17168f6e73b716c"
+checksum = "82783876563cce8326c5aad3b6e95b4be4abaa913e3343e8dc2239046fc2c649"
 dependencies = [
  "fdk-aac-sys",
 ]
