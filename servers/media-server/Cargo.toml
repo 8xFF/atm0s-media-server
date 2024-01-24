@@ -8,7 +8,7 @@ description = "Decentralized media-server with WebRTC/RTMP/Whip/Whep support"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.4.13", features = ["derive", "env"] }
+clap = { version = "4.4.18", features = ["derive", "env"] }
 endpoint = { package = "atm0s-media-server-endpoint", path = "../../packages/endpoint", version = "0.1.0" }
 transport = { package = "atm0s-media-server-transport", path = "../../packages/transport", version = "0.1.0" }
 cluster = { package = "atm0s-media-server-cluster", path = "../../packages/cluster", version = "0.1.0" }
