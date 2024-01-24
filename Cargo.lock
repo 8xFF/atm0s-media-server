@@ -597,9 +597,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.1.6"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "435f75af2e9442128c0ca072104ac42a4059c2c88f3daad17e6ad5d978e7e9f8"
+checksum = "ecec0f2910b2de8844c9ba9d3e3e3e3b2a0f9dd5fe22192b688d53f14dcd93c0"
 dependencies = [
  "async-std",
  "async-trait",
@@ -609,6 +609,7 @@ dependencies = [
  "atm0s-sdn-layers-spread-router-sync",
  "atm0s-sdn-manual-discovery",
  "atm0s-sdn-network",
+ "atm0s-sdn-node-alias",
  "atm0s-sdn-pub-sub",
  "atm0s-sdn-router",
  "atm0s-sdn-rpc",
@@ -616,6 +617,7 @@ dependencies = [
  "atm0s-sdn-transport-tcp",
  "atm0s-sdn-transport-udp",
  "atm0s-sdn-utils",
+ "atm0s-sdn-virtual-socket",
  "futures-util",
  "paste",
  "thiserror",
@@ -634,9 +636,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-key-value"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "266942ffdb64bc5e2827b7408c8bfe66dc41b56381c1e2b86013997c2c7a51ec"
+checksum = "33e838815042e51e7c400bb9a783200ab849d32e292d67784aa5b087770bd150"
 dependencies = [
  "async-std",
  "atm0s-sdn-identity",
@@ -653,9 +655,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-layers-spread-router"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c168734a4a61849cd843a4f8cd27f7248318721ed4e10d53b10b80536c260ddf"
+checksum = "ecc477caf727b547d06189d4184b2db1027324df99cb71b37aba304ba234b9ef"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-router",
@@ -667,9 +669,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-layers-spread-router-sync"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ea3eaa384d32b351f673b9320433a9c66691d6f816521d690bff00bb0377998"
+checksum = "d0c787bb2f971cd2e319a79cb6140a4b47f2ac2f46d8df0a1f0dd2fcecd44fc1"
 dependencies = [
  "async-trait",
  "atm0s-sdn-identity",
@@ -685,9 +687,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-manual-discovery"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3190a1e821b7449a2b4c03f0185d8bf2a2fb527262cfb556c9c5703376c4863"
+checksum = "dc3ca2784f3ccde288628d464e3bbf809d152a3fb1fd2855cadfaa78ea90f865"
 dependencies = [
  "async-trait",
  "atm0s-sdn-identity",
@@ -703,9 +705,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-network"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb2032f77c22aec4cd33cf2b600ada66190edd350a3e46fa7031be96c68dfec0"
+checksum = "26dcf34f17a804c7899dc4dcade5473030bc4260509736a129e93c8ea76c858c"
 dependencies = [
  "async-std",
  "async-trait",
@@ -724,10 +726,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "atm0s-sdn-pub-sub"
-version = "0.1.6"
+name = "atm0s-sdn-node-alias"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82900821dd3e1a71dcfc6c833c31b2cc4237689dce03001a096929aa966d6cc0"
+checksum = "e9e176f92d245c50155c3454ac99f747564f8b5adf7387366d7b6f7aa4cdc7df"
+dependencies = [
+ "async-std",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-network",
+ "atm0s-sdn-pub-sub",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "bincode",
+ "bytes",
+ "log",
+ "parking_lot",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-sdn-pub-sub"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c09fb2b741e2cdba8b00961aec2013cc806d09cea47e74ab41e8062529b83544"
 dependencies = [
  "async-std",
  "async-trait",
@@ -753,9 +774,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-rpc"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "971b129bb4d4e116ea93dd58b9ba55628fc2475c3a344fc22b0324d413935c59"
+checksum = "f149a5868974c3c76572c484bf6a0b03a7dfe53dd78d6e2e00e0dcc75a52e783"
 dependencies = [
  "async-std",
  "atm0s-sdn-identity",
@@ -776,9 +797,9 @@ checksum = "b2ad123e94796f04b6ecec127057cafc867dc108717c05decf8e556859779999"
 
 [[package]]
 name = "atm0s-sdn-transport-tcp"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f13e53e3f432d9c73fa4de04d691dcef7ab9cb1d643d8fd9f25f5b8f36ca6b27"
+checksum = "b8473910d172087dcb4f224c2cd976f95287325bb27909253f0adb03df7aca9e"
 dependencies = [
  "async-bincode",
  "async-std",
@@ -797,9 +818,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-transport-udp"
-version = "0.1.4"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b74b097cbb35f766cca7f1a488cb9635a36e5300d6aa558158610d600d5f7e7"
+checksum = "44525f392829d28664ebaf6db6c84f93978b97f2469cdded3a74ba64bf22dedf"
 dependencies = [
  "async-notify",
  "async-std",
@@ -828,6 +849,25 @@ dependencies = [
  "async-trait",
  "log",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "atm0s-sdn-virtual-socket"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df32a2d8085f7726b597cd70d0dce18fb5b83ee205c65e99596b0fd04c06db2f"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "atm0s-sdn-identity",
+ "atm0s-sdn-network",
+ "atm0s-sdn-router",
+ "atm0s-sdn-utils",
+ "futures",
+ "log",
+ "parking_lot",
+ "quinn",
+ "quinn-plaintext",
 ]
 
 [[package]]
@@ -3623,6 +3663,67 @@ dependencies = [
 ]
 
 [[package]]
+name = "quinn"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cc2c5017e4b43d5995dcea317bc46c1e09404c0a9664d2908f7f02dfe943d75"
+dependencies = [
+ "async-io 1.13.0",
+ "async-std",
+ "bytes",
+ "futures-io",
+ "pin-project-lite",
+ "quinn-proto",
+ "quinn-udp",
+ "rustc-hash",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "quinn-plaintext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb0e784540a62e207fafa749f17a80ea1c67a59b9d5b30c9083a97bcc42d6eea"
+dependencies = [
+ "bytes",
+ "quinn-proto",
+ "seahash",
+ "tracing",
+]
+
+[[package]]
+name = "quinn-proto"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "141bf7dfde2fbc246bfd3fe12f2455aa24b0fbd9af535d8c86c7bd1381ff2b1a"
+dependencies = [
+ "bytes",
+ "rand 0.8.5",
+ "ring 0.16.20",
+ "rustc-hash",
+ "rustls",
+ "slab",
+ "thiserror",
+ "tinyvec",
+ "tracing",
+]
+
+[[package]]
+name = "quinn-udp"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "055b4e778e8feb9f93c4e439f71dc2156ef13360b432b799e179a8c4cdf0b1d7"
+dependencies = [
+ "bytes",
+ "libc",
+ "socket2 0.5.5",
+ "tracing",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4149,6 +4250,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "seahash"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c107b6f4780854c8b126e228ea8869f4d7b71260f962fefb57b996b8959ba6b"
+
+[[package]]
 name = "sealed"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4395,9 +4502,9 @@ checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 
 [[package]]
 name = "snow"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58021967fd0a5eeeb23b08df6cc244a4d4a5b4aec1d27c9e02fad1a58b4cd74e"
+checksum = "2e87c18a6608909007e75a60e04d03eda77b601c94de1c74d9a9dc2c04ab789a"
 dependencies = [
  "aes-gcm",
  "blake2",
@@ -4780,6 +4887,7 @@ version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3523ab5a71916ccf420eebdf5521fcef02141234bbc0b8a49f2fdc4544364ef"
 dependencies = [
+ "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
