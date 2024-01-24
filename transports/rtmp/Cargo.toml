@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-transport-rtmp"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "RTMP transport for atm0s-media-server"
@@ -8,9 +8,9 @@ description = "RTMP transport for atm0s-media-server"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-endpoint = { package = "atm0s-media-server-endpoint", path = "../../packages/endpoint", version = "0.1.0" }
-transport = { package = "atm0s-media-server-transport", path = "../../packages/transport", version = "0.1.0"}
-media-utils = { package = "atm0s-media-server-utils", path = "../../packages/media-utils", version = "0.1.0" }
+endpoint = { package = "atm0s-media-server-endpoint", path = "../../packages/endpoint", version = "0.2.0" }
+transport = { package = "atm0s-media-server-transport", path = "../../packages/transport", version = "0.2.0" }
+media-utils = { package = "atm0s-media-server-utils", path = "../../packages/media-utils", version = "0.2.0" }
 async-std = { workspace = true }
 async-trait = { workspace = true }
 rml_rtmp = "0.8"
