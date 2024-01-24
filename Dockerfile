@@ -16,6 +16,7 @@ RUN case $TARGETPLATFORM in \
 
 FROM ubuntu:22.04
 
+COPY maxminddb-data /maxminddb-data
 COPY --from=base /atm0s-media-server /atm0s-media-server
 
 ENTRYPOINT ["/atm0s-media-server"]
