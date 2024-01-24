@@ -1,8 +1,9 @@
 use std::{ops::Deref, time::Duration};
 
-use async_std::{channel::Sender, prelude::FutureExt as _};
+use async_std::{channel::Sender, prelude::FutureExt as _, stream::StreamExt};
 use clap::Parser;
 use cluster::{
+    implement::NodeId,
     rpc::{
         gateway::{NodePing, NodePong, ServiceInfo},
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
@@ -14,7 +15,7 @@ use cluster::{
     BitrateControlMode, Cluster, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode, VerifyObject, INNER_GATEWAY_SERVICE,
 };
 use futures::{select, FutureExt};
-use media_utils::{AutoCancelTask, ErrorDebugger, StringCompression, SystemTimer, Timer};
+use media_utils::{ErrorDebugger, StringCompression, SystemTimer, Timer};
 use metrics_dashboard::build_dashboard_route;
 use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
@@ -87,7 +88,7 @@ where
         address: format!("{}", cluster.node_addr()),
         server_type: ServerType::WEBRTC,
     };
-    let api_service = OpenApiService::new(WebrtcHttpApis, "Webrtc Server", "1.0.0").server("/");
+    let api_service = OpenApiService::new(WebrtcHttpApis, "Webrtc Server", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
 
@@ -111,42 +112,14 @@ where
 
     let node_id = cluster.node_id();
     let rpc_emitter = rpc_endpoint.emitter();
-    let ctx_c = ctx.clone();
-    let _ping_task: AutoCancelTask<_> = async_std::task::spawn_local(async move {
-        async_std::task::sleep(Duration::from_secs(10)).await;
-        loop {
-            if let Err(e) = rpc_emitter
-                .request::<_, NodePong>(
-                    INNER_GATEWAY_SERVICE,
-                    None,
-                    RPC_NODE_PING,
-                    NodePing {
-                        node_id,
-                        rtmp: None,
-                        sip: None,
-                        webrtc: Some(ServiceInfo {
-                            usage: ((ctx_c.conns_live() * 100) / ctx_c.conns_max()) as u8,
-                            live: ctx_c.conns_live() as u32,
-                            max: ctx_c.conns_max() as u32,
-                            addr: None,
-                            domain: None,
-                        }),
-                    },
-                    5000,
-                )
-                .await
-            {
-                log::error!("[WebrtcMediaServer] ping gateway error {:?}", e);
-            } else {
-                log::info!("[WebrtcMediaServer] ping gateway success");
-            }
-            async_std::task::sleep(Duration::from_secs(1)).await;
-        }
-    })
-    .into();
+    let mut gateway_feedback_tick = async_std::stream::interval(Duration::from_millis(2000));
 
     loop {
         let rpc = select! {
+            _ = gateway_feedback_tick.next().fuse() => {
+                ping_gateway(&ctx, node_id, &rpc_emitter);
+                continue;
+            },
             rpc = http_server.recv().fuse() => {
                 rpc.ok_or("HTTP_SERVER_ERROR")?
             },
@@ -407,4 +380,28 @@ where
             }
         }
     }
+}
+
+fn ping_gateway<EMITTER: RpcEmitter + Send + 'static>(ctx: &MediaServerContext<InternalControl>, node_id: NodeId, rpc_emitter: &EMITTER) {
+    let req = NodePing {
+        node_id,
+        group: "".to_string(),
+        location: None,
+        rtmp: None,
+        sip: None,
+        webrtc: Some(ServiceInfo {
+            usage: ((ctx.conns_live() * 100) / ctx.conns_max()) as u8,
+            live: ctx.conns_live() as u32,
+            max: ctx.conns_max() as u32,
+            addr: None,
+            domain: None,
+        }),
+    };
+
+    let rpc_emitter = rpc_emitter.clone();
+    async_std::task::spawn(async move {
+        if let Err(e) = rpc_emitter.request::<_, NodePong>(INNER_GATEWAY_SERVICE, None, RPC_NODE_PING, req, 1000).await {
+            log::error!("[WebrtcServer] ping gateway error {:?}", e);
+        }
+    });
 }

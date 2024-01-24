@@ -107,7 +107,7 @@ where
         server_type: ServerType::CONNECTOR,
     };
 
-    let api_service = OpenApiService::new(ConnectorHttpApis, "Connector Server", "1.0.0").server(format!("http://localhost:{}", http_port));
+    let api_service = OpenApiService::new(ConnectorHttpApis, "Connector Server", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
 

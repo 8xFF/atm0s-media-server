@@ -3,9 +3,10 @@ use std::{
     time::Duration,
 };
 
-use async_std::{channel::Sender, prelude::FutureExt as _};
+use async_std::{channel::Sender, prelude::FutureExt as _, stream::StreamExt};
 use clap::Parser;
 use cluster::{
+    implement::NodeId,
     rpc::{
         gateway::{NodePing, NodePong, ServiceInfo},
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
@@ -14,7 +15,7 @@ use cluster::{
     Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE,
 };
 use futures::{select, FutureExt};
-use media_utils::{AutoCancelTask, ErrorDebugger};
+use media_utils::ErrorDebugger;
 use metrics_dashboard::build_dashboard_route;
 use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
@@ -79,7 +80,7 @@ where
     let mut rpc_endpoint = RtmpClusterRpc::new(rpc_endpoint);
     let mut http_server: HttpRpcServer<RpcEvent> = crate::rpc::http::HttpRpcServer::new(http_port, http_tls);
 
-    let api_service = OpenApiService::new(RtmpHttpApis, "Rtmp Server", "1.0.0").server("http://localhost:3000");
+    let api_service = OpenApiService::new(RtmpHttpApis, "Rtmp Server", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
     let node_info = NodeInfo {
@@ -108,42 +109,14 @@ where
     let rtmp_port = opts.port;
     let node_id = cluster.node_id();
     let rpc_emitter = rpc_endpoint.emitter();
-    let ctx_c = ctx.clone();
-    let _ping_task: AutoCancelTask<_> = async_std::task::spawn_local(async move {
-        async_std::task::sleep(Duration::from_secs(10)).await;
-        loop {
-            if let Err(e) = rpc_emitter
-                .request::<_, NodePong>(
-                    INNER_GATEWAY_SERVICE,
-                    None,
-                    RPC_NODE_PING,
-                    NodePing {
-                        node_id,
-                        rtmp: None,
-                        sip: Some(ServiceInfo {
-                            usage: ((ctx_c.conns_live() * 100) / ctx_c.conns_max()) as u8,
-                            live: ctx_c.conns_live() as u32,
-                            max: ctx_c.conns_max() as u32,
-                            addr: Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rtmp_port)),
-                            domain: None,
-                        }),
-                        webrtc: None,
-                    },
-                    5000,
-                )
-                .await
-            {
-                log::error!("[RtmpMediaServer] ping gateway error {:?}", e);
-            } else {
-                log::info!("[RtmpMediaServer] ping gateway success");
-            }
-            async_std::task::sleep(Duration::from_secs(1)).await;
-        }
-    })
-    .into();
+    let mut gateway_feedback_tick = async_std::stream::interval(Duration::from_millis(2000));
 
     loop {
         let rpc = select! {
+            _ = gateway_feedback_tick.next().fuse() => {
+                ping_gateway(&ctx, node_id, rtmp_port, &rpc_emitter);
+                continue;
+            },
             rpc = http_server.recv().fuse() => {
                 rpc.ok_or("HTTP_SERVER_ERROR")?
             },
@@ -208,4 +181,28 @@ where
             }
         }
     }
+}
+
+fn ping_gateway<EMITTER: RpcEmitter + Send + 'static>(ctx: &MediaServerContext<InternalControl>, node_id: NodeId, rtmp_port: u16, rpc_emitter: &EMITTER) {
+    let req = NodePing {
+        node_id,
+        group: "".to_string(),
+        location: None,
+        rtmp: Some(ServiceInfo {
+            usage: ((ctx.conns_live() * 100) / ctx.conns_max()) as u8,
+            live: ctx.conns_live() as u32,
+            max: ctx.conns_max() as u32,
+            addr: Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rtmp_port)),
+            domain: None,
+        }),
+        sip: None,
+        webrtc: None,
+    };
+
+    let rpc_emitter = rpc_emitter.clone();
+    async_std::task::spawn(async move {
+        if let Err(e) = rpc_emitter.request::<_, NodePong>(INNER_GATEWAY_SERVICE, None, RPC_NODE_PING, req, 1000).await {
+            log::error!("[RtmpServer] ping gateway error {:?}", e);
+        }
+    });
 }

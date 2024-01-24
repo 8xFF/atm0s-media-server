@@ -91,7 +91,7 @@ impl LocalTrack {
                 }
 
                 if let Some(pkt) = self.filter.process(now_ms, pkt) {
-                    log::info!("[LocalTrack {}] media from cluster pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
+                    log::debug!("[LocalTrack {}] media from cluster pkt {:?} {}", self.track_name, pkt.codec, pkt.seq_no);
                     self.out_actions.push_back(LocalTrackOutput::Transport(LocalTrackOutgoingEvent::MediaPacket(pkt)));
                 }
             }

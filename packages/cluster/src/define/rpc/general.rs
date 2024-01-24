@@ -1,4 +1,4 @@
-use poem_openapi::Object;
+use poem_openapi::{Enum, Object};
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +12,7 @@ pub struct MediaEndpointCloseResponse {
     pub success: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Enum, PartialEq, Eq, Clone, Copy)]
 pub enum MediaSessionProtocol {
     Whip,
     Whep,

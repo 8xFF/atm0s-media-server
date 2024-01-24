@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{net::IpAddr, sync::Arc};
 
 use cluster::{
     implement::NodeId,
@@ -7,10 +7,10 @@ use cluster::{
         gateway::{NodeHealthcheckRequest, NodeHealthcheckResponse},
         RpcEmitter, RpcReqRes, RPC_MEDIA_ENDPOINT_LOG, RPC_NODE_HEALTHCHECK,
     },
-    CONNECTOR_SERVICE, MEDIA_SERVER_SERVICE,
+    CONNECTOR_SERVICE,
 };
 use futures::FutureExt as _;
-use media_utils::{ErrorDebugger, Timer};
+use media_utils::{ErrorDebugger, Timer, F32};
 use metrics::increment_counter;
 use protocol::media_event_logs::{
     session_event::{SessionRouted, SessionRouting, SessionRoutingError},
@@ -21,13 +21,13 @@ use crate::server::gateway::{GATEWAY_SESSIONS_CONNECT_COUNT, GATEWAY_SESSIONS_CO
 
 use super::logic::{GatewayLogic, ServiceType};
 
-async fn select_node<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, node_ids: &[u32]) -> Option<u32> {
+async fn select_node<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, node_ids: &[u32], service_id: u8) -> Option<u32> {
     let mut futures = Vec::new();
 
     for node_id in node_ids {
         let future = emitter
             .request::<_, NodeHealthcheckResponse>(
-                MEDIA_SERVER_SERVICE,
+                service_id,
                 Some(*node_id),
                 RPC_NODE_HEALTHCHECK,
                 NodeHealthcheckRequest::Webrtc {
@@ -89,14 +89,16 @@ pub fn route_to_node<EMITTER, Req, Res>(
     gateway_node_id: NodeId,
     service: ServiceType,
     cmd: &'static str,
-    ip: &str,
+    ip: IpAddr,
+    location: Option<(F32<2>, F32<2>)>,
     version: &Option<String>,
     user_agent: &str,
     session_uuid: u64,
-    req: Box<dyn RpcReqRes<Req, Res> + Sync>,
+    req: Box<dyn RpcReqRes<Req, Res>>,
+    dest_service_id: u8,
 ) where
     EMITTER: RpcEmitter + Send + Sync + 'static,
-    Req: Into<Vec<u8>> + Send + Sync + Clone + 'static,
+    Req: Into<Vec<u8>> + Send + Clone + 'static,
     Res: for<'a> TryFrom<&'a [u8]> + Send + 'static,
 {
     increment_counter!(GATEWAY_SESSIONS_CONNECT_COUNT);
@@ -105,19 +107,20 @@ pub fn route_to_node<EMITTER, Req, Res>(
         user_agent: user_agent.to_string(),
         gateway_node_id,
     });
-    emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
+    emit_endpoint_event(&emitter, &timer, session_uuid, &ip.to_string(), version, event);
 
-    let nodes = gateway_logic.best_nodes(service, 60, 80, 3);
+    let nodes = gateway_logic.best_nodes(location, service, 60, 80, 3);
     if !nodes.is_empty() {
         let rpc_emitter = emitter.clone();
         let ip: String = ip.to_string();
         let version = version.clone();
+        let param = req.param().clone();
         async_std::task::spawn(async move {
             log::info!("[Gateway] connect => ping nodes {:?}", nodes);
-            let node_id = select_node(&rpc_emitter, &nodes).await;
+            let node_id = select_node(&rpc_emitter, &nodes, dest_service_id).await;
             if let Some(node_id) = node_id {
                 log::info!("[Gateway] connect with selected node {:?}", node_id);
-                let res = rpc_emitter.request::<Req, Res>(MEDIA_SERVER_SERVICE, Some(node_id), cmd, req.param().clone(), 5000).await;
+                let res = rpc_emitter.request::<Req, Res>(dest_service_id, Some(node_id), cmd, param, 5000).await;
                 log::info!("[Gateway] webrtc connect res from media-server {:?}", res.as_ref().map(|_| ()));
                 let event = if res.is_err() {
                     increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
@@ -155,7 +158,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
             media_node_ids: vec![],
         });
 
-        emit_endpoint_event(&emitter, &timer, session_uuid, ip, version, event);
+        emit_endpoint_event(&emitter, &timer, session_uuid, &ip.to_string(), version, event);
 
         log::warn!("[Gateway] webrtc connect but media-server pool empty");
         req.answer(Err("NODE_POOL_EMPTY"));

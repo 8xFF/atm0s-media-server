@@ -1,3 +1,5 @@
 /target
 tarpaulin-report.html
 .atm0s
+/maxminddb-data
+.vscode

@@ -1,11 +1,12 @@
 use std::cmp::Ordering;
 
-use cluster::implement::NodeId;
+use cluster::{implement::NodeId, rpc::gateway::ServiceInfo};
+use media_utils::F32;
 use metrics::{describe_gauge, gauge};
 
-use super::ServiceType;
+use super::{ServiceRegistry, ServiceType};
 
-const NODE_TIMEOUT_MS: u64 = 5_000_000;
+const NODE_TIMEOUT_MS: u64 = 10_000;
 
 #[derive(Debug, Default)]
 struct NodeSlot {
@@ -40,13 +41,13 @@ impl Ord for NodeSlot {
 }
 
 #[derive(Debug)]
-pub(super) struct ServiceRegistry {
+pub(super) struct ServiceInnerRegistry {
     metric_live: String,
     metric_max: String,
     nodes: Vec<NodeSlot>,
 }
 
-impl ServiceRegistry {
+impl ServiceInnerRegistry {
     pub fn new(service: ServiceType) -> Self {
         let metric_live = format!("gateway.sessions.{:?}.live", service);
         let metric_max = format!("gateway.sessions.{:?}.max", service);
@@ -60,15 +61,25 @@ impl ServiceRegistry {
         }
     }
 
+    fn sum_live(&self) -> u32 {
+        self.nodes.iter().map(|s| s.live).sum()
+    }
+
+    fn sum_max(&self) -> u32 {
+        self.nodes.iter().map(|s| s.max).sum()
+    }
+}
+
+impl ServiceRegistry for ServiceInnerRegistry {
     /// remove not that dont received ping in NODE_TIMEOUT_MS
-    pub fn on_tick(&mut self, now_ms: u64) {
+    fn on_tick(&mut self, now_ms: u64) {
         self.nodes.retain(|s| s.last_updated + NODE_TIMEOUT_MS > now_ms);
         gauge!(self.metric_live.clone(), self.sum_live() as f64);
         gauge!(self.metric_max.clone(), self.sum_max() as f64);
     }
 
     /// we save node or create new, then sort by ascending order
-    pub fn on_ping(&mut self, now_ms: u64, node_id: NodeId, usage: u8, live: u32, max: u32) {
+    fn on_ping(&mut self, now_ms: u64, _group: &str, _location: Option<(F32<2>, F32<2>)>, node_id: NodeId, usage: u8, live: u32, max: u32) {
         if let Some(slot) = self.nodes.iter_mut().find(|s| s.node_id == node_id) {
             slot.usage = usage;
             slot.live = live;
@@ -87,7 +98,7 @@ impl ServiceRegistry {
     }
 
     /// we get first with max_usage, if not enough => using max_usage_fallback
-    pub fn best_nodes(&mut self, max_usage: u8, max_usage_fallback: u8, size: usize) -> Vec<NodeId> {
+    fn best_nodes(&mut self, _location: Option<(F32<2>, F32<2>)>, max_usage: u8, max_usage_fallback: u8, size: usize) -> Vec<NodeId> {
         let mut res = vec![];
         for slot in self.nodes.iter().rev() {
             if slot.usage <= max_usage {
@@ -114,40 +125,57 @@ impl ServiceRegistry {
         res
     }
 
-    fn sum_live(&self) -> u32 {
-        self.nodes.iter().map(|s| s.live).sum()
-    }
+    fn stats(&self) -> ServiceInfo {
+        let sum_max = self.sum_max();
+        let usage = if sum_max == 0 {
+            0
+        } else {
+            (self.sum_live() as f64 / sum_max as f64 * 100.0) as u8
+        };
 
-    fn sum_max(&self) -> u32 {
-        self.nodes.iter().map(|s| s.max).sum()
+        ServiceInfo {
+            usage,
+            live: self.sum_live(),
+            max: self.sum_max(),
+            addr: None,
+            domain: None,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::server::gateway::logic::{
-        service::{ServiceRegistry, NODE_TIMEOUT_MS},
-        ServiceType,
-    };
+    use super::*;
+    use crate::server::gateway::logic::ServiceType;
 
-    // ServiceRegistry can be created with default values
+    // ServiceInnerRegistry can be created with default values
     #[test]
     fn test_service_registry_creation() {
-        let registry = ServiceRegistry::new(ServiceType::Webrtc);
+        let registry = ServiceInnerRegistry::new(ServiceType::Webrtc);
+        assert_eq!(
+            registry.stats(),
+            ServiceInfo {
+                usage: 0,
+                live: 0,
+                max: 0,
+                addr: None,
+                domain: None,
+            }
+        );
         assert_eq!(registry.nodes.len(), 0);
     }
 
     // on_ping adds a new node to the registry
     #[test]
     fn test_on_ping_adds_new_node() {
-        let mut registry = ServiceRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceInnerRegistry::new(ServiceType::Webrtc);
         let now_ms = 0;
         let node_id = 1;
         let live = 50;
         let usage = 50;
         let max = 100;
 
-        registry.on_ping(now_ms, node_id, usage, live, max);
+        registry.on_ping(now_ms, "", None, node_id, usage, live, max);
 
         assert_eq!(registry.nodes.len(), 1);
         assert_eq!(registry.nodes[0].node_id, node_id);
@@ -163,20 +191,20 @@ mod tests {
     // on_ping updates an existing node in the registry
     #[test]
     fn test_on_ping_updates_existing_node() {
-        let mut registry = ServiceRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceInnerRegistry::new(ServiceType::Webrtc);
         let now_ms = 0;
         let node_id = 1;
         let live = 50;
         let usage = 50;
         let max = 100;
 
-        registry.on_ping(now_ms, node_id, usage, live, max);
+        registry.on_ping(now_ms, "", None, node_id, usage, live, max);
 
         let new_usage = 75;
         let new_live = 112;
         let new_max = 150;
 
-        registry.on_ping(now_ms + 1000, node_id, new_usage, new_live, new_max);
+        registry.on_ping(now_ms + 1000, "", None, node_id, new_usage, new_live, new_max);
 
         assert_eq!(registry.nodes.len(), 1);
         assert_eq!(registry.nodes[0].node_id, node_id);
@@ -189,19 +217,19 @@ mod tests {
     // on_tick removes all nodes when all nodes haven't received a ping in NODE_TIMEOUT_MS
     #[test]
     fn test_on_tick_removes_all_nodes() {
-        let mut registry = ServiceRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceInnerRegistry::new(ServiceType::Webrtc);
         let now_ms = 0;
         let node_id1 = 1;
         let live1 = 50;
         let usage1 = 50;
         let max1 = 100;
-        registry.on_ping(now_ms, node_id1, usage1, live1, max1);
+        registry.on_ping(now_ms, "", None, node_id1, usage1, live1, max1);
 
         let node_id2 = 2;
         let live2 = 112;
         let usage2 = 75;
         let max2 = 150;
-        registry.on_ping(now_ms, node_id2, usage2, live2, max2);
+        registry.on_ping(now_ms, "", None, node_id2, usage2, live2, max2);
 
         registry.on_tick(now_ms + NODE_TIMEOUT_MS + 1);
 
@@ -210,19 +238,19 @@ mod tests {
 
     #[test]
     fn test_best_nodes_returns_nodes_with_max_usage() {
-        let mut registry = ServiceRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceInnerRegistry::new(ServiceType::Webrtc);
         let now_ms = 0;
         let node_id1 = 1;
         let live1 = 50;
         let usage1 = 50;
         let max1 = 100;
-        registry.on_ping(now_ms, node_id1, usage1, live1, max1);
+        registry.on_ping(now_ms, "", None, node_id1, usage1, live1, max1);
 
         let node_id2 = 2;
         let usage2 = 75;
         let live2 = 112;
         let max2 = 150;
-        registry.on_ping(now_ms, node_id2, usage2, live2, max2);
+        registry.on_ping(now_ms, "", None, node_id2, usage2, live2, max2);
 
         assert_eq!(registry.sum_live(), live1 + live2);
         assert_eq!(registry.sum_max(), max1 + max2);
@@ -231,7 +259,7 @@ mod tests {
         let max_usage_fallback = 70;
         let size = 2;
 
-        let result = registry.best_nodes(max_usage, max_usage_fallback, size);
+        let result = registry.best_nodes(None, max_usage, max_usage_fallback, size);
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], node_id1);
@@ -239,28 +267,53 @@ mod tests {
 
     #[test]
     fn test_best_nodes_returns_nodes_with_max_usage_fallback() {
-        let mut registry = ServiceRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceInnerRegistry::new(ServiceType::Webrtc);
         let now_ms = 0;
         let node_id1 = 1;
         let usage1 = 50;
         let live1 = 50;
         let max1 = 100;
-        registry.on_ping(now_ms, node_id1, usage1, live1, max1);
+        registry.on_ping(now_ms, "", None, node_id1, usage1, live1, max1);
 
         let node_id2 = 2;
         let usage2 = 75;
         let live2 = 112;
         let max2 = 150;
-        registry.on_ping(now_ms, node_id2, usage2, live2, max2);
+        registry.on_ping(now_ms, "", None, node_id2, usage2, live2, max2);
 
         let max_usage = 60;
         let max_usage_fallback = 80;
         let size = 2;
 
-        let mut result = registry.best_nodes(max_usage_fallback, max_usage, size);
+        let mut result = registry.best_nodes(None, max_usage_fallback, max_usage, size);
 
         assert_eq!(result.len(), 2);
         result.sort();
         assert_eq!(result, [node_id1, node_id2]);
+    }
+
+    #[test]
+    fn test_stats() {
+        let mut registry = ServiceInnerRegistry::new(ServiceType::Webrtc);
+        let now_ms = 0;
+        let node_id1 = 1;
+        let usage1 = 50;
+        let live1 = 50;
+        let max1 = 100;
+        registry.on_ping(now_ms, "", None, node_id1, usage1, live1, max1);
+
+        let node_id2 = 2;
+        let usage2 = 100;
+        let live2 = 100;
+        let max2 = 200;
+        registry.on_ping(now_ms, "", None, node_id2, usage2, live2, max2);
+
+        let stats = registry.stats();
+
+        assert_eq!(stats.usage, 50);
+        assert_eq!(stats.live, 150);
+        assert_eq!(stats.max, 300);
+        assert_eq!(stats.addr, None);
+        assert_eq!(stats.domain, None);
     }
 }

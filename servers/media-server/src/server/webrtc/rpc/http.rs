@@ -264,8 +264,8 @@ impl WebrtcHttpApis {
 
         log::info!("[HttpApis] create Webrtc endpoint {}/{}", body.0.room, body.0.peer);
         body.0.session_uuid = Some(data.1.generate_session_uuid());
-        body.0.ip_addr = Some(ip_addr);
-        body.0.user_agent = Some(user_agent);
+        body.0.ip_addr = ip_addr;
+        body.0.user_agent = user_agent;
 
         let (req, rx) = RpcReqResHttp::<WebrtcConnectRequest, WebrtcConnectResponse>::new(body.0);
         data.0

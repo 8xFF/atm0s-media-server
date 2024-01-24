@@ -33,6 +33,8 @@ mod tests {
             ServerSdnConfig {
                 secret: "static_key".to_string(),
                 seeds: vec![],
+                connect_tags: vec!["local".to_string()],
+                local_tags: vec!["local".to_string()],
             },
         )
         .await;
@@ -109,6 +111,8 @@ mod tests {
             ServerSdnConfig {
                 secret: "static_key".to_string(),
                 seeds: vec![],
+                connect_tags: vec!["local".to_string()],
+                local_tags: vec!["local".to_string()],
             },
         )
         .await;
@@ -185,6 +189,8 @@ mod tests {
             ServerSdnConfig {
                 secret: "static_key".to_string(),
                 seeds: vec![],
+                connect_tags: vec!["local".to_string()],
+                local_tags: vec!["local".to_string()],
             },
         )
         .await;
@@ -259,6 +265,8 @@ mod tests {
             ServerSdnConfig {
                 secret: "static_key".to_string(),
                 seeds: vec![],
+                connect_tags: vec!["local".to_string()],
+                local_tags: vec!["local".to_string()],
             },
         )
         .await;

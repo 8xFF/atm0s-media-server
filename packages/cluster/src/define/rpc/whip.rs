@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
 
@@ -6,7 +8,7 @@ use crate::{MediaSessionToken, VerifyObject};
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct WhipConnectRequest {
     pub session_uuid: u64,
-    pub ip_addr: String,
+    pub ip_addr: IpAddr,
     pub user_agent: String,
     pub token: String,
     pub sdp: Option<String>,

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// This store float f32 as u32, and can be used as key in HashMap
 /// ACCURACY is the number of digits after the decimal point
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct F32<const ACCURACY: usize>(u32);
 
 impl<const ACCURACY: usize> F32<ACCURACY> {
