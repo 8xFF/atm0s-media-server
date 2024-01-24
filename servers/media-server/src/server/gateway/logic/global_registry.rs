@@ -60,6 +60,19 @@ impl ServiceGlobalRegistry {
     fn sum_max(&self) -> u32 {
         self.zones.iter().map(|(_, s)| s.max).sum()
     }
+
+    fn closest_zone(&self, location: &(F32<2>, F32<2>), max_usage: u8) -> Option<&Zone> {
+        let mut closest_zone = None;
+        let mut closest_distance = std::f32::MAX;
+        for (_, zone) in self.zones.iter() {
+            let distance = lat_lng_distance(location, &zone.location);
+            if distance < closest_distance && zone.max > 0 && zone.usage <= max_usage {
+                closest_distance = distance;
+                closest_zone = Some(zone);
+            }
+        }
+        closest_zone
+    }
 }
 
 impl ServiceRegistry for ServiceGlobalRegistry {
@@ -99,22 +112,16 @@ impl ServiceRegistry for ServiceGlobalRegistry {
     }
 
     /// we get first with max_usage, if not enough => using max_usage_fallback
-    fn best_nodes(&mut self, location: Option<(F32<2>, F32<2>)>, _max_usage: u8, _max_usage_fallback: u8, size: usize) -> Vec<NodeId> {
+    fn best_nodes(&mut self, location: Option<(F32<2>, F32<2>)>, max_usage: u8, max_usage_fallback: u8, size: usize) -> Vec<NodeId> {
         let location = location.unwrap_or((F32::<2>::new(0.0), F32::<2>::new(0.0)));
 
         //finding closest zone
-        let mut closest_zone = None;
-        let mut closest_distance = std::f32::MAX;
-        for (zone_name, zone) in self.zones.iter() {
-            let distance = lat_lng_distance(&location, &zone.location);
-            if distance < closest_distance {
-                closest_distance = distance;
-                closest_zone = Some(zone_name);
-            }
+        let mut closest_zone = self.closest_zone(&location, max_usage);
+        if closest_zone.is_none() {
+            closest_zone = self.closest_zone(&location, max_usage_fallback);
         }
 
         if let Some(zone) = closest_zone {
-            let zone = self.zones.get(zone).expect("Should has zone");
             let mut nodes = zone.nodes.keys().cloned().collect::<Vec<_>>();
             nodes.truncate(size);
             nodes
@@ -150,6 +157,49 @@ mod tests {
         let node_id = 1;
         let usage = 0;
         let live = 0;
+        let max = 10;
+
+        registry.on_ping(now_ms, group, location, node_id, usage, live, max);
+        assert_eq!(registry.zones.len(), 1);
+        assert_eq!(registry.zones.get(group).unwrap().nodes.len(), 1);
+        assert_eq!(registry.zones.get(group).unwrap().nodes.get(&node_id).unwrap(), &now_ms);
+        assert_eq!(registry.zones.get(group).unwrap().usage, usage);
+        assert_eq!(registry.zones.get(group).unwrap().live, live);
+        assert_eq!(registry.zones.get(group).unwrap().max, max);
+        assert_eq!(registry.zones.get(group).unwrap().last_updated, now_ms);
+
+        assert_eq!(registry.best_nodes(location, 60, 80, 1), vec![node_id]);
+
+        registry.on_tick(now_ms + NODE_TIMEOUT_MS);
+        assert_eq!(registry.zones.len(), 0);
+    }
+
+    #[test]
+    fn test_service_fallback_max_usage() {
+        let mut registry = ServiceGlobalRegistry::new(ServiceType::Webrtc);
+        let now_ms = 0;
+        let group = "group";
+        let location = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
+        let node_id = 1;
+        let usage = 70;
+        let live = 9;
+        let max = 10;
+
+        registry.on_ping(now_ms, group, location, node_id, usage, live, max);
+        assert_eq!(registry.best_nodes(location, 50, 60, 1), Vec::<u32>::new());
+        assert_eq!(registry.best_nodes(location, 60, 80, 1), vec![node_id]);
+    }
+
+    // test with gateway with max zero should return none
+    #[test]
+    fn test_service_registry_single_zone_single_gateway_with_max_zero() {
+        let mut registry = ServiceGlobalRegistry::new(ServiceType::Webrtc);
+        let now_ms = 0;
+        let group = "group";
+        let location = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
+        let node_id = 1;
+        let usage = 0;
+        let live = 0;
         let max = 0;
 
         registry.on_ping(now_ms, group, location, node_id, usage, live, max);
@@ -161,7 +211,7 @@ mod tests {
         assert_eq!(registry.zones.get(group).unwrap().max, max);
         assert_eq!(registry.zones.get(group).unwrap().last_updated, now_ms);
 
-        assert_eq!(registry.best_nodes(location, 100, 100, 1), vec![node_id]);
+        assert_eq!(registry.best_nodes(location, 60, 80, 1), Vec::<u32>::new());
 
         registry.on_tick(now_ms + NODE_TIMEOUT_MS);
         assert_eq!(registry.zones.len(), 0);
@@ -178,7 +228,7 @@ mod tests {
         let node_id_2 = 2;
         let usage = 0;
         let live = 0;
-        let max = 0;
+        let max = 10;
 
         registry.on_ping(now_ms, group, location, node_id_1, usage, live, max);
         registry.on_ping(now_ms, group, location, node_id_2, usage, live, max);
@@ -191,7 +241,7 @@ mod tests {
         assert_eq!(registry.zones.get(group).unwrap().max, max);
         assert_eq!(registry.zones.get(group).unwrap().last_updated, now_ms);
 
-        let mut best_nodes = registry.best_nodes(location, 100, 100, 2);
+        let mut best_nodes = registry.best_nodes(location, 60, 80, 2);
         best_nodes.sort();
         assert_eq!(best_nodes, vec![node_id_1, node_id_2]);
 
@@ -221,7 +271,7 @@ mod tests {
         let node_id_2 = 2;
         let usage = 0;
         let live = 0;
-        let max = 0;
+        let max = 10;
 
         registry.on_ping(now_ms, group_1, location_1, node_id_1, usage, live, max);
         registry.on_ping(now_ms, group_2, location_2, node_id_2, usage, live, max);
@@ -241,11 +291,11 @@ mod tests {
         assert_eq!(registry.zones.get(group_2).unwrap().max, max);
         assert_eq!(registry.zones.get(group_2).unwrap().last_updated, now_ms);
 
-        let mut best_nodes = registry.best_nodes(location_1, 100, 100, 2);
+        let mut best_nodes = registry.best_nodes(location_1, 60, 80, 2);
         best_nodes.sort();
         assert_eq!(best_nodes, vec![node_id_1]);
 
-        let mut best_nodes = registry.best_nodes(location_2, 100, 100, 2);
+        let mut best_nodes = registry.best_nodes(location_2, 60, 80, 2);
         best_nodes.sort();
         assert_eq!(best_nodes, vec![node_id_2]);
     }

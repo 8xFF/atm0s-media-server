@@ -126,8 +126,15 @@ impl ServiceRegistry for ServiceInnerRegistry {
     }
 
     fn stats(&self) -> ServiceInfo {
+        let sum_max = self.sum_max();
+        let usage = if sum_max == 0 {
+            0
+        } else {
+            (self.sum_live() as f64 / sum_max as f64 * 100.0) as u8
+        };
+
         ServiceInfo {
-            usage: ((self.sum_live() * 100) / self.sum_max()) as u8,
+            usage,
             live: self.sum_live(),
             max: self.sum_max(),
             addr: None,
@@ -145,6 +152,16 @@ mod tests {
     #[test]
     fn test_service_registry_creation() {
         let registry = ServiceInnerRegistry::new(ServiceType::Webrtc);
+        assert_eq!(
+            registry.stats(),
+            ServiceInfo {
+                usage: 0,
+                live: 0,
+                max: 0,
+                addr: None,
+                domain: None,
+            }
+        );
         assert_eq!(registry.nodes.len(), 0);
     }
 
