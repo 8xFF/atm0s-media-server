@@ -11,7 +11,7 @@ use cluster::{
 };
 use futures::FutureExt as _;
 use media_utils::{ErrorDebugger, Timer, F32};
-use metrics::increment_counter;
+use metrics::counter;
 use protocol::media_event_logs::{
     session_event::{SessionRouted, SessionRouting, SessionRoutingError},
     MediaEndpointLogEvent, MediaSessionEvent, SessionEvent,
@@ -101,7 +101,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
     Req: Into<Vec<u8>> + Send + Clone + 'static,
     Res: for<'a> TryFrom<&'a [u8]> + Send + 'static,
 {
-    increment_counter!(GATEWAY_SESSIONS_CONNECT_COUNT);
+    counter!(GATEWAY_SESSIONS_CONNECT_COUNT).increment(1);
     let started_ms = timer.now_ms();
     let event = MediaSessionEvent::Routing(SessionRouting {
         user_agent: user_agent.to_string(),
@@ -123,7 +123,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
                 let res = rpc_emitter.request::<Req, Res>(dest_service_id, Some(node_id), cmd, param, 5000).await;
                 log::info!("[Gateway] webrtc connect res from media-server {:?}", res.as_ref().map(|_| ()));
                 let event = if res.is_err() {
-                    increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
+                    counter!(GATEWAY_SESSIONS_CONNECT_ERROR).increment(1);
                     MediaSessionEvent::RoutingError(SessionRoutingError {
                         reason: "NODE_ANSWER_ERROR".to_string(),
                         gateway_node_id,
@@ -140,7 +140,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
                 req.answer(res.map_err(|_e| "NODE_ANSWER_ERROR"));
             } else {
                 log::warn!("[Gateway] webrtc connect but ping nodes {:?} timeout", nodes);
-                increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
+                counter!(GATEWAY_SESSIONS_CONNECT_ERROR).increment(1);
                 let event = MediaSessionEvent::RoutingError(SessionRoutingError {
                     reason: "NODE_PING_TIMEOUT".to_string(),
                     gateway_node_id,
@@ -151,7 +151,7 @@ pub fn route_to_node<EMITTER, Req, Res>(
             }
         });
     } else {
-        increment_counter!(GATEWAY_SESSIONS_CONNECT_ERROR);
+        counter!(GATEWAY_SESSIONS_CONNECT_ERROR).increment(1);
         let event = MediaSessionEvent::RoutingError(SessionRoutingError {
             reason: "NODE_POOL_EMPTY".to_string(),
             gateway_node_id,

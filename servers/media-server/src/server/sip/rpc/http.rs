@@ -6,9 +6,9 @@ use cluster::rpc::sip::SipOutgoingInviteClientRequest;
 use cluster::rpc::sip::SipOutgoingInviteResponse;
 use cluster::rpc::sip::SipOutgoingInviteServerRequest;
 use media_utils::Response;
+use poem::http::StatusCode;
 use poem::{web::Data, Result};
 use poem_openapi::{payload::Json, OpenApi};
-use reqwest::StatusCode;
 
 use super::RpcEvent;
 

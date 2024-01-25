@@ -74,8 +74,8 @@ impl ServiceRegistry for ServiceInnerRegistry {
     /// remove not that dont received ping in NODE_TIMEOUT_MS
     fn on_tick(&mut self, now_ms: u64) {
         self.nodes.retain(|s| s.last_updated + NODE_TIMEOUT_MS > now_ms);
-        gauge!(self.metric_live.clone(), self.sum_live() as f64);
-        gauge!(self.metric_max.clone(), self.sum_max() as f64);
+        gauge!(self.metric_live.clone()).set(self.sum_live() as f64);
+        gauge!(self.metric_max.clone()).set(self.sum_max() as f64);
     }
 
     /// we save node or create new, then sort by ascending order

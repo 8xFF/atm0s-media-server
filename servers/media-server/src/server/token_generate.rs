@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use clap::Parser;
 use cluster::{atm0s_sdn::SystemTimer, SessionTokenSigner};
-use metrics_dashboard::build_dashboard_route;
 use poem::Route;
 use poem_openapi::OpenApiService;
 
@@ -23,11 +22,7 @@ pub async fn run_token_generate_server(http_port: u16, http_tls: bool, _opts: To
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
 
-    let route = Route::new()
-        .nest("/", api_service)
-        .nest("/dashboard/", build_dashboard_route())
-        .nest("/ui/", ui)
-        .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()));
+    let route = Route::new().nest("/", api_service).nest("/ui/", ui).at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()));
 
     http_server
         .start(

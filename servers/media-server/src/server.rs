@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_std::channel::{bounded, Receiver, Sender};
 use cluster::{atm0s_sdn::Timer, implement::NodeId, ClusterSessionUuid, MediaConnId, SessionTokenSigner, SessionTokenVerifier};
-use metrics::{describe_counter, describe_gauge, gauge, increment_counter};
+use metrics::{counter, describe_counter, describe_gauge, gauge};
 use parking_lot::RwLock;
 
 const METRIC_SESSIONS_COUNT: &str = "media_server.sessions.count";
@@ -82,7 +82,7 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         describe_gauge!(METRIC_SESSIONS_LIVE, "Current live sessions number");
         describe_gauge!(METRIC_SESSIONS_MAX, "Max live sessions number");
 
-        gauge!(METRIC_SESSIONS_MAX, self.conn_max as f64);
+        gauge!(METRIC_SESSIONS_MAX).set(self.conn_max as f64);
     }
 
     /// Insert pair (Room, Peer) to store
@@ -96,8 +96,8 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         let old_conn = peers.insert(peer.clone(), (tx.clone(), conn_id.clone()));
         conns.insert(conn_id.clone(), (tx, peer.clone()));
 
-        increment_counter!(METRIC_SESSIONS_COUNT);
-        gauge!(METRIC_SESSIONS_LIVE, peers.len() as f64);
+        counter!(METRIC_SESSIONS_COUNT).increment(1);
+        gauge!(METRIC_SESSIONS_LIVE).set(peers.len() as f64);
 
         (rx, conn_id, old_conn.map(|(tx, _)| tx))
     }
@@ -120,14 +120,14 @@ impl<InternalControl> MediaServerContext<InternalControl> {
         let peer = PeerIdentity::new(room, peer);
         let (tx, conn_id) = self.peers.write().remove(&peer)?;
         self.conns.write().remove(&conn_id);
-        gauge!(METRIC_SESSIONS_LIVE, self.peers.read().len() as f64);
+        gauge!(METRIC_SESSIONS_LIVE).set(self.peers.read().len() as f64);
         Some(tx)
     }
 
     pub fn close_conn(&self, conn_id: &str) -> Option<Sender<InternalControl>> {
         let (tx, peer_id) = self.conns.write().remove(conn_id)?;
         self.peers.write().remove(&peer_id);
-        gauge!(METRIC_SESSIONS_LIVE, self.peers.read().len() as f64);
+        gauge!(METRIC_SESSIONS_LIVE).set(self.peers.read().len() as f64);
         Some(tx)
     }
 

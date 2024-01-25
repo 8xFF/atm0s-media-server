@@ -82,8 +82,8 @@ impl ServiceRegistry for ServiceGlobalRegistry {
         for (_, zone) in self.zones.iter_mut() {
             zone.nodes.retain(|_, &mut last_updated| last_updated + NODE_TIMEOUT_MS > now_ms);
         }
-        gauge!(self.metric_live.clone(), self.sum_live() as f64);
-        gauge!(self.metric_max.clone(), self.sum_max() as f64);
+        gauge!(self.metric_live.clone()).set(self.sum_live() as f64);
+        gauge!(self.metric_max.clone()).set(self.sum_max() as f64);
     }
 
     /// we save node or create new, then sort by ascending order
