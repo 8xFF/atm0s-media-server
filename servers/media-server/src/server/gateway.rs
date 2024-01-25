@@ -15,7 +15,7 @@ use cluster::{
 use futures::{select, FutureExt};
 use media_utils::{SystemTimer, Timer, F32};
 use metrics::describe_counter;
-use metrics_dashboard::build_dashboard_route;
+use metrics_dashboard::{build_dashboard_route, DashboardOptions};
 use poem::{web::Json, Route};
 use poem_openapi::OpenApiService;
 
@@ -104,9 +104,14 @@ where
     let samples = EmbeddedFilesEndpoint::<Files>::new(Some("index.html".to_string()));
     #[cfg(not(feature = "embed-samples"))]
     let samples = StaticFilesEndpoint::new("./servers/media-server/public/").index_file("index.html");
+
+    let dashboard_opts = DashboardOptions {
+        custom_charts: vec![],
+        include_default: true,
+    };
     let route = Route::new()
         .nest("/", api_service)
-        .nest("/dashboard/", build_dashboard_route())
+        .nest("/dashboard/", build_dashboard_route(dashboard_opts))
         .nest("/ui/", ui)
         .at("/node-info/", poem::endpoint::make_sync(move |_| Json(node_info.clone())))
         .at("/spec/", poem::endpoint::make_sync(move |_| spec.clone()))

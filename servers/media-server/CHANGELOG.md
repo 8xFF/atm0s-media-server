@@ -6,6 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-v0.1.1...atm0s-media-server-v0.1.2) - 2024-01-25
+
+### Added
+- sip transport and hooks ([#167](https://github.com/8xFF/atm0s-media-server/pull/167))
+
+### Fixed
+- unused warn and local cluster aggregate bitrate ([#99](https://github.com/8xFF/atm0s-media-server/pull/99))
+- wrong typos cause publish error ([#93](https://github.com/8xFF/atm0s-media-server/pull/93))
+- update deps version for avoiding *, updated atm0s-sdn to 0.1.1 ([#87](https://github.com/8xFF/atm0s-media-server/pull/87))
+- auto build releases and publish docker ([#84](https://github.com/8xFF/atm0s-media-server/pull/84))
+
+### Other
+- fix release-plz config ([#188](https://github.com/8xFF/atm0s-media-server/pull/188))
+- release server 0.1.1 ([#123](https://github.com/8xFF/atm0s-media-server/pull/123))
+- restructure cargo workspace deps and fix [#122](https://github.com/8xFF/atm0s-media-server/pull/122) ([#125](https://github.com/8xFF/atm0s-media-server/pull/125))
+- temporal set publish=false sip transport ([#94](https://github.com/8xFF/atm0s-media-server/pull/94))
+- release ([#88](https://github.com/8xFF/atm0s-media-server/pull/88))
+- rename package. added release-plz for auto manage version ([#70](https://github.com/8xFF/atm0s-media-server/pull/70))
+- 9 incomplete sip server ([#52](https://github.com/8xFF/atm0s-media-server/pull/52))
+
 ## [0.1.1](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-v0.1.0...atm0s-media-server-v0.1.1) - 2024-01-24
 
 ### Added
