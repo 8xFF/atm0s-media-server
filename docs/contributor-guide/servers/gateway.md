@@ -1,4 +1,4 @@
-# Gateway Server
+# Gateway
 
 The Gateway Server holds a list of resources. There are two types of gateways: zone-level gateways, which hold all servers within their zone, and global gateways, which hold all zone gateways. Gateways act as routers, directing user requests to the best or destination node based on the request type and parameters.
 
