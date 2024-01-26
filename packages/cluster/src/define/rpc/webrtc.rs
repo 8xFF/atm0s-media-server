@@ -23,20 +23,26 @@ pub struct WebrtcConnectRequestSender {
     pub screen: Option<bool>,
 }
 
+fn default_ipaddr() -> IpAddr {
+    IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+}
+
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct WebrtcConnectRequest {
     pub session_uuid: Option<u64>,
+    #[oai(default = "default_ipaddr")]
     pub ip_addr: IpAddr,
+    #[oai(default = "String::default")]
     pub user_agent: String,
     pub version: Option<String>,
     pub room: String,
     pub peer: String,
-    #[serde(default = "ClusterEndpointSubscribeScope::default")]
+    #[oai(default = "ClusterEndpointSubscribeScope::default")]
     pub sub_scope: ClusterEndpointSubscribeScope,
-    #[serde(default = "ClusterEndpointPublishScope::default")]
+    #[oai(default = "ClusterEndpointPublishScope::default")]
     pub pub_scope: ClusterEndpointPublishScope,
     pub token: String,
-    #[serde(default = "MixMinusAudioMode::default")]
+    #[oai(default = "MixMinusAudioMode::default")]
     pub mix_minus_audio: MixMinusAudioMode,
     pub join_now: Option<bool>,
     pub codecs: Option<Vec<PayloadType>>,
@@ -44,7 +50,7 @@ pub struct WebrtcConnectRequest {
     pub sdp: Option<String>,
     pub compressed_sdp: Option<Vec<u8>>,
     pub senders: Vec<WebrtcConnectRequestSender>,
-    #[serde(default = "BitrateControlMode::default")]
+    #[oai(default = "BitrateControlMode::default")]
     pub remote_bitrate_control_mode: BitrateControlMode,
 }
 
