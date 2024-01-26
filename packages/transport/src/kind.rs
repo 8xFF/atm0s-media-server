@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy, Hash, Enum)]
 pub enum MediaKind {
     #[serde(rename = "audio")]
+    #[oai(rename = "audio")]
     Audio,
     #[serde(rename = "video")]
+    #[oai(rename = "video")]
     Video,
 }
 
