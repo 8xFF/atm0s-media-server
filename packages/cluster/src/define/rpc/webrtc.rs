@@ -1,8 +1,11 @@
-use std::{fmt::Debug, net::IpAddr};
+use std::fmt::Debug;
 
 use crate::{ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MediaSessionToken, VerifyObject};
 
-use super::super::media::{BitrateControlMode, MixMinusAudioMode, PayloadType};
+use super::{
+    super::media::{BitrateControlMode, MixMinusAudioMode, PayloadType},
+    general::RemoteAddr,
+};
 use poem_openapi::Object;
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
@@ -23,16 +26,13 @@ pub struct WebrtcConnectRequestSender {
     pub screen: Option<bool>,
 }
 
-fn default_ipaddr() -> IpAddr {
-    IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
-}
-
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct WebrtcConnectRequest {
-    pub session_uuid: Option<u64>,
-    #[oai(default = "default_ipaddr")]
-    pub ip_addr: IpAddr,
-    #[oai(default = "String::default")]
+    #[oai(skip)]
+    pub session_uuid: u64,
+    #[oai(skip)]
+    pub ip_addr: RemoteAddr,
+    #[oai(skip)]
     pub user_agent: String,
     pub version: Option<String>,
     pub room: String,

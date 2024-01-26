@@ -221,11 +221,11 @@ where
                     node_id,
                     ServiceType::Webrtc,
                     RPC_WEBRTC_CONNECT,
-                    req.param().ip_addr,
+                    req.param().ip_addr.clone().into(),
                     location,
                     &req.param().version.clone(),
                     &req.param().user_agent.clone(),
-                    req.param().session_uuid.expect("Should assign session_uuid on gateway"),
+                    req.param().session_uuid,
                     req,
                     dest_service_id,
                 );
