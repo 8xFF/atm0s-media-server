@@ -26,6 +26,7 @@ pub enum ClusterStateEndpointState {
 pub enum ClusterEndpointSubscribeScope {
     Full,
     #[serde(rename = "stream_only")]
+    #[oai(rename = "stream_only")]
     StreamOnly,
     Manual,
 }
@@ -53,6 +54,8 @@ impl Default for ClusterEndpointSubscribeScope {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Copy, Clone, Enum)]
 pub enum ClusterEndpointPublishScope {
     Full,
+    #[serde(rename = "stream_only")]
+    #[oai(rename = "stream_only")]
     StreamOnly,
 }
 

@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 pub struct Response<T: ParseFromJSON + ToJSON + Type + Send + Sync> {
     pub status: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[oai(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
 }
