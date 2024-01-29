@@ -417,7 +417,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "async-std",
  "async-trait",
@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-cluster"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -482,7 +482,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-endpoint"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-std",
  "atm0s-media-server-audio-mixer",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-transport"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -524,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-transport-rtmp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-transport-sip"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -564,7 +564,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-transport-webrtc"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-std",
  "async-trait",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-utils"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-std",
  "flate2",
