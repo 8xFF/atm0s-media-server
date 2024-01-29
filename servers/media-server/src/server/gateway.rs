@@ -58,6 +58,11 @@ pub struct GatewayArgs {
     #[arg(value_enum, env, long, default_value_t = GatewayMode::Inner)]
     pub mode: GatewayMode,
 
+    /// Standalone mode. 
+    /// If true, the gateway will not try to ping global gateway
+    #[arg(env, long, default_value_t = false)]
+    pub standalone: bool,
+
     /// Gateway group, only set if mode is Inner
     #[arg(env, long, default_value = "")]
     pub group: String,
@@ -137,7 +142,7 @@ where
                 continue;
             }
             _ = gateway_feedback_tick.next().fuse() => {
-                if matches!(opts.mode, GatewayMode::Inner) {
+                if matches!(opts.mode, GatewayMode::Inner) && !opts.standalone {
                     ping_global_gateway(&gateway_logic, &opts.group, (F32::<2>::new(opts.lat), F32::<2>::new(opts.lng)), node_id, &rpc_emitter);
                 }
 
