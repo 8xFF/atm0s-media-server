@@ -24,7 +24,7 @@ Next, we will describe how it work.
 
 We can see in stream application we will have some rooms, each room will have some peers. Each peer will publish a stream and subscribe some streams from other peers. Each room can have some data like room name, room metadata, room settings, .. Each peer can have some data like peer name, peer metadata, peer settings. So we can store room and peer data in a key-value store. All streams can be split into sender and receiver, which is corresponding with publish and subscribe. So we can process stream data in a pub-sub channel.
 
-![How it works](./imgs/how-it-works.excalidraw.png)
+![How it works](/imgs/architecture/how-it-works.excalidraw.png)
 
 With above ways, if the network can scale pub-sub publishers and number of subscribers, we can scale the media server as well.
 And we can do this by atm0s-sdn with decentralized pub-sub and key-value store.
@@ -40,4 +40,4 @@ With kv store, we will known which node is holding data for any channel, so we c
 - The publisher is not overload by sending data to many nodes
 - The data path between publisher and subscriber is fast
 
-![Why it fast](./imgs/why-it-fast.excalidraw.png)
+![Why it fast](/imgs/architecture/why-it-fast.excalidraw.png)
