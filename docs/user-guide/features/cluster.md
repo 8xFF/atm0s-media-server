@@ -6,6 +6,6 @@ We can have multi gateway nodes, multi media-server nodes in a cluster, which en
 
 We have 2 cluster mode: single zone and multi zones.
 
-![Single zone](/imgs/single-zone.excalidraw.png)
+![Single zone](../../imgs/single-zone.excalidraw.png)
 
-![Multi zones](/imgs/multi-zones.excalidraw.png)
+![Multi zones](../../imgs/multi-zones.excalidraw.png)

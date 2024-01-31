@@ -32,7 +32,7 @@ We can config which node-id, secret for all nodes in cluster. We can also config
 
 For config zone info, we will config zone group value, which is used for grouping nodes in cluster. For example, we can have some text like asia-01, asia-02, us-01, us02. Or can more specific like asia-singapore, asia-tokyo, us-newyork, us-sanfrancisco. The zone group is used for automatic building network topology without any manual configuration.
 
-![Multi zones](/docs/imgs/multi-zones.excalidraw.png)
+![Multi zones](../imgs/multi-zones.excalidraw.png)
 
 We also can config http port and tls for http server, it will be used for some control api.
 

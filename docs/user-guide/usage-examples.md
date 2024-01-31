@@ -6,7 +6,7 @@ This example shows some usage examples of the atm0s-media-server
 
 Video conference mainly used with at least 2 region, thefore we need to deploy multi zones cluster. We will have video-conference logic in a main zone, and some other zones will be used for media server. We also have some addition feature like slide, drawing, that will be handle by main zone over websocket connection.
 
-![Video conference](/imgs/usecases/video-conference.excalidraw.png)
+![Video conference](../imgs/usecases/video-conference.excalidraw.png)
 
 ### CCTV system
 
@@ -14,7 +14,7 @@ Atm0s Media Server can act as broadcast layer for CCTV system, which can be view
 
 This also can be use to add a cctv system to a video conference room.
 
-![Video conference](/imgs/usecases/cctv-extended.excalidraw.png)
+![Video conference](../imgs/usecases/cctv-extended.excalidraw.png)
 
 ### Broadcast
 
@@ -27,7 +27,7 @@ Media-over-Quic is considered as a future protocol for this usecase.
 
 In this usecase, with the help of smart-routing feature, we can ensure that the publisher is not overload by sending data to many nodes, and the data path between publisher and subscriber is fast.
 
-![Broadcast](/imgs/usecases/broadcast.excalidraw.png)
+![Broadcast](../imgs/usecases/broadcast.excalidraw.png)
 
 ### Clubhouse clone
 

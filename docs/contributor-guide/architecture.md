@@ -34,11 +34,11 @@ Each time a peer joined to room, we will set key-value according to peer info an
 
 When a peer leave room, we will remove key-value and unsubscribe from stream channel. Other peers will received event from key-value store and unsubscribe from stream channel if need.
 
-![How it works](/imgs/architecture/how-it-works.excalidraw.png)
+![How it works](../imgs/architecture/how-it-works.excalidraw.png)
 
 About PubSub between nodes, atm0s-sdn overlay network will ensure both thing: bandwidth saving and fast data path.
 
-![Why it fast](/imgs/architecture/why-it-fast.excalidraw.png)
+![Why it fast](../imgs/architecture/why-it-fast.excalidraw.png)
 
 ## Implementations
 
@@ -50,7 +50,7 @@ For implement above mechanism, the source code is split into
 
 The relationship between them is described in bellow diagram:
 
-![Architecture](/imgs/architecture/implement-layers.excalidraw.png)
+![Architecture](../imgs/architecture/implement-layers.excalidraw.png)
 
 
 ### Transport
@@ -111,11 +111,11 @@ pub enum TransportIncomingEvent<RE, RR, RL> {
 
 Endpoint is core logic of atm0s-media-server. It manage how to process event from transport and how to communicate with cluster. The endpoint is designed with SAN IO style, which all logic is independent with I/O and process without async/await. The endpoint is implement inside `packages/endpoint`, can can be defined as bellow:
 
-![Endpoint](/imgs/architecture/endpoint.excalidraw.png)
+![Endpoint](../imgs/architecture/endpoint.excalidraw.png)
 
 
 ### Task scheduler
 
 For support large number of peers, we will have a lot of tasks, and for simpler we will only have one task for each endpoint. This is done by `async_std::task::spawn`. The relation between each task is described in bellow diagram:
 
-![Tasks](/imgs/architecture/tasks.excalidraw.png)
+![Tasks](../imgs/architecture/tasks.excalidraw.png)

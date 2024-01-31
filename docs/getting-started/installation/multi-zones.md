@@ -4,7 +4,7 @@ You can deploy multi zones cluster to scale up your cluster. Each zone is a sing
 
 Multi zones is simple some zones which interconnect with each other. In this mode, we will deploy some addition gateway nodes call global gateway nodes. These nodes will route requests to best zone based on user location and that load, some room users may be routed to different zones.
 
-![Multi zones](/imgs/multi-zones.excalidraw.png)
+![Multi zones](../../imgs/multi-zones.excalidraw.png)
 
 In this mode, all global gateway nodes will interconnect with each other. This will take care of route data between zones.
 

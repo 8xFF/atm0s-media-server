@@ -10,7 +10,7 @@ In this mode, gateway will route requests to best node based on that load, some 
 
 The architecture of a single zone cluster is as follows:
 
-![Single zone](/imgs/single-zone.excalidraw.png)
+![Single zone](../../imgs/single-zone.excalidraw.png)
 
 ## Prerequisites
 
