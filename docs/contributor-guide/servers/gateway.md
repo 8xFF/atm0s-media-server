@@ -1,11 +1,11 @@
 # Gateway
 
-The Gateway Server holds a list of resources. There are two types of gateways: zone-level gateways, which hold all servers within their zone, and global gateways, which hold all zone gateways. Gateways act as routers, directing user requests to the best or destination node based on the request type and parameters.
+The Gateway Server holds a list of resources. It will be used to route a request to the correct Media Server.
 
-### Inner Gateway
+The route logic is described in bellow:
 
-This gateway is used to route a request to the best node inside a zone.
+- If request in closest zone, then route to that best media server in current zone.
+- If request in different zone, then route to other gateway which closest to user zone.
 
-### Global Gateway
-
-This gateway is used to route a request to the closest zone to the user. To determine the user's location, we use the free maxmind-db geo-ip. You can download it by running the script `download-geodata.sh`.
+For implement above approach, each media server will broadcast its information to all same zone gateway, this is done by using atm0s-sdn PubSub feature.
+In addition, each gateway also broadcast its information to all other gateway. This also is done by using atm0s-sdn PubSub feature.

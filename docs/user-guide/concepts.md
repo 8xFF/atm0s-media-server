@@ -41,3 +41,25 @@ With kv store, we will known which node is holding data for any channel, so we c
 - The data path between publisher and subscriber is fast
 
 ![Why it fast](/imgs/architecture/why-it-fast.excalidraw.png)
+
+## How to use
+
+For using media-server we will need some sdk or client:
+
+- Whip/Whep
+- WebRTC SDK (js, react, react-native ...)
+- SIP client
+- RTMP client
+
+With WebRTC SDK, we have most flexible way to create a streaming application, we will have:
+
+- sender: publish a stream
+- receiver: subscribe a any stream, can switch between streams or disable/enable.
+
+For control quality of streams, which is very important for streaming application, we will have 3 params:
+
+- priority
+- max, min spartial
+- max, min temporal
+
+With above params, which can be config with receiver, server will calculate how many bitrate should be send to receiver. And with bitrate, we will select which layer of simulcast/svc should be send to receiver.
