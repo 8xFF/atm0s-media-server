@@ -1,34 +1,33 @@
-# Usage example
+# Usage Examples
 
-This example shows some usage examples of the atm0s-media-server
+This section provides some usage examples of the atm0s-media-server. If you have a specific use case in mind, please let us know by creating an issue or a pull request.
 
-### Video conference
+## Video Conference
 
-Video conference mainly used with at least 2 region, thefore we need to deploy multi zones cluster. We will have video-conference logic in a main zone, and some other zones will be used for media server. We also have some addition feature like slide, drawing, that will be handle by main zone over websocket connection.
+A video conference is typically used with at least 2 regions, requiring a multi-zone cluster deployment. The main zone handles the video conference logic, while other zones are used for media server purposes. Additional features such as slides and drawing are handled by the main zone over a WebSocket connection.
 
 ![Video conference](../imgs/usecases/video-conference.excalidraw.png)
 
-### CCTV system
+## CCTV System
 
-Atm0s Media Server can act as broadcast layer for CCTV system, which can be view by wide range of devices like: web, mobile, smart tv. This also support large of viewer, which can be scale up by adding more media server nodes on the cloud. The network topology is simple, we can work with edge only nodes or connect with cloud for providing more addvance feature like.
+Atm0s Media Server can act as a broadcast layer for a CCTV system, allowing it to be viewed on various devices such as web, mobile, and smart TVs. It supports a large number of viewers and can be scaled up by adding more media server nodes in the cloud. The network topology can be simple, working with edge-only nodes, or connected to the cloud for advanced features.
 
-This also can be use to add a cctv system to a video conference room.
+It can also be used to add a CCTV system to a video conference room.
 
-![Video conference](../imgs/usecases/cctv-extended.excalidraw.png)
+![CCTV system](../imgs/usecases/cctv-extended.excalidraw.png)
 
-### Broadcast
+## Broadcast
 
-Atm0s Media Server can be use for ultra-low-latency broadcast system, which can archive under 500ms latency.
-We can use scale and multi-zone features to scale up the system with large number of viewers over the world.
+Atm0s Media Server can be used for an ultra-low-latency broadcast system, achieving latency under 500ms. The system can be scaled up using the scale and multi-zone features to accommodate a large number of viewers worldwide.
 
-Ingress can be multi protocol like: WHIP, RTMP, or WebRTC SDK.
-Engress can be multi protocol like: WHEP, or WebRTC SDK.
-Media-over-Quic is considered as a future protocol for this usecase.
+Ingress can support multiple protocols such as WHIP, RTMP, or WebRTC SDK.
+Egress can support multiple protocols such as WHEP or WebRTC SDK.
+Media-over-Quic, SRT is considered a future protocol for this use case.
 
-In this usecase, with the help of smart-routing feature, we can ensure that the publisher is not overload by sending data to many nodes, and the data path between publisher and subscriber is fast.
+With the help of the smart-routing feature, the publisher is not overloaded by sending data to many nodes, and the data path between the publisher and subscriber is optimized for speed.
 
 ![Broadcast](../imgs/usecases/broadcast.excalidraw.png)
 
-### Clubhouse clone
+## Clubhouse Clone
 
-Same with above video conference, we can work with audio only mode and mix-minus features, which can be use for a huge audio room without audio transcode. Only most highest volume audio stream will be send to other peers. Typically we chose 3 most highest volume audio stream to send to other peers.
+Similar to the video conference use case, the atm0s-media-server can work in audio-only mode and support mix-minus features. This makes it suitable for hosting large audio rooms without audio transcoding. Only the highest volume audio streams are sent to other peers. Typically, the three highest volume audio streams are chosen to be sent to other peers.

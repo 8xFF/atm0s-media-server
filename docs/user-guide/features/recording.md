@@ -1,7 +1,9 @@
 # Recording (Incomplete)
 
-For maximum performance and flexibility, we don't do any media transcode when recording. Instead, we record raw media data and store it in a file. This way also can be very flexible, for example we can record all rooms, but only compose some rooms to a single file after that.
+For maximum performance and flexibility, we don't do any media transcoding when recording. Instead, we record raw media data and store it in a file. This way can also be very flexible; for example, we can record all rooms but only compose some rooms to a single file after that. This way also allow us to replay the recording without any transcoding.
 
-For simple integrate, we use s3 as storage backend. Each media-server will collect raw streams and put to s3 upload queue. S3 destination is configured in media-server config file or fetch dynamic from connector service.
+For simple integration, we use S3 as the storage backend. Each media server will collect raw streams and put them in the S3 upload queue. The S3 destination is configured in the media server config file or fetched dynamically from the connector service.
 
-TODO: write about some best practice.
+TODO: Write about some best practices.
+
+# How to use

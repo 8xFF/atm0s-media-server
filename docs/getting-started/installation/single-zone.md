@@ -1,12 +1,12 @@
 # Single zone
 
 Single zone is the simplest way to deploy a cluster. It is suitable for small scale deployment, testing and development.
-When you deploy a single zone cluster, all nodes are in the same zone. The cluster has the following nodes:
+When deploying a single zone cluster, all nodes are in the same zone. The cluster has the following nodes:
 
 - Inner Gateway nodes
 - Media server nodes (WebRTC, SIP or RTMP depending on your needs)
 
-In this mode, gateway will route requests to best node based on that load, some room users may be routed to different media server nodes.
+In this mode, the gateway will route requests to the best node based on the load, and some users in the same room may be routed to different media server nodes.
 
 The architecture of a single zone cluster is as follows:
 
@@ -15,11 +15,11 @@ The architecture of a single zone cluster is as follows:
 ## Prerequisites
 
 - [Install Docker](https://docs.docker.com/engine/install/)
-- Prepare a secret
-- Prepare a zone prefix, it can be 0x000000 (24bit)
-- Prepare a domain for gateway endpoint
-- Prepare a proxy to route traffic to gateway endpoint (optional)
-- Prepare server index for each node, from 0 to 255
+- Prepare a secret:
+- Prepare a zone prefix (it can be 0x000000, 24bit):
+- Prepare a domain for gateway endpoint:
+- Prepare a proxy to route traffic to gateway endpoint (optional):
+- Prepare server index for each node (from 0 to 255):
 
 ## Deploy some gateway nodes
 

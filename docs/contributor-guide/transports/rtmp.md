@@ -1,8 +1,8 @@
 # RTMP
 
-RTMP transport is implemeted by use rml_rtmp crate.
+RTMP transport is implemented by using the rml_rtmp crate.
 
-We start a tcp-server inside media-server create, then create a transport from incomming tcp stream.
+We start a tcp-server inside media-server create, then create a transport from incoming tcp stream.
 
 Each rtmp session is processed in SAN/IO style:
 

@@ -1,7 +1,7 @@
 # Authentication and Multi Tenancy
 
-We support authentication by using JWT token. We also support multi tenancy by using JWT token. We use `sub` claim in JWT token to identify user and tenant.
+We support authentication using JWT tokens. Additionally, we provide support for multi-tenancy using JWT tokens. The `sub` claim in the JWT token is used to identify both the user and the tenant.
 
-When create a session token, we will add `sub` claim to JWT token. This claim will be used to identify tenant.
+When creating a session token, we include the `sub` claim in the JWT token. This claim is used to identify the tenant.
 
-For extending authentication, please refer to Contributor Guide docs.
+For more information on extending authentication, please refer to the Contributor Guide documentation.

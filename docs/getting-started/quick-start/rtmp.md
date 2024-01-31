@@ -1,8 +1,8 @@
 # RTMP
 
-You can use RTMP to publish to our media server. Currently we dont support transcode, so you need to publish with same resolution and codec with your room.
+You can use RTMP to publish to our media server. Currently, we don't support transcoding, so you need to publish with the same resolution and codec that correspond to your viewers.
 
-Prefer codecs:
+Preferred codecs:
 
 - Video: H264, baseline profile, bitrate 2500kbps
 - Audio: AAC, bitrate 128kbps

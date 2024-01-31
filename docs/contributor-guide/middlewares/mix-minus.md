@@ -1,20 +1,20 @@
 # Mix-minus
 
-Mix-minus middleware will create some virtual output tracks, then hook event when endpoint's call switch receiver to the output tracks.
+The Mix-minus middleware will create some virtual output tracks and hook events when the endpoint's call switches the receiver to the output tracks.
 
-After that, middleware will select most highest volume track and binding to output tracks. The middleware also hook into media packet event and output to the output tracks, then it will be sent into client.
+After that, the middleware will select the track with the highest volume and bind it to the output tracks. The middleware also hooks into the media packet event and outputs it to the output tracks, which will then be sent to the client.
 
-We have 2 modes: mix all tracks in a room, and manual mix tracks.
+We have 2 modes: mix all tracks in a room and manual mix tracks.
 
 ## Mix all tracks in a room mode
 
-In this mode, middleware will hook into cluster track added or removed event, then automatic subscribe or unsubscribe to the track. All audio data will be sent into audio mixer, then audio mixer will select most highest volume track and binding to output tracks.
+In this mode, the middleware will hook into the cluster track added or removed events and automatically subscribe or unsubscribe to the track. All audio data will be sent to the audio mixer, which will select the track with the highest volume and bind it to the output tracks.
 
 ## Manual mix tracks mode
 
-In that mode, client will use sdk to add or remove tracks to audio mixer. The audio mixer will subscribe or unsubscribe to the track, then select most highest volume track and binding to output tracks.
+In this mode, the client will use the SDK to add or remove tracks to the audio mixer. The audio mixer will subscribe or unsubscribe to the track, and then select the track with the highest volume and bind it to the output tracks.
 
 
 ## Feature improvement
 
-Instead of subscribe all audio tracks, we can have multi layers track (metadta, data ..), first it only need subscribe first metadata layer (which have audio level info), then when we need to mix, we can subscribe more layer to get actual audio data.
+Instead of subscribing to all audio tracks, we can have multiple layers of tracks (metadata, data, etc.). Initially, we only need to subscribe to the first metadata layer (which contains audio level information), and then when we need to mix, we can subscribe to more layers to get the actual audio data.

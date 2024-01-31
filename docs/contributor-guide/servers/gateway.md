@@ -1,11 +1,11 @@
 # Gateway
 
-The Gateway Server holds a list of resources. It will be used to route a request to the correct Media Server.
+The Gateway Server holds a list of media servers and is used to route requests to the correct media server.
 
-The route logic is described in bellow:
+The routing logic is described below:
 
-- If request in closest zone, then route to that best media server in current zone.
-- If request in different zone, then route to other gateway which closest to user zone.
+- If the request is in the closest zone, then route it to the best media server in the current zone.
+- If the request is in a different zone, then route it to the other gateway that is closest to the user's zone.
 
-For implement above approach, each media server will broadcast its information to all same zone gateway, this is done by using atm0s-sdn PubSub feature.
-In addition, each gateway also broadcast its information to all other gateway. This also is done by using atm0s-sdn PubSub feature.
+To implement the above approach, each media server will broadcast its information to all gateways in the same zone. This is done using the atm0s-sdn PubSub feature.
+Additionally, each gateway will also broadcast its information to all other gateways. This is also done using the atm0s-sdn PubSub feature.

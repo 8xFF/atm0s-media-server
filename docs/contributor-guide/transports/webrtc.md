@@ -1,9 +1,9 @@
 # WebRTC
 
-WebRTC is using SAN I/O libary called str0m.
+WebRTC is using a SAN I/O library called Str0m.
 
-We have internal part which take care about protocol and transport logic without coupple with I/O. For integrate with I/O and other part, we have wrapper WebrtcTransport which will convert str0m event to internal event and vice versa.
+We have an internal part which takes care of the protocol and transport logic without coupling with I/O. To integrate with I/O and other parts, we have a wrapper called WebrtcTransport, which will process I/O and convert Str0m events to internal events and vice versa.
 
-Curretly we support UDP, SSLTCP.
+Currently, we support UDP and SSLTCP.
 
 TODO: STUN client, TURN server

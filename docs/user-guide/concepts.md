@@ -1,65 +1,70 @@
 # Concepts
 
-atm0s-media-server is designed to be a scalable, flexible and reliable media server. It can be deployed in a single zone or multi zones. In this document, we will describe how atm0s-media-server works and how to deploy it.
+## Introduction
+
+atm0s-media-server is a scalable, flexible, and reliable media server designed to meet the needs of modern streaming applications. Whether deployed in a single zone or across multiple zones, atm0s-media-server provides a powerful solution for handling media streams.
+
+In this document, we will explore the key concepts behind atm0s-media-server, its approach to media streaming, how it works, why it is fast, and how to use it effectively.
 
 ## Approach
 
-We create media server with bellow appaches:
+## Key Features
 
-- Scale both in single zone and multi zones
-- Support multiple protocols: WebRTC, SIP, RTMP
-- Support multiple codecs: VP8, VP9, H264, OPUS, ..
-- Fit with any stream application: video conference, live streaming, spatial room ..
-- Focus on ultra low latency
-- Users in same room don't need to be routed to same media server node
+- Scalability: atm0s-media-server can scale both in a single zone and across multiple zones, allowing for handling large volumes of media streams.
+- Protocol Support: It supports multiple protocols such as WebRTC, SIP, and RTMP, providing flexibility for different streaming applications.
+- Codec Support: atm0s-media-server is compatible with various codecs including VP8, VP9, H264, OPUS, and more, ensuring compatibility with different media formats.
+- Versatility: It is designed to fit any stream application, whether it's video conferencing, live streaming, or spatial room applications.
+- Ultra Low Latency: The focus of atm0s-media-server is on achieving ultra-low latency, ensuring real-time communication and smooth streaming experiences.
+- Distributed Routing: Users in the same room are not required to be routed to the same media server node, allowing for efficient load balancing and improved performance.
 
 ## How it works
 
-For adapt with above approachs, we design atm0s-media-server with fastest path routing algorithm, which is based on [atm0s-sdn](https://github.com/8xff/atm0s-sdn) as bellow:
+To ensure smooth operation and seamless integration with the described approaches, atm0s-media-server is designed with a fastest path routing algorithm, leveraging the power of [atm0s-sdn](https://github.com/8xff/atm0s-sdn) as follows:
 
-- Each peer stream is a atm0s-sdn pub-sub channel
-- Room and Peer metadata is stored in a atm0s-sdn key-value store
+- Each peer stream is treated as a pub-sub channel within atm0s-sdn.
+- Room and peer metadata are stored in a dedicated key-value store within atm0s-sdn.
 
-Next, we will describe how it work.
+Let's dive deeper into how it works.
 
-We can see in stream application we will have some rooms, each room will have some peers. Each peer will publish a stream and subscribe some streams from other peers. Each room can have some data like room name, room metadata, room settings, .. Each peer can have some data like peer name, peer metadata, peer settings. So we can store room and peer data in a key-value store. All streams can be split into sender and receiver, which is corresponding with publish and subscribe. So we can process stream data in a pub-sub channel.
+In a streaming application, multiple rooms exist, each containing several peers. Each peer publishes a stream and subscribes to streams from other peers. Additionally, each room and peer can have associated metadata and settings. To efficiently manage this data, we utilize a key-value store. The streams themselves are divided into senders (publishers) and receivers (subscribers), which are processed within the pub-sub channel.
+
+This architecture ensures a smoother operation and seamless handling of media streams within atm0s-media-server.
 
 ![How it works](../imgs/architecture/how-it-works.excalidraw.png)
 
-With above ways, if the network can scale pub-sub publishers and number of subscribers, we can scale the media server as well.
-And we can do this by atm0s-sdn with decentralized pub-sub and key-value store.
+With the above approaches, we can effectively scale both the pub-sub publishers and the number of subscribers, resulting in a smoother operation of the media server. This scalability is achieved through the decentralized pub-sub and key-value store provided by atm0s-sdn.
 
 ## Why it fast
 
-Next we will describe how atm0s-media-server can be fast.
+Next, let's explore how atm0s-media-server achieves smooth and efficient operation.
 
-Based on atm0s-sdn, in easy explain each node have some connections to other nodes, and each node have route table which known which path is best path to go to any other nodes. The route table is periodically updated by atm0s-sdn. So this route is adapt with network changes in very short time.
+Based on atm0s-sdn, each node establishes connections with other nodes and maintains a route table that determines the best path to reach any other node. This route table is continuously updated, allowing for quick adaptation to network changes.
 
-With kv store, we will known which node is holding data for any channel, so we can sending SUB message to that node. And we can ensure that the sending path is fast. In the way the SUB message is sending, if the received node is already subscribe to that channel, it will reuse subscription. By that way, if have many nodes subscribe to same channel, the publisher is only send data to some number of nodes not greater than the number of connected neighbours. Which will ensure both thing:
+Using the key-value store, we can easily identify the node responsible for a specific channel and send subscription messages directly to that node. This ensures a fast and optimized data path. Additionally, if a node is already subscribed to a channel, it can reuse the existing subscription. This approach minimizes the number of nodes that receive data from the publisher, resulting in:
 
-- The publisher is not overload by sending data to many nodes
-- The data path between publisher and subscriber is fast
+- Reduced load on the publisher by limiting the number of data transmissions
+- Fast and efficient data transmission between the publisher and subscribers
 
 ![Why it fast](../imgs/architecture/why-it-fast.excalidraw.png)
 
 ## How to use
 
-For using media-server we will need some sdk or client:
+For using the media-server, you will need the following SDKs or clients:
 
 - Whip/Whep
-- WebRTC SDK (js, react, react-native ...)
+- WebRTC SDK (JavaScript, React, React Native, etc.)
 - SIP client
 - RTMP client
 
-With WebRTC SDK, we have most flexible way to create a streaming application, we will have:
+When using the WebRTC SDK, you have the most flexible way to create a streaming application. You can:
 
-- sender: publish a stream
-- receiver: subscribe a any stream, can switch between streams or disable/enable.
+- Publish a stream as a sender
+- Subscribe to any stream as a receiver and switch between streams or disable/enable them.
 
-For control quality of streams, which is very important for streaming application, we will have 3 params:
+To control the quality of streams, which is crucial for a streaming application, you can configure the following parameters:
 
-- priority
-- max, min spartial
-- max, min temporal
+- Priority
+- Maximum and minimum spatial resolution
+- Maximum and minimum temporal resolution
 
-With above params, which can be config with receiver, server will calculate how many bitrate should be send to receiver. And with bitrate, we will select which layer of simulcast/svc should be send to receiver.
+Based on these parameters, the server will calculate the appropriate bitrate to send to the receiver. The bitrate will determine which layer of simulcast/SVC should be sent to the receiver.

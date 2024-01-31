@@ -1,6 +1,6 @@
 # Simulcast
 
-For implementing simulcast, each media packet will has a codec meta:
+For implementing simulcast, each media packet will have a codec meta:
 
 ```rust
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
@@ -13,7 +13,7 @@ pub enum PayloadCodec {
 }
 ```
 
-example with Vp8 we have:
+Example with Vp8 we have:
 
 ```rust
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -36,7 +36,7 @@ Currently we supported:
 - VP8 Simulcast
 - VP9 SVC
 
-For implement mor support with other codec like AV1, we need to add more type to PayloadCodec and implement `ScalableFilter` trait for that codec.
+For implementing more support with other codecs such as AV1, we need to add more types to PayloadCodec and implement the `ScalableFilter` trait for that codec.
 
 ```rust
 trait ScalableFilter: Send + Sync {

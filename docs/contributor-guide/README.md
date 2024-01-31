@@ -4,5 +4,10 @@ This document is intended for developers who want to contribute to atm0s-media-s
 
 ## Table of contents
 
-- [Architecture](./architecture.md)
 - [Getting started](./getting-started.md)
+- [Architecture](./architecture.md)
+- [Features](./features/)
+- [Transports](./transports/)
+- [Middlewares](./middlewares/)
+- [Servers](./servers/)
+- [RFCs](./rfcs/)

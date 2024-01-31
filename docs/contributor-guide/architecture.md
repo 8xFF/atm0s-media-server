@@ -1,57 +1,56 @@
 # Architecture
 
-For undestand atm0s-media-server this document will introduce some design approach about it. The document is split to 2 part: abstract design and implements design.
+To understand atm0s-media-server, this document will introduce some design approaches about it. The document is split into 2 parts: abstract design and implementation design.
 
 ## Abstract design
 
-Different with other media-server is based on single node architecture and manual relay between nodes, atm0s-media-server is designed with global cluster from start. We dont reliaze on any single node or single source of data, you can image that we a have a huge cluster accross many zone which support:
+Different from other media servers that are based on single node architecture and manual relay between nodes, atm0s-media-server is designed with a global cluster from the start. We don't rely on any single node or single source of data, you can imagine that we have a huge cluster across many zones which supports:
 
-- Key Value store: support HashMap, Set, Del, Sub
-- Publish and Subscribe: support publish and subscribe
+- Key Value store: supports HashMap, Set, Del, Sub
+- Publish and Subscribe: supports publish and subscribe
 
-For any media-server, we only need some base features:
+For any media server, we only need some base features:
 
-- Client connect to server and join a room
-- Client receive room events: peer joined, leaved or stream started, updated, ended
-- Client receive stream data from other peers
+- Clients connect to the server and join a room
+- Clients receive room events: peer joined, left, or stream started, updated, ended
+- Clients receive stream data from other peers
 
-Next we will show how easy it implement with KeyValue and Pubsub mechanism.
+Next, we will show how easy it is to implement with the KeyValue and Pubsub mechanisms.
 
 KeyValue store:
 
-- MapID: room identify
-- Key: peer identify, stream identify
+- MapID: room identifier
+- Key: peer identifier, stream identifier
 - Value: peer info, stream info
-- Subscriber: each peers in room
+- Subscriber: each peer in the room
 
 PubSub:
 
-- Channel: room + peer + stream identify
-- Publisher: the peer who publish stream
-- Subscriber: the peers who subscribe stream
+- Channel: room/peer/stream as identifier
+- Publisher: the peer who publishes the stream
+- Subscriber: the peers who subscribe to the stream
 
-Each time a peer joined to room, we will set key-value according to peer info and what stream it published. Each other peers will received event from key-value store and subscribe to stream channel if need. By that way audio and video data will be transfered to the peers.
+Each time a peer joins a room, we will set the key-value according to the peer info and the stream it published. Other peers will receive events from the key-value store and subscribe to the stream channel if needed. By doing that, audio and video data will be transferred to the peers.
 
-When a peer leave room, we will remove key-value and unsubscribe from stream channel. Other peers will received event from key-value store and unsubscribe from stream channel if need.
+When a peer leaves a room, we will remove the key-value and unsubscribe from the stream channel. Other peers will receive events from the key-value store and unsubscribe from the stream channel if needed.
 
 ![How it works](../imgs/architecture/how-it-works.excalidraw.png)
 
-About PubSub between nodes, atm0s-sdn overlay network will ensure both thing: bandwidth saving and fast data path.
+About PubSub between nodes, atm0s-sdn overlay network will ensure both things: bandwidth saving and fast data path.
 
-![Why it fast](../imgs/architecture/why-it-fast.excalidraw.png)
+![Why it's fast](../imgs/architecture/why-it-fast.excalidraw.png)
 
 ## Implementations
 
-For implement above mechanism, the source code is split into
+To implement the above mechanism, the source code is divided into three main components:
 
-- Transport: for communicate with client, now we have: SIP, RTMP, WebRTC (SDK, Whip, Whep)
-- Endpoint: for processing inner logic like rooms, rpc. Inside endpoint we have middleware for implementing more features like: log, audio-mixer, custom behaviour.
-- Cluster: for communicate with key-value, pub-sub
+- Transport: This component handles communication with clients, including SIP, RTMP, and WebRTC (SDK, Whip, Whep).
+- Endpoint: The endpoint component is responsible for processing the inner logic of the system, such as managing rooms and handling RPC. Additionally, middleware can be added to the endpoint to implement additional features like logging, audio mixing, and custom behaviors.
+- Cluster: The cluster component facilitates communication with the key-value store and pub-sub system.
 
-The relationship between them is described in bellow diagram:
+The relationship between these components is illustrated in the diagram below:
 
 ![Architecture](../imgs/architecture/implement-layers.excalidraw.png)
-
 
 ### Transport
 
@@ -68,14 +67,14 @@ pub trait Transport<E, RmIn, RrIn, RlIn, RmOut, RrOut, RlOut> {
 }
 ```
 
-Each transport instance will be managed by endpoint by simple way:
+Each transport instance will be managed by the endpoint in a simple way:
 
-- Endpoint will call on_tick perdicately, example 100ms
-- Endpoint will pass event to transport by on_event
-- Endpoint will pass custom event to transport by on_custom_event, custom_event is from external source like RPC. Maybe it will be removed in future.
-- Endpoint will call recv to get event from transport
+- The endpoint will call `on_tick` periodically, for example, every 100ms.
+- The endpoint will pass events to the transport using `on_event`.
+- The endpoint will pass custom events to the transport using `on_custom_event`. Custom events are from external sources like RPC and may be removed in the future.
+- The endpoint will call `recv` to retrieve events from the transport.
 
-The event to Transport is defined as bellow:
+The event to the Transport is defined as below:
 
 ```Rust
 #[derive(PartialEq, Eq, Debug)]
@@ -109,13 +108,12 @@ pub enum TransportIncomingEvent<RE, RR, RL> {
 
 ### Endpoint
 
-Endpoint is core logic of atm0s-media-server. It manage how to process event from transport and how to communicate with cluster. The endpoint is designed with SAN IO style, which all logic is independent with I/O and process without async/await. The endpoint is implement inside `packages/endpoint`, can can be defined as bellow:
+The Endpoint is the core logic of atm0s-media-server. It manages how to process events from the transport and how to communicate with the cluster. The Endpoint is designed with a SAN IO style, where all internal logic is independent of I/O and processed without async/await. It is implemented inside the `packages/endpoint` crate and can be defined as follows:
 
 ![Endpoint](../imgs/architecture/endpoint.excalidraw.png)
 
-
 ### Task scheduler
 
-For support large number of peers, we will have a lot of tasks, and for simpler we will only have one task for each endpoint. This is done by `async_std::task::spawn`. The relation between each task is described in bellow diagram:
+To support a large number of peers, we will have multiple tasks. However, for simplicity, we will only have one task for each endpoint. These tasks are created using `async_std::task::spawn`. The relationship between each task is illustrated in the diagram below:
 
 ![Tasks](../imgs/architecture/tasks.excalidraw.png)

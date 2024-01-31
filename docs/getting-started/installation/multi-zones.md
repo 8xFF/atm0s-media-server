@@ -1,20 +1,20 @@
 # Multi zones
 
-You can deploy multi zones cluster to scale up your cluster. Each zone is a single zone cluster. You can deploy as many zones as you want.
+You can deploy a multi-zone cluster to scale up your cluster. Each zone is a single-zone cluster, and you can deploy many zones across the regions.
 
-Multi zones is simple some zones which interconnect with each other. In this mode, we will deploy some addition gateway nodes call global gateway nodes. These nodes will route requests to best zone based on user location and that load, some room users may be routed to different zones.
+In a multi-zone setup, the zones are interconnected. To achieve this, all gateway nodes are interconnected and each request will be routed to the closest zone's gateway node.
 
 ![Multi zones](../../imgs/multi-zones.excalidraw.png)
 
-In this mode, all global gateway nodes will interconnect with each other. This will take care of route data between zones.
+The gateway nodes also take part in routing media data between zones in the fastest path possible; data will be relayed if the direct connection is bad.
 
-Note that, you can deploy multi connector in some zones to handle room and peer event, but you need to take care how to handle that event by your self to ensure data consistance.
+Note that you can deploy multi connectors in some zones to handle room and peer events. However, you need to handle these events yourself to ensure data consistency.
 
 ## Prerequisites
 
-- Pick different zone prefix for each zone, example if you have 3 zone it can be: 0x000001, 0x000002, 0x000003
-- Select a secret for all zones
+- Choose a different zone prefix for each zone. For example, if you have 3 zones, they can be named 0x000001, 0x000002, and 0x000003.
+- Select a secret for all zones.
 
-## Deploy each zones same as single zone cluster
+## Deploying each zone, same as a single-zone cluster
 
-The deploy step is same with single zone but from zone 2, you need to add zone1 gateway address as seed node for each gateway nodes.
+The deployment steps are the same as for a single-zone cluster. However, starting from second zone, you need to add the first zone gateway address as a seed node for each gateway node.

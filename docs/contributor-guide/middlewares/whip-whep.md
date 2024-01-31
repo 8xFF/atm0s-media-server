@@ -1,14 +1,14 @@
-# Whip-Whep
+# Whip-Weep
 
-Whip and whep is implement by reuse Webrtc transport
+Whip and weep is implemented by reusing WebRTC transport.
 
 ## Whip
 
-We will create default remote audio track and video track for whip
+We will create a default remote audio track and video track for whip.
 
 - Audio track name: audio_main
 - Video track name: video_main
 
-## Whep middleware
+## Weep middleware
 
-We create and whep_auto_attach middleware which hook into cluster track added event, then automatic attach to the track. When attached track is removed, we will select from remain tracks if posible.
+We create a weep_auto_attach middleware which hooks into the cluster track added event, then automatically attaches to the track. When the attached track is removed, we will select from the remaining tracks if possible.

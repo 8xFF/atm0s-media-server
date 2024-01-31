@@ -1,6 +1,5 @@
-# Authentication and Multi Tenancy
-
-We can extend with custom authentication by implement `SessionTokenSigner` trait.
+# Authentication
+We can extend with custom authentication by implementing the `SessionTokenSigner` trait.
 
 ```rust
 pub trait SessionTokenSigner {

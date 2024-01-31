@@ -25,6 +25,7 @@
         - [Cluster](user-guide/features/cluster.md)
         - [Authentication and multi-tenancy](user-guide/features/authentication-and-multi-tenancy.md)
         - [Simulcast/Svc](user-guide/features/simulcast-svc.md)
+        - [Recording](user-guide/features/recording.md)
 
     - [Integration](user-guide/integration.md)
     - [Usage examples](user-guide/usage-examples.md)
@@ -38,7 +39,7 @@
         - [Simulcast/Svc](contributor-guide/features/simulcast-svc.md)
         - [Recording](contributor-guide/features/recording.md)
         - [Cluster](contributor-guide/features/cluster.md)
-        - [Authentication and Multi Tenancy](contributor-guide/features/authentication-and-multi-tenancy.md)
+        - [Authentication and Multi Tenancy](contributor-guide/features/authentication.md)
 
     - [Transports](contributor-guide/transports/README.md)
         - [WebRTC](contributor-guide/transports/webrtc.md)

@@ -1,5 +1,7 @@
 # Configuration
 
+The server is designed for simplicity in configuration. We have a single binary that can be configured to run as a gateway, WebRTC node, RTMP node, SIP node, or connector node. The configuration is done through command-line options and very simple without any complex configuration files.
+
 In this document, we will describe how to configure atm0s-media-server.
 
 ## Network and general configuration
@@ -28,17 +30,16 @@ Options:
   -V, --version                Print version
 ```
 
-We can config which node-id, secret for all nodes in cluster. We can also config which seeds for each node to connect to other nodes. Seeds list is list of address of node which will connect first for gathering more information about cluster. After connect to seeds, node will automatically connect to other nodes in cluster.
+We can configure the `node-id` and `secret` for all nodes in the cluster. Additionally, we can specify the `seeds` for each node to connect to other nodes. The `seeds` list contains the addresses of nodes that will be connected first to gather more information about the cluster. Once connected to the seeds, the node will automatically connect to other nodes in the cluster.
 
-For config zone info, we will config zone group value, which is used for grouping nodes in cluster. For example, we can have some text like asia-01, asia-02, us-01, us02. Or can more specific like asia-singapore, asia-tokyo, us-newyork, us-sanfrancisco. The zone group is used for automatic building network topology without any manual configuration.
-
+To configure zone information, we use the `sdn-group` opts, which is used for grouping nodes in the cluster. For example, we can have zone groups like `asia-01`, `asia-02`, `us-01`, `us-02`. Alternatively, we can be more specific with zone groups like `asia-singapore`, `asia-tokyo`, `us-newyork`, `us-sanfrancisco`. The zone group is used for automatically building the network topology without any manual configuration.
 ![Multi zones](../imgs/multi-zones.excalidraw.png)
 
-We also can config http port and tls for http server, it will be used for some control api.
+Additionally, we have the option to configure the HTTP port and enable TLS for the HTTP server. This is useful for controlling the API.
 
 ## Gateway Node
 
-Gateway node is node which will handle first client request connection, it will route request to best media-server node based on protocol type and client ip address. We use maxmindlite database for getting client location.
+The Gateway node is responsible for handling the initial client connection request. It routes the request to the most suitable media-server node based on the protocol type and client IP address. To determine the client's location, we utilize the MaxMind Lite database.
 
 ```bash
 Usage: atm0s-media-server gateway [OPTIONS]
@@ -51,7 +52,7 @@ Options:
   -V, --version              Print version
 ```
 
-If we have multi zone cluster, we need config lat, lng for each zone, and geoip-db database path. This will help gateway node route request to best zone based on client location.
+To enable multi-zone clustering, we can configure the latitude and longitude for each zone, as well as specify the path to the GeoIP database. This allows the gateway node to route client requests to the optimal zone based on their location.
 
 ## Media Webtc Node
 
@@ -81,11 +82,10 @@ Options:
   -V, --version              Print version
 ```
 
-Note that addr must be a specific addr like `192.168.1.66:5060`, not some think like `0.0.0.0:5060`, because we need to know which addr to send to client in SIP header and SDP.
 
-Hook url is url for sending event to external service, we will send event to this url when have some sip event like: auth, register, unregister, invite.
+Note that the `addr` option must be a specific address like `192.168.1.66:5060`, rather than `0.0.0.0:5060`. This is necessary to determine the address to send to the client in the SIP header and SDP.
 
-The 
+The `hook-url` option is the URL for sending events to an external service. Events such as authentication, registration, unregistration, and invitation will be sent to this URL.
 
 ## Media Rtmp Node
 
@@ -103,7 +103,7 @@ Options:
 
 ## Connector Node
 
-Connector node enable room and peer event handling at external service over message queue. We have some config for Connector node:
+The Connector node enables room and peer event handling at an external service over a message queue. Here are the configuration options for the Connector node:
 
 ```bash
 Usage: atm0s-media-server connector [OPTIONS]
@@ -116,4 +116,6 @@ Options:
   -V, --version                    Print version
 ```
 
-Currently we only support NATS message queue, but we can easily support other message queue like RabbitMQ, Kafka, ... by implement some interface. For persistent data, we use local file for storing data, it can be config by backup-path.
+Currently, we only support NATS as the message queue. However, we have designed the system to easily support other message queues such as RabbitMQ or Kafka by implementing the necessary interfaces. 
+
+For persistent data storage, we use local files. You can configure the backup path for storing the data by setting the `backup-path` option.
