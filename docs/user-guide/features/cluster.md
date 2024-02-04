@@ -1,4 +1,4 @@
-# Cluster
+# Cluster RFC-0003-media-global-cluster
 
 Atm0s Media Server supports cluster mode out of the box. All nodes in the cluster will automatically discover each other and route requests to the best node. 
 
