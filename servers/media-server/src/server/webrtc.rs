@@ -12,7 +12,7 @@ use cluster::{
         whip::WhipConnectResponse,
         RpcEmitter, RpcEndpoint, RpcReqRes, RpcRequest, RPC_NODE_PING,
     },
-    BitrateControlMode, Cluster, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode, VerifyObject, INNER_GATEWAY_SERVICE,
+    BitrateControlMode, Cluster, ClusterEndpoint, ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MixMinusAudioMode, VerifyObject, GATEWAY_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::{ErrorDebugger, StringCompression, SystemTimer, Timer};
@@ -68,6 +68,7 @@ pub struct WebrtcArgs {
 pub async fn run_webrtc_server<C, CR, RPC, REQ, EMITTER>(
     http_port: u16,
     http_tls: bool,
+    zone: &str,
     _opts: WebrtcArgs,
     ctx: MediaServerContext<InternalControl>,
     mut cluster: C,
@@ -122,7 +123,7 @@ where
     loop {
         let rpc = select! {
             _ = gateway_feedback_tick.next().fuse() => {
-                ping_gateway(&ctx, node_id, &rpc_emitter);
+                ping_gateway(&ctx, node_id, zone, &rpc_emitter);
                 continue;
             },
             rpc = http_server.recv().fuse() => {
@@ -387,10 +388,10 @@ where
     }
 }
 
-fn ping_gateway<EMITTER: RpcEmitter + Send + 'static>(ctx: &MediaServerContext<InternalControl>, node_id: NodeId, rpc_emitter: &EMITTER) {
+fn ping_gateway<EMITTER: RpcEmitter + Send + 'static>(ctx: &MediaServerContext<InternalControl>, node_id: NodeId, zone: &str, rpc_emitter: &EMITTER) {
     let req = NodePing {
         node_id,
-        group: "".to_string(),
+        zone: zone.to_string(),
         location: None,
         rtmp: None,
         sip: None,
@@ -405,7 +406,7 @@ fn ping_gateway<EMITTER: RpcEmitter + Send + 'static>(ctx: &MediaServerContext<I
 
     let rpc_emitter = rpc_emitter.clone();
     async_std::task::spawn(async move {
-        if let Err(e) = rpc_emitter.request::<_, NodePong>(INNER_GATEWAY_SERVICE, None, RPC_NODE_PING, req, 1000).await {
+        if let Err(e) = rpc_emitter.request::<_, NodePong>(GATEWAY_SERVICE, None, RPC_NODE_PING, req, 1000).await {
             log::error!("[WebrtcServer] ping gateway error {:?}", e);
         }
     });

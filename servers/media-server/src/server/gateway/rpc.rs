@@ -6,7 +6,7 @@ pub mod http;
 
 pub enum RpcEvent {
     NodePing(Box<dyn RpcReqRes<NodePing, NodePong>>),
-    BestNodest(Box<dyn RpcReqRes<QueryBestNodesRequest, QueryBestNodesResponse>>),
+    BestNodes(Box<dyn RpcReqRes<QueryBestNodesRequest, QueryBestNodesResponse>>),
     WhipConnect(Box<dyn RpcReqRes<WhipConnectRequest, WhipConnectResponse>>),
     WhepConnect(Box<dyn RpcReqRes<WhepConnectRequest, WhepConnectResponse>>),
     WebrtcConnect(Box<dyn RpcReqRes<WebrtcConnectRequest, WebrtcConnectResponse>>),
