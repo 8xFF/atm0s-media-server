@@ -1,4 +1,4 @@
-# Cluster
+# Cluster RFC-0003
 
 The network topology is now fixed. In this configuration, all media servers are connected to the same zone gateways, and all gateways are interconnected. To automate the topology building process, each node will establish connections with other servers that have local tags matching the connect tags.
 
@@ -11,7 +11,6 @@ The network topology is now fixed. In this configuration, all media servers are 
 ## Single zone
 
 ![Single zone](../../imgs/single-zone.excalidraw.png)
-
 
 ## Multi zones
 
