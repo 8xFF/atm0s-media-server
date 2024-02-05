@@ -397,17 +397,17 @@ dependencies = [
 
 [[package]]
 name = "atm0s-custom-str0m"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf10a32f433e7346fc24cf22278880d3550b2e63618e7df81089ded2c18d3236"
+checksum = "aae3d98b6f9c24f928ba2b2081f0532b22116d460f09eff784d8e6639bdc0501"
 dependencies = [
  "combine",
  "crc",
+ "fastrand 2.0.1",
  "hmac 0.12.1",
  "once_cell",
  "openssl",
  "openssl-sys",
- "rand 0.8.5",
  "sctp-proto",
  "serde",
  "sha-1",
@@ -4330,9 +4330,9 @@ dependencies = [
 
 [[package]]
 name = "sctp-proto"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "514eb06a3f6b1f119b6a00a9a87afac072894817d3283b0d36adc8f8a135886a"
+checksum = "8f64cef148d3295c730c3cb340b0b252a4d570b1c7d4bf0808f88540b0a888bc"
 dependencies = [
  "bytes",
  "crc",

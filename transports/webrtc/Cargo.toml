@@ -15,7 +15,7 @@ cluster = { package = "atm0s-media-server-cluster", path = "../../packages/clust
 async-std = { workspace = true }
 async-trait = { workspace = true }
 
-str0m = { version = "0.1.0", package = "atm0s-custom-str0m" }
+str0m = { version = "0.1.1", package = "atm0s-custom-str0m" }
 futures = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
