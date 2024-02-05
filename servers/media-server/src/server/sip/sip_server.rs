@@ -97,7 +97,7 @@ async fn run_transport<T: Transport<(), RmIn, RrIn, RlIn, RmOut, RrOut, RlOut>>(
     }
 }
 
-fn run_incomming_call(
+fn run_incoming_call(
     sip_addr: SocketAddr,
     hook_sender: HooksSender,
     socket: VirtualSocket<GroupId, SipMessage>,
@@ -404,7 +404,7 @@ pub async fn start_server<C, CR, RPC, REQ, EMITTER>(
                         continue;
                     }
                     SipServerSocketMessage::InCall(socket, req) => {
-                        run_incomming_call(sip_addr, hook_sender.clone(), socket, req, &ctx, timer.clone(), tx.clone());
+                        run_incoming_call(sip_addr, hook_sender.clone(), socket, req, &ctx, timer.clone(), tx.clone());
                         continue;
                     }
                     SipServerSocketMessage::Continue => {
