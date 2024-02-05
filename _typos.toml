@@ -1,0 +1,11 @@
+[files]
+extend-exclude = ["*.js", "CHANGELOG.md", "Cargo.lock", "*.sdp", "*.cert", "*.key"]
+
+[default]
+extend-ignore-re = [
+    "eyJhbGciOiJIUzI1NiJ9.[A-Za-z0-9_-]+.[A-Za-z0-9_-]+",
+    "H264_NALU_[A-Z_-]+",
+]
+
+[default.extend-words]
+stap = "stap"

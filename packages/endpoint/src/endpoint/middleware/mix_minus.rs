@@ -565,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn should_continuos_pkt_seq_ts_when_switch_source() {
+    fn should_continuous_pkt_seq_ts_when_switch_source() {
         let mut mix_minus = MixMinusEndpointMiddleware::new("demo", "user0", "default", MixMinusAudioMode::AllAudioStreams, 100, &[None]);
         mix_minus.on_start(0);
         mix_minus.on_transport(0, &TransportIncomingEvent::State(TransportStateEvent::Connected));

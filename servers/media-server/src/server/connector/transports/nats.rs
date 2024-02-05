@@ -21,7 +21,7 @@ impl<M: Message + Clone + TryFrom<Vec<u8>>> NatsTransporter<M> {
                 .reconnect_delay_callback(|c| Duration::from_millis(std::cmp::min((c * 100) as u64, 10000))) //max wait 10s
                 .disconnect_callback(|| log::warn!("connection has been lost"))
                 .reconnect_callback(|| log::warn!("connection has been reestablished"))
-                .close_callback(|| panic!("connection has been closed")) //this should not happend
+                .close_callback(|| panic!("connection has been closed")) //this should not happen
                 .connect(uri)
                 .await?,
             subject,

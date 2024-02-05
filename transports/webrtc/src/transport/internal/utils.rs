@@ -12,7 +12,7 @@ pub fn to_transport_kind(value: MediaKind) -> transport::MediaKind {
 ///
 /// ```ignore
 /// a=ice-ufrag:EsAw
-/// a=ice-pwd:P2uYro0UCOQ4zxjKXaWCBui1
+/// a=ice-pwd:pass
 /// a=group:BUNDLE 0 1
 /// m=audio 9 UDP/TLS/RTP/SAVPF 111
 /// a=mid:0
@@ -54,7 +54,7 @@ mod tests {
     #[test]
     fn test_sdp_patch_to_ices() {
         let patch = "a=ice-ufrag:EsAw\n\
-                     a=ice-pwd:P2uYro0UCOQ4zxjKXaWCBui1\n\
+                     a=ice-pwd:pass\n\
                      a=group:BUNDLE 0 1\n\
                      m=audio 9 UDP/TLS/RTP/SAVPF 111\n\
                      a=mid:0\n\
