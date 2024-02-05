@@ -12,7 +12,7 @@ use cluster::{
         general::{MediaEndpointCloseResponse, MediaSessionProtocol, NodeInfo, ServerType},
         RpcEmitter, RpcEndpoint, RpcRequest, RPC_NODE_PING,
     },
-    Cluster, ClusterEndpoint, INNER_GATEWAY_SERVICE,
+    Cluster, ClusterEndpoint, GATEWAY_SERVICE,
 };
 use futures::{select, FutureExt};
 use media_utils::ErrorDebugger;
@@ -64,6 +64,7 @@ pub struct RtmpArgs {
 pub async fn run_rtmp_server<C, CR, RPC, REQ, EMITTER>(
     http_port: u16,
     http_tls: bool,
+    zone: &str,
     opts: RtmpArgs,
     ctx: MediaServerContext<InternalControl>,
     mut cluster: C,
@@ -119,7 +120,7 @@ where
     loop {
         let rpc = select! {
             _ = gateway_feedback_tick.next().fuse() => {
-                ping_gateway(&ctx, node_id, rtmp_port, &rpc_emitter);
+                ping_gateway(&ctx, node_id, zone, rtmp_port, &rpc_emitter);
                 continue;
             },
             rpc = http_server.recv().fuse() => {
@@ -188,10 +189,10 @@ where
     }
 }
 
-fn ping_gateway<EMITTER: RpcEmitter + Send + 'static>(ctx: &MediaServerContext<InternalControl>, node_id: NodeId, rtmp_port: u16, rpc_emitter: &EMITTER) {
+fn ping_gateway<EMITTER: RpcEmitter + Send + 'static>(ctx: &MediaServerContext<InternalControl>, node_id: NodeId, zone: &str, rtmp_port: u16, rpc_emitter: &EMITTER) {
     let req = NodePing {
         node_id,
-        group: "".to_string(),
+        zone: zone.to_string(),
         location: None,
         rtmp: Some(ServiceInfo {
             usage: ((ctx.conns_live() * 100) / ctx.conns_max()) as u8,
@@ -206,7 +207,7 @@ fn ping_gateway<EMITTER: RpcEmitter + Send + 'static>(ctx: &MediaServerContext<I
 
     let rpc_emitter = rpc_emitter.clone();
     async_std::task::spawn(async move {
-        if let Err(e) = rpc_emitter.request::<_, NodePong>(INNER_GATEWAY_SERVICE, None, RPC_NODE_PING, req, 1000).await {
+        if let Err(e) = rpc_emitter.request::<_, NodePong>(GATEWAY_SERVICE, None, RPC_NODE_PING, req, 1000).await {
             log::error!("[RtmpServer] ping gateway error {:?}", e);
         }
     });

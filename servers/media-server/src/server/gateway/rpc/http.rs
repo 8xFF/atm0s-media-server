@@ -59,7 +59,7 @@ impl GatewayHttpApis {
             size: size.0,
         });
         data.0
-            .send(RpcEvent::BestNodest(Box::new(req)))
+            .send(RpcEvent::BestNodes(Box::new(req)))
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;

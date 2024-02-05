@@ -20,7 +20,7 @@ pub struct ServiceInfo {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, IntoVecU8, TryFromSliceU8)]
 pub struct NodePing {
     pub node_id: u32,
-    pub group: String,
+    pub zone: String,
     pub location: Option<(F32<2>, F32<2>)>,
     pub webrtc: Option<ServiceInfo>,
     pub rtmp: Option<ServiceInfo>,
@@ -54,6 +54,7 @@ pub struct QueryBestNodesRequest {
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct QueryBestNodesResponse {
     pub nodes: Vec<NodeId>,
+    pub service_id: u8,
 }
 
 //TODO test this

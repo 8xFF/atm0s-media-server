@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use cluster::{implement::NodeId, rpc::gateway::ServiceInfo};
+use cluster::{implement::NodeId, rpc::gateway::ServiceInfo, GATEWAY_SERVICE};
 use media_utils::F32;
 use metrics::{describe_gauge, gauge};
 
-use super::{ServiceRegistry, ServiceType};
+use super::{RouteResult, ServiceRegistry, ServiceType};
 
 const NODE_TIMEOUT_MS: u64 = 10_000;
 
@@ -24,6 +24,7 @@ fn lat_lng_distance(from: &(F32<2>, F32<2>), to: &(F32<2>, F32<2>)) -> f32 {
 
 #[derive(Debug, Default)]
 struct Zone {
+    zone: String,
     location: (F32<2>, F32<2>),
     nodes: HashMap<NodeId, u64>,
     usage: u8,
@@ -34,19 +35,21 @@ struct Zone {
 
 #[derive(Debug)]
 pub(super) struct ServiceGlobalRegistry {
+    zone: String,
     metric_live: String,
     metric_max: String,
     zones: HashMap<String, Zone>,
 }
 
 impl ServiceGlobalRegistry {
-    pub fn new(service: ServiceType) -> Self {
+    pub fn new(zone: &str, service: ServiceType) -> Self {
         let metric_live = format!("gateway.sessions.{:?}.live", service);
         let metric_max = format!("gateway.sessions.{:?}.max", service);
         describe_gauge!(metric_live.clone(), format!("Current live {:?} sessions number", service));
         describe_gauge!(metric_max.clone(), format!("Max live {:?} sessions number", service));
 
         Self {
+            zone: zone.to_string(),
             metric_live,
             metric_max,
             zones: Default::default(),
@@ -87,10 +90,10 @@ impl ServiceRegistry for ServiceGlobalRegistry {
     }
 
     /// we save node or create new, then sort by ascending order
-    fn on_ping(&mut self, now_ms: u64, group: &str, location: Option<(F32<2>, F32<2>)>, node_id: NodeId, usage: u8, live: u32, max: u32) {
+    fn on_ping(&mut self, now_ms: u64, zone: &str, location: Option<(F32<2>, F32<2>)>, node_id: NodeId, usage: u8, live: u32, max: u32) {
         let location = location.unwrap_or((F32::<2>::new(0.0), F32::<2>::new(0.0)));
 
-        if let Some(slot) = self.zones.get_mut(group) {
+        if let Some(slot) = self.zones.get_mut(zone) {
             slot.nodes.insert(node_id, now_ms);
             slot.usage = usage;
             slot.live = live;
@@ -98,8 +101,9 @@ impl ServiceRegistry for ServiceGlobalRegistry {
             slot.last_updated = now_ms;
         } else {
             self.zones.insert(
-                group.to_string(),
+                zone.to_string(),
                 Zone {
+                    zone: zone.to_string(),
                     nodes: HashMap::from([(node_id, now_ms)]),
                     location,
                     usage,
@@ -112,7 +116,7 @@ impl ServiceRegistry for ServiceGlobalRegistry {
     }
 
     /// we get first with max_usage, if not enough => using max_usage_fallback
-    fn best_nodes(&mut self, location: Option<(F32<2>, F32<2>)>, max_usage: u8, max_usage_fallback: u8, size: usize) -> Vec<NodeId> {
+    fn best_nodes(&mut self, location: Option<(F32<2>, F32<2>)>, max_usage: u8, max_usage_fallback: u8, size: usize) -> RouteResult {
         let location = location.unwrap_or((F32::<2>::new(0.0), F32::<2>::new(0.0)));
 
         //finding closest zone
@@ -122,11 +126,15 @@ impl ServiceRegistry for ServiceGlobalRegistry {
         }
 
         if let Some(zone) = closest_zone {
-            let mut nodes = zone.nodes.keys().cloned().collect::<Vec<_>>();
-            nodes.truncate(size);
-            nodes
+            if zone.zone.eq(&self.zone) {
+                RouteResult::LocalNode
+            } else {
+                let mut nodes = zone.nodes.keys().cloned().collect::<Vec<_>>();
+                nodes.truncate(size);
+                RouteResult::OtherNode { nodes, service_id: GATEWAY_SERVICE }
+            }
         } else {
-            vec![]
+            RouteResult::NotFound
         }
     }
 
@@ -143,32 +151,33 @@ mod tests {
     // ServiceGlobalRegistry can be created with default values
     #[test]
     fn test_service_registry_creation() {
-        let registry = ServiceGlobalRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceGlobalRegistry::new("local", ServiceType::Webrtc);
         assert_eq!(registry.zones.len(), 0);
+        assert_eq!(registry.best_nodes(None, 80, 90, 1), RouteResult::NotFound);
     }
 
     // test with single zone and single gateway
     #[test]
     fn test_service_registry_single_zone_single_gateway() {
-        let mut registry = ServiceGlobalRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceGlobalRegistry::new("zone1", ServiceType::Webrtc);
         let now_ms = 0;
-        let group = "group";
+        let zone = "zone1";
         let location = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
         let node_id = 1;
         let usage = 0;
         let live = 0;
         let max = 10;
 
-        registry.on_ping(now_ms, group, location, node_id, usage, live, max);
+        registry.on_ping(now_ms, zone, location, node_id, usage, live, max);
         assert_eq!(registry.zones.len(), 1);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.len(), 1);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.get(&node_id).unwrap(), &now_ms);
-        assert_eq!(registry.zones.get(group).unwrap().usage, usage);
-        assert_eq!(registry.zones.get(group).unwrap().live, live);
-        assert_eq!(registry.zones.get(group).unwrap().max, max);
-        assert_eq!(registry.zones.get(group).unwrap().last_updated, now_ms);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.len(), 1);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.get(&node_id).unwrap(), &now_ms);
+        assert_eq!(registry.zones.get(zone).unwrap().usage, usage);
+        assert_eq!(registry.zones.get(zone).unwrap().live, live);
+        assert_eq!(registry.zones.get(zone).unwrap().max, max);
+        assert_eq!(registry.zones.get(zone).unwrap().last_updated, now_ms);
 
-        assert_eq!(registry.best_nodes(location, 60, 80, 1), vec![node_id]);
+        assert_eq!(registry.best_nodes(location, 60, 80, 1), RouteResult::LocalNode);
 
         registry.on_tick(now_ms + NODE_TIMEOUT_MS);
         assert_eq!(registry.zones.len(), 0);
@@ -176,42 +185,42 @@ mod tests {
 
     #[test]
     fn test_service_fallback_max_usage() {
-        let mut registry = ServiceGlobalRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceGlobalRegistry::new("zone1", ServiceType::Webrtc);
         let now_ms = 0;
-        let group = "group";
+        let zone = "zone1";
         let location = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
         let node_id = 1;
         let usage = 70;
         let live = 9;
         let max = 10;
 
-        registry.on_ping(now_ms, group, location, node_id, usage, live, max);
-        assert_eq!(registry.best_nodes(location, 50, 60, 1), Vec::<u32>::new());
-        assert_eq!(registry.best_nodes(location, 60, 80, 1), vec![node_id]);
+        registry.on_ping(now_ms, zone, location, node_id, usage, live, max);
+        assert_eq!(registry.best_nodes(location, 50, 60, 1), RouteResult::NotFound);
+        assert_eq!(registry.best_nodes(location, 60, 80, 1), RouteResult::LocalNode);
     }
 
     // test with gateway with max zero should return none
     #[test]
     fn test_service_registry_single_zone_single_gateway_with_max_zero() {
-        let mut registry = ServiceGlobalRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceGlobalRegistry::new("zone1", ServiceType::Webrtc);
         let now_ms = 0;
-        let group = "group";
+        let zone = "zone1";
         let location = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
         let node_id = 1;
         let usage = 0;
         let live = 0;
         let max = 0;
 
-        registry.on_ping(now_ms, group, location, node_id, usage, live, max);
+        registry.on_ping(now_ms, zone, location, node_id, usage, live, max);
         assert_eq!(registry.zones.len(), 1);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.len(), 1);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.get(&node_id).unwrap(), &now_ms);
-        assert_eq!(registry.zones.get(group).unwrap().usage, usage);
-        assert_eq!(registry.zones.get(group).unwrap().live, live);
-        assert_eq!(registry.zones.get(group).unwrap().max, max);
-        assert_eq!(registry.zones.get(group).unwrap().last_updated, now_ms);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.len(), 1);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.get(&node_id).unwrap(), &now_ms);
+        assert_eq!(registry.zones.get(zone).unwrap().usage, usage);
+        assert_eq!(registry.zones.get(zone).unwrap().live, live);
+        assert_eq!(registry.zones.get(zone).unwrap().max, max);
+        assert_eq!(registry.zones.get(zone).unwrap().last_updated, now_ms);
 
-        assert_eq!(registry.best_nodes(location, 60, 80, 1), Vec::<u32>::new());
+        assert_eq!(registry.best_nodes(location, 60, 80, 1), RouteResult::NotFound);
 
         registry.on_tick(now_ms + NODE_TIMEOUT_MS);
         assert_eq!(registry.zones.len(), 0);
@@ -220,9 +229,9 @@ mod tests {
     // test with single zone multi gateways
     #[test]
     fn test_service_registry_single_zone_multi_gateways() {
-        let mut registry = ServiceGlobalRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceGlobalRegistry::new("zone1", ServiceType::Webrtc);
         let now_ms = 0;
-        let group = "group";
+        let zone = "zone1";
         let location = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
         let node_id_1 = 1;
         let node_id_2 = 2;
@@ -230,41 +239,40 @@ mod tests {
         let live = 0;
         let max = 10;
 
-        registry.on_ping(now_ms, group, location, node_id_1, usage, live, max);
-        registry.on_ping(now_ms, group, location, node_id_2, usage, live, max);
+        registry.on_ping(now_ms, zone, location, node_id_1, usage, live, max);
+        registry.on_ping(now_ms, zone, location, node_id_2, usage, live, max);
         assert_eq!(registry.zones.len(), 1);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.len(), 2);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.get(&node_id_1).unwrap(), &now_ms);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.get(&node_id_2).unwrap(), &now_ms);
-        assert_eq!(registry.zones.get(group).unwrap().usage, usage);
-        assert_eq!(registry.zones.get(group).unwrap().live, live);
-        assert_eq!(registry.zones.get(group).unwrap().max, max);
-        assert_eq!(registry.zones.get(group).unwrap().last_updated, now_ms);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.len(), 2);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.get(&node_id_1).unwrap(), &now_ms);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.get(&node_id_2).unwrap(), &now_ms);
+        assert_eq!(registry.zones.get(zone).unwrap().usage, usage);
+        assert_eq!(registry.zones.get(zone).unwrap().live, live);
+        assert_eq!(registry.zones.get(zone).unwrap().max, max);
+        assert_eq!(registry.zones.get(zone).unwrap().last_updated, now_ms);
 
-        let mut best_nodes = registry.best_nodes(location, 60, 80, 2);
-        best_nodes.sort();
-        assert_eq!(best_nodes, vec![node_id_1, node_id_2]);
+        let route_res = registry.best_nodes(location, 60, 80, 2);
+        assert_eq!(route_res, RouteResult::LocalNode);
 
-        registry.on_ping(1000, group, location, node_id_1, usage, live, max);
+        registry.on_ping(1000, zone, location, node_id_1, usage, live, max);
 
         //simulate timeout
         registry.on_tick(now_ms + NODE_TIMEOUT_MS);
         assert_eq!(registry.zones.len(), 1);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.len(), 1);
-        assert_eq!(registry.zones.get(group).unwrap().nodes.get(&node_id_1).unwrap(), &1000);
-        assert_eq!(registry.zones.get(group).unwrap().usage, usage);
-        assert_eq!(registry.zones.get(group).unwrap().live, live);
-        assert_eq!(registry.zones.get(group).unwrap().max, max);
-        assert_eq!(registry.zones.get(group).unwrap().last_updated, 1000);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.len(), 1);
+        assert_eq!(registry.zones.get(zone).unwrap().nodes.get(&node_id_1).unwrap(), &1000);
+        assert_eq!(registry.zones.get(zone).unwrap().usage, usage);
+        assert_eq!(registry.zones.get(zone).unwrap().live, live);
+        assert_eq!(registry.zones.get(zone).unwrap().max, max);
+        assert_eq!(registry.zones.get(zone).unwrap().last_updated, 1000);
     }
 
     //test with multi zones and multi gateways
     #[test]
     fn test_service_registry_multi_zones_multi_gateways() {
-        let mut registry = ServiceGlobalRegistry::new(ServiceType::Webrtc);
+        let mut registry = ServiceGlobalRegistry::new("zone1", ServiceType::Webrtc);
         let now_ms = 0;
-        let group_1 = "group_1";
-        let group_2 = "group_2";
+        let zone_1 = "zone1";
+        let zone_2 = "zone2";
         let location_1 = Some((F32::<2>::new(0.0), F32::<2>::new(0.0)));
         let location_2 = Some((F32::<2>::new(1.0), F32::<2>::new(1.0)));
         let node_id_1 = 1;
@@ -273,31 +281,35 @@ mod tests {
         let live = 0;
         let max = 10;
 
-        registry.on_ping(now_ms, group_1, location_1, node_id_1, usage, live, max);
-        registry.on_ping(now_ms, group_2, location_2, node_id_2, usage, live, max);
+        registry.on_ping(now_ms, zone_1, location_1, node_id_1, usage, live, max);
+        registry.on_ping(now_ms, zone_2, location_2, node_id_2, usage, live, max);
 
         assert_eq!(registry.zones.len(), 2);
-        assert_eq!(registry.zones.get(group_1).unwrap().nodes.len(), 1);
-        assert_eq!(registry.zones.get(group_1).unwrap().nodes.get(&node_id_1).unwrap(), &now_ms);
-        assert_eq!(registry.zones.get(group_1).unwrap().usage, usage);
-        assert_eq!(registry.zones.get(group_1).unwrap().live, live);
-        assert_eq!(registry.zones.get(group_1).unwrap().max, max);
-        assert_eq!(registry.zones.get(group_1).unwrap().last_updated, now_ms);
+        assert_eq!(registry.zones.get(zone_1).unwrap().nodes.len(), 1);
+        assert_eq!(registry.zones.get(zone_1).unwrap().nodes.get(&node_id_1).unwrap(), &now_ms);
+        assert_eq!(registry.zones.get(zone_1).unwrap().usage, usage);
+        assert_eq!(registry.zones.get(zone_1).unwrap().live, live);
+        assert_eq!(registry.zones.get(zone_1).unwrap().max, max);
+        assert_eq!(registry.zones.get(zone_1).unwrap().last_updated, now_ms);
 
-        assert_eq!(registry.zones.get(group_2).unwrap().nodes.len(), 1);
-        assert_eq!(registry.zones.get(group_2).unwrap().nodes.get(&node_id_2).unwrap(), &now_ms);
-        assert_eq!(registry.zones.get(group_2).unwrap().usage, usage);
-        assert_eq!(registry.zones.get(group_2).unwrap().live, live);
-        assert_eq!(registry.zones.get(group_2).unwrap().max, max);
-        assert_eq!(registry.zones.get(group_2).unwrap().last_updated, now_ms);
+        assert_eq!(registry.zones.get(zone_2).unwrap().nodes.len(), 1);
+        assert_eq!(registry.zones.get(zone_2).unwrap().nodes.get(&node_id_2).unwrap(), &now_ms);
+        assert_eq!(registry.zones.get(zone_2).unwrap().usage, usage);
+        assert_eq!(registry.zones.get(zone_2).unwrap().live, live);
+        assert_eq!(registry.zones.get(zone_2).unwrap().max, max);
+        assert_eq!(registry.zones.get(zone_2).unwrap().last_updated, now_ms);
 
-        let mut best_nodes = registry.best_nodes(location_1, 60, 80, 2);
-        best_nodes.sort();
-        assert_eq!(best_nodes, vec![node_id_1]);
+        let route_res = registry.best_nodes(location_1, 60, 80, 2);
+        assert_eq!(route_res, RouteResult::LocalNode);
 
-        let mut best_nodes = registry.best_nodes(location_2, 60, 80, 2);
-        best_nodes.sort();
-        assert_eq!(best_nodes, vec![node_id_2]);
+        let route_res = registry.best_nodes(location_2, 60, 80, 2);
+        assert_eq!(
+            route_res,
+            RouteResult::OtherNode {
+                nodes: vec![node_id_2],
+                service_id: GATEWAY_SERVICE
+            }
+        );
     }
 
     #[test]

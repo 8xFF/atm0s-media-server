@@ -19,7 +19,7 @@ use protocol::media_event_logs::{
 
 use crate::server::gateway::{GATEWAY_SESSIONS_CONNECT_COUNT, GATEWAY_SESSIONS_CONNECT_ERROR};
 
-use super::logic::{GatewayLogic, ServiceType};
+use super::logic::{GatewayLogic, RouteResult, ServiceType};
 
 async fn select_node<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, node_ids: &[u32], service_id: u8) -> Option<u32> {
     let mut futures = Vec::new();
@@ -78,7 +78,7 @@ fn emit_endpoint_event<EMITTER: RpcEmitter + Send + 'static>(emitter: &EMITTER, 
                 1000,
             )
             .await
-            .log_error("Should ok");
+            .log_error("Should send media-log-event to connector");
     });
 }
 
@@ -95,7 +95,6 @@ pub fn route_to_node<EMITTER, Req, Res>(
     user_agent: &str,
     session_uuid: u64,
     req: Box<dyn RpcReqRes<Req, Res>>,
-    dest_service_id: u8,
 ) where
     EMITTER: RpcEmitter + Send + Sync + 'static,
     Req: Into<Vec<u8>> + Send + Clone + 'static,
@@ -109,18 +108,18 @@ pub fn route_to_node<EMITTER, Req, Res>(
     });
     emit_endpoint_event(&emitter, &timer, session_uuid, &ip.to_string(), version, event);
 
-    let nodes = gateway_logic.best_nodes(location, service, 60, 80, 3);
-    if !nodes.is_empty() {
+    let route_res = gateway_logic.best_nodes(location, service, 60, 80, 3);
+    if let RouteResult::OtherNode { nodes, service_id } = route_res {
         let rpc_emitter = emitter.clone();
         let ip: String = ip.to_string();
         let version = version.clone();
         let param = req.param().clone();
         async_std::task::spawn(async move {
             log::info!("[Gateway] connect => ping nodes {:?}", nodes);
-            let node_id = select_node(&rpc_emitter, &nodes, dest_service_id).await;
+            let node_id = select_node(&rpc_emitter, &nodes, service_id).await;
             if let Some(node_id) = node_id {
                 log::info!("[Gateway] connect with selected node {:?}", node_id);
-                let res = rpc_emitter.request::<Req, Res>(dest_service_id, Some(node_id), cmd, param, 5000).await;
+                let res = rpc_emitter.request::<Req, Res>(service_id, Some(node_id), cmd, param, 5000).await;
                 log::info!("[Gateway] webrtc connect res from media-server {:?}", res.as_ref().map(|_| ()));
                 let event = if res.is_err() {
                     counter!(GATEWAY_SESSIONS_CONNECT_ERROR).increment(1);

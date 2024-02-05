@@ -26,7 +26,7 @@ mod tests {
 
     #[async_std::test]
     async fn subscribe_room() {
-        let (mut server, _rpc) = ServerSdn::new(
+        let (mut server, _rpc, _pubsub) = ServerSdn::new(
             1,
             0,
             100,
@@ -104,7 +104,7 @@ mod tests {
 
     #[async_std::test]
     async fn subscribe_peer() {
-        let (mut server, _rpc) = ServerSdn::new(
+        let (mut server, _rpc, _pubsub) = ServerSdn::new(
             2,
             0,
             100,
@@ -182,7 +182,7 @@ mod tests {
 
     #[async_std::test]
     async fn subscribe_stream() {
-        let (mut server, _rpc) = ServerSdn::new(
+        let (mut server, _rpc, _pubsub) = ServerSdn::new(
             3,
             0,
             100,
@@ -258,7 +258,7 @@ mod tests {
 
     #[async_std::test]
     async fn rpc() {
-        let (_server, mut rpc) = ServerSdn::new(
+        let (_server, mut rpc, _pubsub) = ServerSdn::new(
             4,
             0,
             100,

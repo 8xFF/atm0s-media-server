@@ -49,7 +49,7 @@ pub struct ServerSdn {
 }
 
 impl ServerSdn {
-    pub async fn new(node_id: NodeId, port: u16, service_id: u8, config: ServerSdnConfig) -> (Self, RpcEndpointSdn) {
+    pub async fn new(node_id: NodeId, port: u16, service_id: u8, config: ServerSdnConfig) -> (Self, RpcEndpointSdn, PubsubSdk) {
         let mut node_addr_builder = NodeAddrBuilder::new(node_id);
         let udp_socket = UdpTransport::prepare(port, &mut node_addr_builder).await;
         let tcp_listener = TcpTransport::prepare(port, &mut node_addr_builder).await;
@@ -103,12 +103,13 @@ impl ServerSdn {
             Self {
                 node_id,
                 node_addr: node_addr_builder.addr(),
-                pubsub_sdk,
+                pubsub_sdk: pubsub_sdk.clone(),
                 kv_sdk,
                 join_handler: Some(join_handler),
                 rpc_emitter: rpc_box.emitter(),
             },
             RpcEndpointSdn { rpc_box },
+            pubsub_sdk,
         )
     }
 }

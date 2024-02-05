@@ -429,6 +429,7 @@ dependencies = [
  "atm0s-media-server-transport-sip",
  "atm0s-media-server-transport-webrtc",
  "atm0s-media-server-utils",
+ "bincode",
  "clap",
  "futures",
  "log",
