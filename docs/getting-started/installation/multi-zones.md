@@ -4,7 +4,7 @@ You can deploy a multi-zone cluster to scale up your cluster. Each zone is a sin
 
 In a multi-zone setup, the zones are interconnected. To achieve this, all gateway nodes are interconnected and each request will be routed to the closest zone's gateway node.
 
-![Multi zones](../../imgs/multi-zones.excalidraw.png)
+![Multi zones](../../imgs/multi-zones-abstract.excalidraw.png)
 
 The gateway nodes also take part in routing media data between zones in the fastest path possible; data will be relayed if the direct connection is bad.
 
@@ -17,4 +17,4 @@ Note that you can deploy multi connectors in some zones to handle room and peer 
 
 ## Deploying each zone, same as a single-zone cluster
 
-The deployment steps are the same as for a single-zone cluster. However, starting from second zone, you need to add the first zone gateway address as a seed node for each gateway node.
+The deployment steps are the same as for a single-zone cluster with addition `--zone ZONE_ID` param. However, starting from second zone, you need to add the first zone gateway address as a seed node for each gateway node.
