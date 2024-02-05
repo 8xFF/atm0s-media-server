@@ -6,7 +6,7 @@ This page describes how to run atm0s-media-server from source in your local envi
 
 ### System & Architecture
 
-At the moment, atm0s-media-server now only supports Linux(amd64) and macOS (both amd64 and Apple Silicone).
+At the moment, atm0s-media-server now only supports Linux(amd64, aarch64) and macOS (both amd64 and Apple Silicone).
 
 ### Build Dependencies
 
@@ -31,7 +31,7 @@ cd atm0s-media-server
 cargo run --package atm0s-media-server -- --node-id 1 --http-port 8001 webrtc
 ```
 
-Next, you can access the samples at [http://localhost:8001/samples](http://localhost:8001/samples) you like to interact with in atm0s-media-server.
+Next, you can access the samples at [http://localhost:8001/samples/](http://localhost:8001/samples/) you like to interact with in atm0s-media-server.
 
 Or if you just want to build the server without running it:
 
@@ -49,7 +49,7 @@ atm0s-media-server is well-tested, the entire unit test suite is shipped with so
 cargo test --workspace
 ```
 
-## Docker
+## Prebuild and Docker
 
 We also provide pre-build binary via Github Releases and Github Docker Registry.
 

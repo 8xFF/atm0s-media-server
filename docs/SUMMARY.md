@@ -14,7 +14,7 @@
         - [Sample application](getting-started/quick-start/sample-application.md)
 
     - [FAQ](getting-started/faq.md)
-    - [Troubleshotting](getting-started/troubleshooting.md)
+    - [Troubleshooting](getting-started/troubleshooting.md)
 
 - [User guide](user-guide/README.md)
     - [Concepts](user-guide/concepts.md)
@@ -39,7 +39,7 @@
         - [Simulcast/Svc](contributor-guide/features/simulcast-svc.md)
         - [Recording](contributor-guide/features/recording.md)
         - [Cluster](contributor-guide/features/cluster.md)
-        - [Authentication and Multi Tenancy](contributor-guide/features/authentication.md)
+        - [Authentication](contributor-guide/features/authentication.md)
 
     - [Transports](contributor-guide/transports/README.md)
         - [WebRTC](contributor-guide/transports/webrtc.md)
@@ -50,17 +50,9 @@
     - [Middlewares](contributor-guide/middlewares/README.md)
         - [Mix-minus](contributor-guide/middlewares/mix-minus.md)
         - [Logging](contributor-guide/middlewares/logging.md)
-        - [Whip-Whep](contributor-guide/middlewares/whip-whep.md)
+        - [Whep](contributor-guide/middlewares/whep.md)
 
     - [Servers](contributor-guide/servers/README.md)
         - [Gateway](contributor-guide/servers/gateway.md)
         - [Media Server](contributor-guide/servers/media-server.md)
         - [Connector](contributor-guide/servers/connector.md)
-
-    - [RFCs](contributor-guide/rfcs/README.md)
-        - [2023 Global Cluster](contributor-guide/rfcs/2023-global-cluster.md)
-        - [2023 WebRTC SDK](contributor-guide/rfcs/2023-webrtc-sdk.md)
-        - [2023 RTMP authentication](contributor-guide/rfcs/2024-rtmp-authentication.md)
-        - [2023 Audio mixer](contributor-guide/rfcs/2023-audio-mixer.md)
-        - [2024 SIP hooks](contributor-guide/rfcs/2024-sip-hooks.md)
-        - [2024 Recording](contributor-guide/rfcs/2024-recording.md)

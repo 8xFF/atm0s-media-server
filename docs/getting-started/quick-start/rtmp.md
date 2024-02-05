@@ -8,3 +8,7 @@ Preferred codecs:
 - Audio: AAC, bitrate 128kbps
 
 URL: `rtmp://{gateway}/live/{token}`
+
+Demo configuration for OBS:
+
+![Config OBS](../../imgs/demo-rtmp-config.png)

@@ -2,9 +2,13 @@
 
 After prepare token, you can access to media server by using Whip or Whep.
 
-- Whip Endpoint: `https://{gateway}/whip/endpoint`
-- Whep Endpoint: `https://{gateway}/whep/endpoint`
+- Whip Endpoint: `{gateway}/whip/endpoint`
+- Whep Endpoint: `{gateway}/whep/endpoint`
 
-Tested sdks:
+SDKs compatible:
 
-TODO: tested sdks info here
+| SDK | Status | Link |
+| --- | --- | --- |
+| medooze/whip-whep-js | TODO | [Repo](https://github.com/medooze/whip-whep-js) |
+| Eyevinn/whip | TODO | [Repo](https://github.com/Eyevinn/whip) |
+| Eyevinn/webrtc-player | TODO | [Repo](https://github.com/Eyevinn/webrtc-player) |

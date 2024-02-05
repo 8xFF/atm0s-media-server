@@ -12,3 +12,5 @@ pub trait SessionTokenVerifier {
     fn verify_conn_id(&self, token: &str) -> Option<MediaConnId>;
 }
 ```
+
+We have a simple static secret signer and verifier in the [`cluster` crate](https://github.com/8xFF/atm0s-media-server/blob/master/packages/cluster/src/implement/secure/jwt_static.rs).

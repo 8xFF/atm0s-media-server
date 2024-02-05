@@ -27,7 +27,7 @@ KeyValue store:
 PubSub:
 
 - Channel: room/peer/stream as identifier
-- Publisher: the peer who publishes the stream
+- Publisher: the peer who publishes the stream`
 - Subscriber: the peers who subscribe to the stream
 
 Each time a peer joins a room, we will set the key-value according to the peer info and the stream it published. Other peers will receive events from the key-value store and subscribe to the stream channel if needed. By doing that, audio and video data will be transferred to the peers.
@@ -36,7 +36,7 @@ When a peer leaves a room, we will remove the key-value and unsubscribe from the
 
 ![How it works](../imgs/architecture/how-it-works.excalidraw.png)
 
-About PubSub between nodes, atm0s-sdn overlay network will ensure both things: bandwidth saving and fast data path.
+About PubSub between nodes, atm0s-sdn overlay network ensures both bandwidth saving and smooth data flow. The nodes automatically select the best path between the publisher and subscriber, optimizing bandwidth usage. For example, in the network diagram below, the route path is selected to provide the most optimized and smooth data flow. With this approach, node 1 sends data to node 2 only once, and then node 2 takes care of sending the data to both node 3 and node 4, resulting in an optimized and bandwidth-saving data flow.
 
 ![Why it's fast](../imgs/architecture/why-it-fast.excalidraw.png)
 

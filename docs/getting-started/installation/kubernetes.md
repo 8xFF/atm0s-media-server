@@ -1,6 +1,6 @@
 # Kubernetes
 
-You can install into kubernete cluster by Helm chart
+You can install into kubernetes cluster by Helm chart
 
 ```bash
 helm repo add 8xff https://8xff.github.io/helm

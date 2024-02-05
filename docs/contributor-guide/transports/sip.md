@@ -5,7 +5,7 @@ The current implementation is incomplete and only finished the most important pa
 - It can handle incoming calls to join a room or reject them. It can make outgoing calls and put them in a room.
 - Audio processing is done with OPUS and PCMA transcoding.
 
-We create udp server then create a virtual session with iddentify is (dest, call_id), then we process each session independently in seperate task, this will be convert into SipTransport. All SIP message is serialize and deserialize rsip crate.
+We create udp server then create a virtual session with iddentify is (dest, call_id), then we process each session independently in separate task, this will be convert into SipTransport. All SIP message is serialize and deserialize rsip crate.
 
 ### Checklist
 
@@ -66,7 +66,7 @@ sequenceDiagram
     participant sip-client
     participant atm0s-sip-server
     participant 3rd-hooks
-    sip-client->>atm0s-sip-server: incomming call
+    sip-client->>atm0s-sip-server: incoming call
     atm0s-sip-server ->> 3rd-hooks: post /hooks/invite includes from, to
     3rd-hooks ->> atm0s-sip-server: return action: Reject, Accept, WaitOthers, includes room info
     atm0s-sip-server->atm0s-sip-server: create endpoint and join room if Accept or WaitOthers

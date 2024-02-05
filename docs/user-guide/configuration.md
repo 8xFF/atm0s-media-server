@@ -22,17 +22,18 @@ Options:
       --http-port <HTTP_PORT>  Http port [env: HTTP_PORT=] [default: 3000]
       --http-tls               Run http with tls or not [env: HTTP_TLS=]
       --sdn-port <SDN_PORT>    Sdn port [env: SDN_PORT=] [default: 0]
-      --sdn-group <SDN_GROUP>  Sdn group [env: SDN_GROUP=] [default: local]
-      --node-id <NODE_ID>      Current Node ID [env: NODE_ID=] [default: 1]
+      --zone-id <ZONE_ID>  Sdn group [env: ZONE_ID=] [default: 0x000000]
+      --node-index <NODE_INDEX>      Current Node Index in zone [env: NODE_INDEX=] [default: 1]
       --secret <SECRET>        Cluster Secret Key [env: SECRET=] [default: insecure]
       --seeds <SEEDS>          Neighbors [env: SEEDS=]
   -h, --help                   Print help
   -V, --version                Print version
 ```
 
-We can configure the `node-id` and `secret` for all nodes in the cluster. Additionally, we can specify the `seeds` for each node to connect to other nodes. The `seeds` list contains the addresses of nodes that will be connected first to gather more information about the cluster. Once connected to the seeds, the node will automatically connect to other nodes in the cluster.
+We can configure the `node-index` and `secret` for all nodes in the cluster. Additionally, we can specify the `seeds` for each node to connect to other nodes. The `seeds` list contains the addresses of nodes that will be connected first to gather more information about the cluster. Once connected to the seeds, the node will automatically connect to other nodes in the cluster.
 
-To configure zone information, we use the `sdn-group` opts, which is used for grouping nodes in the cluster. For example, we can have zone groups like `asia-01`, `asia-02`, `us-01`, `us-02`. Alternatively, we can be more specific with zone groups like `asia-singapore`, `asia-tokyo`, `us-newyork`, `us-sanfrancisco`. The zone group is used for automatically building the network topology without any manual configuration.
+To configure zone information, we use the `zone-id` opts, which is used for grouping nodes in the cluster. The zone id is used for automatically building the network topology without any manual configuration. (More information about zone configuration can be found in the [Cluster](./features/cluster.md) section.)
+
 ![Multi zones](../imgs/multi-zones.excalidraw.png)
 
 Additionally, we have the option to configure the HTTP port and enable TLS for the HTTP server. This is useful for controlling the API.
