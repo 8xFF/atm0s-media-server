@@ -1046,9 +1046,9 @@ checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
 
 [[package]]
 name = "bytesio"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6034c2a687656b4915aa70216b26a4f0b70dd2f1adb883c1019bd2b44d3a6ad5"
+checksum = "ff19234db41a12c2dedbfda4b113b7e4bc39a3dba3ce29ff0ce258cad0a54129"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -2090,9 +2090,9 @@ dependencies = [
 
 [[package]]
 name = "h264-decoder"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e52d72a73d5bdea735c5a5406161fc5da9d8a76332e722266052c69d61a0036b"
+checksum = "c8f343949d0d608d23ba6ebf2d79337ef188749bae7143c187da2851e80bc171"
 dependencies = [
  "byteorder",
  "bytes",
@@ -5652,9 +5652,9 @@ dependencies = [
 
 [[package]]
 name = "xflv"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99aa4657821f6191a4640e7f7566f8aece2efd6269845403b520dd26266a7577"
+checksum = "80d303ee10d3b1f44a76f09f1084def5fe16634d560696fe939bfba0e184ce71"
 dependencies = [
  "byteorder",
  "bytes",
