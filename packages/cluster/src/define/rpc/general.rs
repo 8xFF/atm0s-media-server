@@ -1,3 +1,5 @@
+use std::{net::IpAddr, ops::Deref};
+
 use poem_openapi::{Enum, Object};
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
@@ -35,4 +37,33 @@ pub enum ServerType {
     SIP,
     WEBRTC,
     RTMP,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
+pub struct RemoteAddr(IpAddr);
+
+impl From<IpAddr> for RemoteAddr {
+    fn from(addr: IpAddr) -> Self {
+        Self(addr)
+    }
+}
+
+impl Into<IpAddr> for RemoteAddr {
+    fn into(self) -> IpAddr {
+        self.0
+    }
+}
+
+impl Deref for RemoteAddr {
+    type Target = IpAddr;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Default for RemoteAddr {
+    fn default() -> Self {
+        Self(IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)))
+    }
 }

@@ -127,19 +127,19 @@ After that, we can access `http://localhost:3000/samples` to see all embedded sa
 
 In cluster mode, each module needs to be on a separate node. This setup can run on a single machine or multiple machines, whether they are connected via a public or private network.
 
-The Inner-Gateway module routes user traffic to the most suitable media server node.
+The Gateway node routes user traffic to the most suitable media server node.
 ```bash
 atm0s-media-server --node-id 10 --sdn-port 10010 --http-port 3000 gateway
 ```
 
-Afterward, the gateway prints out its address in the format: 10@/ip4/127.0.0.1/udp/10001/ip4/127.0.0.1/tcp/10001. This address serves as the seed node for other nodes joining the cluster.
+Afterward, the gateway prints out its address in the format: 10@/ip4/127.0.0.1/udp/10010/ip4/127.0.0.1/tcp/10010. This address serves as the seed node for other nodes joining the cluster.
 
-The WebRTC module serves users with either an SDK or a Whip, Whep client.
+The WebRTC node serves users with either an SDK or a Whip, Whep client.
 ```bash
 atm0s-media-server --node-id 21 --http-port 3001 --seeds ABOVE_GATEWAY_ADDR webrtc
 ```
 
-The RTMP module serves users with an RTMP broadcaster such as OBS or Streamyard.
+The RTMP node serves users with an RTMP broadcaster such as OBS or Streamyard.
 ```bash
 atm0s-media-server --node-id 30 --seeds ABOVE_GATEWAY_ADDR rtmp
 ```

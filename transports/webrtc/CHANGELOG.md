@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-transport-webrtc-v0.2.0...atm0s-media-server-transport-webrtc-v0.2.1) - 2024-01-26
+
+### Other
+- updated the following local packages: atm0s-media-server-cluster, atm0s-media-server-utils, atm0s-media-server-transport
+
 ## [0.2.0](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-transport-webrtc-v0.1.0...atm0s-media-server-transport-webrtc-v0.2.0) - 2024-01-24
 
 ### Added

@@ -61,7 +61,6 @@ where
     fn build(&mut self, room_id: &str, peer_id: &str) -> C;
 }
 
-pub const GLOBAL_GATEWAY_SERVICE: u8 = 100;
-pub const INNER_GATEWAY_SERVICE: u8 = 101;
+pub const GATEWAY_SERVICE: u8 = 101;
 pub const MEDIA_SERVER_SERVICE: u8 = 102;
 pub const CONNECTOR_SERVICE: u8 = 103;

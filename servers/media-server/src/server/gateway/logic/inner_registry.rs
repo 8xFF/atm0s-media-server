@@ -1,10 +1,10 @@
 use std::cmp::Ordering;
 
-use cluster::{implement::NodeId, rpc::gateway::ServiceInfo};
+use cluster::{implement::NodeId, rpc::gateway::ServiceInfo, MEDIA_SERVER_SERVICE};
 use media_utils::F32;
 use metrics::{describe_gauge, gauge};
 
-use super::{ServiceRegistry, ServiceType};
+use super::{RouteResult, ServiceRegistry, ServiceType};
 
 const NODE_TIMEOUT_MS: u64 = 10_000;
 
@@ -79,7 +79,7 @@ impl ServiceRegistry for ServiceInnerRegistry {
     }
 
     /// we save node or create new, then sort by ascending order
-    fn on_ping(&mut self, now_ms: u64, _group: &str, _location: Option<(F32<2>, F32<2>)>, node_id: NodeId, usage: u8, live: u32, max: u32) {
+    fn on_ping(&mut self, now_ms: u64, _zone: &str, _location: Option<(F32<2>, F32<2>)>, node_id: NodeId, usage: u8, live: u32, max: u32) {
         if let Some(slot) = self.nodes.iter_mut().find(|s| s.node_id == node_id) {
             slot.usage = usage;
             slot.live = live;
@@ -98,23 +98,23 @@ impl ServiceRegistry for ServiceInnerRegistry {
     }
 
     /// we get first with max_usage, if not enough => using max_usage_fallback
-    fn best_nodes(&mut self, _location: Option<(F32<2>, F32<2>)>, max_usage: u8, max_usage_fallback: u8, size: usize) -> Vec<NodeId> {
-        let mut res = vec![];
+    fn best_nodes(&mut self, _location: Option<(F32<2>, F32<2>)>, max_usage: u8, max_usage_fallback: u8, size: usize) -> RouteResult {
+        let mut nodes = vec![];
         for slot in self.nodes.iter().rev() {
             if slot.usage <= max_usage {
-                res.push(slot.node_id);
-                if res.len() == size {
+                nodes.push(slot.node_id);
+                if nodes.len() == size {
                     break;
                 }
             }
         }
 
-        if res.len() < size {
+        if nodes.len() < size {
             for slot in self.nodes.iter().rev() {
                 if slot.usage <= max_usage_fallback {
-                    if !res.contains(&slot.node_id) {
-                        res.push(slot.node_id);
-                        if res.len() == size {
+                    if !nodes.contains(&slot.node_id) {
+                        nodes.push(slot.node_id);
+                        if nodes.len() == size {
                             break;
                         }
                     }
@@ -122,7 +122,14 @@ impl ServiceRegistry for ServiceInnerRegistry {
             }
         }
 
-        res
+        if nodes.is_empty() {
+            RouteResult::NotFound
+        } else {
+            RouteResult::OtherNode {
+                nodes,
+                service_id: MEDIA_SERVER_SERVICE,
+            }
+        }
     }
 
     fn stats(&self) -> ServiceInfo {
@@ -261,8 +268,13 @@ mod tests {
 
         let result = registry.best_nodes(None, max_usage, max_usage_fallback, size);
 
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0], node_id1);
+        assert_eq!(
+            result,
+            RouteResult::OtherNode {
+                nodes: vec![node_id1],
+                service_id: MEDIA_SERVER_SERVICE
+            }
+        );
     }
 
     #[test]
@@ -286,10 +298,17 @@ mod tests {
         let size = 2;
 
         let mut result = registry.best_nodes(None, max_usage_fallback, max_usage, size);
+        if let RouteResult::OtherNode { nodes, service_id: _ } = &mut result {
+            nodes.sort();
+        }
 
-        assert_eq!(result.len(), 2);
-        result.sort();
-        assert_eq!(result, [node_id1, node_id2]);
+        assert_eq!(
+            result,
+            RouteResult::OtherNode {
+                nodes: vec![node_id1, node_id2],
+                service_id: MEDIA_SERVER_SERVICE
+            }
+        );
     }
 
     #[test]

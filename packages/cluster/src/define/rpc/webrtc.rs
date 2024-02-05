@@ -1,8 +1,11 @@
-use std::{fmt::Debug, net::IpAddr};
+use std::fmt::Debug;
 
 use crate::{ClusterEndpointPublishScope, ClusterEndpointSubscribeScope, MediaSessionToken, VerifyObject};
 
-use super::super::media::{BitrateControlMode, MixMinusAudioMode, PayloadType};
+use super::{
+    super::media::{BitrateControlMode, MixMinusAudioMode, PayloadType},
+    general::RemoteAddr,
+};
 use poem_openapi::Object;
 use proc_macro::{IntoVecU8, TryFromSliceU8};
 use serde::{Deserialize, Serialize};
@@ -25,18 +28,21 @@ pub struct WebrtcConnectRequestSender {
 
 #[derive(Debug, Serialize, Deserialize, Object, PartialEq, Eq, IntoVecU8, TryFromSliceU8, Clone)]
 pub struct WebrtcConnectRequest {
-    pub session_uuid: Option<u64>,
-    pub ip_addr: IpAddr,
+    #[oai(skip)]
+    pub session_uuid: u64,
+    #[oai(skip)]
+    pub ip_addr: RemoteAddr,
+    #[oai(skip)]
     pub user_agent: String,
     pub version: Option<String>,
     pub room: String,
     pub peer: String,
-    #[serde(default = "ClusterEndpointSubscribeScope::default")]
+    #[oai(default = "ClusterEndpointSubscribeScope::default")]
     pub sub_scope: ClusterEndpointSubscribeScope,
-    #[serde(default = "ClusterEndpointPublishScope::default")]
+    #[oai(default = "ClusterEndpointPublishScope::default")]
     pub pub_scope: ClusterEndpointPublishScope,
     pub token: String,
-    #[serde(default = "MixMinusAudioMode::default")]
+    #[oai(default = "MixMinusAudioMode::default")]
     pub mix_minus_audio: MixMinusAudioMode,
     pub join_now: Option<bool>,
     pub codecs: Option<Vec<PayloadType>>,
@@ -44,7 +50,7 @@ pub struct WebrtcConnectRequest {
     pub sdp: Option<String>,
     pub compressed_sdp: Option<Vec<u8>>,
     pub senders: Vec<WebrtcConnectRequestSender>,
-    #[serde(default = "BitrateControlMode::default")]
+    #[oai(default = "BitrateControlMode::default")]
     pub remote_bitrate_control_mode: BitrateControlMode,
 }
 

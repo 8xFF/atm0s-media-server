@@ -31,6 +31,7 @@ mod mid_convert;
 mod mid_history;
 mod net;
 mod pt_mapping;
+mod rpc_wait_queue;
 mod rtp_packet_convert;
 pub mod sdp_box;
 mod str0m_event_convert;

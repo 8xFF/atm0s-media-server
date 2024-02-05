@@ -8,7 +8,7 @@ mod server;
 use cluster::{
     atm0s_sdn::SystemTimer,
     implement::{NodeAddr, NodeId, ServerSdn, ServerSdnConfig},
-    CONNECTOR_SERVICE, GLOBAL_GATEWAY_SERVICE, INNER_GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
+    CONNECTOR_SERVICE, GATEWAY_SERVICE, MEDIA_SERVER_SERVICE,
 };
 
 #[cfg(feature = "connector")]
@@ -26,8 +26,6 @@ use server::webrtc::run_webrtc_server;
 
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
-use crate::server::gateway::GatewayMode;
-
 /// Media Server
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -44,9 +42,9 @@ struct Args {
     #[arg(env, long, default_value_t = 0)]
     sdn_port: u16,
 
-    /// Sdn group
+    /// Sdn Zone
     #[arg(env, long, default_value = "local")]
-    sdn_group: String,
+    sdn_zone: String,
 
     /// Current Node ID
     #[arg(env, long, default_value_t = 1)]
@@ -105,63 +103,51 @@ async fn main() {
         #[cfg(feature = "gateway")]
         Servers::Gateway(opts) => {
             use server::MediaServerContext;
-            match opts.mode {
-                GatewayMode::Global => {
-                    config.local_tags = vec!["gateway-global".to_string()];
-                    config.connect_tags = vec!["gateway-global".to_string()];
-                }
-                GatewayMode::Inner => {
-                    config.local_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
-                    config.connect_tags = vec!["gateway-global".to_string(), format!("gateway-inner-{}", args.sdn_group)];
-                }
-            }
+            config.local_tags = vec![format!("gateway-zone-{}", args.sdn_zone), "gateway".to_string()];
+            config.connect_tags = vec!["gateway-global".to_string()];
 
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::<()>::new(args.node_id, 0, Arc::new(SystemTimer()), token.clone(), token);
-            let rpc_service_id = match opts.mode {
-                GatewayMode::Inner => INNER_GATEWAY_SERVICE,
-                GatewayMode::Global => GLOBAL_GATEWAY_SERVICE,
-            };
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, rpc_service_id, config).await;
-            if let Err(e) = run_gateway_server(args.http_port, args.http_tls, opts, ctx, cluster, rpc_endpoint).await {
+            let (cluster, rpc_endpoint, pubsub) = ServerSdn::new(args.node_id, args.sdn_port, GATEWAY_SERVICE, config).await;
+            if let Err(e) = run_gateway_server(args.http_port, args.http_tls, &args.sdn_zone, opts, ctx, cluster, rpc_endpoint, pubsub).await {
                 log::error!("[GatewayServer] error {}", e);
             }
         }
         #[cfg(feature = "webrtc")]
         Servers::Webrtc(opts) => {
             use server::MediaServerContext;
-            config.local_tags = vec![format!("media-webrtc-{}", args.sdn_group)];
-            config.connect_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+            config.local_tags = vec![format!("media-webrtc-{}", args.sdn_zone)];
+            config.connect_tags = vec![format!("gateway-zone-{}", args.sdn_zone)];
 
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
-            if let Err(e) = run_webrtc_server(args.http_port, args.http_tls, opts, ctx, cluster, rpc_endpoint).await {
+            let (cluster, rpc_endpoint, _pubsub) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
+            if let Err(e) = run_webrtc_server(args.http_port, args.http_tls, &args.sdn_zone, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[WebrtcServer] error {}", e);
             }
         }
         #[cfg(feature = "rtmp")]
         Servers::Rtmp(opts) => {
             use server::MediaServerContext;
-            config.local_tags = vec![format!("media-rtmp-{}", args.sdn_group)];
-            config.connect_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+            config.local_tags = vec![format!("media-rtmp-{}", args.sdn_zone)];
+            config.connect_tags = vec![format!("gateway-zone-{}", args.sdn_zone)];
 
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
-            if let Err(e) = run_rtmp_server(args.http_port, args.http_tls, opts, ctx, cluster, rpc_endpoint).await {
+            let (cluster, rpc_endpoint, _pubsub) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
+            if let Err(e) = run_rtmp_server(args.http_port, args.http_tls, &args.sdn_zone, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[RtmpServer] error {}", e);
             }
         }
         #[cfg(feature = "sip")]
         Servers::Sip(opts) => {
             use server::MediaServerContext;
-            config.local_tags = vec![format!("media-sip-{}", args.sdn_group)];
-            config.connect_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+            config.local_tags = vec![format!("media-sip-{}", args.sdn_zone)];
+            config.connect_tags = vec![format!("gateway-zone-{}", args.sdn_zone)];
 
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
+            let (cluster, rpc_endpoint, _pubsub) = ServerSdn::new(args.node_id, args.sdn_port, MEDIA_SERVER_SERVICE, config).await;
             if let Err(e) = run_sip_server(args.http_port, args.http_tls, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[RtmpServer] error {}", e);
             }
@@ -169,12 +155,12 @@ async fn main() {
         #[cfg(feature = "connector")]
         Servers::Connector(opts) => {
             use server::MediaServerContext;
-            config.local_tags = vec![format!("connector-{}", args.sdn_group)];
-            config.connect_tags = vec![format!("gateway-inner-{}", args.sdn_group)];
+            config.local_tags = vec![format!("connector-{}", args.sdn_zone)];
+            config.connect_tags = vec![format!("gateway-zone-{}", args.sdn_zone)];
 
             let token = Arc::new(cluster::implement::jwt_static::JwtStaticToken::new(&args.secret));
             let ctx = MediaServerContext::new(args.node_id, opts.max_conn, Arc::new(SystemTimer()), token.clone(), token);
-            let (cluster, rpc_endpoint) = ServerSdn::new(args.node_id, args.sdn_port, CONNECTOR_SERVICE, config).await;
+            let (cluster, rpc_endpoint, _pubsub) = ServerSdn::new(args.node_id, args.sdn_port, CONNECTOR_SERVICE, config).await;
             if let Err(e) = run_connector_server(args.http_port, args.http_tls, opts, ctx, cluster, rpc_endpoint).await {
                 log::error!("[ConnectorServer] error {}", e);
             }

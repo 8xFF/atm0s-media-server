@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-v0.1.2...atm0s-media-server-v0.1.3) - 2024-01-26
+
+### Fixed
+- webrtc sdk apis json parse error ([#193](https://github.com/8xFF/atm0s-media-server/pull/193))
+- some sdk http apis enum between serde and poem-openapi ([#195](https://github.com/8xFF/atm0s-media-server/pull/195))
+
+### Other
+- update metric-dashboard and poem deps ([#190](https://github.com/8xFF/atm0s-media-server/pull/190))
+
 ## [0.1.2](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-v0.1.1...atm0s-media-server-v0.1.2) - 2024-01-25
 
 ### Added
