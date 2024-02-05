@@ -1,9 +1,11 @@
-# SIP Transport integration: PoC Working
+# SIP
 
 The current implementation is incomplete and only finished the most important parts, it is working as a PoC.
 
 - It can handle incoming calls to join a room or reject them. It can make outgoing calls and put them in a room.
 - Audio processing is done with OPUS and PCMA transcoding.
+
+We create udp server then create a virtual session with iddentify is (dest, call_id), then we process each session independently in separate task, this will be convert into SipTransport. All SIP message is serialize and deserialize rsip crate.
 
 ### Checklist
 
@@ -24,16 +26,16 @@ Call
 - [x] Incoming call
 - [x] Outgoing call
 - [x] Audio transcode
-- [ ] Call RING
-- [ ] Call BUSY
-- [ ] Call CANCEL
-- [ ] Call END after all other members have left
+- [x] Call RING
+- [x] Call BUSY
+- [x] Call CANCEL
+- [x] Call END after all other members have left
 
 Hooks
 
 - [x] Auth hook
 - [x] Register hook
-- [ ] Unregister hook
+- [x] Unregister hook
 - [x] Invite hook
 
 APIs
@@ -64,7 +66,7 @@ sequenceDiagram
     participant sip-client
     participant atm0s-sip-server
     participant 3rd-hooks
-    sip-client->>atm0s-sip-server: incomming call
+    sip-client->>atm0s-sip-server: incoming call
     atm0s-sip-server ->> 3rd-hooks: post /hooks/invite includes from, to
     3rd-hooks ->> atm0s-sip-server: return action: Reject, Accept, WaitOthers, includes room info
     atm0s-sip-server->atm0s-sip-server: create endpoint and join room if Accept or WaitOthers
