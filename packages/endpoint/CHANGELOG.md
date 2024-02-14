@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-endpoint-v0.2.1...atm0s-media-server-endpoint-v0.2.2) - 2024-02-14
+
+### Other
+- added typos github actions ([#224](https://github.com/8xFF/atm0s-media-server/pull/224))
+
 ## [0.2.1](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-endpoint-v0.2.0...atm0s-media-server-endpoint-v0.2.1) - 2024-01-26
 
 ### Other
