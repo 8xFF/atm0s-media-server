@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-transport-sip"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 description = "SIP transport for atm0s-media-server"
@@ -8,7 +8,7 @@ description = "SIP transport for atm0s-media-server"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-endpoint = { package = "atm0s-media-server-endpoint", path = "../../packages/endpoint", version = "0.2.1" }
+endpoint = { package = "atm0s-media-server-endpoint", path = "../../packages/endpoint", version = "0.2.2" }
 transport = { package = "atm0s-media-server-transport", path = "../../packages/transport", version = "0.2.1" }
 media-utils = { package = "atm0s-media-server-utils", path = "../../packages/media-utils", version = "0.2.1" }
 async-std = { workspace = true }

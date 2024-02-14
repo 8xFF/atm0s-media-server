@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-transport-rtmp-v0.2.1...atm0s-media-server-transport-rtmp-v0.2.2) - 2024-02-14
+
+### Other
+- updated the following local packages: atm0s-media-server-endpoint
+
 ## [0.2.1](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-transport-rtmp-v0.2.0...atm0s-media-server-transport-rtmp-v0.2.1) - 2024-01-26
 
 ### Other

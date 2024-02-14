@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/8xFF/atm0s-media-server/compare/v0.1.3...v0.1.4) - 2024-02-14
+
+### Added
+- impls gateway logic as RFC-0003 ([#219](https://github.com/8xFF/atm0s-media-server/pull/219))
+
+### Fixed
+- webrtc rpc not working if sender and receiver is created after rpc arrivered ([#200](https://github.com/8xFF/atm0s-media-server/pull/200))
+
+### Other
+- *(deps)* bump clap from 4.4.18 to 4.5.0 ([#230](https://github.com/8xFF/atm0s-media-server/pull/230))
+- added typos github actions ([#224](https://github.com/8xFF/atm0s-media-server/pull/224))
+- update rust crate reqwest to 0.11.24 ([#203](https://github.com/8xFF/atm0s-media-server/pull/203))
+- update rust crate atm0s-sdn to 0.1.9 ([#202](https://github.com/8xFF/atm0s-media-server/pull/202))
+- update rust crate str0m to 0.1.1 ([#226](https://github.com/8xFF/atm0s-media-server/pull/226))
+
 ## [0.1.3](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-v0.1.2...atm0s-media-server-v0.1.3) - 2024-01-26
 
 ### Fixed

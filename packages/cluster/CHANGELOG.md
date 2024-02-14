@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-cluster-v0.2.1...atm0s-media-server-cluster-v0.3.0) - 2024-02-14
+
+### Added
+- impls gateway logic as RFC-0003 ([#219](https://github.com/8xFF/atm0s-media-server/pull/219))
+
+### Other
+- update rust crate atm0s-sdn to 0.1.9 ([#202](https://github.com/8xFF/atm0s-media-server/pull/202))
+
 ## [0.2.1](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-cluster-v0.2.0...atm0s-media-server-cluster-v0.2.1) - 2024-01-26
 
 ### Fixed
