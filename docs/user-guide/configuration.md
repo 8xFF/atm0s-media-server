@@ -83,7 +83,6 @@ Options:
   -V, --version              Print version
 ```
 
-
 Note that the `addr` option must be a specific address like `192.168.1.66:5060`, rather than `0.0.0.0:5060`. This is necessary to determine the address to send to the client in the SIP header and SDP.
 
 The `hook-url` option is the URL for sending events to an external service. Events such as authentication, registration, unregistration, and invitation will be sent to this URL.
@@ -117,6 +116,6 @@ Options:
   -V, --version                    Print version
 ```
 
-Currently, we only support NATS as the message queue. However, we have designed the system to easily support other message queues such as RabbitMQ or Kafka by implementing the necessary interfaces. 
+Currently, we only support NATS as the message queue. However, we have designed the system to easily support other message queues such as RabbitMQ or Kafka by implementing the necessary interfaces.
 
 For persistent data storage, we use local files. You can configure the backup path for storing the data by setting the `backup-path` option.

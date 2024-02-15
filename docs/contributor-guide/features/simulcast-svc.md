@@ -26,7 +26,7 @@ pub struct Vp8Simulcast {
 }
 ```
 
-In there, we use `spatial` and `temporal` to identify which layer of simulcast we are using and process upgrade/downgrade simulcast. 
+In there, we use `spatial` and `temporal` to identify which layer of simulcast we are using and process upgrade/downgrade simulcast.
 
 The logic of simulcast/svc is put on: endpoint/internal/local_track/scalable_filter.rs
 

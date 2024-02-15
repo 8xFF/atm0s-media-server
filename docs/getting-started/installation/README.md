@@ -1,28 +1,23 @@
 # Installation
 
-To install, you can either: 
+To install, you can either:
 
 - Install from Docker
 
 ```bash
-docker run --net=host ghcr.io/8xff/atm0s-media-server:master:master --help
+docker run --net=host ghcr.io/8xff/atm0s-media-server:master --help
 ```
 
 - Download prebuild
 
-```bash
-wget 
-```
-
-| OS | Arch | Link |
-| --- | --- | --- |
-| MacOS | aarch64 | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-aarch64-apple-darwin) |
-| MacOS | x86_64 | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-x86_64-apple-darwin) |
-| Linux | aarch64 gnu | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-aarch64-unknown-linux-gnu) |
-| Linux | x86_64 gnu | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-x86_64-unknown-linux-gnu) |
+| OS    | Arch         | Link                                                                                                                          |
+| ----- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| MacOS | aarch64      | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-aarch64-apple-darwin)       |
+| MacOS | x86_64       | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-x86_64-apple-darwin)        |
+| Linux | aarch64 gnu  | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-aarch64-unknown-linux-gnu)  |
+| Linux | x86_64 gnu   | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-x86_64-unknown-linux-gnu)   |
 | Linux | aarch64 musl | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-aarch64-unknown-linux-musl) |
-| Linux | x86_64 musl | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-x86_64-unknown-linux-musl) |
-
+| Linux | x86_64 musl  | [Download](https://github.com/8xFF/atm0s-media-server/releases/download/latest/atm0s-media-server-x86_64-unknown-linux-musl)  |
 
 - Build from source
 

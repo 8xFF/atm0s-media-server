@@ -16,7 +16,6 @@ In this mode, the middleware will hook into the cluster track added or removed e
 
 In this mode, the client will use the SDK to add or remove tracks to the audio mixer. The audio mixer will subscribe or unsubscribe to the track, and then select the track with the highest volume and bind it to the output tracks.
 
-
 ## Feature improvement
 
 Instead of subscribing to all audio tracks, we can have multiple layers of tracks (metadata, data, etc.). Initially, we only need to subscribe to the first metadata layer (which contains audio level information), and then when we need to mix, we can subscribe to more layers to get the actual audio data.
