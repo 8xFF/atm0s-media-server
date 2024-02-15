@@ -5,7 +5,7 @@ To install, you can either:
 - Install from Docker
 
 ```bash
-docker run --net=host ghcr.io/8xff/atm0s-media-server:master:master --help
+docker run --net=host ghcr.io/8xff/atm0s-media-server:master --help
 ```
 
 - Download prebuild

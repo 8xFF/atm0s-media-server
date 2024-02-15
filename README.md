@@ -84,7 +84,7 @@ Goals 2 and 3 are in the research phase. For more information, you can visit thi
 - From Docker
 
 ```bash
-docker run --net=host ghcr.io/8xff/atm0s-media-server:master:master --help
+docker run --net=host ghcr.io/8xff/atm0s-media-server:master --help
 ```
 
 - Download prebuild
