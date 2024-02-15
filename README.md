@@ -77,16 +77,9 @@ Goals 2 and 3 are in the research phase. For more information, you can visit thi
   - [x] WebRTC
   - [x] Whip/Whep
 
-## Resources
-
-- [Summary](./docs/summary.md)
-- [Getting Started](./docs/getting-started/README.md)
-- [User Guide](./docs/user-guide/README.md)
-- [Contributor Guide](./docs/contributor-guide/README.md)
-- [RFCs](https://github.com/8xff/RFCs)
-- [FAQ](./docs/getting-started/faq.md)
-
 ## Quick Start
+
+### Prebuild or build from source
 
 - From Docker
 
@@ -111,6 +104,8 @@ docker run --net=host ghcr.io/8xff/atm0s-media-server:master:master --help
 cargo build --release --package atm0s-media-server
 ./target/release/atm0s-media-server --help
 ```
+
+### Run
 
 Run first WebRTC node:
 
@@ -140,11 +135,20 @@ Each node also has embedded monitoring page at `http://localhost:3001/dashboard/
 
 ![Monitoring](./docs/imgs/demo-monitor.png)
 
+## Resources
+
+- [Summary](./docs/summary.md)
+- [Getting Started](./docs/getting-started/README.md)
+- [User Guide](./docs/user-guide/README.md)
+- [Contributor Guide](./docs/contributor-guide/README.md)
+- [RFCs](https://github.com/8xff/RFCs)
+- [FAQ](./docs/getting-started/faq.md)
+
 ## Contributing
 
 The project is continuously being improved and updated. We are always looking for ways to make it better, whether that's through optimizing performance, adding new features, or fixing bugs. We welcome contributions from the community and are always looking for new ideas and suggestions. If you find it interesting or believe it could be helpful, we welcome your contributions to the codebase or consider starring the repository to show your support and motivate our team!
 
-For more information, you can join our [Discord channel](https://discord.gg/qXr5zxsJWp)
+For more information, you can access [Contributor Guide](./docs/contributor-guide/README.md) and join our [Discord channel](https://discord.gg/qXr5zxsJWp)
 
 ## License
 
