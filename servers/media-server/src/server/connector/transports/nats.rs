@@ -2,17 +2,19 @@ use std::{io, marker::PhantomData, time::Duration};
 
 use async_trait::async_trait;
 use prost::Message;
+use serde::Serialize;
 
-use super::ConnectorTransporter;
+use super::{ConnectorTransporter, Format};
 
-pub struct NatsTransporter<M: Message + Clone + TryFrom<Vec<u8>>> {
+pub struct NatsTransporter<M: Message + Clone + TryFrom<Vec<u8>> + Serialize> {
     conn: nats::asynk::Connection,
     subject: String,
+    format: Format,
     _tmp: PhantomData<M>,
 }
 
-impl<M: Message + Clone + TryFrom<Vec<u8>>> NatsTransporter<M> {
-    pub async fn new(uri: String, subject: String) -> Result<Self, io::Error> {
+impl<M: Message + Clone + TryFrom<Vec<u8>> + Serialize> NatsTransporter<M> {
+    pub async fn new(uri: &str, subject: &str, format: &Format) -> Result<Self, io::Error> {
         log::info!("Connecting to NATS server: {}", uri);
         Ok(Self {
             conn: nats::asynk::Options::new()
@@ -24,16 +26,23 @@ impl<M: Message + Clone + TryFrom<Vec<u8>>> NatsTransporter<M> {
                 .close_callback(|| panic!("connection has been closed")) //this should not happen
                 .connect(uri)
                 .await?,
-            subject,
+            subject: subject.to_string(),
+            format: format.clone(),
             _tmp: Default::default(),
         })
     }
 }
 
 #[async_trait]
-impl<M: Message + Clone + TryFrom<Vec<u8>>> ConnectorTransporter<M> for NatsTransporter<M> {
+impl<M: Message + Clone + TryFrom<Vec<u8>> + Serialize> ConnectorTransporter<M> for NatsTransporter<M> {
     async fn send(&mut self, data: M) -> Result<(), io::Error> {
-        let data = data.encode_to_vec();
+        let data: Vec<u8> = match self.format {
+            Format::Json => match serde_json::to_string(&data) {
+                Ok(data) => data.as_bytes().to_vec(),
+                Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+            },
+            Format::Protobuf => data.encode_to_vec(),
+        };
         self.conn.publish(&self.subject, data).await?;
         Ok(())
     }

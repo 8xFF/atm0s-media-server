@@ -1,17 +1,34 @@
-use std::io;
+use std::{fmt::Display, io};
 
 use async_trait::async_trait;
+use clap::ValueEnum;
 use prost::Message;
 
 pub mod nats;
+pub mod http;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseURIError {
     InvalidURI,
 }
 
+#[derive(Debug, ValueEnum, Clone)]
+pub enum Format {
+    Json,
+    Protobuf,
+}
+
+impl Display for Format {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Format::Json => write!(f, "json"),
+            Format::Protobuf => write!(f, "protobuf"),
+        }
+    }
+}
+
 #[async_trait]
-pub trait ConnectorTransporter<M: Message + TryFrom<Vec<u8>>>: Send + Sync {
+pub trait ConnectorTransporter<M: Message>: Send + Sync {
     async fn close(&mut self) -> Result<(), io::Error>;
     async fn send(&mut self, data: M) -> Result<(), io::Error>;
 }

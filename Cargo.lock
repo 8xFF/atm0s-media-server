@@ -447,6 +447,7 @@ dependencies = [
  "rsip",
  "rust-embed",
  "serde",
+ "serde_json",
  "tracing-subscriber",
  "yaque",
 ]
@@ -510,6 +511,7 @@ version = "0.1.1"
 dependencies = [
  "prost",
  "prost-build",
+ "serde",
 ]
 
 [[package]]
