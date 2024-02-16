@@ -18,12 +18,8 @@ pub struct SipHttpApis;
 impl SipHttpApis {
     /// get node health
     #[oai(path = "/health", method = "get")]
-    async fn health(&self, Data(_ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>) -> Result<Json<Response<String>>> {
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some("OK".to_string()),
-        }))
+    async fn health(&self, Data(_ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>) -> Result<Json<Response<String, String>>> {
+        Ok(Json(Response::success("OK")))
     }
 
     /// invite a client
@@ -32,7 +28,7 @@ impl SipHttpApis {
         &self,
         Data(ctx): Data<&(Sender<RpcEvent>, MediaServerContext<InternalControl>)>,
         body: Json<SipOutgoingInviteClientRequest>,
-    ) -> Result<Json<Response<SipOutgoingInviteResponse>>> {
+    ) -> Result<Json<Response<SipOutgoingInviteResponse, String>>> {
         log::info!("[HttpApis] invite sip client {:?}", body.0);
         let (req, rx) = RpcReqResHttp::new(body.0);
         ctx.0
@@ -41,16 +37,16 @@ impl SipHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some(res),
-        }))
+        Ok(Json(Response::success(res)))
     }
 
     /// invite a server
     #[oai(path = "/sip/invite/server", method = "post")]
-    async fn invite_server(&self, Data(ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>, body: Json<SipOutgoingInviteServerRequest>) -> Result<Json<Response<SipOutgoingInviteResponse>>> {
+    async fn invite_server(
+        &self,
+        Data(ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>,
+        body: Json<SipOutgoingInviteServerRequest>,
+    ) -> Result<Json<Response<SipOutgoingInviteResponse, String>>> {
         log::info!("[HttpApis] invite sip client {:?}", body.0);
         let (req, rx) = RpcReqResHttp::new(body.0);
         ctx.0
@@ -59,10 +55,6 @@ impl SipHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some(res),
-        }))
+        Ok(Json(Response::success(res)))
     }
 }

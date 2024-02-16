@@ -38,12 +38,8 @@ pub struct WebrtcHttpApis;
 impl WebrtcHttpApis {
     /// get node health
     #[oai(path = "/health", method = "get")]
-    async fn health(&self, Data(_ctx): Data<&DataContainer>) -> Result<Json<Response<String>>> {
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some("OK".to_string()),
-        }))
+    async fn health(&self, Data(_ctx): Data<&DataContainer>) -> Result<Json<Response<String, String>>> {
+        Ok(Json(Response::success("OK")))
     }
 
     /// connect whip endpoint
@@ -122,7 +118,7 @@ impl WebrtcHttpApis {
 
     /// delete whip conn
     #[oai(path = "/whip/conn/:conn_id", method = "delete")]
-    async fn conn_whip_delete(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>) -> Result<Json<Response<String>>> {
+    async fn conn_whip_delete(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>) -> Result<Json<Response<String, String>>> {
         log::info!("[HttpApis] close whip endpoint conn {}", conn_id.0);
         let (req, rx) = RpcReqResHttp::<MediaEndpointCloseRequest, MediaEndpointCloseResponse>::new(MediaEndpointCloseRequest { conn_id: conn_id.0.clone() });
         data.0
@@ -132,11 +128,7 @@ impl WebrtcHttpApis {
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let _res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Whip endpoint closed conn {}", conn_id.0);
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some("OK".to_string()),
-        }))
+        Ok(Json(Response::success("OK")))
     }
 
     /// connect whep endpoint
@@ -216,7 +208,7 @@ impl WebrtcHttpApis {
 
     /// delete whip conn
     #[oai(path = "/whep/conn/:conn_id", method = "delete")]
-    async fn conn_whep_delete(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>) -> Result<Json<Response<String>>> {
+    async fn conn_whep_delete(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>) -> Result<Json<Response<String, String>>> {
         log::info!("[HttpApis] close whep endpoint conn {}", conn_id.0);
         let (req, rx) = RpcReqResHttp::<MediaEndpointCloseRequest, MediaEndpointCloseResponse>::new(MediaEndpointCloseRequest { conn_id: conn_id.0.clone() });
         data.0
@@ -226,11 +218,7 @@ impl WebrtcHttpApis {
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let _res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Whep endpoint closed conn {}", conn_id.0);
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some("OK".to_string()),
-        }))
+        Ok(Json(Response::success("OK")))
     }
 
     /// connect webrtc endpoint
@@ -241,7 +229,7 @@ impl WebrtcHttpApis {
         UserAgent(user_agent): UserAgent,
         RemoteIpAddr(ip_addr): RemoteIpAddr,
         mut body: Json<WebrtcConnectRequest>,
-    ) -> Result<Json<Response<WebrtcSdp>>> {
+    ) -> Result<Json<Response<WebrtcSdp, String>>> {
         let token_success = match data.1.verifier().verify_media_session(&body.0.token) {
             None => false,
             Some(s_token) => {
@@ -256,8 +244,9 @@ impl WebrtcHttpApis {
         };
         if !token_success {
             return Ok(Json(Response {
-                status: false,
-                error: Some("INVALID_TOKEN".to_string()),
+                success: false,
+                error_code: Some("INVALID_TOKEN".to_string()),
+                error_msg: Some("INVALID_TOKEN".to_string()),
                 data: None,
             }));
         }
@@ -282,21 +271,17 @@ impl WebrtcHttpApis {
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
         }?;
         log::info!("[HttpApis] Webrtc endpoint created with conn_id {}", res.conn_id);
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some(WebrtcSdp {
-                node_id: 0,
-                conn_id: res.conn_id,
-                sdp,
-                service_token: None,
-            }),
-        }))
+        Ok(Json(Response::success(WebrtcSdp {
+            node_id: 0,
+            conn_id: res.conn_id,
+            sdp,
+            service_token: None,
+        })))
     }
 
     /// sending remote ice candidate
     #[oai(path = "/webrtc/ice_remote", method = "post")]
-    async fn webrtc_ice_remote(&self, Data(data): Data<&DataContainer>, body: Json<WebrtcRemoteIceRequest>) -> Result<Json<Response<String>>> {
+    async fn webrtc_ice_remote(&self, Data(data): Data<&DataContainer>, body: Json<WebrtcRemoteIceRequest>) -> Result<Json<Response<String, String>>> {
         log::info!("[HttpApis] on Webrtc endpoint ice-remote {}", body.0.candidate);
         let (req, rx) = RpcReqResHttp::<WebrtcRemoteIceRequest, WebrtcRemoteIceResponse>::new(body.0);
         data.0
@@ -305,16 +290,12 @@ impl WebrtcHttpApis {
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some("OK".to_string()),
-        }))
+        Ok(Json(Response::success("OK")))
     }
 
     /// delete webrtc conn
     #[oai(path = "/webrtc/conn/:conn_id", method = "delete")]
-    async fn conn_webrtc_delete(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>) -> Result<Json<Response<String>>> {
+    async fn conn_webrtc_delete(&self, Data(data): Data<&DataContainer>, conn_id: Path<String>) -> Result<Json<Response<String, String>>> {
         log::info!("[HttpApis] close webrtc endpoint conn {}", conn_id.0);
         let (req, rx) = RpcReqResHttp::<MediaEndpointCloseRequest, MediaEndpointCloseResponse>::new(MediaEndpointCloseRequest { conn_id: conn_id.0.clone() });
         data.0
@@ -324,10 +305,6 @@ impl WebrtcHttpApis {
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let _res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Webrtc endpoint closed conn {}", conn_id.0);
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some("OK".to_string()),
-        }))
+        Ok(Json(Response::success("OK")))
     }
 }

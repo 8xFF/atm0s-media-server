@@ -20,17 +20,13 @@ pub struct RtmpHttpApis;
 impl RtmpHttpApis {
     /// get node health
     #[oai(path = "/health", method = "get")]
-    async fn health(&self, Data(_ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>) -> Result<Json<Response<String>>> {
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some("OK".to_string()),
-        }))
+    async fn health(&self, Data(_ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>) -> Result<Json<Response<String, String>>> {
+        Ok(Json(Response::success("OK")))
     }
 
     /// delete Rtmp conn
     #[oai(path = "/rtmp/conn/:conn_id", method = "delete")]
-    async fn conn_rtmp_delete(&self, Data(ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>, conn_id: Path<String>) -> Result<Json<Response<String>>> {
+    async fn conn_rtmp_delete(&self, Data(ctx): Data<&(Sender<RpcEvent>, MediaServerContext<()>)>, conn_id: Path<String>) -> Result<Json<Response<String, String>>> {
         log::info!("[HttpApis] close Rtmp endpoint conn {}", conn_id.0);
         let (req, rx) = RpcReqResHttp::<MediaEndpointCloseRequest, MediaEndpointCloseResponse>::new(MediaEndpointCloseRequest { conn_id: conn_id.0.clone() });
         ctx.0
@@ -40,10 +36,6 @@ impl RtmpHttpApis {
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
         let _res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Rtmp endpoint closed conn {}", conn_id.0);
-        Ok(Json(Response {
-            status: true,
-            error: None,
-            data: Some("OK".to_string()),
-        }))
+        Ok(Json(Response::success("OK")))
     }
 }

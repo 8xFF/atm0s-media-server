@@ -69,7 +69,7 @@ impl Context {
             })
             .send()
             .await?
-            .json::<Response<SipOutgoingInviteResponse>>()
+            .json::<Response<SipOutgoingInviteResponse, String>>()
             .await?;
         log::info!("make_client_call: {:?}", res);
         Ok(())
