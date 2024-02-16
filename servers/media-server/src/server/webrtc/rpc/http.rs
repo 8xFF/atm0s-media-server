@@ -78,7 +78,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         let sdp = match (res.sdp, res.compressed_sdp) {
             (Some(sdp), _) => Ok(sdp),
             (_, Some(compressed_sdp)) => StringCompression::default()
@@ -104,7 +104,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         if let Some(sdp) = res.ice_restart_sdp {
             log::info!("[HttpApis] Whip endpoint patch with ice_restart");
             Ok(HttpResponse::new(ApplicationSdpPatch(sdp)))
@@ -130,7 +130,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let _res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let _res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Whip endpoint closed conn {}", conn_id.0);
         Ok(Json(Response {
             status: true,
@@ -172,7 +172,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         let sdp = match (res.sdp, res.compressed_sdp) {
             (Some(sdp), _) => Ok(sdp),
             (_, Some(compressed_sdp)) => StringCompression::default()
@@ -198,7 +198,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         if let Some(sdp) = res.ice_restart_sdp {
             log::info!("[HttpApis] Whep endpoint patch with ice_restart");
             Ok(HttpResponse::new(ApplicationSdpPatch(sdp)))
@@ -224,7 +224,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let _res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let _res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Whep endpoint closed conn {}", conn_id.0);
         Ok(Json(Response {
             status: true,
@@ -273,7 +273,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         let sdp = match (res.sdp, res.compressed_sdp) {
             (Some(sdp), _) => Ok(sdp),
             (_, Some(compressed_sdp)) => StringCompression::default()
@@ -304,7 +304,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         Ok(Json(Response {
             status: true,
             error: None,
@@ -322,7 +322,7 @@ impl WebrtcHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let _res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let _res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] Webrtc endpoint closed conn {}", conn_id.0);
         Ok(Json(Response {
             status: true,
