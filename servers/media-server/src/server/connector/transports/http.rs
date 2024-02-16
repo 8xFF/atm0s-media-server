@@ -35,6 +35,7 @@ impl<M: Message + Serialize> ConnectorTransporter<M> for HttpTransporter<M> {
                 self.client
                     .post(&self.url)
                     .body(data.encode_to_vec())
+                    .header("Content-Type", "application/octet-stream")
                     .send()
                     .await
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
