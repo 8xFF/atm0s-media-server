@@ -58,7 +58,7 @@ impl SipHttpApis {
             .await
             .map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.recv().await.map_err(|e| poem::Error::new(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-        let res = res.map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let res = res.map_err(|e| poem::Error::from_string(e, StatusCode::BAD_REQUEST))?;
         Ok(Json(Response {
             status: true,
             error: None,
