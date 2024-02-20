@@ -1,4 +1,5 @@
 # Authentication
+
 We can extend with custom authentication by implementing the `SessionTokenSigner` trait.
 
 ```rust

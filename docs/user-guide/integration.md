@@ -18,17 +18,18 @@ To learn more about token generation mechanisms, refer to the table in the secti
 
 Supported token generation mechanisms:
 
-| Type | Token | Status |
-| --- | --- | --- |
-| Static Secret | [JWT](https://jwt.io/) | Done |
-| Public Private Key | [JWT](https://jwt.io/) | TODO |
-| Hierarchical Key | [JWT](https://jwt.io/) | TODO |
+| Type               | Token                  | Status |
+| ------------------ | ---------------------- | ------ |
+| Static Secret      | [JWT](https://jwt.io/) | Done   |
+| Public Private Key | [JWT](https://jwt.io/) | TODO   |
+| Hierarchical Key   | [JWT](https://jwt.io/) | TODO   |
 
 We can use token-generate APIS to generate tokens. To do this, you will need to start the `token-generate` service by:
 
 ```bash
 atm0s-media-server --http-port 3100 token-generate
 ```
+
 And access to the Swagger dashboard at http://localhost:3100/ui/ for expolering APIS.
 
 Or you can generate by any JWT library with body:
@@ -59,11 +60,11 @@ In there:
 
 We have some HTTP APIs for managing, sessions. The APIs are defined as below:
 
-| Method | Endpoint | Body | Response | Description |
-| --- | --- | --- | --- | --- |
+| Method | Endpoint                     | Body | Response              | Description  |
+| ------ | ---------------------------- | ---- | --------------------- | ------------ |
 | DELETE | GATEWAY/webrtc/conn/:conn_id | none | `{ status: boolean }` | Close a peer |
-| DELETE | GATEWAY/whip/conn/:conn_id | none | `{ status: boolean }` | Close a peer |
-| DELETE | GATEWAY/whep/conn/:conn_id | none | `{ status: boolean }` | Close a peer |
+| DELETE | GATEWAY/whip/conn/:conn_id   | none | `{ status: boolean }` | Close a peer |
+| DELETE | GATEWAY/whep/conn/:conn_id   | none | `{ status: boolean }` | Close a peer |
 
 ## External event handling with message queue
 
@@ -76,19 +77,18 @@ For SIP integration, we use Hooks. Currently, only HTTP Hooks are supported. Eac
 
 Hooks:
 
-| Type | Endpoint | Body | Response | Status |
-| --- | --- | --- | --- | --- |
-| Auth | /hooks/auth | body here | return SIP HA1 hash or reject | Done |
-| Register | /hooks/register | body here | Save to db  | Done |
-| Unregister | /hooks/unregister | body here | Remove from db | Done |
-| Invite | /hooks/invite | body here | return action: reject, or move to room | Done |
+| Type       | Endpoint          | Body      | Response                               | Status |
+| ---------- | ----------------- | --------- | -------------------------------------- | ------ |
+| Auth       | /hooks/auth       | body here | return SIP HA1 hash or reject          | Done   |
+| Register   | /hooks/register   | body here | Save to db                             | Done   |
+| Unregister | /hooks/unregister | body here | Remove from db                         | Done   |
+| Invite     | /hooks/invite     | body here | return action: reject, or move to room | Done   |
 
 Actions:
 
-| Type | Endpoint| Body | Respinse | Description |
-| --- | --- | --- | --- | --- |
+| Type   | Endpoint        | Body      | Respinse      | Description                |
+| ------ | --------------- | --------- | ------------- | -------------------------- |
 | Invite | /actions/invite | body here | response here | For creating outgoing call |
-
 
 ### Working flow
 

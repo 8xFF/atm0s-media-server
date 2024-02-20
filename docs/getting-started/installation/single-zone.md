@@ -25,13 +25,13 @@ The architecture of a single zone cluster is as follows:
 
 Example we have a node index rules like:
 
-| Node type | Index range |
-| --- | --- |
-| Gateway | [0; 10) |
-| SIP | [10; 60) |
-| RTMP | [60; 90) |
-| Connector | [90; 100) |
-| WebRTC | [100 to 255] |
+| Node type | Index range  |
+| --------- | ------------ |
+| Gateway   | [0; 10)      |
+| SIP       | [10; 60)     |
+| RTMP      | [60; 90)     |
+| Connector | [90; 100)    |
+| WebRTC    | [100 to 255] |
 
 ## Deploy some gateway nodes
 
@@ -45,7 +45,7 @@ docker run -d --name atm0s-media-gateway-1 \
     --http-port=8080 \
     --sdn-port=10010 \
     --zone-index=1 \
-    --secret=your-secret \
+    --secret=insecure \
     gateway
 ```
 
@@ -56,7 +56,7 @@ docker run -d --name atm0s-media-gateway-1 \
     --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --http-port=8080 \
     --zone-index=2 \
-    --secret=your-secret \
+    --secret=insecure \
     --seeds FIRST_GATEWAY_ADDR \
     gateway
 ```
@@ -71,7 +71,7 @@ WebRTC 1:
 docker run -d --name atm0s-media-gateway-1 \
     --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --zone-index=100 \
-    --secret=your-secret \
+    --secret=insecure \
     --seeds FIRST_GATEWAY_ADDR \
     webrtc
 ```
@@ -82,7 +82,7 @@ WebRTC 2:
 docker run -d --name atm0s-media-gateway-1 \
     --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --zone-index=101 \
-    --secret=your-secret \
+    --secret=insecure \
     --seeds FIRST_GATEWAY_ADDR \
     webrtc
 ```
@@ -97,7 +97,7 @@ SIP 1:
 docker run -d --name atm0s-media-gateway-1 \
     --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --zone-index=10 \
-    --secret=your-secret \
+    --secret=insecure \
     --seeds FIRST_GATEWAY_ADDR \
     sip \
     --addr SERVER_IP:5060
@@ -109,7 +109,7 @@ SIP 1:
 docker run -d --name atm0s-media-gateway-1 \
     --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --zone-index=11 \
-    --secret=your-secret \
+    --secret=insecure \
     --seeds FIRST_GATEWAY_ADDR \
     sip \
     --addr SERVER_IP:5060
@@ -125,7 +125,7 @@ Rtmp 1:
 docker run -d --name atm0s-media-gateway-1 \
     --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --zone-index=60 \
-    --secret=your-secret \
+    --secret=insecure \
     --seeds FIRST_GATEWAY_ADDR \
     sip \
     --addr SERVER_IP:5060
@@ -137,7 +137,7 @@ Rtmp 2:
 docker run -d --name atm0s-media-gateway-1 \
     --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --zone-index=60 \
-    --secret=your-secret \
+    --secret=insecure \
     --seeds FIRST_GATEWAY_ADDR \
     sip \
     --addr SERVER_IP:5060
@@ -153,12 +153,25 @@ Connector 1:
 docker run -d --name atm0s-media-gateway-1 \
     --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --zone-index=60 \
-    --secret=your-secret \
+    --secret=insecure \
     --seeds FIRST_GATEWAY_ADDR \
     connector \
     --mq-uri nats://NATS_IP:4222
 ```
 
+## Monitoring
+
+Each cluster nodes will expose a dashboard and prometheus metrics, you can use it to monitor your cluster.
+
+Example bellow is gateway node dashboard: `gateway_url/dashboard/`
+
+![Monitoring](../../imgs/demo-monitor.png)
+
 ## Testing your cluster
 
-Now let testing your cluster by some embded samples or sdk samples
+Some samples required access to microphone and camera permission, therefore it need to run with https if you want to test with some remote servers. We have 2 options for that:
+
+- Running gateway under a reverse proxy like NGINX for providing https
+- Start gateway with `--http-tls` for switching to self-signed https server.
+
+Now let testing your cluster by some embded samples or sdk samples, more info at [Quick Start](../quick-start/README.md)

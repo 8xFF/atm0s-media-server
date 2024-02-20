@@ -18,8 +18,8 @@ At the moment, atm0s-media-server now only supports Linux(amd64, aarch64) and ma
   - Compile the proto file
   - Note that the version needs to be >= 3.15. You can check it with `protoc --version`
 
-[1]: <https://www.rust-lang.org/tools/install/>
-[2]: <https://grpc.io/docs/protoc-installation/>
+[1]: https://www.rust-lang.org/tools/install/
+[2]: https://grpc.io/docs/protoc-installation/
 
 ## Compile and Run
 
@@ -69,6 +69,7 @@ short_array_element_width_threshold = 20
 Above is customize for cargo fmt, for easier reading code with wide screen.
 
 ## Debugging
+
 (if you found any mistake or found other way to improve document, feel free to fork and send we a PR, we are very appricius with that )
 
 We have some ways to debugging
