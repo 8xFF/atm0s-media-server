@@ -6,4 +6,4 @@ If we have multiple connector servers, the routing algorithm will send each even
 
 We can have multiple connector servers in each zone, and then the routing algorithm will send the event log to the connector server in the same zone.
 
-Each connector server is connected to a message queue, and external services can get event logs from the message queue. Currently, we only support NATS message queue.
+Each connector server is connected to a message queue, and external services can get event logs from the message queue. Currently, we only support NATS message queue and HTTP POST API endpoints.
