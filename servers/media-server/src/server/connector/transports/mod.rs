@@ -1,30 +1,24 @@
-use std::{fmt::Display, io};
+use derive_more::Display;
+use std::io;
 
 use async_trait::async_trait;
 use clap::ValueEnum;
 use prost::Message;
 
-pub mod nats;
 pub mod http;
+pub mod nats;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseURIError {
     InvalidURI,
 }
 
-#[derive(Debug, ValueEnum, Clone)]
+#[derive(Debug, ValueEnum, Clone, Display)]
 pub enum Format {
+    #[display(fmt = "json")]
     Json,
+    #[display(fmt = "protobuf")]
     Protobuf,
-}
-
-impl Display for Format {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Format::Json => write!(f, "json"),
-            Format::Protobuf => write!(f, "protobuf"),
-        }
-    }
 }
 
 #[async_trait]

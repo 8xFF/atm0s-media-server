@@ -27,22 +27,25 @@ impl<M: Message + Serialize> HttpTransporter<M> {
 #[async_trait]
 impl<M: Message + Serialize> ConnectorTransporter<M> for HttpTransporter<M> {
     async fn send(&mut self, data: M) -> Result<(), io::Error> {
-        match self.format {
-            Format::Json => {
-                self.client.post(&self.url).json(&data).send().await.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let res = match self.format {
+            Format::Json => self.client.post(&self.url).json(&data).send().await,
+            Format::Protobuf => self.client.post(&self.url).body(data.encode_to_vec()).header("Content-Type", "application/octet-stream").send().await,
+        };
+
+        match res {
+            Ok(res) => {
+                if res.status().is_success() {
+                    log::debug!("Data sent to {}", self.url);
+                    return Ok(());
+                }
+                log::error!("Failed to send data to {}: {:?}", self.url, res);
+                return Err(io::Error::new(io::ErrorKind::Other, "Failed to send data"));
             }
-            Format::Protobuf => {
-                self.client
-                    .post(&self.url)
-                    .body(data.encode_to_vec())
-                    .header("Content-Type", "application/octet-stream")
-                    .send()
-                    .await
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            Err(e) => {
+                log::error!("Failed to send data to {}: {:?}", self.url, e);
+                return Err(io::Error::new(io::ErrorKind::Other, "Failed to send data"));
             }
         };
-        log::debug!("Sending data to {}: {:?}", self.url, data);
-        Ok(())
     }
 
     async fn close(&mut self) -> Result<(), io::Error> {

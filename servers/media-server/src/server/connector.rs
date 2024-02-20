@@ -82,15 +82,10 @@ where
                 .expect("Nats should be connected");
             Box::new(nats)
         }
-        "http" => {
+        "http" | "https" => {
             let http = transports::http::HttpTransporter::<MediaEndpointLogRequest>::new(&opts.mq_uri, &opts.format);
             Box::new(http)
         }
-        "https" => {
-            let http = transports::http::HttpTransporter::<MediaEndpointLogRequest>::new(&opts.mq_uri, &opts.format);
-            Box::new(http)
-        }
-
         _ => {
             log::error!("Unsupported transporter");
             return Err("Unsupported transporter");

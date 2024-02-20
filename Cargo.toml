@@ -24,3 +24,4 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 prost = "0.12"
 poem-openapi = { version = "4.0" }
+derive_more = { version = "0.99" }
