@@ -11,7 +11,7 @@ license = "MIT"
 transport = { package = "atm0s-media-server-transport", path = "../transport", version = "0.2.1" }
 media-utils = { package = "atm0s-media-server-utils", path = "../media-utils", version = "0.2.1" }
 proc-macro = { package = "atm0s-media-server-proc-macro", path = "../proc-macro", version = "0.1.1" }
-atm0s-sdn = { version = "0.1.9", features = ["all"], optional = true  }
+atm0s-sdn = { version = "0.1.10", features = ["all"], optional = true  }
 async-trait = { workspace = true }
 serde = { workspace = true }
 poem-openapi = { workspace = true }
