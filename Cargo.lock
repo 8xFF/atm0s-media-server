@@ -598,9 +598,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6835715b1c598ae8b8340bd4272961ee7b0d2f87cebfe2d2ef7eb394f29d74b2"
+checksum = "9dd1e950ae0c699218f2058790fd727a557caf8e89dcd16275733d40290c0c35"
 dependencies = [
  "async-std",
  "async-trait",
@@ -854,9 +854,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-virtual-socket"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df32a2d8085f7726b597cd70d0dce18fb5b83ee205c65e99596b0fd04c06db2f"
+checksum = "26d7a0b16f7a9618da0fc2b4b889c9aad065ce43fef82bc747b741dc0a55041d"
 dependencies = [
  "async-std",
  "async-trait",
