@@ -576,7 +576,7 @@ dependencies = [
  "atm0s-media-server-utils",
  "criterion",
  "futures",
- "local-ip-address",
+ "local-ip-address 0.6.1",
  "log",
  "serde",
  "serde_json",
@@ -810,7 +810,7 @@ dependencies = [
  "atm0s-sdn-utils",
  "bincode",
  "futures-util",
- "local-ip-address",
+ "local-ip-address 0.5.7",
  "log",
  "parking_lot",
  "serde",
@@ -831,7 +831,7 @@ dependencies = [
  "atm0s-sdn-utils",
  "bincode",
  "futures-util",
- "local-ip-address",
+ "local-ip-address 0.5.7",
  "log",
  "parking_lot",
  "serde",
@@ -2649,6 +2649,18 @@ name = "local-ip-address"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "612ed4ea9ce5acfb5d26339302528a5e1e59dfed95e9e11af3c083236ff1d15d"
+dependencies = [
+ "libc",
+ "neli",
+ "thiserror",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "local-ip-address"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "136ef34e18462b17bf39a7826f8f3bbc223341f8e83822beb8b77db9a3d49696"
 dependencies = [
  "libc",
  "neli",
