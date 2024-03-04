@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-cluster-v0.3.0...atm0s-media-server-cluster-v0.3.1) - 2024-03-04
+
+### Other
+- updated the following local packages: atm0s-media-server-protocol
+
 ## [0.3.0](https://github.com/8xFF/atm0s-media-server/compare/atm0s-media-server-cluster-v0.2.1...atm0s-media-server-cluster-v0.3.0) - 2024-02-14
 
 ### Added

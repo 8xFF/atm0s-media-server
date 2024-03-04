@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-cluster"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "Cluster Interface for atm0s-media-server"
 license = "MIT"
@@ -16,7 +16,7 @@ async-trait = { workspace = true }
 serde = { workspace = true }
 poem-openapi = { workspace = true }
 bincode = { version = "1" }
-protocol = { package = "atm0s-media-server-protocol", path = "../protocol", version = "0.1.1" }
+protocol = { package = "atm0s-media-server-protocol", path = "../protocol", version = "0.1.2" }
 
 async-std = { workspace = true, optional = true }
 log = { workspace = true, optional = true  }

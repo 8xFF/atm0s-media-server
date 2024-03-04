@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/8xFF/atm0s-media-server/compare/v0.1.4...v0.1.5) - 2024-03-04
+
+### Added
+- connector support http export transport ([#233](https://github.com/8xFF/atm0s-media-server/pull/233))
+
+### Fixed
+- rpc http bad request response with more info ([#235](https://github.com/8xFF/atm0s-media-server/pull/235))
+
+### Other
+- *(deps)* bump clap from 4.5.0 to 4.5.1 ([#239](https://github.com/8xFF/atm0s-media-server/pull/239))
+
 ## [0.1.4](https://github.com/8xFF/atm0s-media-server/compare/v0.1.3...v0.1.4) - 2024-02-14
 
 ### Added
