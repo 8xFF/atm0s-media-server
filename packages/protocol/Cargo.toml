@@ -10,6 +10,7 @@ build = "build.rs"
 
 [dependencies]
 prost = { workspace = true }
+serde = { workspace = true }
 
 [build-dependencies]
 prost-build = "0.12"

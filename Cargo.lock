@@ -431,6 +431,7 @@ dependencies = [
  "atm0s-media-server-utils",
  "bincode",
  "clap",
+ "derive_more",
  "futures",
  "log",
  "maxminddb",
@@ -447,6 +448,7 @@ dependencies = [
  "rsip",
  "rust-embed",
  "serde",
+ "serde_json",
  "tracing-subscriber",
  "yaque",
 ]
@@ -510,6 +512,7 @@ version = "0.1.1"
 dependencies = [
  "prost",
  "prost-build",
+ "serde",
 ]
 
 [[package]]

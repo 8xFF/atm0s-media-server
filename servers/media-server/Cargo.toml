@@ -25,6 +25,7 @@ log = { workspace = true }
 poem = { version = "2.0", features = ["embed", "rustls"] }
 poem-openapi = { workspace = true, features = ["swagger-ui", "static-files"] }
 serde = { workspace = true }
+serde_json = { workspace = true }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "std"] }
 rust-embed = { version = "8.2", optional = true }
 rsip = { version = "0.4.0", optional = true }
@@ -38,6 +39,7 @@ rand = "0.8.5"
 yaque = { version = "0.6.6", optional = true }
 maxminddb = { version = "0.24.0", optional = true }
 bincode = { version = "1" }
+derive_more = { workspace = true }
 
 [dev-dependencies]
 md5 = "0.7.0"

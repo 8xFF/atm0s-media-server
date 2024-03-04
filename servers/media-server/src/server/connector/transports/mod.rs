@@ -1,8 +1,11 @@
+use derive_more::Display;
 use std::io;
 
 use async_trait::async_trait;
+use clap::ValueEnum;
 use prost::Message;
 
+pub mod http;
 pub mod nats;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -10,8 +13,16 @@ pub enum ParseURIError {
     InvalidURI,
 }
 
+#[derive(Debug, ValueEnum, Clone, Display)]
+pub enum Format {
+    #[display(fmt = "json")]
+    Json,
+    #[display(fmt = "protobuf")]
+    Protobuf,
+}
+
 #[async_trait]
-pub trait ConnectorTransporter<M: Message + TryFrom<Vec<u8>>>: Send + Sync {
+pub trait ConnectorTransporter<M: Message>: Send + Sync {
     async fn close(&mut self) -> Result<(), io::Error>;
     async fn send(&mut self, data: M) -> Result<(), io::Error>;
 }

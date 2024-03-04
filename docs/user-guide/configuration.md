@@ -112,10 +112,12 @@ Options:
       --mq-uri <MQ_URI>            Message Queue URI in the form of `amqp://user:pass@host:port/vhost` [env: MQ_URI=] [default: nats://localhost:4222]
       --mq-channel <MQ_CHANNEL>    MQ Channel [env: MQ_CHANNEL=] [default: atm0s/event_log]
       --backup-path <BACKUP_PATH>  Filebase backup path for logs [env: BACKUP_PATH=] [default: .atm0s/data/connector-queue]
+      --format <FORMAT>            The output format of the message, for now it can either be `protobuf` or `json` [env: FORMAT=] [default: protobuf]
   -h, --help                       Print help
   -V, --version                    Print version
 ```
 
 Currently, we only support NATS as the message queue. However, we have designed the system to easily support other message queues such as RabbitMQ or Kafka by implementing the necessary interfaces.
+You can also use an HTTP API endpoint to receive the cluster events, simply by configuring the MQ URI to be that API Endpoints: `http(s)://localhost:4000/events`. The events will be delivered through a POST request in the specified format. If the format is `protobuf`, the request header will include the content type of `application/octet-stream`.
 
 For persistent data storage, we use local files. You can configure the backup path for storing the data by setting the `backup-path` option.
