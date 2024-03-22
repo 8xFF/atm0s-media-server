@@ -15,7 +15,7 @@ async-std = { workspace = true }
 async-trait = { workspace = true }
 log = { workspace = true }
 futures = { workspace = true }
-bytes = "1.5"
+bytes = "1.6"
 rsip = "0.4.0"
 rand = "0.8"
 sdp-rs = "0.2.1"
