@@ -1,10 +1,10 @@
 [workspace]
 members = [
     "bin",
-    "packages/core",
     "packages/protocol",
-    "packages/runner",
-    "packages/transport-webrtc",
+    "packages/media_core",
+    "packages/media_runner",
+    "packages/transport_webrtc",
 ]
 
 [workspace.dependencies]

@@ -1,5 +1,5 @@
 [package]
-name = "runner"
+name = "media-server-runner"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,11 +8,11 @@ edition = "2021"
 [dependencies]
 log = { workspace = true }
 media-server-protocol = { path = "../protocol" }
-media-server-core = { path = "../core" }
+media-server-core = { path = "../media_core" }
 
-sans-io-runtime = { workspace = true }
+sans-io-runtime = { workspace = true, default-features = false }
 atm0s-sdn = { workspace = true }
-transport-webrtc = { path = "../transport-webrtc", optional = true }
+transport-webrtc = { path = "../transport_webrtc", optional = true }
 
 [features]
 default = ["webrtc"]

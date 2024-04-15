@@ -1,6 +1,7 @@
 use atm0s_sdn::{NodeAddr, NodeId};
 use clap::Parser;
 use server::{run_media_connector, run_media_gateway, run_media_server, ServerType};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod http;
 mod server;
@@ -10,12 +11,12 @@ mod server;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Http port
-    #[arg(env, long, default_value_t = 3000)]
-    http_port: u16,
+    #[arg(env, long)]
+    http_port: Option<u16>,
 
     /// Run http with tls or not
     #[arg(env, long)]
-    http_tls: bool,
+    http_tls: Option<u16>,
 
     /// Sdn port
     #[arg(env, long, default_value_t = 0)]
@@ -47,6 +48,7 @@ async fn main() {
         std::env::set_var("RUST_LOG", "atm0s_media_server=info");
     }
     let args: Args = Args::parse();
+    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
     match args.server {
         ServerType::Gateway(args) => run_media_gateway(args).await,
