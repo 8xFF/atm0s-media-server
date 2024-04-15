@@ -1,0 +1,16 @@
+[package]
+name = "bin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.5", features = ["env", "derive"] }
+log = { workspace = true }
+poem = { version = "3.0" }
+poem-openapi = { version = "5.0", features = ["swagger-ui"] }
+tokio = { version = "1.37", features = ["full"] }
+sans-io-runtime = { workspace = true }
+atm0s-sdn = { workspace = true }
+runner = { path = "../packages/runner" }

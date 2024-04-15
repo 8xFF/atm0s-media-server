@@ -35,19 +35,9 @@ For a deep dive into the technical aspects of network architecture, please refer
 
 (Above is a demo video of the version used by Bluesea Network)
 
-## Project Status: Alpha
+## Project Status: Refactoring
 
-This project is currently in the alpha stage of development. It is actively being developed and may undergo significant changes, including changes to the API. The primary focus at this stage is to make the project stable and reliable.
-
-Our goals for this project can be summarized as follows:
-
-- **Goal 1**: Cluster: Create a global decentralized media server cluster with multiple zones, support both SDKs for flexible and mainstream protocols (RTMP, SIP, SRT) for compatibility.
-- **Goal 2**: Market: Develop a sharing marketplace for the media server, enabling resource sharing and monetization. This will help scale the media server cluster during peak times and reduce costs during off-peak times. In the feature marketplace fees will be used to fund the development of the project.
-- **Goal 3**: P2P Network: Establish a network between users, where servers only act as fallbacks. This approach aims to significantly reduce infrastructure costs and scale to infinity.
-
-Our primary focus is currently on Goal 1. For details on the current phase plan, please refer to our [Roadmap](https://github.com/8xFF/atm0s-media-server/issues/69).
-
-Goals 2 and 3 are in the research phase. For more information, you can visit this [Repository](https://github.com/giangndm/decentralized-p2p-streaming).
+We are actively refactoring entiry media server and network stack with [sans-io-runtime](https://github.com/8xff/sans-io-runtime) for better performance. If you are looking for older version, please check in [legacy branch](https://github.com/8xFF/atm0s-media-server/tree/legacy).
 
 ## Features
 
@@ -57,27 +47,32 @@ Goals 2 and 3 are in the research phase. For more information, you can visit thi
 - Support encodings: H264, Vp8, Vp9, H265 (Coming soon), AV1 (Coming soon)
 - Cross-platform: Linux, macOS, Windows.
 - Decentralized WebRTC SFU (Selective Forwarding Unit)
-- Modern, full-featured client SDKs
-  - [x] [Vanilla JavaScript](https://github.com/8xFF/atm0s-media-sdk-js)
-  - [x] [Rust](WIP)
-  - [x] [React](https://github.com/8xFF/atm0s-media-sdk-react)
-  - [x] [React Native](WIP)
-  - [ ] Flutter
-  - [ ] iOS Native
-  - [ ] Android Native
 - Easy to deploy: single binary, Docker, or Kubernetes
-- Advanced features including:
-  - [x] Audio Mix-Minus (WIP)
-  - [x] Simulcast/SVC
-  - [x] SFU
-  - [x] SFU Cascading (each stream is a global PubSub channel, similar to [Cloudflare interconnected network](https://blog.cloudflare.com/announcing-cloudflare-calls/))
-  - [ ] Recording
-  - [x] RTMP
-  - [x] SIP (WIP)
-  - [x] WebRTC
-  - [x] Whip/Whep
+- Easy to scale: global pubsub network, similar to [Cloudflare interconnected network](https://blog.cloudflare.com/announcing-cloudflare-calls/))
 
-## Quick Start
+| Feature             | Description                                                                          | Status |
+| ------------------- | ------------------------------------------------------------------------------------ | ------ |
+| Multi-zones Cluster | Implement with global pubsub network [RFC-0003](https://github.com/8xFF/rfcs/pull/3) | 🚧     |
+| Whip                | Whip Protocol                                                                        | 🚧     |
+| Whep                | Whep Protocol                                                                        | 🚧     |
+| WebRTC-SDK          | Webrtc-SDK Protocol [RFC-0005](https://github.com/8xFF/rfcs/pull/5)                  | ❌     |
+| RTMP                | RTMP Protocol                                                                        | ❌     |
+| RTMP-Transcode      | RTMP with Transcode                                                                  | ❌     |
+| SIP                 | SIP calls                                                                            | ❌     |
+| MoQ                 | Media-over-Quic                                                                      | ❌     |
+| Monitoring          | Dashboard for monitoring                                                             | ❌     |
+| Recording           | Record stream                                                                        | ❌     |
+| Gateway             | External gateway [RFC-0003](https://github.com/8xFF/rfcs/pull/3)                     | ❌     |
+| Connector           | External event handling                                                              | ❌     |
+
+Status:
+
+- ❌: Not started
+- 🚧: In progress
+- 🚀: In review/testing
+- ✅: Completed
+
+## Quick Start (not ready yet)
 
 ### Prebuild or build from source
 

@@ -1,27 +1,13 @@
 [workspace]
 members = [
-    "packages/cluster",
-    "packages/endpoint",
-    "packages/transport",
-    "packages/audio-mixer",
-    "packages/media-utils",
+    "bin",
+    "packages/core",
     "packages/protocol",
-    "transports/webrtc",
-    "transports/rtmp",
-    "transports/sip",
-    "servers/media-server"
+    "packages/runner",
+    "packages/transport-webrtc",
 ]
 
 [workspace.dependencies]
-futures = "0.3"
-async-trait = "0.1"
-async-std = { version = "1.12", features = ["tokio1", "unstable", "attributes"] }
-async-notify = "0.3"
-parking_lot = "0.12"
-log = { version = "0.4" }
-env_logger = { version = "0.11" }
-serde_json = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-prost = "0.12"
-poem-openapi = { version = "4.0" }
-derive_more = { version = "0.99" }
+sans-io-runtime = { git = "https://github.com/8xff/sans-io-runtime.git", rev = "0d54ce5fd587c45f380c4235526b120b2cd527ba" }
+atm0s-sdn = { git = "https://github.com/8xff/atm0s-sdn.git", rev = "be6191bad5a019286feb9eff3b2506ac00b3e3d7" }
+log = "0.4"
