@@ -4,7 +4,6 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, net::SocketAddr};
 
 #[derive(Debug)]
 pub struct SharedUdpPort<Task> {
-    backend_addr: Option<SocketAddr>,
     task_remotes: HashMap<SocketAddr, Task>,
     task_remotes_map: HashMap<Task, Vec<SocketAddr>>,
     task_ufrags: HashMap<String, Task>,
@@ -14,7 +13,6 @@ pub struct SharedUdpPort<Task> {
 impl<Task> Default for SharedUdpPort<Task> {
     fn default() -> Self {
         Self {
-            backend_addr: None,
             task_remotes: HashMap::new(),
             task_remotes_map: HashMap::new(),
             task_ufrags: HashMap::new(),
@@ -24,14 +22,6 @@ impl<Task> Default for SharedUdpPort<Task> {
 }
 
 impl<Task: Debug + Clone + Copy + Hash + PartialEq + Eq> SharedUdpPort<Task> {
-    pub fn set_backend_info(&mut self, addr: SocketAddr) {
-        self.backend_addr = Some(addr);
-    }
-
-    pub fn get_backend_addr(&self) -> Option<SocketAddr> {
-        self.backend_addr
-    }
-
     pub fn add_ufrag(&mut self, ufrag: String, task: Task) {
         log::info!("Add ufrag {} to task {:?}", ufrag, task);
         self.task_ufrags.insert(ufrag.clone(), task);

@@ -1,6 +1,6 @@
-use atm0s_sdn::{NodeAddr, NodeId};
+use atm0s_sdn::{NodeAddr, NodeId, SdnWorkerCfg};
 use clap::Parser;
-use server::{run_media_connector, run_media_gateway, run_media_server, ServerType};
+use server::{run_media_connector, run_media_gateway, run_media_server, MediaSdnConfig, ServerType};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod http;
@@ -50,9 +50,15 @@ async fn main() {
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
+    let sdn = MediaSdnConfig {
+        node_id: args.node_id,
+        seeds: args.seeds,
+        secret: args.secret,
+    };
+
     match args.server {
         ServerType::Gateway(args) => run_media_gateway(args).await,
         ServerType::Connector(args) => run_media_connector(args).await,
-        ServerType::Media(args) => run_media_server(args).await,
+        ServerType::Media(args) => run_media_server(sdn, args).await,
     }
 }

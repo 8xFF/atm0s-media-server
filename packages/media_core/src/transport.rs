@@ -1,19 +1,50 @@
 use std::time::Instant;
 
+use media_server_protocol::media::MediaPacket;
 use sans_io_runtime::backend::{BackendIncoming, BackendOutgoing};
-
-use crate::base::{LocalTrackControl, LocalTrackEvent, RemoteTrackControl, RemoteTrackEvent};
 
 pub struct TransportSession(pub u64);
 pub struct TrackId(pub u16);
 
-pub enum TransportState {}
+pub enum TransportError {
+    Timeout,
+}
+
+pub enum TransportState {
+    Connecting,
+    ConnectError(TransportError),
+    Connected,
+    Reconnecting,
+    Disconnected(Option<TransportError>),
+}
 
 pub struct TransportStats {}
 
 pub enum TransportControlIn {}
 
 pub enum TransportControlOut {}
+
+pub enum LocalTrackControl {
+    Media(MediaPacket),
+}
+
+pub enum LocalTrackEvent {
+    Started { name: String },
+    Paused,
+    RequestKeyFrame,
+    Ended,
+}
+
+pub enum RemoteTrackControl {
+    RequestKeyFrame,
+}
+
+pub enum RemoteTrackEvent {
+    Started { name: String },
+    Paused,
+    Media(MediaPacket),
+    Ended,
+}
 
 pub enum TransportInput<'a> {
     Net(BackendIncoming<'a>),

@@ -2,6 +2,7 @@
 members = [
     "bin",
     "packages/protocol",
+    "packages/media_utils",
     "packages/media_core",
     "packages/media_runner",
     "packages/transport_webrtc",

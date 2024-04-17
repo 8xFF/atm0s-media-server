@@ -13,12 +13,13 @@ pub struct EndpointSession(pub u64);
 
 pub enum Input<'a> {
     Net(BackendIncoming<'a>),
-    Sdn(EndpointEvent),
+    Cluster(EndpointEvent),
 }
 
 pub enum Output<'a> {
     Net(BackendOutgoing<'a>),
-    Sdn(EndpointControl),
+    Cluster(EndpointControl),
+    Shutdown,
 }
 
 pub struct Endpoint<T: Transport> {
@@ -27,6 +28,10 @@ pub struct Endpoint<T: Transport> {
 }
 
 impl<T: Transport> Endpoint<T> {
+    pub fn new(transport: T) -> Self {
+        Self { transport, middlewares: vec![] }
+    }
+
     pub fn on_tick<'a>(&mut self, now: Instant) -> Option<Output<'a>> {
         let out = self.transport.on_tick(now)?;
         self.process_transport_output(out)

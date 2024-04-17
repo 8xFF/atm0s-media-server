@@ -8,6 +8,9 @@ edition = "2021"
 [dependencies]
 log = { workspace = true }
 sans-io-runtime = { workspace = true, default-features = false }
+media-server-utils = { path = "../media_utils" }
+media-server-protocol = { path = "../protocol" }
 media-server-core = { path = "../media_core" }
 str0m = "0.5.0"
 faster-stun = "1.0.2"
+smallmap = "1.4.2"

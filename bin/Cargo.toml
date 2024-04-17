@@ -9,7 +9,7 @@ edition = "2021"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
 clap = { version = "4.5", features = ["env", "derive"] }
 log = { workspace = true }
-poem = { version = "3.0" }
+poem = { version = "3.0", features = ["static-files"] }
 poem-openapi = { version = "5.0", features = ["swagger-ui"] }
 tokio = { version = "1.37", features = ["full"] }
 sans-io-runtime = { workspace = true }

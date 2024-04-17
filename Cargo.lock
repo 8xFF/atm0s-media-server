@@ -1185,6 +1185,9 @@ dependencies = [
 [[package]]
 name = "media-server-protocol"
 version = "0.1.0"
+dependencies = [
+ "convert-enum",
+]
 
 [[package]]
 name = "media-server-runner"
@@ -1199,6 +1202,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "media-server-utils"
+version = "0.1.0"
+dependencies = [
+ "smallmap",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1209,6 +1219,16 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "mime_guess"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
+dependencies = [
+ "mime",
+ "unicase",
+]
 
 [[package]]
 name = "miniz_oxide"
@@ -1616,9 +1636,11 @@ dependencies = [
  "headers",
  "http",
  "http-body-util",
+ "httpdate",
  "hyper",
  "hyper-util",
  "mime",
+ "mime_guess",
  "multer",
  "nix",
  "parking_lot",
@@ -2127,6 +2149,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "smallmap"
+version = "1.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6d0205d551de9bbfea07e51ace307c7f1ca224958a3df56fef6c2cfd244c199"
+dependencies = [
+ "rustc_version",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2474,7 +2505,10 @@ dependencies = [
  "faster-stun",
  "log",
  "media-server-core",
+ "media-server-protocol",
+ "media-server-utils",
  "sans-io-runtime 0.1.0 (git+https://github.com/8xff/sans-io-runtime.git?rev=0d54ce5fd587c45f380c4235526b120b2cd527ba)",
+ "smallmap",
  "str0m",
 ]
 
@@ -2489,6 +2523,15 @@ name = "uncased"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1b88fcfe09e89d3866a5c11019378088af2d24c3fbd4f0543f96b479ec90697"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
+name = "unicase"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7d2d4dafb69621809a81864c9c1b864479e1235c0dd4e199924b9742439ed89"
 dependencies = [
  "version_check",
 ]

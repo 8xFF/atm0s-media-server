@@ -1,3 +1,5 @@
+use media_server_protocol::transport::{RpcReq, RpcRes};
+use poem::endpoint::StaticFilesEndpoint;
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 use poem_openapi::types::{ToJSON, Type};
 use poem_openapi::OpenApiService;
@@ -14,29 +16,27 @@ pub struct Response<T: ParseFromJSON + ToJSON + Type + Send + Sync> {
 }
 
 pub struct Rpc<Req, Res> {
-    req: Req,
-    answer_tx: tokio::sync::oneshot::Sender<Res>,
+    pub req: Req,
+    pub answer_tx: tokio::sync::oneshot::Sender<Res>,
 }
 
-impl<Request, Response> Rpc<Request, Response> {
-    pub fn new(req: Request) -> (Self, tokio::sync::oneshot::Receiver<Response>) {
+impl<Req, Res> Rpc<Req, Res> {
+    pub fn new(req: Req) -> (Self, tokio::sync::oneshot::Receiver<Res>) {
         let (answer_tx, answer_rx) = tokio::sync::oneshot::channel();
         (Self { req, answer_tx }, answer_rx)
     }
 
-    pub fn answer(self, res: Response) {
+    pub fn res(self, res: Res) {
         let _ = self.answer_tx.send(res);
     }
 }
 
-mod connector;
-mod media;
-mod payload_sdp;
-mod remote_ip;
-mod user_agent;
+mod api_connector;
+mod api_media;
+mod utils;
 
-pub async fn run_gateway_http_server(sender: Sender<media::RpcType>) -> Result<(), Box<dyn std::error::Error>> {
-    let api_service: OpenApiService<_, ()> = OpenApiService::new(media::MediaApis, "Media Gateway APIs", env!("CARGO_PKG_VERSION")).server("/");
+pub async fn run_gateway_http_server(sender: Sender<Rpc<RpcReq, RpcRes>>) -> Result<(), Box<dyn std::error::Error>> {
+    let api_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis, "Media Gateway APIs", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
     let route = Route::new()
@@ -44,22 +44,23 @@ pub async fn run_gateway_http_server(sender: Sender<media::RpcType>) -> Result<(
         .nest("/ui", ui)
         .at("/spec", poem::endpoint::make_sync(move |_| spec.clone()))
         .with(Cors::new())
-        .data(media::MediaServerCtx { sender });
+        .data(api_media::MediaServerCtx { sender });
 
     Server::new(TcpListener::bind("0.0.0.0:3000")).run(route).await?;
     Ok(())
 }
 
-pub async fn run_media_http_server(sender: Sender<media::RpcType>) -> Result<(), Box<dyn std::error::Error>> {
-    let api_service: OpenApiService<_, ()> = OpenApiService::new(media::MediaApis, "Media Server APIs", env!("CARGO_PKG_VERSION")).server("/");
+pub async fn run_media_http_server(sender: Sender<Rpc<RpcReq, RpcRes>>) -> Result<(), Box<dyn std::error::Error>> {
+    let api_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis, "Media Server APIs", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
     let route = Route::new()
         .nest("/", api_service)
+        .nest("/samples", StaticFilesEndpoint::new("./public").index_file("index.html"))
         .nest("/ui", ui)
         .at("/spec", poem::endpoint::make_sync(move |_| spec.clone()))
         .with(Cors::new())
-        .data(media::MediaServerCtx { sender });
+        .data(api_media::MediaServerCtx { sender });
 
     Server::new(TcpListener::bind("0.0.0.0:3000")).run(route).await?;
     Ok(())
