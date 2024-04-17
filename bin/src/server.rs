@@ -1,4 +1,3 @@
-use atm0s_sdn::{NodeAddr, NodeId};
 use clap::Subcommand;
 
 mod connector;
@@ -14,10 +13,4 @@ pub enum ServerType {
     Gateway(gateway::Args),
     Connector(connector::Args),
     Media(media::Args),
-}
-
-pub struct MediaSdnConfig {
-    pub node_id: NodeId,
-    pub seeds: Vec<NodeAddr>,
-    pub secret: String,
 }

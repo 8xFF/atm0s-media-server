@@ -133,17 +133,18 @@ checksum = "6b4930d2cb77ce62f89ee5d5289b4ac049559b1c45539271f5ed4fdc7db34545"
 [[package]]
 name = "atm0s-sdn"
 version = "0.1.10"
-source = "git+https://github.com/8xff/atm0s-sdn.git?rev=be6191bad5a019286feb9eff3b2506ac00b3e3d7#be6191bad5a019286feb9eff3b2506ac00b3e3d7"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
  "atm0s-sdn-router",
  "bincode",
+ "convert-enum",
  "local-ip-address",
  "log",
+ "num_enum 0.7.2",
  "parking_lot",
  "rand",
- "sans-io-runtime 0.1.0 (git+https://github.com/8xFF/sans-io-runtime.git?rev=1be9705b4fe9852b7c1ac66dc610fedf94a83971)",
+ "sans-io-runtime",
  "serde",
  "thiserror",
 ]
@@ -151,7 +152,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.2.0"
-source = "git+https://github.com/8xff/atm0s-sdn.git?rev=be6191bad5a019286feb9eff3b2506ac00b3e3d7#be6191bad5a019286feb9eff3b2506ac00b3e3d7"
 dependencies = [
  "multiaddr",
  "rand",
@@ -161,7 +161,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-network"
 version = "0.3.1"
-source = "git+https://github.com/8xff/atm0s-sdn.git?rev=be6191bad5a019286feb9eff3b2506ac00b3e3d7#be6191bad5a019286feb9eff3b2506ac00b3e3d7"
 dependencies = [
  "aes-gcm",
  "atm0s-sdn-identity",
@@ -173,9 +172,10 @@ dependencies = [
  "log",
  "mockall",
  "num",
+ "num_enum 0.7.2",
  "parking_lot",
  "rand",
- "sans-io-runtime 0.1.0 (git+https://github.com/8xFF/sans-io-runtime.git?rev=1be9705b4fe9852b7c1ac66dc610fedf94a83971)",
+ "sans-io-runtime",
  "serde",
  "sha1",
  "sha2",
@@ -186,7 +186,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-router"
 version = "0.1.4"
-source = "git+https://github.com/8xff/atm0s-sdn.git?rev=be6191bad5a019286feb9eff3b2506ac00b3e3d7#be6191bad5a019286feb9eff3b2506ac00b3e3d7"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -198,7 +197,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.1.1"
-source = "git+https://github.com/8xff/atm0s-sdn.git?rev=be6191bad5a019286feb9eff3b2506ac00b3e3d7#be6191bad5a019286feb9eff3b2506ac00b3e3d7"
 dependencies = [
  "log",
  "serde",
@@ -254,7 +252,8 @@ dependencies = [
  "media-server-runner",
  "poem",
  "poem-openapi",
- "sans-io-runtime 0.1.0 (git+https://github.com/8xff/sans-io-runtime.git?rev=0d54ce5fd587c45f380c4235526b120b2cd527ba)",
+ "rand",
+ "sans-io-runtime",
  "tokio",
  "tracing-subscriber",
 ]
@@ -688,7 +687,7 @@ dependencies = [
  "crc",
  "hmac",
  "md-5",
- "num_enum",
+ "num_enum 0.6.1",
  "sha-1",
 ]
 
@@ -1179,7 +1178,7 @@ dependencies = [
  "atm0s-sdn",
  "log",
  "media-server-protocol",
- "sans-io-runtime 0.1.0 (git+https://github.com/8xff/sans-io-runtime.git?rev=0d54ce5fd587c45f380c4235526b120b2cd527ba)",
+ "sans-io-runtime",
 ]
 
 [[package]]
@@ -1194,10 +1193,11 @@ name = "media-server-runner"
 version = "0.1.0"
 dependencies = [
  "atm0s-sdn",
+ "convert-enum",
  "log",
  "media-server-core",
  "media-server-protocol",
- "sans-io-runtime 0.1.0 (git+https://github.com/8xff/sans-io-runtime.git?rev=0d54ce5fd587c45f380c4235526b120b2cd527ba)",
+ "sans-io-runtime",
  "transport-webrtc",
 ]
 
@@ -1480,7 +1480,16 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a015b430d3c108a207fd776d2e2196aaf8b1cf8cf93253e3a097ff3085076a1"
 dependencies = [
- "num_enum_derive",
+ "num_enum_derive 0.6.1",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02339744ee7253741199f897151b38e72257d13802d4ee837285cc2990a90845"
+dependencies = [
+ "num_enum_derive 0.7.2",
 ]
 
 [[package]]
@@ -1490,6 +1499,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96667db765a921f7b295ffee8b60472b686a51d4f21c2ee4ffdb94c7013b65a6"
 dependencies = [
  "proc-macro-crate 1.3.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.58",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "681030a937600a36906c185595136d26abfebb4aa9c65701cefcaf8578bb982b"
+dependencies = [
+ "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
  "syn 2.0.58",
@@ -1972,24 +1993,12 @@ checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
 [[package]]
 name = "sans-io-runtime"
 version = "0.1.0"
-source = "git+https://github.com/8xff/sans-io-runtime.git?rev=0d54ce5fd587c45f380c4235526b120b2cd527ba#0d54ce5fd587c45f380c4235526b120b2cd527ba"
 dependencies = [
+ "convert-enum",
  "derive_more",
  "heapless",
  "log",
- "parking_lot",
- "polling",
- "socket2",
-]
-
-[[package]]
-name = "sans-io-runtime"
-version = "0.1.0"
-source = "git+https://github.com/8xFF/sans-io-runtime.git?rev=1be9705b4fe9852b7c1ac66dc610fedf94a83971#1be9705b4fe9852b7c1ac66dc610fedf94a83971"
-dependencies = [
- "derive_more",
- "heapless",
- "log",
+ "num_enum 0.7.2",
  "parking_lot",
  "polling",
  "socket2",
@@ -2507,7 +2516,8 @@ dependencies = [
  "media-server-core",
  "media-server-protocol",
  "media-server-utils",
- "sans-io-runtime 0.1.0 (git+https://github.com/8xff/sans-io-runtime.git?rev=0d54ce5fd587c45f380c4235526b120b2cd527ba)",
+ "num_enum 0.7.2",
+ "sans-io-runtime",
  "smallmap",
  "str0m",
 ]

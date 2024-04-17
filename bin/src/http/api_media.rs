@@ -1,6 +1,9 @@
-use media_server_protocol::transport::{
-    whip::{self, WhipConnectReq, WhipDeleteReq, WhipRemoteIceReq},
-    RpcReq, RpcRes, RpcResult,
+use media_server_protocol::{
+    endpoint::ClusterConnId,
+    transport::{
+        whip::{self, WhipConnectReq, WhipDeleteReq, WhipRemoteIceReq},
+        RpcReq, RpcRes, RpcResult,
+    },
 };
 use poem::{http::StatusCode, web::Data, Result};
 use poem_openapi::{
@@ -21,7 +24,7 @@ pub struct TokenAuthorization(pub Bearer);
 
 #[derive(Clone)]
 pub struct MediaServerCtx {
-    pub(crate) sender: tokio::sync::mpsc::Sender<Rpc<RpcReq, RpcRes>>,
+    pub(crate) sender: tokio::sync::mpsc::Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
 }
 
 pub struct MediaApis;
@@ -49,7 +52,7 @@ impl MediaApis {
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         match res {
             RpcRes::Whip(whip::RpcRes::Connect(res)) => match res {
-                RpcResult::Success(res) => {
+                RpcResult::Ok(res) => {
                     log::info!("[HttpApis] Whip endpoint created with conn_id {}", res.conn_id);
                     Ok(CustomHttpResponse {
                         code: StatusCode::CREATED,
@@ -57,9 +60,9 @@ impl MediaApis {
                         headers: vec![("location", format!("/whip/conn/{}", res.conn_id))],
                     })
                 }
-                RpcResult::Error { code, message } => {
-                    log::warn!("Whip endpoint creation failed with code {} and message {}", code, message);
-                    Err(poem::Error::from_string(format!("Code: {code}, Message: {message}"), StatusCode::BAD_REQUEST))
+                RpcResult::Err(e) => {
+                    log::warn!("Whip endpoint creation failed with {e}");
+                    Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
@@ -69,23 +72,21 @@ impl MediaApis {
     /// patch whip conn for trickle-ice
     #[oai(path = "/whip/conn/:conn_id", method = "patch")]
     async fn conn_whip_patch(&self, Data(data): Data<&MediaServerCtx>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
+        let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[HttpApis] patch whip endpoint with sdp {}", body.0);
-        let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::RemoteIce(WhipRemoteIceReq {
-            conn_id: conn_id.0.clone(),
-            ice: body.0,
-        })));
+        let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::RemoteIce(WhipRemoteIceReq { conn_id, ice: body.0 })));
         data.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         //TODO process with ICE restart
         match res {
             RpcRes::Whip(whip::RpcRes::RemoteIce(res)) => match res {
-                RpcResult::Success(_res) => {
-                    log::info!("[HttpApis] Whip endpoint patch trickle-ice with conn_id {}", conn_id.0);
+                RpcResult::Ok(_res) => {
+                    log::info!("[HttpApis] Whip endpoint patch trickle-ice with conn_id {conn_id}");
                     Ok(HttpResponse::new(ApplicationSdpPatch("".to_string())).status(StatusCode::NO_CONTENT))
                 }
-                RpcResult::Error { code, message } => {
-                    log::warn!("Whip endpoint patch trickle-ice failed with code {} and message {}", code, message);
-                    Err(poem::Error::from_string(format!("Code: {code}, Message: {message}"), StatusCode::BAD_REQUEST))
+                RpcResult::Err(e) => {
+                    log::warn!("Whip endpoint patch trickle-ice failed with error {e}");
+                    Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
@@ -95,25 +96,27 @@ impl MediaApis {
     /// post whip conn for action
     #[oai(path = "/api/whip/conn/:conn_id", method = "post")]
     async fn conn_whip_post(&self, _ctx: Data<&MediaServerCtx>, _conn_id: Path<String>, _body: Json<String>) -> Result<ApplicationSdp<String>> {
+        // let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         Err(poem::Error::from_string("Not supported", StatusCode::BAD_REQUEST))
     }
 
     /// delete whip conn
     #[oai(path = "/whip/conn/:conn_id", method = "delete")]
     async fn conn_whip_delete(&self, Data(data): Data<&MediaServerCtx>, conn_id: Path<String>) -> Result<PlainText<String>> {
-        log::info!("[HttpApis] close whip endpoint conn {}", conn_id.0);
-        let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::Delete(WhipDeleteReq { conn_id: conn_id.0.clone() })));
+        let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        log::info!("[HttpApis] close whip endpoint conn {}", conn_id);
+        let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::Delete(WhipDeleteReq { conn_id })));
         data.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         match res {
             RpcRes::Whip(whip::RpcRes::Delete(res)) => match res {
-                RpcResult::Success(_res) => {
-                    log::info!("[HttpApis] Whip endpoint closed with conn_id {}", conn_id.0);
+                RpcResult::Ok(_res) => {
+                    log::info!("[HttpApis] Whip endpoint closed with conn_id {conn_id}");
                     Ok(PlainText("OK".to_string()))
                 }
-                RpcResult::Error { code, message } => {
-                    log::warn!("Whip endpoint close request failed with code {} and message {}", code, message);
-                    Err(poem::Error::from_string(format!("Code: {code}, Message: {message}"), StatusCode::BAD_REQUEST))
+                RpcResult::Err(e) => {
+                    log::warn!("Whip endpoint close request failed with error {e}");
+                    Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
             _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),

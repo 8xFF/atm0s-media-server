@@ -4,6 +4,7 @@ use media_server_core::{
     cluster::{EndpointControl, EndpointEvent},
     endpoint::{Endpoint, Input, Output},
 };
+use media_server_protocol::transport::RpcResult;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     group_owner_type, group_task, TaskSwitcher,
@@ -49,12 +50,20 @@ impl MediaWorkerWebrtc {
         }
     }
 
-    pub fn spawn(&mut self, variant: Variant, offer: &str) -> Option<String> {
-        let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone()).ok()?;
+    pub fn spawn(&mut self, variant: Variant, offer: &str) -> RpcResult<(String, usize)> {
+        let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone())?;
         let endpoint = Endpoint::new(tran);
         let index = self.endpoints.add_task(endpoint);
         self.shared_port.add_ufrag(ufrag, index);
-        Some(sdp)
+        Ok((sdp, index))
+    }
+
+    pub fn on_remote_ice(&mut self, variant: Variant, index: usize, ice: String) -> RpcResult<()> {
+        todo!()
+    }
+
+    pub fn close(&mut self, variant: Variant, index: usize) -> RpcResult<()> {
+        todo!()
     }
 
     fn process_output<'a>(&mut self, index: usize, out: Output<'a>) -> GroupOutput<'a> {

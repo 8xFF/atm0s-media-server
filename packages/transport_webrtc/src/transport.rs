@@ -1,7 +1,10 @@
 use std::{net::SocketAddr, ops::Deref, time::Instant};
 
 use media_server_core::transport::{Transport, TransportInput, TransportOutput};
-use media_server_protocol::media::MediaPacket;
+use media_server_protocol::{
+    media::MediaPacket,
+    transport::{RpcError, RpcResult},
+};
 use sans_io_runtime::Buffer;
 use str0m::{
     change::{DtlsCert, SdpOffer},
@@ -11,6 +14,8 @@ use str0m::{
     rtp::ExtensionValues,
     Candidate, Rtc,
 };
+
+use crate::WebrtcError;
 
 mod whep;
 mod whip;
@@ -35,19 +40,14 @@ trait TransportWebrtcInternal {
     fn on_str0m_out<'a>(&mut self, now: Instant, out: str0m::Output) -> Option<InternalOutput<'a>>;
 }
 
-pub enum TransportWebrtcError {
-    SdpError,
-    RtcError,
-}
-
 pub struct TransportWebrtc {
     rtc: Rtc,
     internal: Box<dyn TransportWebrtcInternal>,
 }
 
 impl TransportWebrtc {
-    pub fn new(variant: Variant, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> Result<(Self, String, String), TransportWebrtcError> {
-        let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| TransportWebrtcError::SdpError)?;
+    pub fn new(variant: Variant, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
+        let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::SdpError))?;
         let rtc_config = Rtc::builder().set_rtp_mode(true).set_ice_lite(true).set_dtls_cert(dtls_cert).set_local_ice_credentials(IceCreds::new());
         let ice_ufrag = rtc_config.local_ice_credentials().as_ref().expect("should have ice credentials").ufrag.clone();
 
@@ -57,7 +57,7 @@ impl TransportWebrtc {
         for (local_addr, _slot) in &local_addrs {
             rtc.add_local_candidate(Candidate::host(*local_addr, Protocol::Udp).expect("Should add local candidate"));
         }
-        let answer = rtc.sdp_api().accept_offer(offer).map_err(|_e| TransportWebrtcError::RtcError)?;
+        let answer = rtc.sdp_api().accept_offer(offer).map_err(|_e| RpcError::new2(WebrtcError::Str0mError))?;
         Ok((
             Self {
                 rtc,

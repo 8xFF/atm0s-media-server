@@ -1,10 +1,20 @@
-use atm0s_sdn::{NodeAddr, NodeId, SdnWorkerCfg};
+use atm0s_sdn::{NodeAddr, NodeId};
 use clap::Parser;
-use server::{run_media_connector, run_media_gateway, run_media_server, MediaSdnConfig, ServerType};
+use rand::random;
+use server::{run_media_connector, run_media_gateway, run_media_server, ServerType};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod http;
 mod server;
+
+#[derive(Clone)]
+pub struct NodeConfig {
+    pub node_id: NodeId,
+    pub session: u64,
+    pub secret: String,
+    pub seeds: Vec<NodeAddr>,
+    pub udp_port: u16,
+}
 
 /// Scalable Media Server solution for WebRTC, RTMP, and SIP.
 #[derive(Parser, Debug)]
@@ -38,6 +48,10 @@ struct Args {
     #[arg(env, long)]
     seeds: Vec<NodeAddr>,
 
+    /// Neighbors
+    #[arg(env, long)]
+    workers: usize,
+
     #[command(subcommand)]
     server: ServerType,
 }
@@ -50,15 +64,18 @@ async fn main() {
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
-    let sdn = MediaSdnConfig {
+    let workers = args.workers;
+    let node = NodeConfig {
         node_id: args.node_id,
-        seeds: args.seeds,
+        session: random(),
         secret: args.secret,
+        seeds: args.seeds,
+        udp_port: args.sdn_port,
     };
 
     match args.server {
-        ServerType::Gateway(args) => run_media_gateway(args).await,
-        ServerType::Connector(args) => run_media_connector(args).await,
-        ServerType::Media(args) => run_media_server(sdn, args).await,
+        ServerType::Gateway(args) => run_media_gateway(workers, args).await,
+        ServerType::Connector(args) => run_media_connector(workers, args).await,
+        ServerType::Media(args) => run_media_server(workers, node, args).await,
     }
 }
