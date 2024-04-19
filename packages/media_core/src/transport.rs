@@ -41,8 +41,10 @@ pub struct TransportStats {
 
 /// This is used for notifying state of local track to endpoint
 pub enum LocalTrackEvent {
+    Started,
     Switch(Option<(PeerId, TrackName)>),
     RequestKeyFrame,
+    Ended,
 }
 
 /// This is used for notifying state of remote track to endpoint
@@ -80,6 +82,6 @@ pub enum TransportOutput<'a, Ext> {
 
 pub trait Transport<ExtIn, ExtOut> {
     fn on_tick<'a>(&mut self, now: Instant) -> Option<TransportOutput<'a, ExtOut>>;
-    fn on_control<'a>(&mut self, now: Instant, input: TransportInput<'a, ExtIn>) -> Option<TransportOutput<'a, ExtOut>>;
+    fn on_input<'a>(&mut self, now: Instant, input: TransportInput<'a, ExtIn>) -> Option<TransportOutput<'a, ExtOut>>;
     fn pop_event<'a>(&mut self, now: Instant) -> Option<TransportOutput<'a, ExtOut>>;
 }

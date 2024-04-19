@@ -189,13 +189,19 @@ impl TransportWebrtcWhep {
                 return None;
             }
             self.audio_mid = Some(media.mid);
-            None
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
+                AUDIO_TRACK,
+                LocalTrackEvent::Started,
+            ))))
         } else {
             if self.video_mid.is_some() {
                 return None;
             }
             self.video_mid = Some(media.mid);
-            None
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
+                VIDEO_TRACK,
+                LocalTrackEvent::Started,
+            ))))
         }
     }
 

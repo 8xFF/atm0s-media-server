@@ -124,7 +124,7 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
         self.process_internal_output(now, out)
     }
 
-    fn on_control<'a>(&mut self, now: Instant, input: TransportInput<'a, ExtIn>) -> Option<TransportOutput<'a, ExtOut>> {
+    fn on_input<'a>(&mut self, now: Instant, input: TransportInput<'a, ExtIn>) -> Option<TransportOutput<'a, ExtOut>> {
         let out = self.internal.on_transport_input(now, input)?;
         self.process_internal_output(now, out)
     }

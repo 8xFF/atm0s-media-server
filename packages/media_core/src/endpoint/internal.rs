@@ -1,7 +1,6 @@
 use std::time::Instant;
 
 use media_server_protocol::endpoint::{PeerId, RoomId};
-use sans_io_runtime::backend::BackendOutgoing;
 
 use crate::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent},
@@ -10,8 +9,7 @@ use crate::{
 
 use super::{middleware::EndpointMiddleware, EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
-pub enum InternalOutput<'a> {
-    Net(BackendOutgoing<'a>),
+pub enum InternalOutput {
     Event(EndpointEvent),
     RpcRes(EndpointReqId, EndpointRes),
     Cluster(ClusterEndpointControl),
@@ -27,22 +25,18 @@ impl EndpointInternal {
         Self { room: None, middlewares: Vec::new() }
     }
 
-    pub fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
+    pub fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput> {
         None
     }
 
-    pub fn pop_output<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
-        None
-    }
-
-    pub fn shutdown<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
+    pub fn pop_output<'a>(&mut self, now: Instant) -> Option<InternalOutput> {
         None
     }
 }
 
 /// This block is for processing transport related event
 impl EndpointInternal {
-    pub fn on_transport_event<'a>(&mut self, now: Instant, event: TransportEvent) -> Option<InternalOutput<'a>> {
+    pub fn on_transport_event<'a>(&mut self, now: Instant, event: TransportEvent) -> Option<InternalOutput> {
         match event {
             TransportEvent::State(state) => self.on_transport_state_changed(now, state),
             TransportEvent::RemoteTrack(track, event) => self.on_transport_remote_track(now, track, event),
@@ -51,11 +45,11 @@ impl EndpointInternal {
         }
     }
 
-    pub fn on_transport_rpc<'a>(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointReq) -> Option<InternalOutput<'a>> {
+    pub fn on_transport_rpc<'a>(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointReq) -> Option<InternalOutput> {
         todo!()
     }
 
-    fn on_transport_state_changed<'a>(&mut self, now: Instant, state: TransportState) -> Option<InternalOutput<'a>> {
+    fn on_transport_state_changed<'a>(&mut self, now: Instant, state: TransportState) -> Option<InternalOutput> {
         match state {
             TransportState::Connecting => todo!(),
             TransportState::ConnectError(_) => todo!(),
@@ -65,7 +59,7 @@ impl EndpointInternal {
         }
     }
 
-    fn on_transport_remote_track<'a>(&mut self, now: Instant, track: RemoteTrackId, event: RemoteTrackEvent) -> Option<InternalOutput<'a>> {
+    fn on_transport_remote_track<'a>(&mut self, now: Instant, track: RemoteTrackId, event: RemoteTrackEvent) -> Option<InternalOutput> {
         match event {
             RemoteTrackEvent::Started { name } => todo!(),
             RemoteTrackEvent::Paused => todo!(),
@@ -75,14 +69,16 @@ impl EndpointInternal {
         }
     }
 
-    fn on_transport_local_track<'a>(&mut self, now: Instant, track: LocalTrackId, event: LocalTrackEvent) -> Option<InternalOutput<'a>> {
+    fn on_transport_local_track<'a>(&mut self, now: Instant, track: LocalTrackId, event: LocalTrackEvent) -> Option<InternalOutput> {
         match event {
+            LocalTrackEvent::Started => todo!(),
             LocalTrackEvent::RequestKeyFrame => todo!(),
             LocalTrackEvent::Switch(_) => todo!(),
+            LocalTrackEvent::Ended => todo!(),
         }
     }
 
-    fn on_transport_req<'a>(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointReq) -> Option<InternalOutput<'a>> {
+    fn on_transport_req<'a>(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointReq) -> Option<InternalOutput> {
         match req {
             EndpointReq::JoinRoom(room, peer) => {
                 self.room = Some((room.clone(), peer.clone()));
@@ -97,14 +93,14 @@ impl EndpointInternal {
         }
     }
 
-    fn on_transport_stats<'a>(&mut self, now: Instant, stats: TransportStats) -> Option<InternalOutput<'a>> {
+    fn on_transport_stats<'a>(&mut self, now: Instant, stats: TransportStats) -> Option<InternalOutput> {
         todo!()
     }
 }
 
 /// This block is for cluster related events
 impl EndpointInternal {
-    pub fn on_cluster_event<'a>(&mut self, now: Instant, event: ClusterEndpointEvent) -> Option<InternalOutput<'a>> {
+    pub fn on_cluster_event<'a>(&mut self, now: Instant, event: ClusterEndpointEvent) -> Option<InternalOutput> {
         match event {
             ClusterEndpointEvent::PeerJoined(peer) => Some(InternalOutput::Event(EndpointEvent::PeerJoined(peer))),
             ClusterEndpointEvent::PeerLeaved(peer) => Some(InternalOutput::Event(EndpointEvent::PeerLeaved(peer))),
@@ -115,13 +111,13 @@ impl EndpointInternal {
         }
     }
 
-    fn on_cluster_remote_track<'a>(&mut self, now: Instant, id: RemoteTrackId, event: ClusterRemoteTrackEvent) -> Option<InternalOutput<'a>> {
+    fn on_cluster_remote_track<'a>(&mut self, now: Instant, id: RemoteTrackId, event: ClusterRemoteTrackEvent) -> Option<InternalOutput> {
         match event {
             _ => todo!(),
         }
     }
 
-    fn on_cluster_local_track<'a>(&mut self, now: Instant, id: LocalTrackId, event: ClusterLocalTrackEvent) -> Option<InternalOutput<'a>> {
+    fn on_cluster_local_track<'a>(&mut self, now: Instant, id: LocalTrackId, event: ClusterLocalTrackEvent) -> Option<InternalOutput> {
         match event {
             _ => todo!(),
         }

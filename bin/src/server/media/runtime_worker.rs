@@ -1,14 +1,14 @@
-use std::{sync::Arc, time::Instant};
+use std::{collections::VecDeque, sync::Arc, time::Instant};
 
 use atm0s_sdn::{
     secure::{HandshakeBuilderXDA, StaticKeyAuthorization},
     services::visualization,
-    ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, SdnExtOut,
+    ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, SdnExtOut, SdnWorkerBusEvent,
 };
 use media_server_protocol::transport::{RpcReq, RpcRes};
-use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, SdnConfig, SE};
+use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, SdnConfig, SC, SE, TC, TW};
 use rand::rngs::OsRng;
-use sans_io_runtime::{WorkerInner, WorkerInnerInput, WorkerInnerOutput};
+use sans_io_runtime::{BusChannelControl, BusControl, WorkerInner, WorkerInnerInput, WorkerInnerOutput};
 
 use crate::NodeConfig;
 
@@ -22,8 +22,13 @@ pub enum ExtOut {
     Rpc(u64, u16, RpcRes<usize>),
     Sdn(SdnExtOut<SE>),
 }
-type Channel = ();
-type Event = ();
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Channel {
+    Controller,
+    Worker(u16),
+}
+type Event = SdnWorkerBusEvent<SC, SE, TC, TW>;
 pub struct ICfg {
     pub controller: bool,
     pub node: NodeConfig,
@@ -37,6 +42,7 @@ type Output<'a> = WorkerInnerOutput<'a, Owner, ExtOut, Channel, Event, SCfg>;
 pub struct MediaRuntimeWorker {
     index: u16,
     worker: MediaServerWorker,
+    queue: VecDeque<Output<'static>>,
 }
 
 impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRuntimeWorker {
@@ -62,9 +68,16 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
             },
         };
 
+        let mut queue = VecDeque::from([Output::Bus(BusControl::Channel(Owner::Sdn, BusChannelControl::Subscribe(Channel::Worker(index))))]);
+
+        if sdn_config.controller.is_some() {
+            queue.push_back(Output::Bus(BusControl::Channel(Owner::Sdn, BusChannelControl::Subscribe(Channel::Controller))));
+        }
+
         MediaRuntimeWorker {
             index,
             worker: MediaServerWorker::new(sdn_config, cfg.media),
+            queue,
         }
     }
 
@@ -77,7 +90,7 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
     }
 
     fn spawn(&mut self, now: Instant, cfg: SCfg) {
-        todo!()
+        panic!("Not supported")
     }
 
     fn on_tick<'a>(&mut self, now: Instant) -> Option<Output<'a>> {
@@ -106,9 +119,11 @@ impl MediaRuntimeWorker {
         match out {
             WorkerOutput::ExtRpc(req_id, res) => Output::Ext(true, ExtOut::Rpc(req_id, self.index, res)),
             WorkerOutput::ExtSdn(out) => Output::Ext(false, ExtOut::Sdn(out)),
-            WorkerOutput::Bus(event) => {
-                todo!()
-            }
+            WorkerOutput::Bus(event) => match &event {
+                SdnWorkerBusEvent::Control(_) => Output::Bus(BusControl::Channel(Owner::Sdn, BusChannelControl::Publish(Channel::Controller, true, event))),
+                SdnWorkerBusEvent::Workers(_) => Output::Bus(BusControl::Broadcast(true, event)),
+                SdnWorkerBusEvent::Worker(index, _) => Output::Bus(BusControl::Channel(Owner::Sdn, BusChannelControl::Publish(Channel::Worker(*index), true, event))),
+            },
             WorkerOutput::Net(owner, out) => Output::Net(owner, out),
             WorkerOutput::Continue => Output::Continue,
         }

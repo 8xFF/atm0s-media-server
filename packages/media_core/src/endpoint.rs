@@ -17,6 +17,8 @@ use crate::{
 
 use internal::EndpointInternal;
 
+use self::internal::InternalOutput;
+
 mod internal;
 mod middleware;
 
@@ -131,29 +133,45 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
     pub fn on_event<'a>(&mut self, now: Instant, input: EndpointInput<'a, ExtIn>) -> Option<EndpointOutput<'a, ExtOut>> {
         match input {
             EndpointInput::Net(net) => {
-                let out = self.transport.on_control(now, TransportInput::Net(net))?;
+                let out = self.transport.on_input(now, TransportInput::Net(net))?;
                 self.process_transport_output(now, out)
             }
             EndpointInput::Ext(ext) => {
-                let out = self.transport.on_control(now, TransportInput::Ext(ext))?;
+                let out = self.transport.on_input(now, TransportInput::Ext(ext))?;
                 self.process_transport_output(now, out)
             }
             EndpointInput::Cluster(event) => {
                 let out = self.internal.on_cluster_event(now, event)?;
                 self.process_internal_output(now, out)
             }
-            EndpointInput::Close => todo!(),
+            EndpointInput::Close => {
+                let out = self.transport.on_input(now, TransportInput::Close)?;
+                self.process_transport_output(now, out)
+            }
         }
     }
 
     pub fn pop_output<'a>(&mut self, now: Instant) -> Option<EndpointOutput<'a, ExtOut>> {
-        let out = self.transport.pop_event(now)?;
-        self.process_transport_output(now, out)
+        let s = &mut self.switcher;
+        loop {
+            match s.queue_current()?.try_into().ok()? {
+                TaskType::Internal => {
+                    if let Some(out) = s.queue_process(self.internal.pop_output(now)) {
+                        return self.process_internal_output(now, out);
+                    }
+                }
+                TaskType::Transport => {
+                    if let Some(out) = s.queue_process(self.transport.pop_event(now)) {
+                        return self.process_transport_output(now, out);
+                    }
+                }
+            }
+        }
     }
 
     pub fn shutdown<'a>(&mut self, now: Instant) -> Option<EndpointOutput<'a, ExtOut>> {
-        let out = self.internal.shutdown(now)?;
-        self.process_internal_output(now, out)
+        let out = self.transport.on_input(now, TransportInput::Close)?;
+        self.process_transport_output(now, out)
     }
 }
 
@@ -174,8 +192,18 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
         }
     }
 
-    fn process_internal_output<'a>(&mut self, now: Instant, out: internal::InternalOutput<'a>) -> Option<EndpointOutput<'a, ExtOut>> {
+    fn process_internal_output<'a>(&mut self, now: Instant, out: internal::InternalOutput) -> Option<EndpointOutput<'a, ExtOut>> {
         self.switcher.queue_flag_task(TaskType::Internal.into());
-        todo!()
+        match out {
+            InternalOutput::Event(event) => {
+                let out = self.transport.on_input(now, TransportInput::Endpoint(event))?;
+                self.process_transport_output(now, out)
+            }
+            InternalOutput::RpcRes(req_id, res) => {
+                let out = self.transport.on_input(now, TransportInput::RpcRes(req_id, res))?;
+                self.process_transport_output(now, out)
+            }
+            InternalOutput::Cluster(control) => Some(EndpointOutput::Cluster(control)),
+        }
     }
 }
