@@ -1179,6 +1179,7 @@ dependencies = [
  "log",
  "media-server-protocol",
  "media-server-utils",
+ "num_enum 0.7.2",
  "sans-io-runtime",
 ]
 

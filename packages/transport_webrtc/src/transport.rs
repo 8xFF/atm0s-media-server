@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, ops::Deref, time::Instant};
 
-use media_server_core::transport::{Transport, TransportControl, TransportEvent};
+use media_server_core::transport::{Transport, TransportInput, TransportOutput};
 use media_server_protocol::{
     media::MediaPacket,
     transport::{RpcError, RpcResult},
@@ -41,12 +41,12 @@ enum InternalOutput<'a> {
     Str0mKeyframe(Mid, KeyframeRequestKind),
     Str0mLimitBitrate(Mid, u64),
     Str0mSendMedia(Mid, MediaPacket),
-    TransportOutput(TransportEvent<'a, ExtOut>),
+    TransportOutput(TransportOutput<'a, ExtOut>),
 }
 
 trait TransportWebrtcInternal {
     fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>>;
-    fn on_transport_input<'a>(&mut self, now: Instant, input: TransportControl<'a, ExtIn>) -> Option<InternalOutput<'a>>;
+    fn on_transport_input<'a>(&mut self, now: Instant, input: TransportInput<'a, ExtIn>) -> Option<InternalOutput<'a>>;
     fn on_str0m_out<'a>(&mut self, now: Instant, out: str0m::Output) -> Option<InternalOutput<'a>>;
 }
 
@@ -82,12 +82,12 @@ impl TransportWebrtc {
         ))
     }
 
-    pub fn on_remote_ice<'a>(&mut self, now: Instant, ice: String) -> Option<TransportEvent<'a, ExtOut>> {
+    pub fn on_remote_ice<'a>(&mut self, now: Instant, ice: String) -> Option<TransportOutput<'a, ExtOut>> {
         //TODO
         self.pop_event(now)
     }
 
-    fn process_internal_output<'a>(&mut self, now: Instant, out: InternalOutput<'a>) -> Option<TransportEvent<'a, ExtOut>> {
+    fn process_internal_output<'a>(&mut self, now: Instant, out: InternalOutput<'a>) -> Option<TransportOutput<'a, ExtOut>> {
         match out {
             InternalOutput::Str0mReceive(now, protocol, source, destination, buf) => {
                 self.rtc.handle_input(str0m::Input::Receive(now, Receive::new(protocol, source, destination, buf.deref()).ok()?)).ok()?;
@@ -119,17 +119,17 @@ impl TransportWebrtc {
 }
 
 impl Transport<ExtIn, ExtOut> for TransportWebrtc {
-    fn on_tick<'a>(&mut self, now: Instant) -> Option<TransportEvent<'a, ExtOut>> {
+    fn on_tick<'a>(&mut self, now: Instant) -> Option<TransportOutput<'a, ExtOut>> {
         let out = self.internal.on_tick(now)?;
         self.process_internal_output(now, out)
     }
 
-    fn on_control<'a>(&mut self, now: Instant, input: TransportControl<'a, ExtIn>) -> Option<TransportEvent<'a, ExtOut>> {
+    fn on_control<'a>(&mut self, now: Instant, input: TransportInput<'a, ExtIn>) -> Option<TransportOutput<'a, ExtOut>> {
         let out = self.internal.on_transport_input(now, input)?;
         self.process_internal_output(now, out)
     }
 
-    fn pop_event<'a>(&mut self, now: Instant) -> Option<TransportEvent<'a, ExtOut>> {
+    fn pop_event<'a>(&mut self, now: Instant) -> Option<TransportOutput<'a, ExtOut>> {
         loop {
             let out = self.rtc.poll_output().ok()?;
             if let Some(out) = self.internal.on_str0m_out(now, out) {

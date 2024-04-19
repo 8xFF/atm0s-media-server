@@ -2,7 +2,7 @@ use std::{collections::VecDeque, net::SocketAddr, time::Instant};
 
 use media_server_core::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent},
-    endpoint::{Endpoint, Input, Output},
+    endpoint::{Endpoint, EndpointInput, EndpointOutput},
 };
 use media_server_protocol::transport::RpcResult;
 use sans_io_runtime::{
@@ -16,7 +16,7 @@ use crate::{
     transport::{ExtIn, ExtOut, TransportWebrtc, Variant},
 };
 
-group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, Input<'a, ExtIn>, Output<'a, ExtOut>);
+group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, EndpointInput<'a, ExtIn>, EndpointOutput<'a, ExtOut>);
 
 group_owner_type!(WebrtcOwner);
 
@@ -61,16 +61,16 @@ impl MediaWorkerWebrtc {
         Ok((sdp, index))
     }
 
-    fn process_output<'a>(&mut self, index: usize, out: Output<'a, ExtOut>) -> GroupOutput<'a, ExtOut> {
+    fn process_output<'a>(&mut self, index: usize, out: EndpointOutput<'a, ExtOut>) -> GroupOutput<'a, ExtOut> {
         match out {
-            Output::Net(net) => GroupOutput::Net(net),
-            Output::Cluster(control) => GroupOutput::Cluster(WebrtcOwner(index), control),
-            Output::Shutdown => {
+            EndpointOutput::Net(net) => GroupOutput::Net(net),
+            EndpointOutput::Cluster(control) => GroupOutput::Cluster(WebrtcOwner(index), control),
+            EndpointOutput::Shutdown => {
                 self.endpoints.remove_task(index);
                 self.shared_port.remove_task(index);
                 GroupOutput::Shutdown(WebrtcOwner(index))
             }
-            Output::Ext(ext) => GroupOutput::Ext(WebrtcOwner(index), ext),
+            EndpointOutput::Ext(ext) => GroupOutput::Ext(WebrtcOwner(index), ext),
         }
     }
 }
@@ -96,19 +96,19 @@ impl MediaWorkerWebrtc {
             }
             GroupInput::Net(BackendIncoming::UdpPacket { slot, from, data }) => {
                 let index = self.shared_port.map_remote(from, &data)?;
-                let out = self.endpoints.on_event(now, index, Input::Net(BackendIncoming::UdpPacket { slot, from, data }))?;
+                let out = self.endpoints.on_event(now, index, EndpointInput::Net(BackendIncoming::UdpPacket { slot, from, data }))?;
                 Some(self.process_output(index, out))
             }
             GroupInput::Cluster(owner, event) => {
-                let out = self.endpoints.on_event(now, owner.index(), Input::Cluster(event))?;
+                let out = self.endpoints.on_event(now, owner.index(), EndpointInput::Cluster(event))?;
                 Some(self.process_output(owner.index(), out))
             }
             GroupInput::Ext(owner, ext) => {
-                let out = self.endpoints.on_event(now, owner.index(), Input::Ext(ext))?;
+                let out = self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ext))?;
                 Some(self.process_output(owner.index(), out))
             }
             GroupInput::Close(owner) => {
-                let out = self.endpoints.on_event(now, owner.index(), Input::Close)?;
+                let out = self.endpoints.on_event(now, owner.index(), EndpointInput::Close)?;
                 Some(self.process_output(owner.index(), out))
             }
         }

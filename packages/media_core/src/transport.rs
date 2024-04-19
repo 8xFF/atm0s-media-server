@@ -1,11 +1,13 @@
 use std::time::Instant;
 
 use media_server_protocol::{
-    endpoint::{PeerId, RoomId, TrackMeta, TrackName},
+    endpoint::{PeerId, TrackName},
     media::MediaPacket,
 };
 use media_server_utils::F16u;
 use sans_io_runtime::backend::{BackendIncoming, BackendOutgoing};
+
+use crate::endpoint::{EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
 #[derive(Clone, Copy)]
 pub struct TransportId(pub u64);
@@ -37,88 +39,47 @@ pub struct TransportStats {
     pub recv_loss: F16u,
 }
 
-pub enum ClientRemoteTrackControl {
-    Started(TrackName),
-    Media(MediaPacket),
-    Ended,
-}
-
-pub enum ClientRemoteTrackEvent {
-    RequestKeyFrame,
-    LimitBitrateBps(u64),
-}
-
-pub enum ClientLocalTrackControl {
-    Subscribe(PeerId, TrackName),
-    RequestKeyFrame,
-    Unsubscribe,
-}
-
-pub enum ClientLocalTrackEvent {
-    Started,
-    Media(MediaPacket),
-    Ended,
-}
-
-pub enum ClientEndpointControl {
-    JoinRoom(RoomId, PeerId),
-    LeaveRoom,
-    RemoteTrack(RemoteTrackId, ClientRemoteTrackControl),
-    LocalTrack(LocalTrackId, ClientLocalTrackControl),
-}
-
-pub enum ClientEndpointEvent {
-    PeerJoined(PeerId),
-    PeerLeaved(PeerId),
-    PeerTrackStarted(PeerId, TrackName, TrackMeta),
-    PeerTrackStopped(PeerId, TrackName),
-    RemoteTrack(RemoteTrackId, ClientRemoteTrackEvent),
-    LocalTrack(LocalTrackId, ClientLocalTrackEvent),
-}
-
-pub enum LocalTrackControl {
-    Media(MediaPacket),
-}
-
+/// This is used for notifying state of local track to endpoint
 pub enum LocalTrackEvent {
-    Started { name: String },
-    Paused,
-    RequestKeyFrame,
-    Ended,
-}
-
-pub enum RemoteTrackControl {
+    Switch(Option<(PeerId, TrackName)>),
     RequestKeyFrame,
 }
 
+/// This is used for notifying state of remote track to endpoint
 pub enum RemoteTrackEvent {
     Started { name: String },
     Paused,
+    Resumed,
     Media(MediaPacket),
     Ended,
 }
 
-pub enum TransportControl<'a, Ext> {
-    Net(BackendIncoming<'a>),
-    RemoteMediaTrack(RemoteTrackId, RemoteTrackControl),
-    LocalMediaTrack(LocalTrackId, LocalTrackControl),
-    Event(ClientEndpointEvent),
-    Ext(Ext),
-    Close,
-}
-
-pub enum TransportEvent<'a, Ext> {
-    Net(BackendOutgoing<'a>),
+pub enum TransportEvent {
     State(TransportState),
     RemoteTrack(RemoteTrackId, RemoteTrackEvent),
     LocalTrack(LocalTrackId, LocalTrackEvent),
     Stats(TransportStats),
-    Control(ClientEndpointControl),
+}
+
+/// This is control message from endpoint
+pub enum TransportInput<'a, Ext> {
+    Net(BackendIncoming<'a>),
+    Endpoint(EndpointEvent),
+    RpcRes(EndpointReqId, EndpointRes),
+    Ext(Ext),
+    Close,
+}
+
+/// This is event from transport, in general is is result of transport protocol
+pub enum TransportOutput<'a, Ext> {
+    Net(BackendOutgoing<'a>),
+    Event(TransportEvent),
+    RpcReq(EndpointReqId, EndpointReq),
     Ext(Ext),
 }
 
 pub trait Transport<ExtIn, ExtOut> {
-    fn on_tick<'a>(&mut self, now: Instant) -> Option<TransportEvent<'a, ExtOut>>;
-    fn on_control<'a>(&mut self, now: Instant, input: TransportControl<'a, ExtIn>) -> Option<TransportEvent<'a, ExtOut>>;
-    fn pop_event<'a>(&mut self, now: Instant) -> Option<TransportEvent<'a, ExtOut>>;
+    fn on_tick<'a>(&mut self, now: Instant) -> Option<TransportOutput<'a, ExtOut>>;
+    fn on_control<'a>(&mut self, now: Instant, input: TransportInput<'a, ExtIn>) -> Option<TransportOutput<'a, ExtOut>>;
+    fn pop_event<'a>(&mut self, now: Instant) -> Option<TransportOutput<'a, ExtOut>>;
 }
