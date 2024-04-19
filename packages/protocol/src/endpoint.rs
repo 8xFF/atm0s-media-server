@@ -1,5 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
+use crate::media::{MediaCodec, MediaKind, MediaScaling};
+
 #[derive(Clone, Copy)]
 pub struct ClusterConnId {
     pub node: u32,
@@ -30,4 +32,20 @@ impl Display for ServerConnId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({},{})", self.worker, self.index)
     }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RoomId(pub String);
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct PeerId(pub String);
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct TrackName(pub String);
+
+#[derive(Clone)]
+pub struct TrackMeta {
+    pub kind: MediaKind,
+    pub codec: MediaCodec,
+    pub scaling: MediaScaling,
 }

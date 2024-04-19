@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, net::SocketAddr, time::Instant};
 
 use media_server_core::{
-    cluster::{EndpointControl, EndpointEvent},
+    cluster::{ClusterEndpointControl, ClusterEndpointEvent},
     endpoint::{Endpoint, Input, Output},
 };
 use media_server_protocol::transport::RpcResult;
@@ -13,21 +13,24 @@ use str0m::change::DtlsCert;
 
 use crate::{
     shared_port::SharedUdpPort,
-    transport::{TransportWebrtc, Variant},
+    transport::{ExtIn, ExtOut, TransportWebrtc, Variant},
 };
 
-group_task!(Endpoints, Endpoint<TransportWebrtc>, Input<'a>, Output<'a>);
+group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, Input<'a, ExtIn>, Output<'a, ExtOut>);
 
 group_owner_type!(WebrtcOwner);
 
-pub enum GroupInput<'a> {
+pub enum GroupInput<'a, Ext> {
     Net(BackendIncoming<'a>),
-    Cluster(WebrtcOwner, EndpointEvent),
+    Cluster(WebrtcOwner, ClusterEndpointEvent),
+    Ext(WebrtcOwner, Ext),
+    Close(WebrtcOwner),
 }
 
-pub enum GroupOutput<'a> {
+pub enum GroupOutput<'a, Ext> {
     Net(BackendOutgoing<'a>),
-    Cluster(WebrtcOwner, EndpointControl),
+    Cluster(WebrtcOwner, ClusterEndpointControl),
+    Ext(WebrtcOwner, Ext),
     Shutdown(WebrtcOwner),
 }
 
@@ -36,7 +39,7 @@ pub struct MediaWorkerWebrtc {
     dtls_cert: DtlsCert,
     endpoints: Endpoints,
     addrs: Vec<(SocketAddr, usize)>,
-    queue: VecDeque<GroupOutput<'static>>,
+    queue: VecDeque<GroupOutput<'static, ExtOut>>,
 }
 
 impl MediaWorkerWebrtc {
@@ -58,15 +61,7 @@ impl MediaWorkerWebrtc {
         Ok((sdp, index))
     }
 
-    pub fn on_remote_ice(&mut self, variant: Variant, index: usize, ice: String) -> RpcResult<()> {
-        todo!()
-    }
-
-    pub fn close(&mut self, variant: Variant, index: usize) -> RpcResult<()> {
-        todo!()
-    }
-
-    fn process_output<'a>(&mut self, index: usize, out: Output<'a>) -> GroupOutput<'a> {
+    fn process_output<'a>(&mut self, index: usize, out: Output<'a, ExtOut>) -> GroupOutput<'a, ExtOut> {
         match out {
             Output::Net(net) => GroupOutput::Net(net),
             Output::Cluster(control) => GroupOutput::Cluster(WebrtcOwner(index), control),
@@ -75,6 +70,7 @@ impl MediaWorkerWebrtc {
                 self.shared_port.remove_task(index);
                 GroupOutput::Shutdown(WebrtcOwner(index))
             }
+            Output::Ext(ext) => GroupOutput::Ext(WebrtcOwner(index), ext),
         }
     }
 }
@@ -84,14 +80,14 @@ impl MediaWorkerWebrtc {
         self.endpoints.tasks()
     }
 
-    pub fn on_tick<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a>> {
+    pub fn on_tick<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a, ExtOut>> {
         if let Some(out) = self.queue.pop_front() {
             return Some(out);
         }
         self.endpoints.on_tick(now).map(|(index, out)| self.process_output(index, out))
     }
 
-    pub fn on_event<'a>(&mut self, now: Instant, input: GroupInput<'a>) -> Option<GroupOutput<'a>> {
+    pub fn on_event<'a>(&mut self, now: Instant, input: GroupInput<'a, ExtIn>) -> Option<GroupOutput<'a, ExtOut>> {
         match input {
             GroupInput::Net(BackendIncoming::UdpListenResult { bind: _, result }) => {
                 let (addr, slot) = result.ok()?;
@@ -107,15 +103,23 @@ impl MediaWorkerWebrtc {
                 let out = self.endpoints.on_event(now, owner.index(), Input::Cluster(event))?;
                 Some(self.process_output(owner.index(), out))
             }
+            GroupInput::Ext(owner, ext) => {
+                let out = self.endpoints.on_event(now, owner.index(), Input::Ext(ext))?;
+                Some(self.process_output(owner.index(), out))
+            }
+            GroupInput::Close(owner) => {
+                let out = self.endpoints.on_event(now, owner.index(), Input::Close)?;
+                Some(self.process_output(owner.index(), out))
+            }
         }
     }
 
-    pub fn pop_output<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a>> {
+    pub fn pop_output<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a, ExtOut>> {
         let (index, out) = self.endpoints.pop_output(now)?;
         Some(self.process_output(index, out))
     }
 
-    pub fn shutdown<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a>> {
+    pub fn shutdown<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a, ExtOut>> {
         self.endpoints.shutdown(now).map(|(index, out)| self.process_output(index, out))
     }
 }

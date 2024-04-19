@@ -3,14 +3,14 @@ use std::{collections::VecDeque, net::SocketAddr, time::Instant};
 use atm0s_sdn::{services::visualization, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot};
 use media_server_core::cluster::{self, MediaCluster};
 use media_server_protocol::transport::{
-    whip::{self, WhipConnectRes},
+    whip::{self, WhipConnectRes, WhipDeleteRes, WhipRemoteIceRes},
     RpcReq, RpcRes,
 };
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     TaskSwitcher,
 };
-use transport_webrtc::{MediaWorkerWebrtc, WebrtcOwner};
+use transport_webrtc::{GroupInput, MediaWorkerWebrtc, WebrtcOwner};
 
 pub struct MediaConfig {
     pub webrtc_addrs: Vec<SocketAddr>,
@@ -121,10 +121,7 @@ impl MediaServerWorker {
 
     pub fn on_event<'a>(&mut self, now: Instant, input: Input<'a>) -> Option<Output<'a>> {
         match input {
-            Input::ExtRpc(req_id, req) => {
-                let res = self.process_rpc(req);
-                Some(Output::ExtRpc(req_id, res))
-            }
+            Input::ExtRpc(req_id, req) => self.process_rpc(now, req_id, req),
             Input::Net(owner, event) => match owner {
                 Owner::Sdn => {
                     let now_ms = self.timer.timestamp_ms(now);
@@ -256,7 +253,7 @@ impl MediaServerWorker {
         }
     }
 
-    fn output_webrtc<'a>(&mut self, now: Instant, out: transport_webrtc::GroupOutput<'a>) -> Output<'a> {
+    fn output_webrtc<'a>(&mut self, now: Instant, out: transport_webrtc::GroupOutput<'a, transport_webrtc::ExtOut>) -> Output<'a> {
         self.switcher.queue_flag_task(TaskType::MediaWebrtc as usize);
         match out {
             transport_webrtc::GroupOutput::Net(out) => Output::Net(Owner::MediaWebrtc, out),
@@ -268,26 +265,40 @@ impl MediaServerWorker {
                 }
             }
             transport_webrtc::GroupOutput::Shutdown(_owner) => Output::Continue,
+            transport_webrtc::GroupOutput::Ext(_owner, ext) => match ext {
+                transport_webrtc::ExtOut::RemoteIce(req_id, variant, res) => match variant {
+                    transport_webrtc::Variant::Whip => Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::RemoteIce(res.map(|_| WhipRemoteIceRes {})))),
+                    transport_webrtc::Variant::Whep => todo!(),
+                    transport_webrtc::Variant::Sdk => {
+                        todo!()
+                    }
+                },
+            },
         }
     }
 }
 
 impl MediaServerWorker {
-    fn process_rpc<'a>(&mut self, req: RpcReq<usize>) -> RpcRes<usize> {
+    fn process_rpc<'a>(&mut self, now: Instant, req_id: u64, req: RpcReq<usize>) -> Option<Output<'a>> {
         match req {
             RpcReq::Whip(req) => match req {
                 whip::RpcReq::Connect(req) => match self.media_webrtc.spawn(transport_webrtc::Variant::Whip, &req.sdp) {
-                    Ok((sdp, conn_id)) => RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))),
-                    Err(e) => RpcRes::Whip(whip::RpcRes::Connect(Err(e))),
+                    Ok((sdp, conn_id)) => Some(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
+                    Err(e) => Some(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
                 },
-                whip::RpcReq::RemoteIce(req) => match self.media_webrtc.on_remote_ice(transport_webrtc::Variant::Whip, req.conn_id, req.ice) {
-                    Ok(_) => RpcRes::Whip(whip::RpcRes::RemoteIce(Ok(whip::WhipRemoteIceRes {}))),
-                    Err(e) => RpcRes::Whip(whip::RpcRes::RemoteIce(Err(e))),
-                },
-                whip::RpcReq::Delete(req) => match self.media_webrtc.close(transport_webrtc::Variant::Whip, req.conn_id) {
-                    Ok(_) => RpcRes::Whip(whip::RpcRes::Delete(Ok(whip::WhipDeleteRes {}))),
-                    Err(e) => RpcRes::Whip(whip::RpcRes::Delete(Err(e))),
-                },
+                whip::RpcReq::RemoteIce(req) => {
+                    let out = self.media_webrtc.on_event(
+                        now,
+                        GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Whip, req.ice)),
+                    )?;
+                    Some(self.output_webrtc(now, out))
+                }
+                whip::RpcReq::Delete(req) => {
+                    //TODO check error instead of auto response ok
+                    self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Delete(Ok(WhipDeleteRes {})))));
+                    let out = self.media_webrtc.on_event(now, GroupInput::Close(req.conn_id.into()))?;
+                    Some(self.output_webrtc(now, out))
+                }
             },
         }
     }

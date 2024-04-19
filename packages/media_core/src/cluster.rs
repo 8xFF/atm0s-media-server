@@ -1,22 +1,68 @@
 use std::{marker::PhantomData, time::Instant};
 
 use atm0s_sdn::features::{FeaturesControl, FeaturesEvent};
+use media_server_protocol::{
+    endpoint::{PeerId, RoomId, TrackMeta, TrackName},
+    media::MediaPacket,
+};
 
-pub enum EndpointControl {}
+use crate::transport::{LocalTrackId, RemoteTrackId};
 
 #[derive(Clone)]
-pub enum EndpointEvent {
-    Test,
+pub enum ClusterRemoteTrackControl {
+    Started(TrackName),
+    Media(MediaPacket),
+    Ended,
+}
+
+#[derive(Clone)]
+pub enum ClusterRemoteTrackEvent {
+    RequestKeyFrame,
+}
+
+#[derive(Clone)]
+pub enum ClusterLocalTrackControl {
+    Subscribe(PeerId, TrackName),
+    RequestKeyFrame,
+    Unsubscribe,
+}
+
+#[derive(Clone)]
+pub enum ClusterLocalTrackEvent {
+    Started,
+    Media(MediaPacket),
+    Ended,
+}
+
+pub enum ClusterEndpointControl {
+    JoinRoom(RoomId, PeerId),
+    LeaveRoom,
+    SubscribeRoom,
+    UnsubscribeRoom,
+    SubscribePeer(PeerId),
+    UnsubscribePeer(PeerId),
+    RemoteTrack(RemoteTrackId, ClusterRemoteTrackControl),
+    LocalTrack(LocalTrackId, ClusterLocalTrackControl),
+}
+
+#[derive(Clone)]
+pub enum ClusterEndpointEvent {
+    PeerJoined(PeerId),
+    PeerLeaved(PeerId),
+    TrackStarted(PeerId, TrackName, TrackMeta),
+    TrackStoped(PeerId, TrackName),
+    RemoteTrack(RemoteTrackId, ClusterRemoteTrackEvent),
+    LocalTrack(LocalTrackId, ClusterLocalTrackEvent),
 }
 
 pub enum Input<Owner> {
     Sdn(FeaturesEvent),
-    Endpoint(Owner, EndpointControl),
+    Endpoint(Owner, ClusterEndpointControl),
 }
 
 pub enum Output<Owner> {
     Sdn(FeaturesControl),
-    Endpoint(Vec<Owner>, EndpointEvent),
+    Endpoint(Vec<Owner>, ClusterEndpointEvent),
 }
 
 #[derive(Debug)]

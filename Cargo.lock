@@ -1178,6 +1178,7 @@ dependencies = [
  "atm0s-sdn",
  "log",
  "media-server-protocol",
+ "media-server-utils",
  "sans-io-runtime",
 ]
 

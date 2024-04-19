@@ -3,23 +3,25 @@ use std::{
     time::{Duration, Instant},
 };
 
-use media_server_core::transport::{RemoteTrackControl, RemoteTrackEvent, TransportError, TransportInput, TransportOutput, TransportState};
+use media_server_core::transport::{
+    ClientEndpointEvent, ClientRemoteTrackEvent, RemoteTrackControl, RemoteTrackEvent, RemoteTrackId, TransportControl, TransportError, TransportEvent, TransportState,
+};
 use media_server_utils::Small2dMap;
 use sans_io_runtime::backend::{BackendIncoming, BackendOutgoing};
 use str0m::{
-    media::{Direction, KeyframeRequestKind, MediaKind, Mid},
+    media::{Direction, KeyframeRequestKind, MediaAdded, MediaKind, Mid},
     net::Protocol,
     Event as Str0mEvent, IceConnectionState, Output as Str0mOutput,
 };
 
 use crate::utils::rtp_to_media_packet;
 
-use super::{InternalOutput, TransportWebrtcInternal};
+use super::{ExtIn, InternalOutput, TransportWebrtcInternal};
 
 const TIMEOUT_SEC: u64 = 10;
-const AUDIO_TRACK: u16 = 0;
+const AUDIO_TRACK: RemoteTrackId = RemoteTrackId(0);
 const AUDIO_NAME: &str = "audio_main";
-const VIDEO_TRACK: u16 = 1;
+const VIDEO_TRACK: RemoteTrackId = RemoteTrackId(1);
 const VIDEO_NAME: &str = "video_main";
 
 enum State {
@@ -64,20 +66,20 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
         match &self.state {
             State::New => {
                 self.state = State::Connecting { at: now };
-                return Some(InternalOutput::TransportOutput(TransportOutput::State(TransportState::Connecting)));
+                return Some(InternalOutput::TransportOutput(TransportEvent::State(TransportState::Connecting)));
             }
             State::Connecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
                     log::info!("Connect timed out after {:?}", now - *at);
                     self.state = State::ConnectError(TransportWebrtcError::Timeout);
-                    return Some(InternalOutput::TransportOutput(TransportOutput::State(TransportState::ConnectError(TransportError::Timeout))));
+                    return Some(InternalOutput::TransportOutput(TransportEvent::State(TransportState::ConnectError(TransportError::Timeout))));
                 }
             }
             State::Reconnecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
                     log::info!("Reconnecting timed out after {:?}", now - *at);
                     self.state = State::Disconnected(Some(TransportWebrtcError::Timeout));
-                    return Some(InternalOutput::TransportOutput(TransportOutput::State(TransportState::Disconnected(Some(TransportError::Timeout)))));
+                    return Some(InternalOutput::TransportOutput(TransportEvent::State(TransportState::Disconnected(Some(TransportError::Timeout)))));
                 }
             }
             _ => {}
@@ -90,23 +92,25 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
         Some(InternalOutput::Str0mTick(now))
     }
 
-    fn on_transport_input<'a>(&mut self, now: Instant, input: TransportInput<'a>) -> Option<InternalOutput<'a>> {
+    fn on_transport_input<'a>(&mut self, now: Instant, input: TransportControl<'a, ExtIn>) -> Option<InternalOutput<'a>> {
         match input {
-            TransportInput::Net(net) => match net {
+            TransportControl::Net(net) => match net {
                 BackendIncoming::UdpPacket { slot, from, data } => {
                     let destination = self.ports.get2(&slot)?;
                     Some(InternalOutput::Str0mReceive(now, Protocol::Udp, from, *destination, data.freeze()))
                 }
                 _ => panic!("Unexpected input"),
             },
-            TransportInput::Control(control) => match control {},
-            TransportInput::LocalMediaTrack(track, event) => None,
-            TransportInput::RemoteMediaTrack(track, event) => match event {
+            TransportControl::Event(event) => self.on_endpoint_event(now, event),
+            TransportControl::LocalMediaTrack(track, event) => None,
+            TransportControl::RemoteMediaTrack(track, event) => match event {
                 RemoteTrackControl::RequestKeyFrame => {
                     let mid = self.video_mid?;
                     Some(InternalOutput::Str0mKeyframe(mid, KeyframeRequestKind::Pli))
                 }
             },
+            TransportControl::Ext(_) => panic!("Unexpected ext input inside whip"),
+            TransportControl::Close => panic!("Unexpected close input inside whip"),
         }
     }
 
@@ -118,7 +122,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             }
             Str0mOutput::Transmit(out) => {
                 let from = self.ports.get1(&out.source)?;
-                return Some(InternalOutput::TransportOutput(TransportOutput::Net(BackendOutgoing::UdpPacket {
+                return Some(InternalOutput::TransportOutput(TransportEvent::Net(BackendOutgoing::UdpPacket {
                     slot: *from,
                     to: out.destination,
                     data: out.contents.to_vec().into(),
@@ -127,52 +131,10 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             Str0mOutput::Event(event) => match event {
                 Str0mEvent::Connected => {
                     self.state = State::Connected;
-                    return Some(InternalOutput::TransportOutput(TransportOutput::State(TransportState::Connected)));
+                    return Some(InternalOutput::TransportOutput(TransportEvent::State(TransportState::Connected)));
                 }
-                Str0mEvent::IceConnectionStateChange(state) => match state {
-                    IceConnectionState::New => None,
-                    IceConnectionState::Checking => None,
-                    IceConnectionState::Connected | IceConnectionState::Completed => {
-                        if matches!(self.state, State::Reconnecting { at: _ }) {
-                            self.state = State::Connected;
-                            Some(InternalOutput::TransportOutput(TransportOutput::State(TransportState::Connected)))
-                        } else {
-                            None
-                        }
-                    }
-                    IceConnectionState::Disconnected => {
-                        if matches!(self.state, State::Connected) {
-                            self.state = State::Reconnecting { at: now };
-                            return Some(InternalOutput::TransportOutput(TransportOutput::State(TransportState::Reconnecting)));
-                        } else {
-                            return None;
-                        }
-                    }
-                },
-                Str0mEvent::MediaAdded(media) => {
-                    if matches!(media.direction, Direction::SendOnly | Direction::Inactive) {
-                        return None;
-                    }
-                    if media.kind == MediaKind::Audio {
-                        if self.audio_mid.is_some() {
-                            return None;
-                        }
-                        self.audio_mid = Some(media.mid);
-                        Some(InternalOutput::TransportOutput(TransportOutput::RemoteTrack(
-                            AUDIO_TRACK,
-                            RemoteTrackEvent::Started { name: AUDIO_NAME.to_string() },
-                        )))
-                    } else {
-                        if self.video_mid.is_some() {
-                            return None;
-                        }
-                        self.video_mid = Some(media.mid);
-                        Some(InternalOutput::TransportOutput(TransportOutput::RemoteTrack(
-                            VIDEO_TRACK,
-                            RemoteTrackEvent::Started { name: VIDEO_NAME.to_string() },
-                        )))
-                    }
-                }
+                Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
+                Str0mEvent::MediaAdded(media) => self.on_str0m_media_added(now, media),
                 Str0mEvent::RtpPacket(pkt) => {
                     let track = if *pkt.header.payload_type == 111 {
                         AUDIO_TRACK
@@ -180,10 +142,72 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                         VIDEO_TRACK
                     };
                     let pkt = rtp_to_media_packet(pkt);
-                    Some(InternalOutput::TransportOutput(TransportOutput::RemoteTrack(track, RemoteTrackEvent::Media(pkt))))
+                    Some(InternalOutput::TransportOutput(TransportEvent::RemoteTrack(track, RemoteTrackEvent::Media(pkt))))
                 }
                 _ => None,
             },
+        }
+    }
+}
+
+impl TransportWebrtcWhip {
+    fn on_str0m_state<'a>(&mut self, now: Instant, state: IceConnectionState) -> Option<InternalOutput<'a>> {
+        match state {
+            IceConnectionState::New => None,
+            IceConnectionState::Checking => None,
+            IceConnectionState::Connected | IceConnectionState::Completed => {
+                if matches!(self.state, State::Reconnecting { at: _ }) {
+                    self.state = State::Connected;
+                    Some(InternalOutput::TransportOutput(TransportEvent::State(TransportState::Connected)))
+                } else {
+                    None
+                }
+            }
+            IceConnectionState::Disconnected => {
+                if matches!(self.state, State::Connected) {
+                    self.state = State::Reconnecting { at: now };
+                    return Some(InternalOutput::TransportOutput(TransportEvent::State(TransportState::Reconnecting)));
+                } else {
+                    return None;
+                }
+            }
+        }
+    }
+
+    fn on_str0m_media_added<'a>(&mut self, now: Instant, media: MediaAdded) -> Option<InternalOutput<'a>> {
+        if matches!(media.direction, Direction::SendOnly | Direction::Inactive) {
+            return None;
+        }
+        if media.kind == MediaKind::Audio {
+            if self.audio_mid.is_some() {
+                return None;
+            }
+            self.audio_mid = Some(media.mid);
+            Some(InternalOutput::TransportOutput(TransportEvent::RemoteTrack(
+                AUDIO_TRACK,
+                RemoteTrackEvent::Started { name: AUDIO_NAME.to_string() },
+            )))
+        } else {
+            if self.video_mid.is_some() {
+                return None;
+            }
+            self.video_mid = Some(media.mid);
+            Some(InternalOutput::TransportOutput(TransportEvent::RemoteTrack(
+                VIDEO_TRACK,
+                RemoteTrackEvent::Started { name: VIDEO_NAME.to_string() },
+            )))
+        }
+    }
+
+    fn on_endpoint_event<'a>(&mut self, now: Instant, event: ClientEndpointEvent) -> Option<InternalOutput<'a>> {
+        match event {
+            ClientEndpointEvent::PeerJoined(_) => None,
+            ClientEndpointEvent::PeerLeaved(_) => None,
+            ClientEndpointEvent::PeerTrackStarted(_, _, _) => None,
+            ClientEndpointEvent::PeerTrackStopped(_, _) => None,
+            ClientEndpointEvent::LocalTrack(_, _) => None,
+            ClientEndpointEvent::RemoteTrack(_, ClientRemoteTrackEvent::LimitBitrateBps(bitrate)) => Some(InternalOutput::Str0mLimitBitrate(self.video_mid?, bitrate)),
+            ClientEndpointEvent::RemoteTrack(_, ClientRemoteTrackEvent::RequestKeyFrame) => Some(InternalOutput::Str0mKeyframe(self.video_mid?, KeyframeRequestKind::Pli)),
         }
     }
 }

@@ -10,3 +10,4 @@ log = { workspace = true }
 sans-io-runtime = { workspace = true, default-features = false }
 atm0s-sdn = { workspace = true }
 media-server-protocol = { path = "../protocol" }
+media-server-utils = { path = "../media_utils" }
