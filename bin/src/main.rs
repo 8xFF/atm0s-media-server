@@ -48,22 +48,26 @@ struct Args {
     #[arg(env, long)]
     seeds: Vec<NodeAddr>,
 
-    /// Neighbors
-    #[arg(env, long)]
+    /// Workers
+    #[arg(env, long, default_value_t = 1)]
     workers: usize,
 
     #[command(subcommand)]
     server: ServerType,
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
     if std::env::var_os("RUST_LOG").is_none() {
-        std::env::set_var("RUST_LOG", "atm0s_media_server=info");
+        std::env::set_var("RUST_LOG", "info");
+    }
+    if std::env::var_os("RUST_BACKTRACE").is_none() {
+        std::env::set_var("RUST_BACKTRACE", "1");
     }
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
+    let http_port = args.http_port;
     let workers = args.workers;
     let node = NodeConfig {
         node_id: args.node_id,
@@ -76,6 +80,6 @@ async fn main() {
     match args.server {
         ServerType::Gateway(args) => run_media_gateway(workers, args).await,
         ServerType::Connector(args) => run_media_connector(workers, args).await,
-        ServerType::Media(args) => run_media_server(workers, node, args).await,
+        ServerType::Media(args) => run_media_server(workers, http_port, node, args).await,
     }
 }

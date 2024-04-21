@@ -94,6 +94,9 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
     }
 
     fn on_tick<'a>(&mut self, now: Instant) -> Option<Output<'a>> {
+        if !self.queue.is_empty() {
+            return self.queue.pop_front();
+        }
         let out = self.worker.on_tick(now)?;
         Some(self.process_out(out))
     }
@@ -104,6 +107,9 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
     }
 
     fn pop_output<'a>(&mut self, now: Instant) -> Option<Output<'a>> {
+        if !self.queue.is_empty() {
+            return self.queue.pop_front();
+        }
         let out = self.worker.pop_output(now)?;
         Some(self.process_out(out))
     }

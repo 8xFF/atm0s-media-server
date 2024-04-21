@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use media_server_protocol::endpoint::ClusterConnId;
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use poem::endpoint::StaticFilesEndpoint;
@@ -51,7 +53,7 @@ pub async fn run_gateway_http_server(sender: Sender<Rpc<RpcReq<ClusterConnId>, R
     Ok(())
 }
 
-pub async fn run_media_http_server(sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_media_http_server(port: u16, sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>) -> Result<(), Box<dyn std::error::Error>> {
     let api_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis, "Media Server APIs", env!("CARGO_PKG_VERSION")).server("/");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec();
@@ -63,6 +65,6 @@ pub async fn run_media_http_server(sender: Sender<Rpc<RpcReq<ClusterConnId>, Rpc
         .with(Cors::new())
         .data(api_media::MediaServerCtx { sender });
 
-    Server::new(TcpListener::bind("0.0.0.0:3000")).run(route).await?;
+    Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
     Ok(())
 }

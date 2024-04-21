@@ -78,18 +78,22 @@ impl<Owner> Default for MediaCluster<Owner> {
 
 impl<Owner> MediaCluster<Owner> {
     pub fn on_tick(&mut self, now: Instant) -> Option<Output<Owner>> {
-        todo!()
+        //TODO
+        None
     }
 
     pub fn on_input(&mut self, now: Instant, input: Input<Owner>) -> Option<Output<Owner>> {
-        todo!()
+        //TODO
+        None
     }
 
     pub fn pop_output(&mut self, now: Instant) -> Option<Output<Owner>> {
-        todo!()
+        //TODO
+        None
     }
 
     pub fn shutdown<'a>(&mut self, now: Instant) -> Option<Output<Owner>> {
-        todo!()
+        //TODO
+        None
     }
 }

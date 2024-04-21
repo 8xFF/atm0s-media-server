@@ -12,20 +12,25 @@ use runtime_worker::{ExtIn, ExtOut};
 
 #[derive(Debug, Parser)]
 pub struct Args {
+    /// Custom binding address for WebRTC UDP
+    #[arg(env, long)]
     custom_addrs: Vec<SocketAddr>,
 }
 
-pub async fn run_media_server(workers: usize, node: NodeConfig, args: Args) {
+pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
     println!("Running media server");
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
-    tokio::spawn(async move {
-        if let Err(e) = run_media_http_server(req_tx).await {
-            log::error!("HTTP Error: {}", e);
-        }
-    });
+    if let Some(http_port) = http_port {
+        tokio::spawn(async move {
+            if let Err(e) = run_media_http_server(http_port, req_tx).await {
+                log::error!("HTTP Error: {}", e);
+            }
+        });
+    }
 
     //TODO get local addrs
     let node_id = node.node_id;
+    let node_session = node.session;
     let webrtc_addrs = args.custom_addrs;
     let mut controller = Controller::<_, _, _, _, _, 128>::default();
     for i in 0..workers {
@@ -49,13 +54,19 @@ pub async fn run_media_server(workers: usize, node: NodeConfig, args: Args) {
             req_id_seed += 1;
             reqs.insert(req_id, req.answer_tx);
 
-            let (req, _node_id) = req.req.extract();
-            let (req, worker) = req.extract();
+            let (req, _node_id) = req.req.down();
+            let (req, worker) = req.down();
 
             let ext = ExtIn::Rpc(req_id, req);
             if let Some(worker) = worker {
-                controller.send_to(worker, ext);
+                if worker < workers as u16 {
+                    log::info!("on req {req_id} dest to worker {worker}");
+                    controller.send_to(worker, ext);
+                } else {
+                    log::info!("on req {req_id} dest to wrong worker {worker} but workers is {workers}");
+                }
             } else {
+                log::info!("on req {req_id} dest to any worker");
                 controller.send_to_best(ext);
             }
         }
@@ -63,7 +74,8 @@ pub async fn run_media_server(workers: usize, node: NodeConfig, args: Args) {
         while let Some(out) = controller.pop_event() {
             match out {
                 ExtOut::Rpc(req_id, worker, res) => {
-                    let res = res.up_layer(worker).up_layer(node_id);
+                    log::info!("on req {req_id} res from worker {worker}");
+                    let res = res.up(worker).up((node_id, node_session));
                     if let Some(tx) = reqs.remove(&req_id) {
                         if let Err(_) = tx.send(res) {
                             log::error!("Send rpc response error for req {req_id}");

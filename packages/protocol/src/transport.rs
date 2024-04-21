@@ -1,46 +1,52 @@
 use std::fmt::Display;
 
-use crate::endpoint::{ClusterConnId, ServerConnId};
-
 pub mod webrtc;
 pub mod whep;
 pub mod whip;
 
+pub trait ConnLayer {
+    type Up;
+    type UpParam;
+    type Down;
+    type DownRes;
+
+    fn down(self) -> (Self::Down, Self::DownRes);
+    fn up(self, param: Self::UpParam) -> Self::Up;
+}
+
 #[derive(Debug, Clone, convert_enum::From, convert_enum::TryInto)]
 pub enum RpcReq<Conn> {
-    // Webrtc(webrtc::RpcReq),
-    // Whep(whep::RpcReq),
+    Whep(whep::RpcReq<Conn>),
     Whip(whip::RpcReq<Conn>),
 }
 
-impl RpcReq<ClusterConnId> {
-    pub fn extract(self) -> (RpcReq<ServerConnId>, Option<u32>) {
-        todo!()
-    }
-}
-
-impl RpcReq<ServerConnId> {
-    pub fn extract(self) -> (RpcReq<usize>, Option<u16>) {
-        todo!()
+impl<Conn: ConnLayer> RpcReq<Conn> {
+    pub fn down(self) -> (RpcReq<Conn::Down>, Option<Conn::DownRes>) {
+        match self {
+            Self::Whip(req) => {
+                let (req, layer) = req.down();
+                (RpcReq::Whip(req), layer)
+            }
+            Self::Whep(req) => {
+                let (req, layer) = req.down();
+                (RpcReq::Whep(req), layer)
+            }
+        }
     }
 }
 
 #[derive(Debug, Clone, convert_enum::From, convert_enum::TryInto)]
 pub enum RpcRes<Conn> {
-    // Webrtc(webrtc::RpcRes),
-    // Whep(whep::RpcRes),
+    Whep(whep::RpcRes<Conn>),
     Whip(whip::RpcRes<Conn>),
 }
 
-impl RpcRes<ServerConnId> {
-    pub fn up_layer(self, node: u32) -> RpcRes<ClusterConnId> {
-        todo!()
-    }
-}
-
-impl RpcRes<usize> {
-    pub fn up_layer(self, worker: u16) -> RpcRes<ServerConnId> {
-        todo!()
+impl<Conn: ConnLayer> RpcRes<Conn> {
+    pub fn up(self, param: Conn::UpParam) -> RpcRes<Conn::Up> {
+        match self {
+            Self::Whip(req) => RpcRes::Whip(req.up(param)),
+            Self::Whep(req) => RpcRes::Whep(req.up(param)),
+        }
     }
 }
 

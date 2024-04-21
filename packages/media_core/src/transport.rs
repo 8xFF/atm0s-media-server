@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{hash::Hash, time::Instant};
 
 use media_server_protocol::{
     endpoint::{PeerId, TrackName},
@@ -16,9 +16,21 @@ pub struct TransportId(pub u64);
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct RemoteTrackId(pub u16);
 
+impl Hash for RemoteTrackId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 /// LocalTrackId is used for track which send media to client
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct LocalTrackId(pub u16);
+
+impl Hash for LocalTrackId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
 
 pub enum TransportError {
     Timeout,
@@ -47,6 +59,12 @@ pub enum LocalTrackEvent {
     Ended,
 }
 
+impl LocalTrackEvent {
+    pub fn need_create(&self) -> bool {
+        matches!(self, LocalTrackEvent::Started { .. })
+    }
+}
+
 /// This is used for notifying state of remote track to endpoint
 pub enum RemoteTrackEvent {
     Started { name: String },
@@ -54,6 +72,12 @@ pub enum RemoteTrackEvent {
     Resumed,
     Media(MediaPacket),
     Ended,
+}
+
+impl RemoteTrackEvent {
+    pub fn need_create(&self) -> bool {
+        matches!(self, RemoteTrackEvent::Started { .. })
+    }
 }
 
 pub enum TransportEvent {
@@ -78,6 +102,7 @@ pub enum TransportOutput<'a, Ext> {
     Event(TransportEvent),
     RpcReq(EndpointReqId, EndpointReq),
     Ext(Ext),
+    Destroy,
 }
 
 pub trait Transport<ExtIn, ExtOut> {

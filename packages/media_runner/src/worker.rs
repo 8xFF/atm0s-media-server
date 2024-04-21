@@ -3,6 +3,7 @@ use std::{collections::VecDeque, net::SocketAddr, time::Instant};
 use atm0s_sdn::{services::visualization, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot};
 use media_server_core::cluster::{self, MediaCluster};
 use media_server_protocol::transport::{
+    whep::{self, WhepConnectRes, WhepDeleteRes, WhepRemoteIceRes},
     whip::{self, WhipConnectRes, WhipDeleteRes, WhipRemoteIceRes},
     RpcReq, RpcRes,
 };
@@ -154,17 +155,17 @@ impl MediaServerWorker {
             match c.try_into().ok()? {
                 TaskType::Sdn => {
                     let now_ms = self.timer.timestamp_ms(now);
-                    if let Some(out) = s.looper_process(self.sdn_worker.pop_output(now_ms)) {
+                    if let Some(out) = s.queue_process(self.sdn_worker.pop_output(now_ms)) {
                         return Some(self.output_sdn(now, out));
                     }
                 }
                 TaskType::MediaCluster => {
-                    if let Some(out) = s.looper_process(self.media_cluster.pop_output(now)) {
+                    if let Some(out) = s.queue_process(self.media_cluster.pop_output(now)) {
                         return Some(self.output_cluster(now, out));
                     }
                 }
                 TaskType::MediaWebrtc => {
-                    if let Some(out) = s.looper_process(self.media_webrtc.pop_output(now)) {
+                    if let Some(out) = s.queue_process(self.media_webrtc.pop_output(now)) {
                         return Some(self.output_webrtc(now, out));
                     }
                 }
@@ -268,7 +269,7 @@ impl MediaServerWorker {
             transport_webrtc::GroupOutput::Ext(_owner, ext) => match ext {
                 transport_webrtc::ExtOut::RemoteIce(req_id, variant, res) => match variant {
                     transport_webrtc::Variant::Whip => Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::RemoteIce(res.map(|_| WhipRemoteIceRes {})))),
-                    transport_webrtc::Variant::Whep => todo!(),
+                    transport_webrtc::Variant::Whep => Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::RemoteIce(res.map(|_| WhepRemoteIceRes {})))),
                     transport_webrtc::Variant::Sdk => {
                         todo!()
                     }
@@ -280,6 +281,7 @@ impl MediaServerWorker {
 
 impl MediaServerWorker {
     fn process_rpc<'a>(&mut self, now: Instant, req_id: u64, req: RpcReq<usize>) -> Option<Output<'a>> {
+        log::info!("[MediaServerWorker] incoming rpc req {req_id}");
         match req {
             RpcReq::Whip(req) => match req {
                 whip::RpcReq::Connect(req) => match self.media_webrtc.spawn(transport_webrtc::Variant::Whip, &req.sdp) {
@@ -287,6 +289,7 @@ impl MediaServerWorker {
                     Err(e) => Some(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
                 },
                 whip::RpcReq::RemoteIce(req) => {
+                    log::info!("on rpc request {req_id}, whip::RpcReq::RemoteIce");
                     let out = self.media_webrtc.on_event(
                         now,
                         GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Whip, req.ice)),
@@ -296,6 +299,26 @@ impl MediaServerWorker {
                 whip::RpcReq::Delete(req) => {
                     //TODO check error instead of auto response ok
                     self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Delete(Ok(WhipDeleteRes {})))));
+                    let out = self.media_webrtc.on_event(now, GroupInput::Close(req.conn_id.into()))?;
+                    Some(self.output_webrtc(now, out))
+                }
+            },
+            RpcReq::Whep(req) => match req {
+                whep::RpcReq::Connect(req) => match self.media_webrtc.spawn(transport_webrtc::Variant::Whep, &req.sdp) {
+                    Ok((sdp, conn_id)) => Some(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp }))))),
+                    Err(e) => Some(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Err(e))))),
+                },
+                whep::RpcReq::RemoteIce(req) => {
+                    log::info!("on rpc request {req_id}, whep::RpcReq::RemoteIce");
+                    let out = self.media_webrtc.on_event(
+                        now,
+                        GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Whep, req.ice)),
+                    )?;
+                    Some(self.output_webrtc(now, out))
+                }
+                whep::RpcReq::Delete(req) => {
+                    //TODO check error instead of auto response ok
+                    self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Delete(Ok(WhepDeleteRes {})))));
                     let out = self.media_webrtc.on_event(now, GroupInput::Close(req.conn_id.into()))?;
                     Some(self.output_webrtc(now, out))
                 }

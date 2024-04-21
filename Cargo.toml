@@ -14,3 +14,4 @@ atm0s-sdn = { path = "../atm0s-sdn/packages/runner" }
 convert-enum = "0.1"
 num_enum = "0.7"
 log = "0.4"
+smallmap = "1.4"

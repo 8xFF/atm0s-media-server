@@ -189,6 +189,7 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
                 let out = self.internal.on_transport_rpc(now, req_id, req)?;
                 self.process_internal_output(now, out)
             }
+            TransportOutput::Destroy => Some(EndpointOutput::Shutdown),
         }
     }
 

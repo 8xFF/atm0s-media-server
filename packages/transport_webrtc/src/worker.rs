@@ -91,6 +91,7 @@ impl MediaWorkerWebrtc {
         match input {
             GroupInput::Net(BackendIncoming::UdpListenResult { bind: _, result }) => {
                 let (addr, slot) = result.ok()?;
+                log::info!("[MediaWorkerWebrtc] UdpListenResult {addr}, slot {slot}");
                 self.addrs.push((addr, slot));
                 None
             }
@@ -104,6 +105,7 @@ impl MediaWorkerWebrtc {
                 Some(self.process_output(owner.index(), out))
             }
             GroupInput::Ext(owner, ext) => {
+                log::info!("[MediaWorkerWebrtc] on ext to owner {:?}", owner);
                 let out = self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ext))?;
                 Some(self.process_output(owner.index(), out))
             }
