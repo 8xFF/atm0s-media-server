@@ -13,7 +13,7 @@ use str0m::change::DtlsCert;
 
 use crate::{
     shared_port::SharedUdpPort,
-    transport::{ExtIn, ExtOut, TransportWebrtc, Variant},
+    transport::{ExtIn, ExtOut, TransportWebrtc, VariantParams},
 };
 
 group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, EndpointInput<'a, ExtIn>, EndpointOutput<'a, ExtOut>);
@@ -53,7 +53,7 @@ impl MediaWorkerWebrtc {
         }
     }
 
-    pub fn spawn(&mut self, variant: Variant, offer: &str) -> RpcResult<(String, usize)> {
+    pub fn spawn(&mut self, variant: VariantParams, offer: &str) -> RpcResult<(String, usize)> {
         let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone())?;
         let endpoint = Endpoint::new(tran);
         let index = self.endpoints.add_task(endpoint);
@@ -65,7 +65,7 @@ impl MediaWorkerWebrtc {
         match out {
             EndpointOutput::Net(net) => GroupOutput::Net(net),
             EndpointOutput::Cluster(control) => GroupOutput::Cluster(WebrtcOwner(index), control),
-            EndpointOutput::Shutdown => {
+            EndpointOutput::Destroy => {
                 self.endpoints.remove_task(index);
                 self.shared_port.remove_task(index);
                 GroupOutput::Shutdown(WebrtcOwner(index))

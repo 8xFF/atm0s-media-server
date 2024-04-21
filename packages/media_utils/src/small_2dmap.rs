@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-pub struct Small2dMap<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> {
+pub struct Small2dMap<T1, T2> {
     data: smallmap::Map<T1, T2>,
     reverse: smallmap::Map<T2, T1>,
 }

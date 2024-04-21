@@ -1,3 +1,4 @@
+use derive_more::{AsRef, From};
 use std::{fmt::Display, str::FromStr};
 
 use crate::{
@@ -100,13 +101,13 @@ impl ConnLayer for usize {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash)]
 pub struct RoomId(pub String);
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash)]
 pub struct PeerId(pub String);
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash)]
 pub struct TrackName(pub String);
 
 #[derive(Clone)]

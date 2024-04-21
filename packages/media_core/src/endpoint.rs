@@ -37,6 +37,11 @@ pub enum EndpointLocalTrackRes {
 }
 
 pub struct EndpointReqId(pub u64);
+impl From<u64> for EndpointReqId {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
 
 /// This is control APIs, which is used to control server from Endpoint SDK
 pub enum EndpointReq {
@@ -85,7 +90,7 @@ pub enum EndpointOutput<'a, Ext> {
     Net(BackendOutgoing<'a>),
     Cluster(ClusterEndpointControl),
     Ext(Ext),
-    Shutdown,
+    Destroy,
 }
 
 #[derive(num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
@@ -189,7 +194,6 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
                 let out = self.internal.on_transport_rpc(now, req_id, req)?;
                 self.process_internal_output(now, out)
             }
-            TransportOutput::Destroy => Some(EndpointOutput::Shutdown),
         }
     }
 
@@ -205,6 +209,7 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
                 self.process_transport_output(now, out)
             }
             InternalOutput::Cluster(control) => Some(EndpointOutput::Cluster(control)),
+            InternalOutput::Destroy => Some(EndpointOutput::Destroy),
         }
     }
 }

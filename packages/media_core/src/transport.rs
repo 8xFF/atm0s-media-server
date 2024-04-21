@@ -9,11 +9,11 @@ use sans_io_runtime::backend::{BackendIncoming, BackendOutgoing};
 
 use crate::endpoint::{EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct TransportId(pub u64);
 
 /// RemoteTrackId is used for track which received media from client
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RemoteTrackId(pub u16);
 
 impl Hash for RemoteTrackId {
@@ -23,7 +23,7 @@ impl Hash for RemoteTrackId {
 }
 
 /// LocalTrackId is used for track which send media to client
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LocalTrackId(pub u16);
 
 impl Hash for LocalTrackId {
@@ -32,6 +32,7 @@ impl Hash for LocalTrackId {
     }
 }
 
+#[derive(Debug)]
 pub enum TransportError {
     Timeout,
 }
@@ -52,6 +53,7 @@ pub struct TransportStats {
 }
 
 /// This is used for notifying state of local track to endpoint
+#[derive(Debug)]
 pub enum LocalTrackEvent {
     Started,
     Switch(Option<(PeerId, TrackName)>),
@@ -66,6 +68,7 @@ impl LocalTrackEvent {
 }
 
 /// This is used for notifying state of remote track to endpoint
+#[derive(Debug)]
 pub enum RemoteTrackEvent {
     Started { name: String },
     Paused,
@@ -102,7 +105,6 @@ pub enum TransportOutput<'a, Ext> {
     Event(TransportEvent),
     RpcReq(EndpointReqId, EndpointReq),
     Ext(Ext),
-    Destroy,
 }
 
 pub trait Transport<ExtIn, ExtOut> {

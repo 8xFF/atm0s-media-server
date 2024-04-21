@@ -1,14 +1,17 @@
-use std::{marker::PhantomData, time::Instant};
+use std::{fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::features::{FeaturesControl, FeaturesEvent};
 use media_server_protocol::{
     endpoint::{PeerId, RoomId, TrackMeta, TrackName},
     media::MediaPacket,
 };
+use media_server_utils::Small2dMap;
 
 use crate::transport::{LocalTrackId, RemoteTrackId};
 
-#[derive(Clone)]
+mod room;
+
+#[derive(Debug, Clone)]
 pub enum ClusterRemoteTrackControl {
     Started(TrackName),
     Media(MediaPacket),
@@ -20,20 +23,21 @@ pub enum ClusterRemoteTrackEvent {
     RequestKeyFrame,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ClusterLocalTrackControl {
     Subscribe(PeerId, TrackName),
     RequestKeyFrame,
     Unsubscribe,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum ClusterLocalTrackEvent {
     Started,
     Media(MediaPacket),
     Ended,
 }
 
+#[derive(Debug)]
 pub enum ClusterEndpointControl {
     JoinRoom(RoomId, PeerId),
     LeaveRoom,
@@ -65,25 +69,28 @@ pub enum Output<Owner> {
     Endpoint(Vec<Owner>, ClusterEndpointEvent),
 }
 
-#[derive(Debug)]
 pub struct MediaCluster<Owner> {
-    _tmp: PhantomData<Owner>,
+    endpoints: Small2dMap<Owner, RoomId>,
 }
 
-impl<Owner> Default for MediaCluster<Owner> {
+impl<Owner: Hash + Eq + Clone> Default for MediaCluster<Owner> {
     fn default() -> Self {
-        Self { _tmp: PhantomData }
+        Self { endpoints: Small2dMap::default() }
     }
 }
 
-impl<Owner> MediaCluster<Owner> {
+impl<Owner: Debug> MediaCluster<Owner> {
     pub fn on_tick(&mut self, now: Instant) -> Option<Output<Owner>> {
         //TODO
         None
     }
 
-    pub fn on_input(&mut self, now: Instant, input: Input<Owner>) -> Option<Output<Owner>> {
-        //TODO
+    pub fn on_sdn_event(&mut self, now: Instant, event: FeaturesEvent) -> Option<Output<Owner>> {
+        None
+    }
+
+    pub fn on_endpoint_control(&mut self, now: Instant, owner: Owner, control: ClusterEndpointControl) -> Option<Output<Owner>> {
+        log::info!("[MediaCluster] {:?} control {:?}", owner, control);
         None
     }
 

@@ -5,6 +5,7 @@ use media_server_core::{
     transport::{Transport, TransportInput, TransportOutput},
 };
 use media_server_protocol::{
+    endpoint::{PeerId, RoomId},
     media::MediaPacket,
     transport::{RpcError, RpcResult},
 };
@@ -25,6 +26,12 @@ use crate::WebrtcError;
 mod whep;
 mod whip;
 
+pub enum VariantParams {
+    Whip(RoomId, PeerId),
+    Whep(RoomId, PeerId),
+    Sdk,
+}
+
 pub enum Variant {
     Whip,
     Whep,
@@ -44,7 +51,6 @@ enum InternalOutput<'a> {
     Str0mLimitBitrate(Mid, u64),
     Str0mSendMedia(Mid, MediaPacket),
     TransportOutput(TransportOutput<'a, ExtOut>),
-    Destroy,
 }
 
 trait TransportWebrtcInternal {
@@ -64,7 +70,7 @@ pub struct TransportWebrtc {
 }
 
 impl TransportWebrtc {
-    pub fn new(variant: Variant, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
+    pub fn new(variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
         let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::SdpError))?;
         let rtc_config = Rtc::builder().set_rtp_mode(true).set_ice_lite(true).set_dtls_cert(dtls_cert).set_local_ice_credentials(IceCreds::new());
         let ice_ufrag = rtc_config.local_ice_credentials().as_ref().expect("should have ice credentials").ufrag.clone();
@@ -84,9 +90,9 @@ impl TransportWebrtc {
                 next_tick: None,
                 rtc,
                 internal: match variant {
-                    Variant::Whip => Box::new(whip::TransportWebrtcWhip::new()),
-                    Variant::Whep => Box::new(whep::TransportWebrtcWhep::new()),
-                    Variant::Sdk => unimplemented!(),
+                    VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
+                    VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
+                    VariantParams::Sdk => unimplemented!(),
                 },
                 ports,
             },
@@ -114,7 +120,6 @@ impl TransportWebrtc {
                 self.pop_event(now)
             }
             InternalOutput::TransportOutput(out) => Some(out),
-            InternalOutput::Destroy => Some(TransportOutput::Destroy),
         }
     }
 }
@@ -161,9 +166,13 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
                 }
             },
             TransportInput::Close => {
-                self.internal.close(now);
+                log::info!("[TransportWebrtc] close request");
                 self.rtc.disconnect();
-                self.pop_event(now)
+                if let Some(out) = self.internal.close(now) {
+                    self.process_internal_output(now, out)
+                } else {
+                    self.pop_event(now)
+                }
             }
         }
     }

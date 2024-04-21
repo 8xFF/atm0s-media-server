@@ -1,13 +1,10 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    time::Instant,
-};
+use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::endpoint::{PeerId, RoomId};
 
 use crate::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent},
-    transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportEvent, TransportInput, TransportState, TransportStats},
+    transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportEvent, TransportState, TransportStats},
 };
 
 use self::{local_track::EndpointLocalTrack, remote_track::EndpointRemoteTrack};
@@ -21,6 +18,7 @@ pub enum InternalOutput {
     Event(EndpointEvent),
     RpcRes(EndpointReqId, EndpointRes),
     Cluster(ClusterEndpointControl),
+    Destroy,
 }
 
 pub struct EndpointInternal {
@@ -73,17 +71,21 @@ impl EndpointInternal {
             EndpointReq::JoinRoom(room, peer) => {
                 self.room = Some((room.clone(), peer.clone()));
                 if matches!(self.state, TransportState::Connecting) {
-                    Some(InternalOutput::Cluster(ClusterEndpointControl::JoinRoom(room, peer)))
-                } else {
+                    log::info!("[EndpointInternal] join_room({room}, {peer}) but in Connecting state => wait");
                     None
+                } else {
+                    log::info!("[EndpointInternal] join_room({room}, {peer})");
+                    Some(InternalOutput::Cluster(ClusterEndpointControl::JoinRoom(room, peer)))
                 }
             }
             EndpointReq::LeaveRoom => {
-                self.room.take()?;
+                let (room, peer) = self.room.take()?;
                 if matches!(self.state, TransportState::Connecting) {
-                    Some(InternalOutput::Cluster(ClusterEndpointControl::LeaveRoom))
-                } else {
+                    log::info!("[EndpointInternal] leave_room({room}, {peer}) but in Connecting state => only clear local");
                     None
+                } else {
+                    log::info!("[EndpointInternal] leave_room({room}, {peer})");
+                    Some(InternalOutput::Cluster(ClusterEndpointControl::LeaveRoom))
                 }
             }
             EndpointReq::RemoteTrack(track, control) => todo!(),
@@ -94,9 +96,16 @@ impl EndpointInternal {
     fn on_transport_state_changed<'a>(&mut self, now: Instant, state: TransportState) -> Option<InternalOutput> {
         self.state = state;
         match &self.state {
-            TransportState::Connecting => None,
-            TransportState::ConnectError(_) => None,
+            TransportState::Connecting => {
+                log::info!("[EndpointInternal] connecting");
+                None
+            }
+            TransportState::ConnectError(err) => {
+                log::info!("[EndpointInternal] connect error");
+                Some(InternalOutput::Destroy)
+            }
             TransportState::Connected => {
+                log::info!("[EndpointInternal] connected");
                 for i in 0..self.local_tracks_id.len() {
                     let id = self.local_tracks_id[i];
                     if let Some(out) = self.local_tracks.get_mut(&id).expect("Should have").on_connected(now) {
@@ -114,12 +123,25 @@ impl EndpointInternal {
                         }
                     }
                 }
-                let (room, peer) = self.room.as_ref()?;
-                self.queue.push_back(InternalOutput::Cluster(ClusterEndpointControl::JoinRoom(room.clone(), peer.clone())));
+                if let Some((room, peer)) = self.room.as_ref() {
+                    log::info!("[EndpointInternal] join_room({room}, {peer}) after connected");
+                    self.queue.push_back(InternalOutput::Cluster(ClusterEndpointControl::JoinRoom(room.clone(), peer.clone())));
+                }
                 self.queue.pop_front()
             }
-            TransportState::Reconnecting => None,
-            TransportState::Disconnected(_) => None,
+            TransportState::Reconnecting => {
+                log::info!("[EndpointInternal] reconnecting");
+                None
+            }
+            TransportState::Disconnected(err) => {
+                log::info!("[EndpointInternal] disconnected {:?}", err);
+                if let Some((room, peer)) = &self.room {
+                    log::info!("[EndpointInternal] leave_room({room}, {peer}) after disconnected");
+                    self.queue.push_back(InternalOutput::Cluster(ClusterEndpointControl::LeaveRoom));
+                }
+                self.queue.push_back(InternalOutput::Destroy);
+                self.queue.pop_front()
+            }
         }
     }
 
@@ -128,7 +150,7 @@ impl EndpointInternal {
             self.remote_tracks_id.push(track);
             self.remote_tracks.insert(track, EndpointRemoteTrack::default());
         }
-        let out = self.remote_tracks.get_mut(&track)?.on_event(now, event)?;
+        let out = self.remote_tracks.get_mut(&track)?.on_transport_event(now, event)?;
         self.on_remote_track_output(now, track, out)
     }
 
@@ -137,7 +159,7 @@ impl EndpointInternal {
             self.local_tracks_id.push(track);
             self.local_tracks.insert(track, EndpointLocalTrack::default());
         }
-        let out = self.local_tracks.get_mut(&track)?.on_event(now, event)?;
+        let out = self.local_tracks.get_mut(&track)?.on_transport_event(now, event)?;
         self.on_local_track_output(now, track, out)
     }
 
@@ -160,25 +182,25 @@ impl EndpointInternal {
     }
 
     fn on_cluster_remote_track<'a>(&mut self, now: Instant, id: RemoteTrackId, event: ClusterRemoteTrackEvent) -> Option<InternalOutput> {
-        match event {
-            _ => todo!(),
-        }
+        None
     }
 
     fn on_cluster_local_track<'a>(&mut self, now: Instant, id: LocalTrackId, event: ClusterLocalTrackEvent) -> Option<InternalOutput> {
-        match event {
-            _ => todo!(),
-        }
+        None
     }
 }
 
 /// This block for internal local and remote track
 impl EndpointInternal {
     fn on_remote_track_output<'a>(&mut self, now: Instant, id: RemoteTrackId, out: remote_track::Output) -> Option<InternalOutput> {
-        todo!()
+        match out {
+            remote_track::Output::Cluster(control) => Some(InternalOutput::Cluster(ClusterEndpointControl::RemoteTrack(id, control))),
+        }
     }
 
     fn on_local_track_output<'a>(&mut self, now: Instant, id: LocalTrackId, out: local_track::Output) -> Option<InternalOutput> {
-        todo!()
+        match out {
+            local_track::Output::Cluster(control) => Some(InternalOutput::Cluster(ClusterEndpointControl::LocalTrack(id, control))),
+        }
     }
 }

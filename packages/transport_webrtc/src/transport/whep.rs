@@ -4,10 +4,10 @@ use std::{
 };
 
 use media_server_core::{
-    endpoint::{EndpointEvent, EndpointLocalTrackEvent},
+    endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointReq},
     transport::{LocalTrackEvent, LocalTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
-use media_server_protocol::endpoint::{PeerId, TrackMeta, TrackName};
+use media_server_protocol::endpoint::{PeerId, RoomId, TrackMeta, TrackName};
 use str0m::{
     media::{Direction, MediaAdded, MediaKind, Mid},
     Event as Str0mEvent, IceConnectionState,
@@ -42,6 +42,8 @@ struct SubscribeStreams {
 }
 
 pub struct TransportWebrtcWhep {
+    room: RoomId,
+    peer: PeerId,
     state: State,
     audio_mid: Option<Mid>,
     video_mid: Option<Mid>,
@@ -50,8 +52,10 @@ pub struct TransportWebrtcWhep {
 }
 
 impl TransportWebrtcWhep {
-    pub fn new() -> Self {
+    pub fn new(room: RoomId, peer: PeerId) -> Self {
         Self {
+            room,
+            peer,
             state: State::New,
             audio_mid: None,
             video_mid: None,
@@ -113,6 +117,10 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             Str0mEvent::Connected => {
                 log::info!("[TransportWebrtcWhep] connected");
                 self.state = State::Connected;
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    0.into(),
+                    EndpointReq::JoinRoom(self.room.clone(), self.peer.clone()),
+                )));
                 return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
             }
             Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
@@ -132,7 +140,6 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
     }
 
     fn close<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
-        self.queue.push_back(InternalOutput::Destroy);
         log::info!("[TransportWebrtcWhep] switched to disconnected with close action");
         self.state = State::Disconnected(None);
         Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
@@ -151,20 +158,12 @@ impl TransportWebrtcWhep {
             IceConnectionState::New => None,
             IceConnectionState::Checking => None,
             IceConnectionState::Connected | IceConnectionState::Completed => match &self.state {
-                State::Connecting { at } => {
-                    log::info!("[TransportWebrtcWhep] switched to connected after {:?}", now - *at);
-                    self.state = State::Connected;
-                    Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
-                }
                 State::Reconnecting { at } => {
                     log::info!("[TransportWebrtcWhep] switched to reconnected after {:?}", now - *at);
                     self.state = State::Connected;
                     Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
                 }
-                _ => {
-                    log::warn!("[TransportWebrtcWhep] wrong internal state {:?}", self.state);
-                    None
-                }
+                _ => None,
             },
             IceConnectionState::Disconnected => {
                 if matches!(self.state, State::Connected) {

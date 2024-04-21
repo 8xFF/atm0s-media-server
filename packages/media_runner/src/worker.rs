@@ -7,6 +7,7 @@ use media_server_protocol::transport::{
     whip::{self, WhipConnectRes, WhipDeleteRes, WhipRemoteIceRes},
     RpcReq, RpcRes,
 };
+use rand::random;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     TaskSwitcher,
@@ -63,7 +64,7 @@ impl TryFrom<usize> for TaskType {
     }
 }
 
-#[derive(convert_enum::From)]
+#[derive(convert_enum::From, Debug, Clone, Hash, PartialEq, Eq)]
 enum MediaClusterOwner {
     Webrtc(WebrtcOwner),
 }
@@ -207,7 +208,7 @@ impl MediaServerWorker {
             SdnWorkerOutput::Ext(out) => Output::ExtSdn(out),
             SdnWorkerOutput::ExtWorker(out) => match out {
                 SdnExtOut::FeaturesEvent(e) => {
-                    if let Some(out) = self.media_cluster.on_input(now, cluster::Input::Sdn(e)) {
+                    if let Some(out) = self.media_cluster.on_sdn_event(now, e) {
                         self.output_cluster(now, out)
                     } else {
                         Output::Continue
@@ -259,7 +260,7 @@ impl MediaServerWorker {
         match out {
             transport_webrtc::GroupOutput::Net(out) => Output::Net(Owner::MediaWebrtc, out),
             transport_webrtc::GroupOutput::Cluster(owner, control) => {
-                if let Some(out) = self.media_cluster.on_input(now, cluster::Input::Endpoint(owner.into(), control)) {
+                if let Some(out) = self.media_cluster.on_endpoint_control(now, owner.into(), control) {
                     self.output_cluster(now, out)
                 } else {
                     Output::Continue
@@ -284,7 +285,10 @@ impl MediaServerWorker {
         log::info!("[MediaServerWorker] incoming rpc req {req_id}");
         match req {
             RpcReq::Whip(req) => match req {
-                whip::RpcReq::Connect(req) => match self.media_webrtc.spawn(transport_webrtc::Variant::Whip, &req.sdp) {
+                whip::RpcReq::Connect(req) => match self
+                    .media_webrtc
+                    .spawn(transport_webrtc::VariantParams::Whip(req.token.into(), "publisher".to_string().into()), &req.sdp)
+                {
                     Ok((sdp, conn_id)) => Some(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
                     Err(e) => Some(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
                 },
@@ -304,10 +308,13 @@ impl MediaServerWorker {
                 }
             },
             RpcReq::Whep(req) => match req {
-                whep::RpcReq::Connect(req) => match self.media_webrtc.spawn(transport_webrtc::Variant::Whep, &req.sdp) {
-                    Ok((sdp, conn_id)) => Some(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp }))))),
-                    Err(e) => Some(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Err(e))))),
-                },
+                whep::RpcReq::Connect(req) => {
+                    let peer_id = format!("whep-{}", random::<u64>());
+                    match self.media_webrtc.spawn(transport_webrtc::VariantParams::Whep(req.token.into(), peer_id.into()), &req.sdp) {
+                        Ok((sdp, conn_id)) => Some(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp }))))),
+                        Err(e) => Some(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Err(e))))),
+                    }
+                }
                 whep::RpcReq::RemoteIce(req) => {
                     log::info!("on rpc request {req_id}, whep::RpcReq::RemoteIce");
                     let out = self.media_webrtc.on_event(

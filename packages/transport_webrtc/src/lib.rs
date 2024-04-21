@@ -3,7 +3,7 @@ mod transport;
 mod utils;
 mod worker;
 
-pub use transport::{ExtIn, ExtOut, Variant};
+pub use transport::{ExtIn, ExtOut, Variant, VariantParams};
 pub use worker::{GroupInput, GroupOutput, MediaWorkerWebrtc, WebrtcOwner};
 
 #[derive(num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]

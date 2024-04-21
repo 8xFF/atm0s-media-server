@@ -4,9 +4,10 @@ use std::{
 };
 
 use media_server_core::{
-    endpoint::EndpointEvent,
+    endpoint::{EndpointEvent, EndpointReq},
     transport::{RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
+use media_server_protocol::endpoint::{PeerId, RoomId};
 use str0m::{
     media::{Direction, KeyframeRequestKind, MediaAdded, MediaKind, Mid},
     Event as Str0mEvent, IceConnectionState,
@@ -22,6 +23,7 @@ const AUDIO_NAME: &str = "audio_main";
 const VIDEO_TRACK: RemoteTrackId = RemoteTrackId(1);
 const VIDEO_NAME: &str = "video_main";
 
+#[derive(Debug)]
 enum State {
     New,
     Connecting { at: Instant },
@@ -31,11 +33,14 @@ enum State {
     Disconnected(Option<TransportWebrtcError>),
 }
 
+#[derive(Debug)]
 enum TransportWebrtcError {
     Timeout,
 }
 
 pub struct TransportWebrtcWhip {
+    room: RoomId,
+    peer: PeerId,
     state: State,
     audio_mid: Option<Mid>,
     video_mid: Option<Mid>,
@@ -43,8 +48,10 @@ pub struct TransportWebrtcWhip {
 }
 
 impl TransportWebrtcWhip {
-    pub fn new() -> Self {
+    pub fn new(room: RoomId, peer: PeerId) -> Self {
         Self {
+            room,
+            peer,
             state: State::New,
             audio_mid: None,
             video_mid: None,
@@ -62,7 +69,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             }
             State::Connecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
-                    log::info!("Connect timed out after {:?}", now - *at);
+                    log::info!("[TransportWebrtcWhip] connect timed out after {:?} => switched to ConnectError", now - *at);
                     self.state = State::ConnectError(TransportWebrtcError::Timeout);
                     return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::ConnectError(
                         TransportError::Timeout,
@@ -71,7 +78,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             }
             State::Reconnecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
-                    log::info!("Reconnecting timed out after {:?}", now - *at);
+                    log::info!("[TransportWebrtcWhip] reconnect timed out after {:?} => switched to Disconnected", now - *at);
                     self.state = State::Disconnected(Some(TransportWebrtcError::Timeout));
                     return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
                         TransportError::Timeout,
@@ -111,6 +118,11 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
         match event {
             Str0mEvent::Connected => {
                 self.state = State::Connected;
+                log::info!("[TransportWebrtcWhip] connected");
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    0.into(),
+                    EndpointReq::JoinRoom(self.room.clone(), self.peer.clone()),
+                )));
                 return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
             }
             Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
@@ -132,8 +144,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
     }
 
     fn close<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
-        self.queue.push_back(InternalOutput::Destroy);
-        log::info!("[TransportWebrtcWhep] switched to disconnected with close action");
+        log::info!("[TransportWebrtcWhip] switched to disconnected with close action");
         self.state = State::Disconnected(None);
         Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
     }
@@ -145,20 +156,23 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
 
 impl TransportWebrtcWhip {
     fn on_str0m_state<'a>(&mut self, now: Instant, state: IceConnectionState) -> Option<InternalOutput<'a>> {
+        log::info!("[TransportWebrtcWhip] str0m state changed {:?}", state);
+
         match state {
             IceConnectionState::New => None,
             IceConnectionState::Checking => None,
-            IceConnectionState::Connected | IceConnectionState::Completed => {
-                if matches!(self.state, State::Reconnecting { at: _ }) {
+            IceConnectionState::Connected | IceConnectionState::Completed => match &self.state {
+                State::Reconnecting { at } => {
+                    log::info!("[TransportWebrtcWhip] switched to reconnected after {:?}", now - *at);
                     self.state = State::Connected;
                     Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
-                } else {
-                    None
                 }
-            }
+                _ => None,
+            },
             IceConnectionState::Disconnected => {
                 if matches!(self.state, State::Connected) {
                     self.state = State::Reconnecting { at: now };
+                    log::info!("[TransportWebrtcWhip] switched to reconnecting");
                     return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Reconnecting))));
                 } else {
                     return None;
