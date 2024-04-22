@@ -1,6 +1,8 @@
 use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::endpoint::{PeerId, RoomId};
+use media_server_utils::Small2dMap;
+use sans_io_runtime::{TaskGroup, TaskSwitcher};
 
 use crate::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
@@ -14,6 +16,13 @@ use super::{middleware::EndpointMiddleware, EndpointEvent, EndpointReq, Endpoint
 mod local_track;
 mod remote_track;
 
+#[derive(num_enum::TryFromPrimitive)]
+#[repr(usize)]
+enum TaskType {
+    LocalTracks,
+    RemoteTracks,
+}
+
 pub enum InternalOutput {
     Event(EndpointEvent),
     RpcRes(EndpointReqId, EndpointRes),
@@ -25,12 +34,13 @@ pub struct EndpointInternal {
     state: TransportState,
     wait_join: Option<(RoomId, PeerId)>,
     joined: Option<(ClusterRoomHash, RoomId, PeerId)>,
-    local_tracks_id: Vec<LocalTrackId>,
-    remote_tracks_id: Vec<RemoteTrackId>,
-    local_tracks: smallmap::Map<LocalTrackId, EndpointLocalTrack>,
-    remote_tracks: smallmap::Map<RemoteTrackId, EndpointRemoteTrack>,
+    local_tracks_id: Small2dMap<LocalTrackId, usize>,
+    remote_tracks_id: Small2dMap<RemoteTrackId, usize>,
+    local_tracks: TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>,
+    remote_tracks: TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>,
     middlewares: Vec<Box<dyn EndpointMiddleware>>,
     queue: VecDeque<InternalOutput>,
+    switcher: TaskSwitcher,
 }
 
 impl EndpointInternal {
@@ -45,11 +55,31 @@ impl EndpointInternal {
             remote_tracks: Default::default(),
             middlewares: Default::default(),
             queue: Default::default(),
+            switcher: TaskSwitcher::new(2),
         }
     }
 
     pub fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput> {
-        None
+        loop {
+            match self.switcher.looper_current(now)?.try_into().ok()? {
+                TaskType::LocalTracks => {
+                    if let Some((index, out)) = self.switcher.looper_process(self.local_tracks.on_tick(now)) {
+                        let track_id = self.local_tracks_id.get2(&index).expect("Should have local_track_id");
+                        if let Some(out) = self.convert_local_track_output(now, *track_id, out) {
+                            return Some(out);
+                        }
+                    }
+                }
+                TaskType::RemoteTracks => {
+                    if let Some((index, out)) = self.switcher.looper_process(self.remote_tracks.on_tick(now)) {
+                        let track_id = self.remote_tracks_id.get2(&index).expect("Should have remote_track_id");
+                        if let Some(out) = self.convert_remote_track_output(now, *track_id, out) {
+                            return Some(out);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn pop_output<'a>(&mut self, now: Instant) -> Option<InternalOutput> {
@@ -57,27 +87,26 @@ impl EndpointInternal {
             return Some(out);
         }
 
-        //TODO optimize performance
-        for i in 0..self.local_tracks_id.len() {
-            let track_id = self.local_tracks_id[i];
-            if let Some(out) = self.local_tracks[&track_id].pop_output() {
-                if let Some(out) = self.convert_local_track_output(now, track_id, out) {
-                    return Some(out);
+        loop {
+            match self.switcher.queue_current()?.try_into().ok()? {
+                TaskType::LocalTracks => {
+                    if let Some((index, out)) = self.switcher.queue_process(self.local_tracks.pop_output(now)) {
+                        let track_id = self.local_tracks_id.get2(&index).expect("Should have local_track_id");
+                        if let Some(out) = self.convert_local_track_output(now, *track_id, out) {
+                            return Some(out);
+                        }
+                    }
+                }
+                TaskType::RemoteTracks => {
+                    if let Some((index, out)) = self.switcher.queue_process(self.remote_tracks.pop_output(now)) {
+                        let track_id = self.remote_tracks_id.get2(&index).expect("Should have remote_track_id");
+                        if let Some(out) = self.convert_remote_track_output(now, *track_id, out) {
+                            return Some(out);
+                        }
+                    }
                 }
             }
         }
-
-        //TODO optimize performance
-        for i in 0..self.remote_tracks_id.len() {
-            let track_id = self.remote_tracks_id[i];
-            if let Some(out) = self.remote_tracks[&track_id].pop_output() {
-                if let Some(out) = self.convert_remote_track_output(now, track_id, out) {
-                    return Some(out);
-                }
-            }
-        }
-
-        None
     }
 }
 
@@ -112,13 +141,13 @@ impl EndpointInternal {
                 }
             }
             EndpointReq::RemoteTrack(track_id, req) => {
-                let track = self.remote_tracks.get_mut(&track_id)?;
-                let out = track.on_rpc_req(now, req_id, req)?;
+                let index = self.remote_tracks_id.get1(&track_id)?;
+                let out = self.remote_tracks.on_event(now, *index, remote_track::Input::RpcReq(req_id, req))?;
                 self.convert_remote_track_output(now, track_id, out)
             }
             EndpointReq::LocalTrack(track_id, req) => {
-                let track = self.local_tracks.get_mut(&track_id)?;
-                let out = track.on_rpc_req(now, req_id, req)?;
+                let index = self.local_tracks_id.get1(&track_id)?;
+                let out = self.local_tracks.on_event(now, *index, local_track::Input::RpcReq(req_id, req))?;
                 self.convert_local_track_output(now, track_id, out)
             }
         }
@@ -132,7 +161,7 @@ impl EndpointInternal {
                 None
             }
             TransportState::ConnectError(err) => {
-                log::info!("[EndpointInternal] connect error");
+                log::info!("[EndpointInternal] connect error {:?}", err);
                 Some(InternalOutput::Destroy)
             }
             TransportState::Connected => {
@@ -147,9 +176,8 @@ impl EndpointInternal {
             }
             TransportState::Disconnected(err) => {
                 log::info!("[EndpointInternal] disconnected {:?}", err);
-                if let Some((hash, room, peer)) = &self.joined {
-                    log::info!("[EndpointInternal] leave_room({room}, {peer}) after disconnected");
-                    self.queue.push_back(InternalOutput::Cluster(*hash, ClusterEndpointControl::Leave));
+                if let Some(out) = self.leave_room(now) {
+                    self.queue.push_back(out);
                 }
                 self.queue.push_back(InternalOutput::Destroy);
                 self.queue.pop_front()
@@ -160,22 +188,24 @@ impl EndpointInternal {
     fn on_transport_remote_track<'a>(&mut self, now: Instant, track: RemoteTrackId, event: RemoteTrackEvent) -> Option<InternalOutput> {
         if let Some(meta) = event.need_create() {
             log::info!("[EndpointInternal] create remote track {:?}", track);
-            self.remote_tracks_id.push(track);
             let room = self.joined.as_ref().map(|j| j.0.clone());
-            self.remote_tracks.insert(track, EndpointRemoteTrack::new(room, meta));
+            let index = self.remote_tracks.add_task(EndpointRemoteTrack::new(room, meta));
+            self.remote_tracks_id.insert(track, index);
         }
-        let out = self.remote_tracks.get_mut(&track)?.on_transport_event(now, event)?;
+        let index = self.remote_tracks_id.get1(&track)?;
+        let out = self.remote_tracks.on_event(now, *index, remote_track::Input::Event(event))?;
         self.convert_remote_track_output(now, track, out)
     }
 
     fn on_transport_local_track<'a>(&mut self, now: Instant, track: LocalTrackId, event: LocalTrackEvent) -> Option<InternalOutput> {
         if event.need_create() {
             log::info!("[EndpointInternal] create local track {:?}", track);
-            self.local_tracks_id.push(track);
             let room = self.joined.as_ref().map(|j| j.0.clone());
-            self.local_tracks.insert(track, EndpointLocalTrack::new(room));
+            let index = self.local_tracks.add_task(EndpointLocalTrack::new(room));
+            self.local_tracks_id.insert(track, index);
         }
-        let out = self.local_tracks.get_mut(&track)?.on_transport_event(now, event)?;
+        let index = self.local_tracks_id.get1(&track)?;
+        let out = self.local_tracks.on_event(now, *index, local_track::Input::Event(event))?;
         self.convert_local_track_output(now, track, out)
     }
 
@@ -194,20 +224,16 @@ impl EndpointInternal {
         self.joined = Some(((&room).into(), room.clone(), peer.clone()));
         self.queue.push_back(InternalOutput::Cluster((&room).into(), ClusterEndpointControl::Join(peer)));
 
-        for i in 0..self.local_tracks_id.len() {
-            let track_id = self.local_tracks_id[i];
-            let track = &mut self.local_tracks[&track_id];
-            if let Some(out) = track.on_join_room(now, room_hash) {
+        for (track_id, index) in self.local_tracks_id.pairs() {
+            if let Some(out) = self.local_tracks.on_event(now, index, local_track::Input::JoinRoom(room_hash)) {
                 if let Some(out) = self.convert_local_track_output(now, track_id, out) {
                     self.queue.push_back(out);
                 }
             }
         }
 
-        for i in 0..self.remote_tracks_id.len() {
-            let track_id = self.remote_tracks_id[i];
-            let track = &mut self.remote_tracks[&track_id];
-            if let Some(out) = track.on_join_room(now, room_hash) {
+        for (track_id, index) in self.remote_tracks_id.pairs() {
+            if let Some(out) = self.remote_tracks.on_event(now, index, remote_track::Input::JoinRoom(room_hash)) {
                 if let Some(out) = self.convert_remote_track_output(now, track_id, out) {
                     self.queue.push_back(out);
                 }
@@ -219,28 +245,24 @@ impl EndpointInternal {
 
     fn leave_room<'a>(&mut self, now: Instant) -> Option<InternalOutput> {
         let (hash, room, peer) = self.joined.take()?;
+        log::info!("[EndpointInternal] leave_room({room}, {peer})");
 
-        for i in 0..self.local_tracks_id.len() {
-            let track_id = self.local_tracks_id[i];
-            let track = &mut self.local_tracks[&track_id];
-            if let Some(out) = track.on_leave_room(now) {
+        for (track_id, index) in self.local_tracks_id.pairs() {
+            if let Some(out) = self.local_tracks.on_event(now, index, local_track::Input::LeaveRoom) {
                 if let Some(out) = self.convert_local_track_output(now, track_id, out) {
                     self.queue.push_back(out);
                 }
             }
         }
 
-        for i in 0..self.remote_tracks_id.len() {
-            let track_id = self.remote_tracks_id[i];
-            let track = &mut self.remote_tracks[&track_id];
-            if let Some(out) = track.on_leave_room(now) {
+        for (track_id, index) in self.remote_tracks_id.pairs() {
+            if let Some(out) = self.remote_tracks.on_event(now, index, remote_track::Input::LeaveRoom) {
                 if let Some(out) = self.convert_remote_track_output(now, track_id, out) {
                     self.queue.push_back(out);
                 }
             }
         }
 
-        log::info!("[EndpointInternal] leave_room({room}, {peer})");
         Some(InternalOutput::Cluster(hash, ClusterEndpointControl::Leave))
     }
 }
@@ -257,14 +279,14 @@ impl EndpointInternal {
     }
 
     fn on_cluster_remote_track<'a>(&mut self, now: Instant, id: RemoteTrackId, event: ClusterRemoteTrackEvent) -> Option<InternalOutput> {
-        let track = self.remote_tracks.get_mut(&id)?;
-        let out = track.on_cluster_event(now, event)?;
+        let index = self.remote_tracks_id.get1(&id)?;
+        let out = self.remote_tracks.on_event(now, *index, remote_track::Input::Cluster(event))?;
         self.convert_remote_track_output(now, id, out)
     }
 
     fn on_cluster_local_track<'a>(&mut self, now: Instant, id: LocalTrackId, event: ClusterLocalTrackEvent) -> Option<InternalOutput> {
-        let track = self.local_tracks.get_mut(&id)?;
-        let out = track.on_cluster_event(now, event)?;
+        let index = self.local_tracks_id.get1(&id)?;
+        let out = self.local_tracks.on_event(now, *index, local_track::Input::Cluster(event))?;
         self.convert_local_track_output(now, id, out)
     }
 }
@@ -272,6 +294,7 @@ impl EndpointInternal {
 /// This block for internal local and remote track
 impl EndpointInternal {
     fn convert_remote_track_output<'a>(&mut self, now: Instant, id: RemoteTrackId, out: remote_track::Output) -> Option<InternalOutput> {
+        self.switcher.queue_flag_task(TaskType::RemoteTracks as usize);
         match out {
             remote_track::Output::Event(event) => Some(InternalOutput::Event(EndpointEvent::RemoteMediaTrack(id, event))),
             remote_track::Output::Cluster(room, control) => Some(InternalOutput::Cluster(room, ClusterEndpointControl::RemoteTrack(id, control))),
@@ -280,6 +303,7 @@ impl EndpointInternal {
     }
 
     fn convert_local_track_output<'a>(&mut self, now: Instant, id: LocalTrackId, out: local_track::Output) -> Option<InternalOutput> {
+        self.switcher.queue_flag_task(TaskType::LocalTracks as usize);
         match out {
             local_track::Output::Event(event) => Some(InternalOutput::Event(EndpointEvent::LocalMediaTrack(id, event))),
             local_track::Output::Cluster(room, control) => Some(InternalOutput::Cluster(room, ClusterEndpointControl::LocalTrack(id, control))),

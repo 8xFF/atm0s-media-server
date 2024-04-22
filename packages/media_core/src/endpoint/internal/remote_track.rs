@@ -1,12 +1,21 @@
 use std::time::Instant;
 
 use media_server_protocol::endpoint::{TrackMeta, TrackName};
+use sans_io_runtime::Task;
 
 use crate::{
     cluster::{ClusterRemoteTrackControl, ClusterRemoteTrackEvent, ClusterRoomHash},
     endpoint::{EndpointRemoteTrackEvent, EndpointRemoteTrackReq, EndpointRemoteTrackRes, EndpointReqId},
     transport::RemoteTrackEvent,
 };
+
+pub enum Input {
+    JoinRoom(ClusterRoomHash),
+    LeaveRoom,
+    Cluster(ClusterRemoteTrackEvent),
+    Event(RemoteTrackEvent),
+    RpcReq(EndpointReqId, EndpointRemoteTrackReq),
+}
 
 pub enum Output {
     Event(EndpointRemoteTrackEvent),
@@ -25,7 +34,7 @@ impl EndpointRemoteTrack {
         Self { meta, room, name: None }
     }
 
-    pub fn on_join_room(&mut self, now: Instant, room: ClusterRoomHash) -> Option<Output> {
+    fn on_join_room(&mut self, now: Instant, room: ClusterRoomHash) -> Option<Output> {
         assert_eq!(self.room, None);
         self.room = Some(room);
         log::info!("[EndpointRemoteTrack] join room {room}");
@@ -33,7 +42,7 @@ impl EndpointRemoteTrack {
         log::info!("[EndpointRemoteTrack] started as name {name} after join room");
         Some(Output::Cluster(room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())))
     }
-    pub fn on_leave_room(&mut self, now: Instant) -> Option<Output> {
+    fn on_leave_room(&mut self, now: Instant) -> Option<Output> {
         let room = self.room.take().expect("Must have room here");
         log::info!("[EndpointRemoteTrack] leave room {room}");
         let name = self.name.as_ref()?;
@@ -41,13 +50,13 @@ impl EndpointRemoteTrack {
         Some(Output::Cluster(room, ClusterRemoteTrackControl::Ended))
     }
 
-    pub fn on_cluster_event(&mut self, now: Instant, event: ClusterRemoteTrackEvent) -> Option<Output> {
+    fn on_cluster_event(&mut self, now: Instant, event: ClusterRemoteTrackEvent) -> Option<Output> {
         match event {
             ClusterRemoteTrackEvent::RequestKeyFrame => Some(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
         }
     }
 
-    pub fn on_transport_event(&mut self, now: Instant, event: RemoteTrackEvent) -> Option<Output> {
+    fn on_transport_event(&mut self, now: Instant, event: RemoteTrackEvent) -> Option<Output> {
         match event {
             RemoteTrackEvent::Started { name, meta: _ } => {
                 self.name = Some(name.clone());
@@ -70,11 +79,31 @@ impl EndpointRemoteTrack {
         }
     }
 
-    pub fn on_rpc_req(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointRemoteTrackReq) -> Option<Output> {
+    fn on_rpc_req(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointRemoteTrackReq) -> Option<Output> {
+        None
+    }
+}
+
+impl Task<Input, Output> for EndpointRemoteTrack {
+    fn on_tick(&mut self, now: Instant) -> Option<Output> {
         None
     }
 
-    pub fn pop_output(&mut self) -> Option<Output> {
+    fn on_event(&mut self, now: Instant, input: Input) -> Option<Output> {
+        match input {
+            Input::JoinRoom(room) => self.on_join_room(now, room),
+            Input::LeaveRoom => self.on_leave_room(now),
+            Input::Cluster(event) => self.on_cluster_event(now, event),
+            Input::Event(event) => self.on_transport_event(now, event),
+            Input::RpcReq(req_id, req) => self.on_rpc_req(now, req_id, req),
+        }
+    }
+
+    fn pop_output(&mut self, now: Instant) -> Option<Output> {
+        None
+    }
+
+    fn shutdown(&mut self, now: Instant) -> Option<Output> {
         None
     }
 }

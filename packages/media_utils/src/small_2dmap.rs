@@ -20,6 +20,18 @@ impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> Small2dMap<T1, T2> {
         self.reverse.insert(value, key);
     }
 
+    pub fn keys1(&self) -> Vec<T1> {
+        self.data.keys().cloned().collect::<Vec<_>>()
+    }
+
+    pub fn pairs(&self) -> Vec<(T1, T2)> {
+        self.data.iter().cloned().collect::<Vec<_>>()
+    }
+
+    pub fn keys2(&self) -> Vec<T2> {
+        self.reverse.keys().cloned().collect::<Vec<_>>()
+    }
+
     pub fn get1(&self, key: &T1) -> Option<&T2> {
         self.data.get(key)
     }

@@ -99,7 +99,7 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Owner> {
                 dht_kv::Event::MapGetRes(_, _) => None,
             },
             FeaturesEvent::PubSub(pubsub::Event(channel, event)) => match event {
-                pubsub::ChannelEvent::RouteChanged(_) => None,
+                pubsub::ChannelEvent::RouteChanged(_) => self.on_channel_source_changed(channel),
                 pubsub::ChannelEvent::SourceData(_, data) => self.on_channel_pkt(channel, data),
                 pubsub::ChannelEvent::FeedbackData(fb) => self.on_channel_feedback(channel, fb),
             },
@@ -126,7 +126,7 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Owner> {
                 }
             }
             ClusterEndpointControl::Leave => {
-                let peer = self.peers.remove(&owner)?;
+                let peer = self.peers.remove(&owner).expect("Should have owner");
                 log::info!("[ClusterRoom {}] leave peer ({peer})", self.room);
                 if self.peers.is_empty() {
                     log::info!("[ClusterRoom {}] last peer leave => unsubscribe room map", self.room);
@@ -250,6 +250,16 @@ impl<Owner: Debug + Clone + Hash + Eq> ClusterRoom<Owner> {
             log::info!("[ClusterRoom {}] cluster: peer ({}) stopped track {}) => fire event to {:?}", self.room, peer, name, peers);
             Some(Output::Endpoint(peers, ClusterEndpointEvent::TrackStoped(peer, name)))
         }
+    }
+
+    fn on_channel_source_changed(&mut self, channel: ChannelId) -> Option<Output<Owner>> {
+        let subscribers = self.subscribers.get(&channel)?;
+        log::info!("[ClusterRoom {}] cluster: channel {channel} source changed => fire event to {:?}", self.room, subscribers);
+        for (owner, track) in subscribers {
+            self.queue
+                .push_back(Output::Endpoint(vec![owner.clone()], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::SourceChanged)))
+        }
+        self.queue.pop_front()
     }
 
     fn on_channel_pkt(&mut self, channel: ChannelId, data: Vec<u8>) -> Option<Output<Owner>> {
