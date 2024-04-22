@@ -4,7 +4,7 @@ use std::{
 };
 
 use media_server_core::{
-    endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointReq},
+    endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointReq},
     transport::{LocalTrackEvent, LocalTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
 use media_server_protocol::endpoint::{PeerId, RoomId, TrackMeta, TrackName};
@@ -48,6 +48,8 @@ pub struct TransportWebrtcWhep {
     audio_mid: Option<Mid>,
     video_mid: Option<Mid>,
     subscribed: SubscribeStreams,
+    audio_subscribe_waits: VecDeque<(PeerId, TrackName, TrackMeta)>,
+    video_subscribe_waits: VecDeque<(PeerId, TrackName, TrackMeta)>,
     queue: VecDeque<InternalOutput<'static>>,
 }
 
@@ -61,6 +63,8 @@ impl TransportWebrtcWhep {
             video_mid: None,
             subscribed: Default::default(),
             queue: VecDeque::new(),
+            audio_subscribe_waits: VecDeque::new(),
+            video_subscribe_waits: VecDeque::new(),
         }
     }
 }
@@ -97,9 +101,19 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
 
     fn on_endpoint_event<'a>(&mut self, now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
-            EndpointEvent::PeerJoined(_) => None,
-            EndpointEvent::PeerLeaved(_) => None,
-            EndpointEvent::PeerTrackStarted(peer, track, meta) => self.try_subscribe(peer, track, meta),
+            EndpointEvent::PeerTrackStarted(peer, track, meta) => {
+                if self.audio_mid.is_none() && meta.kind.is_audio() {
+                    log::info!("[TransportWebrtcWhep] waiting local audio track => push Subscribe candidate to waits");
+                    self.audio_subscribe_waits.push_back((peer, track, meta));
+                    return None;
+                }
+                if self.video_mid.is_none() && meta.kind.is_video() {
+                    log::info!("[TransportWebrtcWhep] waiting local video track => push Subscribe candidate to waits");
+                    self.video_subscribe_waits.push_back((peer, track, meta));
+                    return None;
+                }
+                self.try_subscribe(peer, track, meta)
+            }
             EndpointEvent::PeerTrackStopped(peer, track) => self.try_unsubscribe(peer, track),
             EndpointEvent::LocalMediaTrack(track, event) => match event {
                 EndpointLocalTrackEvent::Media(pkt) => Some(InternalOutput::Str0mSendMedia(self.video_mid?, pkt)),
@@ -127,6 +141,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             Str0mEvent::MediaAdded(media) => self.on_str0m_media_added(now, media),
             Str0mEvent::KeyframeRequest(req) => {
                 if self.video_mid == Some(req.mid) {
+                    log::info!("[TransportWebrtcWhep] request key-frame");
                     Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
                         VIDEO_TRACK,
                         LocalTrackEvent::RequestKeyFrame,
@@ -178,6 +193,7 @@ impl TransportWebrtcWhep {
     }
 
     fn on_str0m_media_added<'a>(&mut self, now: Instant, media: MediaAdded) -> Option<InternalOutput<'a>> {
+        log::info!("[TransportWebrtcWhep] str0m media added {:?}", media);
         if matches!(media.direction, Direction::RecvOnly | Direction::Inactive) {
             return None;
         }
@@ -186,6 +202,11 @@ impl TransportWebrtcWhep {
                 return None;
             }
             self.audio_mid = Some(media.mid);
+            while let Some((peer, track, meta)) = self.audio_subscribe_waits.pop_front() {
+                if let Some(out) = self.try_subscribe(peer, track, meta) {
+                    self.queue.push_back(out);
+                }
+            }
             Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
                 AUDIO_TRACK,
                 LocalTrackEvent::Started,
@@ -195,6 +216,11 @@ impl TransportWebrtcWhep {
                 return None;
             }
             self.video_mid = Some(media.mid);
+            while let Some((peer, track, meta)) = self.video_subscribe_waits.pop_front() {
+                if let Some(out) = self.try_subscribe(peer, track, meta) {
+                    self.queue.push_back(out);
+                }
+            }
             Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
                 VIDEO_TRACK,
                 LocalTrackEvent::Started,
@@ -205,43 +231,48 @@ impl TransportWebrtcWhep {
 
 impl TransportWebrtcWhep {
     fn try_subscribe<'a>(&mut self, peer: PeerId, track: TrackName, meta: TrackMeta) -> Option<InternalOutput<'a>> {
+        log::info!("[TransportWebrtcWhep] try subscribe {peer} {track}");
         if self.subscribed.peer.is_none() || self.subscribed.peer.eq(&Some(peer.clone())) {
             if self.subscribed.audio.is_none() && meta.kind.is_audio() {
                 self.subscribed.audio = Some(track.clone());
-                return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
-                    AUDIO_TRACK,
-                    LocalTrackEvent::Switch(Some((peer, track))),
-                ))));
+                log::info!("[TransportWebrtcWhep] send subscribe {peer} {track}");
+                return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    0.into(), //TODO generate req_id
+                    EndpointReq::LocalTrack(AUDIO_TRACK, EndpointLocalTrackReq::Switch(Some((peer, track)))),
+                )));
             }
 
-            if self.subscribed.video.is_none() && meta.kind.is_audio() {
+            if self.subscribed.video.is_none() && meta.kind.is_video() {
                 self.subscribed.video = Some(track.clone());
-                return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
-                    VIDEO_TRACK,
-                    LocalTrackEvent::Switch(Some((peer, track))),
-                ))));
+                log::info!("[TransportWebrtcWhep] send subscribe {peer} {track}");
+                return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    0.into(), //TODO generate req_id
+                    EndpointReq::LocalTrack(VIDEO_TRACK, EndpointLocalTrackReq::Switch(Some((peer, track)))),
+                )));
             }
         }
 
         None
     }
 
+    //TODO try to get other tracks if avaiable
     fn try_unsubscribe<'a>(&mut self, peer: PeerId, track: TrackName) -> Option<InternalOutput<'a>> {
+        log::info!("[TransportWebrtcWhep] try unsubscribe {peer} {track}");
         if self.subscribed.peer.eq(&Some(peer.clone())) {
             if self.subscribed.audio.eq(&Some(track.clone())) {
                 self.subscribed.audio = None;
-                return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
-                    AUDIO_TRACK,
-                    LocalTrackEvent::Switch(None),
-                ))));
+                return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    0.into(), //TODO generate req_id
+                    EndpointReq::LocalTrack(AUDIO_TRACK, EndpointLocalTrackReq::Switch(None)),
+                )));
             }
 
             if self.subscribed.video.eq(&Some(track)) {
                 self.subscribed.video = None;
-                return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
-                    VIDEO_TRACK,
-                    LocalTrackEvent::Switch(None),
-                ))));
+                return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    0.into(), //TODO generate req_id
+                    EndpointReq::LocalTrack(VIDEO_TRACK, EndpointLocalTrackReq::Switch(None)),
+                )));
             }
 
             if self.subscribed.audio.is_none() && self.subscribed.video.is_none() {

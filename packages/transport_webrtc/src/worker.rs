@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, net::SocketAddr, time::Instant};
 
 use media_server_core::{
-    cluster::{ClusterEndpointControl, ClusterEndpointEvent},
+    cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterRoomHash},
     endpoint::{Endpoint, EndpointInput, EndpointOutput},
 };
 use media_server_protocol::transport::RpcResult;
@@ -29,9 +29,10 @@ pub enum GroupInput<'a, Ext> {
 
 pub enum GroupOutput<'a, Ext> {
     Net(BackendOutgoing<'a>),
-    Cluster(WebrtcOwner, ClusterEndpointControl),
+    Cluster(WebrtcOwner, ClusterRoomHash, ClusterEndpointControl),
     Ext(WebrtcOwner, Ext),
     Shutdown(WebrtcOwner),
+    Continue,
 }
 
 pub struct MediaWorkerWebrtc {
@@ -64,13 +65,14 @@ impl MediaWorkerWebrtc {
     fn process_output<'a>(&mut self, index: usize, out: EndpointOutput<'a, ExtOut>) -> GroupOutput<'a, ExtOut> {
         match out {
             EndpointOutput::Net(net) => GroupOutput::Net(net),
-            EndpointOutput::Cluster(control) => GroupOutput::Cluster(WebrtcOwner(index), control),
+            EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcOwner(index), room, control),
             EndpointOutput::Destroy => {
                 self.endpoints.remove_task(index);
                 self.shared_port.remove_task(index);
                 GroupOutput::Shutdown(WebrtcOwner(index))
             }
             EndpointOutput::Ext(ext) => GroupOutput::Ext(WebrtcOwner(index), ext),
+            EndpointOutput::Continue => GroupOutput::Continue,
         }
     }
 }

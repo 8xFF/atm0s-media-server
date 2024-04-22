@@ -6,9 +6,9 @@ use atm0s_sdn::{
     ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, SdnExtOut, SdnWorkerBusEvent,
 };
 use media_server_protocol::transport::{RpcReq, RpcRes};
-use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, SdnConfig, SC, SE, TC, TW};
+use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, SdnConfig, UserData, SC, SE, TC, TW};
 use rand::rngs::OsRng;
-use sans_io_runtime::{BusChannelControl, BusControl, WorkerInner, WorkerInnerInput, WorkerInnerOutput};
+use sans_io_runtime::{BusChannelControl, BusControl, BusEvent, WorkerInner, WorkerInnerInput, WorkerInnerOutput};
 
 use crate::NodeConfig;
 
@@ -20,7 +20,7 @@ pub enum ExtIn {
 #[derive(Debug, Clone)]
 pub enum ExtOut {
     Rpc(u64, u16, RpcRes<usize>),
-    Sdn(SdnExtOut<SE>),
+    Sdn(SdnExtOut<UserData, SE>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -28,7 +28,7 @@ pub enum Channel {
     Controller,
     Worker(u16),
 }
-type Event = SdnWorkerBusEvent<SC, SE, TC, TW>;
+type Event = SdnWorkerBusEvent<UserData, SC, SE, TC, TW>;
 pub struct ICfg {
     pub controller: bool,
     pub node: NodeConfig,
@@ -137,9 +137,10 @@ impl MediaRuntimeWorker {
 
     fn convert_input<'a>(input: Input<'a>) -> WorkerInput<'a> {
         match input {
-            Input::Bus(event) => {
-                todo!()
-            }
+            Input::Bus(event) => match event {
+                BusEvent::Broadcast(_from, msg) => WorkerInput::Bus(msg),
+                BusEvent::Channel(_owner, _channel, msg) => WorkerInput::Bus(msg),
+            },
             Input::Ext(ext) => match ext {
                 ExtIn::Rpc(req_id, ext) => WorkerInput::ExtRpc(req_id, ext),
             },

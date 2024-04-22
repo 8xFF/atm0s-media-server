@@ -1,8 +1,9 @@
 use derive_more::{AsRef, From};
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
 use crate::{
-    media::{MediaCodec, MediaKind, MediaScaling},
+    media::{MediaKind, MediaScaling},
     transport::ConnLayer,
 };
 
@@ -101,19 +102,18 @@ impl ConnLayer for usize {
     }
 }
 
-#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash)]
+#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RoomId(pub String);
 
-#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash)]
+#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PeerId(pub String);
 
-#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash)]
+#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TrackName(pub String);
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackMeta {
     pub kind: MediaKind,
-    pub codec: MediaCodec,
     pub scaling: MediaScaling,
 }
 

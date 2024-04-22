@@ -11,7 +11,7 @@ use sans_io_runtime::{
 };
 
 use crate::{
-    cluster::{ClusterEndpointControl, ClusterEndpointEvent},
+    cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterRoomHash},
     transport::{LocalTrackId, RemoteTrackId, Transport, TransportInput, TransportOutput},
 };
 
@@ -71,8 +71,6 @@ pub enum EndpointRemoteTrackEvent {
 }
 
 pub enum EndpointEvent {
-    PeerJoined(PeerId),
-    PeerLeaved(PeerId),
     PeerTrackStarted(PeerId, TrackName, TrackMeta),
     PeerTrackStopped(PeerId, TrackName),
     RemoteMediaTrack(RemoteTrackId, EndpointRemoteTrackEvent),
@@ -88,8 +86,9 @@ pub enum EndpointInput<'a, Ext> {
 
 pub enum EndpointOutput<'a, Ext> {
     Net(BackendOutgoing<'a>),
-    Cluster(ClusterEndpointControl),
+    Cluster(ClusterRoomHash, ClusterEndpointControl),
     Ext(Ext),
+    Continue,
     Destroy,
 }
 
@@ -123,12 +122,12 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
             match s.looper_current(now)?.try_into().ok()? {
                 TaskType::Internal => {
                     if let Some(out) = s.looper_process(self.internal.on_tick(now)) {
-                        return self.process_internal_output(now, out);
+                        return Some(self.process_internal_output(now, out));
                     }
                 }
                 TaskType::Transport => {
                     if let Some(out) = s.looper_process(self.transport.on_tick(now)) {
-                        return self.process_transport_output(now, out);
+                        return Some(self.process_transport_output(now, out));
                     }
                 }
             }
@@ -139,19 +138,19 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
         match input {
             EndpointInput::Net(net) => {
                 let out = self.transport.on_input(now, TransportInput::Net(net))?;
-                self.process_transport_output(now, out)
+                Some(self.process_transport_output(now, out))
             }
             EndpointInput::Ext(ext) => {
                 let out = self.transport.on_input(now, TransportInput::Ext(ext))?;
-                self.process_transport_output(now, out)
+                Some(self.process_transport_output(now, out))
             }
             EndpointInput::Cluster(event) => {
                 let out = self.internal.on_cluster_event(now, event)?;
-                self.process_internal_output(now, out)
+                Some(self.process_internal_output(now, out))
             }
             EndpointInput::Close => {
                 let out = self.transport.on_input(now, TransportInput::Close)?;
-                self.process_transport_output(now, out)
+                Some(self.process_transport_output(now, out))
             }
         }
     }
@@ -162,12 +161,12 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
             match s.queue_current()?.try_into().ok()? {
                 TaskType::Internal => {
                     if let Some(out) = s.queue_process(self.internal.pop_output(now)) {
-                        return self.process_internal_output(now, out);
+                        return Some(self.process_internal_output(now, out));
                     }
                 }
                 TaskType::Transport => {
                     if let Some(out) = s.queue_process(self.transport.pop_event(now)) {
-                        return self.process_transport_output(now, out);
+                        return Some(self.process_transport_output(now, out));
                     }
                 }
             }
@@ -176,40 +175,52 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
 
     pub fn shutdown<'a>(&mut self, now: Instant) -> Option<EndpointOutput<'a, ExtOut>> {
         let out = self.transport.on_input(now, TransportInput::Close)?;
-        self.process_transport_output(now, out)
+        Some(self.process_transport_output(now, out))
     }
 }
 
 impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
-    fn process_transport_output<'a>(&mut self, now: Instant, out: TransportOutput<'a, ExtOut>) -> Option<EndpointOutput<'a, ExtOut>> {
+    fn process_transport_output<'a>(&mut self, now: Instant, out: TransportOutput<'a, ExtOut>) -> EndpointOutput<'a, ExtOut> {
         self.switcher.queue_flag_task(TaskType::Transport.into());
         match out {
             TransportOutput::Event(event) => {
-                let out = self.internal.on_transport_event(now, event)?;
-                self.process_internal_output(now, out)
+                if let Some(out) = self.internal.on_transport_event(now, event) {
+                    self.process_internal_output(now, out)
+                } else {
+                    EndpointOutput::Continue
+                }
             }
-            TransportOutput::Ext(ext) => Some(EndpointOutput::Ext(ext)),
-            TransportOutput::Net(net) => Some(EndpointOutput::Net(net)),
+            TransportOutput::Ext(ext) => EndpointOutput::Ext(ext),
+            TransportOutput::Net(net) => EndpointOutput::Net(net),
             TransportOutput::RpcReq(req_id, req) => {
-                let out = self.internal.on_transport_rpc(now, req_id, req)?;
-                self.process_internal_output(now, out)
+                if let Some(out) = self.internal.on_transport_rpc(now, req_id, req) {
+                    self.process_internal_output(now, out)
+                } else {
+                    EndpointOutput::Continue
+                }
             }
         }
     }
 
-    fn process_internal_output<'a>(&mut self, now: Instant, out: internal::InternalOutput) -> Option<EndpointOutput<'a, ExtOut>> {
+    fn process_internal_output<'a>(&mut self, now: Instant, out: internal::InternalOutput) -> EndpointOutput<'a, ExtOut> {
         self.switcher.queue_flag_task(TaskType::Internal.into());
         match out {
             InternalOutput::Event(event) => {
-                let out = self.transport.on_input(now, TransportInput::Endpoint(event))?;
-                self.process_transport_output(now, out)
+                if let Some(out) = self.transport.on_input(now, TransportInput::Endpoint(event)) {
+                    self.process_transport_output(now, out)
+                } else {
+                    EndpointOutput::Continue
+                }
             }
             InternalOutput::RpcRes(req_id, res) => {
-                let out = self.transport.on_input(now, TransportInput::RpcRes(req_id, res))?;
-                self.process_transport_output(now, out)
+                if let Some(out) = self.transport.on_input(now, TransportInput::RpcRes(req_id, res)) {
+                    self.process_transport_output(now, out)
+                } else {
+                    EndpointOutput::Continue
+                }
             }
-            InternalOutput::Cluster(control) => Some(EndpointOutput::Cluster(control)),
-            InternalOutput::Destroy => Some(EndpointOutput::Destroy),
+            InternalOutput::Cluster(room, control) => EndpointOutput::Cluster(room, control),
+            InternalOutput::Destroy => EndpointOutput::Destroy,
         }
     }
 }

@@ -1,6 +1,9 @@
 use derivative::Derivative;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone)]
+use crate::endpoint::{PeerId, TrackMeta, TrackName};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MediaKind {
     Audio,
     Video,
@@ -16,14 +19,14 @@ impl MediaKind {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MediaScaling {
     None,
     Simulcat,
     Svc,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MediaCodec {
     Opus,
     H264,
@@ -31,7 +34,7 @@ pub enum MediaCodec {
     Vp9,
 }
 
-#[derive(Derivative, Clone)]
+#[derive(Derivative, Clone, Serialize, Deserialize)]
 #[derivative(Debug)]
 pub struct MediaPacket {
     pub pt: u8,
@@ -41,4 +44,31 @@ pub struct MediaPacket {
     pub nackable: bool,
     #[derivative(Debug = "ignore")]
     pub data: Vec<u8>,
+}
+
+impl MediaPacket {
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("should ok")
+    }
+
+    pub fn deserialize(data: &[u8]) -> Option<MediaPacket> {
+        bincode::deserialize::<Self>(data).ok()
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TrackInfo {
+    pub peer: PeerId,
+    pub track: TrackName,
+    pub meta: TrackMeta,
+}
+
+impl TrackInfo {
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("should ok")
+    }
+
+    pub fn deserialize(data: &[u8]) -> Option<TrackInfo> {
+        bincode::deserialize::<Self>(data).ok()
+    }
 }

@@ -18,7 +18,7 @@ pub struct MediaConfig {
     pub webrtc_addrs: Vec<SocketAddr>,
 }
 
-pub type SdnConfig = SdnWorkerCfg<SC, SE, TC, TW>;
+pub type SdnConfig = SdnWorkerCfg<UserData, SC, SE, TC, TW>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Owner {
@@ -27,6 +27,7 @@ pub enum Owner {
 }
 
 //for sdn
+pub type UserData = cluster::ClusterRoomHash;
 pub type SC = visualization::Control;
 pub type SE = visualization::Event;
 pub type TC = ();
@@ -35,13 +36,14 @@ pub type TW = ();
 pub enum Input<'a> {
     ExtRpc(u64, RpcReq<usize>),
     Net(Owner, BackendIncoming<'a>),
+    Bus(SdnWorkerBusEvent<UserData, SC, SE, TC, TW>),
 }
 
 pub enum Output<'a> {
     ExtRpc(u64, RpcRes<usize>),
-    ExtSdn(SdnExtOut<SE>),
+    ExtSdn(SdnExtOut<UserData, SE>),
     Net(Owner, BackendOutgoing<'a>),
-    Bus(SdnWorkerBusEvent<SC, SE, TC, TW>),
+    Bus(SdnWorkerBusEvent<UserData, SC, SE, TC, TW>),
     Continue,
 }
 
@@ -64,14 +66,14 @@ impl TryFrom<usize> for TaskType {
     }
 }
 
-#[derive(convert_enum::From, Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(convert_enum::From, Debug, Clone, Copy, Hash, PartialEq, Eq)]
 enum MediaClusterOwner {
     Webrtc(WebrtcOwner),
 }
 
 pub struct MediaServerWorker {
     sdn_slot: usize,
-    sdn_worker: SdnWorker<SC, SE, TC, TW>,
+    sdn_worker: SdnWorker<UserData, SC, SE, TC, TW>,
     media_cluster: MediaCluster<MediaClusterOwner>,
     media_webrtc: MediaWorkerWebrtc,
     switcher: TaskSwitcher,
@@ -144,6 +146,11 @@ impl MediaServerWorker {
                     Some(self.output_webrtc(now, out))
                 }
             },
+            Input::Bus(event) => {
+                let now_ms = self.timer.timestamp_ms(now);
+                let out = self.sdn_worker.on_event(now_ms, SdnWorkerInput::Bus(event))?;
+                Some(self.output_sdn(now, out))
+            }
         }
     }
 
@@ -202,13 +209,13 @@ impl MediaServerWorker {
 }
 
 impl MediaServerWorker {
-    fn output_sdn<'a>(&mut self, now: Instant, out: SdnWorkerOutput<'a, SC, SE, TC, TW>) -> Output<'a> {
+    fn output_sdn<'a>(&mut self, now: Instant, out: SdnWorkerOutput<'a, UserData, SC, SE, TC, TW>) -> Output<'a> {
         self.switcher.queue_flag_task(TaskType::Sdn as usize);
         match out {
             SdnWorkerOutput::Ext(out) => Output::ExtSdn(out),
             SdnWorkerOutput::ExtWorker(out) => match out {
-                SdnExtOut::FeaturesEvent(e) => {
-                    if let Some(out) = self.media_cluster.on_sdn_event(now, e) {
+                SdnExtOut::FeaturesEvent(room, event) => {
+                    if let Some(out) = self.media_cluster.on_sdn_event(now, room, event) {
                         self.output_cluster(now, out)
                     } else {
                         Output::Continue
@@ -229,9 +236,9 @@ impl MediaServerWorker {
     fn output_cluster<'a>(&mut self, now: Instant, out: cluster::Output<MediaClusterOwner>) -> Output<'a> {
         self.switcher.queue_flag_task(TaskType::MediaCluster as usize);
         match out {
-            cluster::Output::Sdn(control) => {
+            cluster::Output::Sdn(userdata, control) => {
                 let now_ms = self.timer.timestamp_ms(now);
-                if let Some(out) = self.sdn_worker.on_event(now_ms, SdnWorkerInput::ExtWorker(SdnExtIn::FeaturesControl(control))) {
+                if let Some(out) = self.sdn_worker.on_event(now_ms, SdnWorkerInput::ExtWorker(SdnExtIn::FeaturesControl(userdata, control))) {
                     self.output_sdn(now, out)
                 } else {
                     Output::Continue
@@ -252,6 +259,7 @@ impl MediaServerWorker {
                 }
                 Output::Continue
             }
+            cluster::Output::Continue => Output::Continue,
         }
     }
 
@@ -259,14 +267,13 @@ impl MediaServerWorker {
         self.switcher.queue_flag_task(TaskType::MediaWebrtc as usize);
         match out {
             transport_webrtc::GroupOutput::Net(out) => Output::Net(Owner::MediaWebrtc, out),
-            transport_webrtc::GroupOutput::Cluster(owner, control) => {
-                if let Some(out) = self.media_cluster.on_endpoint_control(now, owner.into(), control) {
+            transport_webrtc::GroupOutput::Cluster(owner, room, control) => {
+                if let Some(out) = self.media_cluster.on_endpoint_control(now, owner.into(), room, control) {
                     self.output_cluster(now, out)
                 } else {
                     Output::Continue
                 }
             }
-            transport_webrtc::GroupOutput::Shutdown(_owner) => Output::Continue,
             transport_webrtc::GroupOutput::Ext(_owner, ext) => match ext {
                 transport_webrtc::ExtOut::RemoteIce(req_id, variant, res) => match variant {
                     transport_webrtc::Variant::Whip => Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::RemoteIce(res.map(|_| WhipRemoteIceRes {})))),
@@ -276,6 +283,8 @@ impl MediaServerWorker {
                     }
                 },
             },
+            transport_webrtc::GroupOutput::Shutdown(_owner) => Output::Continue,
+            transport_webrtc::GroupOutput::Continue => Output::Continue,
         }
     }
 }

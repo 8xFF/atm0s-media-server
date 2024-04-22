@@ -7,9 +7,12 @@ use media_server_core::{
     endpoint::{EndpointEvent, EndpointReq},
     transport::{RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
-use media_server_protocol::endpoint::{PeerId, RoomId};
+use media_server_protocol::{
+    endpoint::{PeerId, RoomId, TrackMeta},
+    media::{MediaCodec, MediaKind, MediaScaling},
+};
 use str0m::{
-    media::{Direction, KeyframeRequestKind, MediaAdded, MediaKind, Mid},
+    media::{Direction, KeyframeRequestKind, MediaAdded, Mid},
     Event as Str0mEvent, IceConnectionState,
 };
 
@@ -92,13 +95,12 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
 
     fn on_endpoint_event<'a>(&mut self, now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
-            EndpointEvent::PeerJoined(_) => todo!(),
-            EndpointEvent::PeerLeaved(_) => todo!(),
-            EndpointEvent::PeerTrackStarted(_, _, _) => todo!(),
-            EndpointEvent::PeerTrackStopped(_, _) => todo!(),
+            EndpointEvent::PeerTrackStarted(_, _, _) => None,
+            EndpointEvent::PeerTrackStopped(_, _) => None,
             EndpointEvent::RemoteMediaTrack(_, event) => match event {
                 media_server_core::endpoint::EndpointRemoteTrackEvent::RequestKeyFrame => {
                     let mid = self.video_mid?;
+                    log::info!("[TransportWebrtcWhip] request key-frame");
                     Some(InternalOutput::Str0mKeyframe(mid, KeyframeRequestKind::Pli))
                 }
                 media_server_core::endpoint::EndpointRemoteTrackEvent::LimitBitrateBps(bitrate) => {
@@ -106,7 +108,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                     Some(InternalOutput::Str0mLimitBitrate(mid, bitrate))
                 }
             },
-            EndpointEvent::LocalMediaTrack(_, _) => todo!(),
+            EndpointEvent::LocalMediaTrack(_, _) => None,
         }
     }
 
@@ -182,26 +184,41 @@ impl TransportWebrtcWhip {
     }
 
     fn on_str0m_media_added<'a>(&mut self, now: Instant, media: MediaAdded) -> Option<InternalOutput<'a>> {
+        log::info!("[TransportWebrtcWhip] str0m media added {:?}", media);
         if matches!(media.direction, Direction::SendOnly | Direction::Inactive) {
             return None;
         }
-        if media.kind == MediaKind::Audio {
+        if media.kind == str0m::media::MediaKind::Audio {
             if self.audio_mid.is_some() {
                 return None;
             }
             self.audio_mid = Some(media.mid);
+            log::info!("[TransportWebrtcWhip] started remote track {AUDIO_NAME}");
             Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
                 AUDIO_TRACK,
-                RemoteTrackEvent::Started { name: AUDIO_NAME.to_string() },
+                RemoteTrackEvent::Started {
+                    name: AUDIO_NAME.to_string(),
+                    meta: TrackMeta {
+                        kind: MediaKind::Audio,
+                        scaling: MediaScaling::None,
+                    },
+                },
             ))))
         } else {
             if self.video_mid.is_some() {
                 return None;
             }
             self.video_mid = Some(media.mid);
+            log::info!("[TransportWebrtcWhip] started remote track {VIDEO_NAME}");
             Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
                 VIDEO_TRACK,
-                RemoteTrackEvent::Started { name: VIDEO_NAME.to_string() },
+                RemoteTrackEvent::Started {
+                    name: VIDEO_NAME.to_string(),
+                    meta: TrackMeta {
+                        kind: MediaKind::Video,
+                        scaling: MediaScaling::None,
+                    },
+                },
             ))))
         }
     }

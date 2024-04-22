@@ -1,19 +1,17 @@
+use derive_more::Display;
 use std::{hash::Hash, time::Instant};
 
-use media_server_protocol::{
-    endpoint::{PeerId, TrackName},
-    media::MediaPacket,
-};
+use media_server_protocol::{endpoint::TrackMeta, media::MediaPacket};
 use media_server_utils::F16u;
 use sans_io_runtime::backend::{BackendIncoming, BackendOutgoing};
 
 use crate::endpoint::{EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Display)]
 pub struct TransportId(pub u64);
 
 /// RemoteTrackId is used for track which received media from client
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub struct RemoteTrackId(pub u16);
 
 impl Hash for RemoteTrackId {
@@ -23,7 +21,7 @@ impl Hash for RemoteTrackId {
 }
 
 /// LocalTrackId is used for track which send media to client
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub struct LocalTrackId(pub u16);
 
 impl Hash for LocalTrackId {
@@ -56,7 +54,6 @@ pub struct TransportStats {
 #[derive(Debug)]
 pub enum LocalTrackEvent {
     Started,
-    Switch(Option<(PeerId, TrackName)>),
     RequestKeyFrame,
     Ended,
 }
@@ -70,7 +67,7 @@ impl LocalTrackEvent {
 /// This is used for notifying state of remote track to endpoint
 #[derive(Debug)]
 pub enum RemoteTrackEvent {
-    Started { name: String },
+    Started { name: String, meta: TrackMeta },
     Paused,
     Resumed,
     Media(MediaPacket),
@@ -78,8 +75,12 @@ pub enum RemoteTrackEvent {
 }
 
 impl RemoteTrackEvent {
-    pub fn need_create(&self) -> bool {
-        matches!(self, RemoteTrackEvent::Started { .. })
+    pub fn need_create(&self) -> Option<TrackMeta> {
+        if let RemoteTrackEvent::Started { meta, .. } = self {
+            Some(meta.clone())
+        } else {
+            None
+        }
     }
 }
 
