@@ -131,6 +131,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b4930d2cb77ce62f89ee5d5289b4ac049559b1c45539271f5ed4fdc7db34545"
 
 [[package]]
+name = "atm0s-media-server"
+version = "0.1.0"
+dependencies = [
+ "atm0s-sdn",
+ "clap",
+ "log",
+ "media-server-protocol",
+ "media-server-runner",
+ "poem",
+ "poem-openapi",
+ "rand",
+ "sans-io-runtime",
+ "tokio",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "atm0s-sdn"
 version = "0.1.10"
 source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=3c2945754926bd014c36e8ec20c228051a45603f#3c2945754926bd014c36e8ec20c228051a45603f"
@@ -246,23 +263,6 @@ name = "base64"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
-
-[[package]]
-name = "bin"
-version = "0.1.0"
-dependencies = [
- "atm0s-sdn",
- "clap",
- "log",
- "media-server-protocol",
- "media-server-runner",
- "poem",
- "poem-openapi",
- "rand",
- "sans-io-runtime",
- "tokio",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "bincode"

@@ -1,5 +1,5 @@
 [package]
-name = "bin"
+name = "atm0s-media-server"
 version = "0.1.0"
 edition = "2021"
 
