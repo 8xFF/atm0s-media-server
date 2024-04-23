@@ -1,3 +1,5 @@
+//! Channel Publisher will takecare of pubsub channel for sending data and handle when received channel feedback
+
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
@@ -50,7 +52,7 @@ impl<Owner: Hash + Eq + Copy> RoomChannelPublisher<Owner> {
         }
     }
 
-    pub fn on_track_publish(&mut self, owner: Owner, track: RemoteTrackId, peer: PeerId, name: TrackName, meta: TrackMeta) -> Option<Output<Owner>> {
+    pub fn on_track_publish(&mut self, owner: Owner, track: RemoteTrackId, peer: PeerId, name: TrackName) -> Option<Output<Owner>> {
         log::info!("[ClusterRoom {}] peer ({peer} started track {name})", self.room);
         let channel_id = super::track_key(self.room, &peer, &name);
         self.tracks.insert((owner, track), (peer.clone(), name.clone(), channel_id));
@@ -75,4 +77,13 @@ impl<Owner: Hash + Eq + Copy> RoomChannelPublisher<Owner> {
     pub fn pop_output(&mut self) -> Option<Output<Owner>> {
         self.queue.pop_front()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO Track start => should register with SDN
+    //TODO Track stop => should unregister with SDN
+    //TODO Track media => should send data over SDN
+    //TODO Handle feedback: should handle KeyFrame feedback
+    //TODO Handle feedback: should handle Bitrate feedback
 }

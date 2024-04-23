@@ -1,3 +1,5 @@
+//! Endpoint take care integrate between transport and endpoint internal logic. It don't have logic, just forward events
+
 use std::{marker::PhantomData, time::Instant};
 
 use media_server_protocol::{
@@ -225,4 +227,11 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
             InternalOutput::Destroy => EndpointOutput::Destroy,
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO should forward event from transport to internal
+    //TODO should forward event from internal to transport
+    //TODO should output cluster events
 }

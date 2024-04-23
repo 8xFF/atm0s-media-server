@@ -1,3 +1,4 @@
+//TODO replace faster_stun with other for better licence
 use faster_stun::attribute::*;
 use faster_stun::*;
 use std::{collections::HashMap, fmt::Debug, hash::Hash, net::SocketAddr};
@@ -59,4 +60,10 @@ impl<Task: Debug + Clone + Copy + Hash + PartialEq + Eq> SharedUdpPort<Task> {
         let message = MessageReader::decode(buf, &mut attributes).ok()?;
         message.get::<UserName>().map(|u| u.split(':').next())?
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO test correct mapping
+    //TODO test invalid request
 }

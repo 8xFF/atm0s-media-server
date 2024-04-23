@@ -1,3 +1,6 @@
+//! Channel Subscriber handle logic for viewer. This module takecare sending Sub or Unsub, and also feedback
+//!
+
 use std::{
     collections::{HashMap, VecDeque},
     fmt::Debug,
@@ -6,10 +9,7 @@ use std::{
 };
 
 use atm0s_sdn::{
-    features::{
-        pubsub::{self, ChannelControl, ChannelId, Feedback},
-        FeaturesControl,
-    },
+    features::pubsub::{self, ChannelControl, ChannelId, Feedback},
     NodeId,
 };
 use media_server_protocol::{
@@ -93,6 +93,10 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
         )))
     }
 
+    pub fn on_track_desired_bitrate(&mut self, owner: Owner, track: LocalTrackId, bitrate: u32) -> Option<Output<Owner>> {
+        todo!()
+    }
+
     pub fn on_track_unsubscribe(&mut self, owner: Owner, track: LocalTrackId) -> Option<Output<Owner>> {
         let (channel_id, target_peer, target_track) = self.subscribers_source.get(&(owner, track))?;
         log::info!(
@@ -115,4 +119,13 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
     pub fn pop_output(&mut self, now: Instant) -> Option<Output<Owner>> {
         self.queue.pop_front()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO First Subcribe channel should sending Sub
+    //TODO Last Unsubscribe channel should sending Unsub
+    //TODO Sending key-frame request
+    //TODO Sending bitrate request single sub
+    //TODO Sending bitrate request multi subs
 }

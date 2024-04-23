@@ -1,3 +1,9 @@
+//! Cluster handle all of logic allow multi node can collaborate to make a giant streaming system.
+//!
+//! Cluster is collect of some rooms, each room is independent logic.
+//! We use UserData feature from SDN with UserData is ClusterRoomHash to route SDN event to correct room.
+//!
+
 use derive_more::{AsRef, Display, From};
 use sans_io_runtime::{Task, TaskGroup};
 use std::{
@@ -40,12 +46,14 @@ pub enum ClusterRemoteTrackControl {
 #[derive(Clone)]
 pub enum ClusterRemoteTrackEvent {
     RequestKeyFrame,
+    LimitBitrate { min: u32, max: u32 },
 }
 
 #[derive(Debug, Clone)]
 pub enum ClusterLocalTrackControl {
     Subscribe(PeerId, TrackName),
     RequestKeyFrame,
+    DesiredBitrate(u32),
     Unsubscribe,
 }
 
@@ -146,4 +154,10 @@ impl<Owner: Debug + Hash + Copy + Clone + Debug + Eq> MediaCluster<Owner> {
         let (_index, out) = self.rooms.shutdown(now)?;
         Some(out)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO should create room when new room event arrived
+    //TODO should route to correct room
 }

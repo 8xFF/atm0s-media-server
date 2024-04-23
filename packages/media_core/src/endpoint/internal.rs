@@ -1,3 +1,5 @@
+//! EndpointInternal compose small parts: local track, remote track. It act as integration hub
+
 use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::endpoint::{PeerId, RoomId};
@@ -38,7 +40,7 @@ pub struct EndpointInternal {
     remote_tracks_id: Small2dMap<RemoteTrackId, usize>,
     local_tracks: TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>,
     remote_tracks: TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>,
-    middlewares: Vec<Box<dyn EndpointMiddleware>>,
+    _middlewares: Vec<Box<dyn EndpointMiddleware>>,
     queue: VecDeque<InternalOutput>,
     switcher: TaskSwitcher,
 }
@@ -53,7 +55,7 @@ impl EndpointInternal {
             remote_tracks_id: Default::default(),
             local_tracks: Default::default(),
             remote_tracks: Default::default(),
-            middlewares: Default::default(),
+            _middlewares: Default::default(),
             queue: Default::default(),
             switcher: TaskSwitcher::new(2),
         }
@@ -209,7 +211,7 @@ impl EndpointInternal {
         self.convert_local_track_output(now, track, out)
     }
 
-    fn on_transport_stats<'a>(&mut self, now: Instant, stats: TransportStats) -> Option<InternalOutput> {
+    fn on_transport_stats<'a>(&mut self, _now: Instant, _stats: TransportStats) -> Option<InternalOutput> {
         None
     }
 
@@ -296,7 +298,7 @@ impl EndpointInternal {
 
 /// This block for internal local and remote track
 impl EndpointInternal {
-    fn convert_remote_track_output<'a>(&mut self, now: Instant, id: RemoteTrackId, out: remote_track::Output) -> Option<InternalOutput> {
+    fn convert_remote_track_output<'a>(&mut self, _now: Instant, id: RemoteTrackId, out: remote_track::Output) -> Option<InternalOutput> {
         self.switcher.queue_flag_task(TaskType::RemoteTracks as usize);
         match out {
             remote_track::Output::Event(event) => Some(InternalOutput::Event(EndpointEvent::RemoteMediaTrack(id, event))),
@@ -305,7 +307,7 @@ impl EndpointInternal {
         }
     }
 
-    fn convert_local_track_output<'a>(&mut self, now: Instant, id: LocalTrackId, out: local_track::Output) -> Option<InternalOutput> {
+    fn convert_local_track_output<'a>(&mut self, _now: Instant, id: LocalTrackId, out: local_track::Output) -> Option<InternalOutput> {
         self.switcher.queue_flag_task(TaskType::LocalTracks as usize);
         match out {
             local_track::Output::Event(event) => Some(InternalOutput::Event(EndpointEvent::LocalMediaTrack(id, event))),
@@ -313,4 +315,16 @@ impl EndpointInternal {
             local_track::Output::RpcRes(req_id, res) => Some(InternalOutput::RpcRes(req_id, EndpointRes::LocalTrack(id, res))),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO single local track, join leave room
+    //TODO multi local tracks, join leave room
+    //TODO single remote track, join leave room
+    //TODO multi remote tracks, join leave room
+    //TODO both local and remote tracks, join leave room
+    //TODO handle close request
+    //TODO handle transport connected
+    //TODO handle transport disconnected
 }

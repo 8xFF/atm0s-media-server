@@ -161,7 +161,7 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
             }
             TransportInput::Ext(ext) => match ext {
                 ExtIn::RemoteIce(req_id, variant, _ice) => {
-                    //TODO
+                    //TODO handle remote-ice with str0m
                     Some(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(()))))
                 }
             },

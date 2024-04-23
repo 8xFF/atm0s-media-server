@@ -26,7 +26,7 @@ enum State {
     ConnectError(TransportWebrtcError),
     Connected,
     Reconnecting { at: Instant },
-    Disconnected(Option<TransportWebrtcError>),
+    Disconnected,
 }
 
 #[derive(Debug)]
@@ -88,7 +88,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             State::Reconnecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
                     log::info!("[TransportWebrtcWhep] reconnect timed out after {:?} => switched to Disconnected", now - *at);
-                    self.state = State::Disconnected(Some(TransportWebrtcError::Timeout));
+                    self.state = State::Disconnected;
                     return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
                         TransportError::Timeout,
                     ))))));
@@ -99,7 +99,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
         None
     }
 
-    fn on_endpoint_event<'a>(&mut self, now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
+    fn on_endpoint_event<'a>(&mut self, _now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
             EndpointEvent::PeerTrackStarted(peer, track, meta) => {
                 if self.audio_mid.is_none() && meta.kind.is_audio() {
@@ -115,15 +115,15 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                 self.try_subscribe(peer, track, meta)
             }
             EndpointEvent::PeerTrackStopped(peer, track) => self.try_unsubscribe(peer, track),
-            EndpointEvent::LocalMediaTrack(track, event) => match event {
+            EndpointEvent::LocalMediaTrack(_track, event) => match event {
                 EndpointLocalTrackEvent::Media(pkt) => Some(InternalOutput::Str0mSendMedia(self.video_mid?, pkt)),
             },
-            EndpointEvent::RemoteMediaTrack(track, event) => None,
-            EndpointEvent::GoAway(seconds, reason) => todo!(),
+            EndpointEvent::RemoteMediaTrack(_track, _event) => None,
+            EndpointEvent::GoAway(_seconds, _reason) => None,
         }
     }
 
-    fn on_transport_rpc_res<'a>(&mut self, now: Instant, req_id: media_server_core::endpoint::EndpointReqId, res: media_server_core::endpoint::EndpointRes) -> Option<InternalOutput<'a>> {
+    fn on_transport_rpc_res<'a>(&mut self, _now: Instant, _req_id: media_server_core::endpoint::EndpointReqId, _res: media_server_core::endpoint::EndpointRes) -> Option<InternalOutput<'a>> {
         None
     }
 
@@ -155,13 +155,13 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
         }
     }
 
-    fn close<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
+    fn close<'a>(&mut self, _now: Instant) -> Option<InternalOutput<'a>> {
         log::info!("[TransportWebrtcWhep] switched to disconnected with close action");
-        self.state = State::Disconnected(None);
+        self.state = State::Disconnected;
         Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
     }
 
-    fn pop_output<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
+    fn pop_output<'a>(&mut self, _now: Instant) -> Option<InternalOutput<'a>> {
         self.queue.pop_front()
     }
 }
@@ -193,7 +193,7 @@ impl TransportWebrtcWhep {
         }
     }
 
-    fn on_str0m_media_added<'a>(&mut self, now: Instant, media: MediaAdded) -> Option<InternalOutput<'a>> {
+    fn on_str0m_media_added<'a>(&mut self, _now: Instant, media: MediaAdded) -> Option<InternalOutput<'a>> {
         log::info!("[TransportWebrtcWhep] str0m media added {:?}", media);
         if matches!(media.direction, Direction::RecvOnly | Direction::Inactive) {
             return None;

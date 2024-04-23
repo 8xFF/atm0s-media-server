@@ -1,3 +1,12 @@
+//!
+//! This part is composer from some other small parts: Metadata, Channel Subscriber, Channel Publisher
+//!
+//! Main functions:
+//!
+//! - Send/Recv metadata related key-value
+//! - Send/Receive pubsub channel
+//!
+
 use std::{
     collections::VecDeque,
     fmt::Debug,
@@ -158,7 +167,7 @@ impl<Owner: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Owner> {
         match control {
             ClusterRemoteTrackControl::Started(name, meta) => {
                 let peer = self.metadata.get_peer_from_owner(owner)?;
-                if let Some(out) = self.publisher.on_track_publish(owner, track, peer, name.clone(), meta.clone()) {
+                if let Some(out) = self.publisher.on_track_publish(owner, track, peer, name.clone()) {
                     let out = self.process_publisher_output(out);
                     self.queue.push_back(out);
                 }
@@ -190,6 +199,7 @@ impl<Owner: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Owner> {
         let out = match control {
             ClusterLocalTrackControl::Subscribe(target_peer, target_track) => self.subscriber.on_track_subscribe(owner, track_id, target_peer, target_track),
             ClusterLocalTrackControl::RequestKeyFrame => self.subscriber.on_track_request_key(owner, track_id),
+            ClusterLocalTrackControl::DesiredBitrate(bitrate) => self.subscriber.on_track_desired_bitrate(owner, track_id, bitrate),
             ClusterLocalTrackControl::Unsubscribe => self.subscriber.on_track_unsubscribe(owner, track_id),
         }?;
         Some(self.process_subscriber_output(out))
@@ -226,4 +236,18 @@ pub fn track_key<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track: &Tra
     peer.as_ref().hash(&mut h);
     track.as_ref().hash(&mut h);
     h.finish().into()
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO join room should set key-value and SUB to maps
+    //TODO maps event should fire event to endpoint
+    //TODO leave room should del key-value
+    //TODO track started should SET key-value and pubsub START
+    //TODO track feedback should fire event to endpoint
+    //TODO track stopped should DEL key-value and pubsub STOP
+    //TODO subscibe track should SUB channel
+    //TODO fedback track should FEEDBACK channel
+    //TODO channel data should fire event to endpoint
+    //TODO unsubscribe track should UNSUB channel
 }

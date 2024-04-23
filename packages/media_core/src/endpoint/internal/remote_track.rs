@@ -1,3 +1,5 @@
+//! RemoteTrack take care about publish local media to sdn, and react with feedback from consumers
+
 use std::time::Instant;
 
 use media_server_protocol::endpoint::{TrackMeta, TrackName};
@@ -53,6 +55,10 @@ impl EndpointRemoteTrack {
     fn on_cluster_event(&mut self, now: Instant, event: ClusterRemoteTrackEvent) -> Option<Output> {
         match event {
             ClusterRemoteTrackEvent::RequestKeyFrame => Some(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
+            ClusterRemoteTrackEvent::LimitBitrate { min, max } => {
+                //TODO based on scaling type
+                Some(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps(min as u64)))
+            }
         }
     }
 
@@ -106,4 +112,16 @@ impl Task<Input, Output> for EndpointRemoteTrack {
     fn shutdown(&mut self, now: Instant) -> Option<Output> {
         None
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO start in room
+    //TODO start not in room
+    //TODO stop in room
+    //TODO stop not in room
+    //TODO switched room need fire events
+    //TODO send media to cluster
+    //TODO handle key-frame-request feedback
+    //TODO handle bitrate limit feedback
 }

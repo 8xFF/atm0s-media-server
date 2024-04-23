@@ -1,3 +1,7 @@
+//! LocalTrack take care handling client request related this track
+//! It also handle feedback to source track about key-frame-request or desired-bitrate
+//! Last role is rewrite media data from source track to ensure seq and timestamp is continous even when switched to other source
+
 use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::{
@@ -50,7 +54,7 @@ impl EndpointLocalTrack {
         None
     }
 
-    fn on_leave_room(&mut self, now: Instant) -> Option<Output> {
+    fn on_leave_room(&mut self, _now: Instant) -> Option<Output> {
         assert_ne!(self.room, None);
         let room = self.room.take()?;
         log::info!("[EndpointLocalTrack] leave room {room}");
@@ -59,12 +63,12 @@ impl EndpointLocalTrack {
         Some(Output::Cluster(room, ClusterLocalTrackControl::Unsubscribe))
     }
 
-    fn on_cluster_event(&mut self, now: Instant, event: ClusterLocalTrackEvent) -> Option<Output> {
+    fn on_cluster_event(&mut self, _now: Instant, event: ClusterLocalTrackEvent) -> Option<Output> {
         match event {
             ClusterLocalTrackEvent::Started => todo!(),
             ClusterLocalTrackEvent::SourceChanged => {
                 let room = self.room.as_ref()?;
-                log::info!("[EndpointLocalTrack] source changed => request key-frame");
+                log::info!("[EndpointLocalTrack] source changed => request key-frame and reset seq, ts rewrite");
                 Some(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame))
             }
             ClusterLocalTrackEvent::Media(pkt) => Some(Output::Event(EndpointLocalTrackEvent::Media(pkt))),
@@ -138,4 +142,17 @@ impl Task<Input, Output> for EndpointLocalTrack {
     fn shutdown(&mut self, now: Instant) -> Option<Output> {
         None
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO view not in room
+    //TODO view in room
+    //TODO unview ok
+    //TODO unview not ok
+    //TODO room changed should fire unview
+    //TODO switched source need continuos ts and seq
+    //TODO should request key-frame if wait key-frame
+    //TODO should forward key-frame request from transport
+    //TODO local ended should unview if in viewing state
 }

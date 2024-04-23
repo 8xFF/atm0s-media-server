@@ -1,3 +1,12 @@
+//!
+//! Medata part takecare of how cluster will store peer, track info.
+//! We have 3 level: Full, Track only and Manual
+//!
+//! - Full: subscribe on both peer and track infomation
+//! - Track only: subscribe on track info, this method is useful with large users application like broadcast or webinar
+//! - Manual: client manual call subscribe on which peer it interested in, this method is useful with some spartial audio application
+//!
+
 use std::{
     collections::{HashMap, VecDeque},
     fmt::Debug,
@@ -133,4 +142,21 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
             Some(Output::Endpoint(peers, ClusterEndpointEvent::TrackStoped(peer, name)))
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    //TODO Test join as full => should subscribe both peers and tracks, fire both peer and track events
+    //TODO Test leave as full => should unsubscribe both peers and tracks
+    //TODO Test join as track only => should subscribe only tracks, fire only track events
+    //TODO Test leave as track only => should unsubscribe only tracks
+    //TODO Test join as manual => dont subscribe
+    //TODO Test leave as manual => don unsubscribe
+    //TODO Test manual and subscribe peer => should subscribe that peer
+    //TODO Test manual and unsubscribe peer => should unsubscribe that peer
+    //TODO Test track publish => should set key to both single peer map and tracks map
+    //TODO Test track unpublish => should del key to both single peer map and tracks map
+    //TODO Handle kv event => should handle peers map
+    //TODO Handle kv event => should handle tracks map
+    //TODO Handle kv event => should handle single peer map
 }
