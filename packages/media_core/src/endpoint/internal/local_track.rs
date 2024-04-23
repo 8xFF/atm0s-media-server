@@ -71,7 +71,10 @@ impl EndpointLocalTrack {
                 log::info!("[EndpointLocalTrack] source changed => request key-frame and reset seq, ts rewrite");
                 Some(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame))
             }
-            ClusterLocalTrackEvent::Media(pkt) => Some(Output::Event(EndpointLocalTrackEvent::Media(pkt))),
+            ClusterLocalTrackEvent::Media(pkt) => {
+                log::trace!("[EndpointLocalTrack] on media payload {} seq {}", pkt.pt, pkt.seq);
+                Some(Output::Event(EndpointLocalTrackEvent::Media(pkt)))
+            }
             ClusterLocalTrackEvent::Ended => todo!(),
         }
     }

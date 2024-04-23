@@ -1,7 +1,6 @@
-//TODO replace faster_stun with other for better licence
-use faster_stun::attribute::*;
-use faster_stun::*;
 use std::{collections::HashMap, fmt::Debug, hash::Hash, net::SocketAddr};
+
+use stun_rs::{attributes::stun::UserName, MessageDecoderBuilder};
 
 #[derive(Debug)]
 pub struct SharedUdpPort<Task> {
@@ -48,17 +47,19 @@ impl<Task: Debug + Clone + Copy + Hash + PartialEq + Eq> SharedUdpPort<Task> {
 
         let stun_username = Self::get_stun_username(buf)?;
         log::warn!("Received a stun packet from an unknown remote: {:?}, username {}", remote, stun_username);
-        let task = self.task_ufrags.get(stun_username)?;
+        let task = self.task_ufrags.get(&stun_username)?;
         log::info!("Mapping remote {:?} to task {:?}", remote, task);
         self.task_remotes.insert(remote, *task);
         self.task_remotes_map.entry(*task).or_default().push(remote);
         Some(*task)
     }
 
-    fn get_stun_username(buf: &[u8]) -> Option<&str> {
-        let mut attributes = Vec::new();
-        let message = MessageReader::decode(buf, &mut attributes).ok()?;
-        message.get::<UserName>().map(|u| u.split(':').next())?
+    fn get_stun_username(buf: &[u8]) -> Option<String> {
+        let decoder = MessageDecoderBuilder::default().build();
+        let (msg, _) = decoder.decode(buf).ok()?;
+        let att = msg.get::<UserName>()?;
+        let username = att.as_user_name().ok()?;
+        username.as_str().split(':').next().map(|c| c.to_string())
     }
 }
 

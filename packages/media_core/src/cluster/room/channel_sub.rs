@@ -57,6 +57,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
     pub fn on_channel_data(&mut self, channel: ChannelId, data: Vec<u8>) -> Option<Output<Owner>> {
         let pkt = MediaPacket::deserialize(&data)?;
         let subscribers = self.subscribers.get(&channel)?;
+        log::trace!("[ClusterRoom {}] on channel media payload {} seq {} to {} subscribers", self.room, pkt.pt, pkt.seq, subscribers.len());
         for (owner, track) in subscribers {
             self.queue.push_back(Output::Endpoint(
                 vec![owner.clone()],

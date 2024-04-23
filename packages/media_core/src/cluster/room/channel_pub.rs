@@ -2,6 +2,7 @@
 
 use std::{
     collections::{HashMap, VecDeque},
+    fmt::Debug,
     hash::Hash,
 };
 
@@ -30,7 +31,7 @@ pub struct RoomChannelPublisher<Owner> {
     queue: VecDeque<Output<Owner>>,
 }
 
-impl<Owner: Hash + Eq + Copy> RoomChannelPublisher<Owner> {
+impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
             room,
@@ -62,6 +63,7 @@ impl<Owner: Hash + Eq + Copy> RoomChannelPublisher<Owner> {
     }
 
     pub fn on_track_data(&mut self, owner: Owner, track: RemoteTrackId, media: MediaPacket) -> Option<Output<Owner>> {
+        log::trace!("[ClusterRoom {}] peer {:?} track {track} publish media payload {} seq {}", self.room, owner, media.pt, media.seq);
         let (_peer, _name, channel_id) = self.tracks.get(&(owner, track))?;
         let data = media.serialize();
         Some(Output::Pubsub(pubsub::Control(*channel_id, ChannelControl::PubData(data))))

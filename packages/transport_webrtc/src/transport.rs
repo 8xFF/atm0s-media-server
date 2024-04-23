@@ -112,6 +112,7 @@ impl TransportWebrtc {
                 self.pop_event(now)
             }
             InternalOutput::Str0mSendMedia(mid, pkt) => {
+                log::trace!("[TransportWebrtc] sending media payload {} seq {} to mid {mid}", pkt.pt, pkt.seq);
                 self.rtc
                     .direct_api()
                     .stream_tx_by_mid(mid, None)?
