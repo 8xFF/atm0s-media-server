@@ -101,7 +101,7 @@ impl EndpointLocalTrack {
                     Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
                 } else {
                     log::warn!("[EndpointLocalTrack] view but not in room");
-                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::LocalTrackSwitchNotInRoom)))))
+                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
                 }
             }
             EndpointLocalTrackReq::Switch(None) => {
@@ -112,11 +112,11 @@ impl EndpointLocalTrack {
                         Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
                     } else {
                         log::warn!("[EndpointLocalTrack] unview but not bind to any source");
-                        Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::LocalTrackSwitchNotPin)))))
+                        Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::LocalTrackNotPinSource)))))
                     }
                 } else {
                     log::warn!("[EndpointLocalTrack] unview but not in room");
-                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::LocalTrackSwitchNotInRoom)))))
+                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
                 }
             }
         }

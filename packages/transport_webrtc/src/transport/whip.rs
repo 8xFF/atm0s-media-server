@@ -8,7 +8,7 @@ use media_server_core::{
     transport::{RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
 use media_server_protocol::{
-    endpoint::{PeerId, RoomId, TrackMeta},
+    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta},
     media::{MediaKind, MediaScaling},
 };
 use str0m::{
@@ -95,6 +95,8 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
 
     fn on_endpoint_event<'a>(&mut self, _now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
+            EndpointEvent::PeerJoined(_, _) => None,
+            EndpointEvent::PeerLeaved(_) => None,
             EndpointEvent::PeerTrackStarted(_, _, _) => None,
             EndpointEvent::PeerTrackStopped(_, _) => None,
             EndpointEvent::RemoteMediaTrack(_, event) => match event {
@@ -124,7 +126,13 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                 log::info!("[TransportWebrtcWhip] connected");
                 self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(),
-                    EndpointReq::JoinRoom(self.room.clone(), self.peer.clone()),
+                    EndpointReq::JoinRoom(
+                        self.room.clone(),
+                        self.peer.clone(),
+                        PeerMeta {},
+                        RoomInfoPublish { peer: true, tracks: true },
+                        RoomInfoSubscribe { peers: false, tracks: false },
+                    ),
                 )));
                 return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
             }

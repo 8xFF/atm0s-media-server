@@ -68,7 +68,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
     }
 
     pub fn on_track_subscribe(&mut self, owner: Owner, track: LocalTrackId, target_peer: PeerId, target_track: TrackName) -> Option<Output<Owner>> {
-        let channel_id: ChannelId = super::track_key(self.room, &target_peer, &target_track);
+        let channel_id: ChannelId = super::gen_channel_id(self.room, &target_peer, &target_track);
         log::info!(
             "[ClusterRoom {}] owner {:?} track {track} subscribe peer {target_peer} track {target_track}), channel: {channel_id}",
             self.room,

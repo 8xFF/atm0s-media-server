@@ -7,7 +7,7 @@ use media_server_core::{
     endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointReq},
     transport::{LocalTrackEvent, LocalTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
-use media_server_protocol::endpoint::{PeerId, RoomId, TrackMeta, TrackName};
+use media_server_protocol::endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName};
 use str0m::{
     media::{Direction, MediaAdded, MediaKind, Mid},
     Event as Str0mEvent, IceConnectionState,
@@ -101,6 +101,8 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
 
     fn on_endpoint_event<'a>(&mut self, _now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
+            EndpointEvent::PeerJoined(_, _) => None,
+            EndpointEvent::PeerLeaved(_) => None,
             EndpointEvent::PeerTrackStarted(peer, track, meta) => {
                 if self.audio_mid.is_none() && meta.kind.is_audio() {
                     log::info!("[TransportWebrtcWhep] waiting local audio track => push Subscribe candidate to waits");
@@ -134,7 +136,13 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                 self.state = State::Connected;
                 self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(),
-                    EndpointReq::JoinRoom(self.room.clone(), self.peer.clone()),
+                    EndpointReq::JoinRoom(
+                        self.room.clone(),
+                        self.peer.clone(),
+                        PeerMeta {},
+                        RoomInfoPublish { peer: false, tracks: false },
+                        RoomInfoSubscribe { peers: false, tracks: true },
+                    ),
                 )));
                 return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
             }

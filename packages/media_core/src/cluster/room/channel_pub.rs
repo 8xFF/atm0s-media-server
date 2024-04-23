@@ -55,7 +55,7 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
 
     pub fn on_track_publish(&mut self, owner: Owner, track: RemoteTrackId, peer: PeerId, name: TrackName) -> Option<Output<Owner>> {
         log::info!("[ClusterRoom {}] peer ({peer} started track {name})", self.room);
-        let channel_id = super::track_key(self.room, &peer, &name);
+        let channel_id = super::gen_channel_id(self.room, &peer, &name);
         self.tracks.insert((owner, track), (peer.clone(), name.clone(), channel_id));
         self.tracks_source.insert(channel_id, (owner, track));
 

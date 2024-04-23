@@ -140,8 +140,8 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Owner> {
 
     fn on_endpoint_control(&mut self, now: Instant, owner: Owner, control: ClusterEndpointControl) -> Option<Output<Owner>> {
         match control {
-            ClusterEndpointControl::Join(peer, publish, subscribe) => {
-                let out = self.metadata.on_join(owner, peer, publish, subscribe)?;
+            ClusterEndpointControl::Join(peer, meta, publish, subscribe) => {
+                let out = self.metadata.on_join(owner, peer, meta, publish, subscribe)?;
                 Some(self.process_meta_output(out))
             }
             ClusterEndpointControl::Leave => {
@@ -230,7 +230,7 @@ impl<Owner: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Owner> {
     }
 }
 
-pub fn track_key<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track: &TrackName) -> T {
+pub fn gen_channel_id<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track: &TrackName) -> T {
     let mut h = std::hash::DefaultHasher::new();
     room.as_ref().hash(&mut h);
     peer.as_ref().hash(&mut h);
