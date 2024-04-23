@@ -46,7 +46,7 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
         let (owner, track_id) = self.tracks_source.get(&channel)?;
         match fb_kind {
             FeedbackKind::Bitrate => todo!(),
-            FeedbackKind::KeyFrameRequest => Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::RemoteTrack(*track_id, ClusterRemoteTrackEvent::RequestKeyFrame))),
+            FeedbackKind::KeyFrameRequest => Some(Output::Endpoint(vec![*owner], ClusterEndpointEvent::RemoteTrack(*track_id, ClusterRemoteTrackEvent::RequestKeyFrame))),
         }
     }
 
