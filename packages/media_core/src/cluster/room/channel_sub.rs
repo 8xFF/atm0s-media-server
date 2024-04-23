@@ -49,7 +49,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
         log::info!("[ClusterRoom {}] cluster: channel {channel} source changed => fire event to {:?}", self.room, subscribers);
         for (owner, track) in subscribers {
             self.queue
-                .push_back(Output::Endpoint(vec![owner.clone()], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::SourceChanged)))
+                .push_back(Output::Endpoint(vec![*owner], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::SourceChanged)))
         }
         self.queue.pop_front()
     }
@@ -59,10 +59,8 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
         let subscribers = self.subscribers.get(&channel)?;
         log::trace!("[ClusterRoom {}] on channel media payload {} seq {} to {} subscribers", self.room, pkt.pt, pkt.seq, subscribers.len());
         for (owner, track) in subscribers {
-            self.queue.push_back(Output::Endpoint(
-                vec![owner.clone()],
-                ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::Media(pkt.clone())),
-            ))
+            self.queue
+                .push_back(Output::Endpoint(vec![*owner], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::Media(pkt.clone()))))
         }
         self.queue.pop_front()
     }

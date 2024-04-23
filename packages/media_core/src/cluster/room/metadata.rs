@@ -127,7 +127,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
             for (_track_key, info) in self.cluster_peers.iter() {
                 //TODO avoiding duplicate same peer
                 self.queue
-                    .push_back(Output::Endpoint(vec![owner.clone()], ClusterEndpointEvent::PeerJoined(info.peer.clone(), info.meta.clone())));
+                    .push_back(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerJoined(info.peer.clone(), info.meta.clone())));
             }
 
             // If this is first peer which subscribed to peers_map, the should send Sub
@@ -145,7 +145,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
             for (_track_key, info) in self.cluster_tracks.iter() {
                 //TODO avoiding duplicate same peer
                 self.queue.push_back(Output::Endpoint(
-                    vec![owner.clone()],
+                    vec![owner],
                     ClusterEndpointEvent::TrackStarted(info.peer.clone(), info.track.clone(), info.meta.clone()),
                 ));
             }
