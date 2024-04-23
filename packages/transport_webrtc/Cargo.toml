@@ -1,0 +1,17 @@
+[package]
+name = "transport-webrtc"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = { workspace = true }
+sans-io-runtime = { workspace = true, default-features = false }
+media-server-utils = { path = "../media_utils" }
+media-server-protocol = { path = "../protocol" }
+media-server-core = { path = "../media_core" }
+num_enum = { workspace = true }
+str0m = "0.5.0"
+smallmap = "1.4.2"
+stun-rs = "0.1.8"
