@@ -5,7 +5,7 @@ use media_server_utils::Small2dMap;
 use sans_io_runtime::{TaskGroup, TaskSwitcher};
 
 use crate::{
-    cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
+    cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash, ClusterRoomInfoPublishLevel, ClusterRoomInfoSubscribeLevel},
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportEvent, TransportState, TransportStats},
 };
 
@@ -222,7 +222,10 @@ impl EndpointInternal {
         }
 
         self.joined = Some(((&room).into(), room.clone(), peer.clone()));
-        self.queue.push_back(InternalOutput::Cluster((&room).into(), ClusterEndpointControl::Join(peer)));
+        self.queue.push_back(InternalOutput::Cluster(
+            (&room).into(),
+            ClusterEndpointControl::Join(peer, ClusterRoomInfoPublishLevel::Full, ClusterRoomInfoSubscribeLevel::Full),
+        ));
 
         for (track_id, index) in self.local_tracks_id.pairs() {
             if let Some(out) = self.local_tracks.on_event(now, index, local_track::Input::JoinRoom(room_hash)) {

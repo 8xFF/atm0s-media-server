@@ -119,6 +119,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                 EndpointLocalTrackEvent::Media(pkt) => Some(InternalOutput::Str0mSendMedia(self.video_mid?, pkt)),
             },
             EndpointEvent::RemoteMediaTrack(track, event) => None,
+            EndpointEvent::GoAway(seconds, reason) => todo!(),
         }
     }
 

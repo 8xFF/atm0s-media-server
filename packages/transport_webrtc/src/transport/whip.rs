@@ -109,6 +109,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                 }
             },
             EndpointEvent::LocalMediaTrack(_, _) => None,
+            EndpointEvent::GoAway(seconds, reason) => todo!(),
         }
     }
 

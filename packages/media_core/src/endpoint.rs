@@ -75,6 +75,8 @@ pub enum EndpointEvent {
     PeerTrackStopped(PeerId, TrackName),
     RemoteMediaTrack(RemoteTrackId, EndpointRemoteTrackEvent),
     LocalMediaTrack(LocalTrackId, EndpointLocalTrackEvent),
+    /// This session will be disconnect after some seconds
+    GoAway(u8, Option<String>),
 }
 
 pub enum EndpointInput<'a, Ext> {

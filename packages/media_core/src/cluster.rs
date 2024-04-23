@@ -58,9 +58,24 @@ pub enum ClusterLocalTrackEvent {
 }
 
 #[derive(Debug)]
+pub enum ClusterRoomInfoPublishLevel {
+    Full,
+    TrackOnly,
+}
+
+#[derive(Debug)]
+pub enum ClusterRoomInfoSubscribeLevel {
+    Full,
+    TrackOnly,
+    Manual,
+}
+
+#[derive(Debug)]
 pub enum ClusterEndpointControl {
-    Join(PeerId),
+    Join(PeerId, ClusterRoomInfoPublishLevel, ClusterRoomInfoSubscribeLevel),
     Leave,
+    SubscribePeer(PeerId),
+    UnsubscribePeer(PeerId),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackControl),
     LocalTrack(LocalTrackId, ClusterLocalTrackControl),
 }
