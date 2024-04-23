@@ -404,6 +404,26 @@ mod tests {
 
     use super::{Output, RoomMetadata};
 
+    /// Test correct get peer info
+    #[test]
+    fn correct_get_peer() {
+        let room: ClusterRoomHash = 1.into();
+        let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
+        let peer_id: PeerId = "peer1".to_string().into();
+        let peer_meta = PeerMeta {};
+        let owner = 1;
+        room_meta.on_join(
+            owner,
+            peer_id.clone(),
+            peer_meta.clone(),
+            RoomInfoPublish { peer: false, tracks: false },
+            RoomInfoSubscribe { peers: false, tracks: false },
+        );
+
+        assert_eq!(room_meta.get_peer_from_owner(1), Some(peer_id));
+        assert_eq!(room_meta.get_peer_from_owner(2), None);
+    }
+
     /// Test join as peer only => should subscribe peers, fire only peer
     /// After leave should unsubscribe only peers, and del
     #[test]
@@ -451,6 +471,37 @@ mod tests {
         let out = room_meta.on_leave(owner);
         assert_eq!(out, Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Del(peer_key)))));
         assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Unsub))));
+        assert_eq!(room_meta.pop_output(Instant::now()), None);
+    }
+
+    #[test]
+    fn join_sub_peer_only_should_restore_old_peers() {
+        let room: ClusterRoomHash = 1.into();
+        let peers_map = RoomMetadata::<u8>::peers_map(room);
+        let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
+
+        let peer2: PeerId = "peer2".to_string().into();
+        let peer2_key = RoomMetadata::<u8>::peers_key(&peer2);
+        let peer2_info = PeerInfo::new(peer2, PeerMeta {});
+
+        let out = room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer2_key, 0, peer2_info.serialize()));
+        assert_eq!(out, None);
+
+        let owner = 1;
+        let peer_id: PeerId = "peer1".to_string().into();
+        let peer_meta = PeerMeta {};
+        let out = room_meta.on_join(
+            owner,
+            peer_id.clone(),
+            peer_meta.clone(),
+            RoomInfoPublish { peer: false, tracks: false },
+            RoomInfoSubscribe { peers: true, tracks: false },
+        );
+        assert_eq!(
+            out,
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerJoined(peer2_info.peer.clone(), peer2_info.meta.clone())))
+        );
+        assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Sub))));
         assert_eq!(room_meta.pop_output(Instant::now()), None);
     }
 
@@ -507,7 +558,43 @@ mod tests {
         assert_eq!(room_meta.pop_output(Instant::now()), None);
     }
 
-    //TODO Test manual no subscribe peer => dont fire any event
+    //join track only should restore old tracks
+    #[test]
+    fn join_sub_track_only_should_restore_old_tracks() {
+        let room: ClusterRoomHash = 1.into();
+        let tracks_map = RoomMetadata::<u8>::tracks_map(room);
+        let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
+
+        let peer2: PeerId = "peer2".to_string().into();
+        let track_name: TrackName = "audio_main".to_string().into();
+        let track_key = RoomMetadata::<u8>::tracks_key(&peer2, &track_name);
+        let track_info = TrackInfo::simple_audio(peer2);
+
+        let out = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
+        assert_eq!(out, None);
+
+        let owner = 1;
+        let peer_id: PeerId = "peer1".to_string().into();
+        let peer_meta = PeerMeta {};
+        let out = room_meta.on_join(
+            owner,
+            peer_id.clone(),
+            peer_meta.clone(),
+            RoomInfoPublish { peer: false, tracks: false },
+            RoomInfoSubscribe { peers: false, tracks: true },
+        );
+        assert_eq!(
+            out,
+            Some(Output::Endpoint(
+                vec![owner],
+                ClusterEndpointEvent::TrackStarted(track_info.peer.clone(), track_info.track.clone(), track_info.meta.clone())
+            ))
+        );
+        assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Sub))));
+        assert_eq!(room_meta.pop_output(Instant::now()), None);
+    }
+
+    //Test manual no subscribe peer => dont fire any event
     #[test]
     fn join_manual_no_subscribe_peer() {
         let room: ClusterRoomHash = 1.into();
