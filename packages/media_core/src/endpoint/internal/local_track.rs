@@ -1,6 +1,6 @@
 //! LocalTrack take care handling client request related this track
 //! It also handle feedback to source track about key-frame-request or desired-bitrate
-//! Last role is rewrite media data from source track to ensure seq and timestamp is continous even when switched to other source
+//! Last role is rewrite media data from source track to ensure seq and timestamp is continuous even when switched to other source
 
 use std::{collections::VecDeque, time::Instant};
 
@@ -151,7 +151,7 @@ mod tests {
     //TODO unview ok
     //TODO unview not ok
     //TODO room changed should fire unview
-    //TODO switched source need continuos ts and seq
+    //TODO switched source need continuous ts and seq
     //TODO should request key-frame if wait key-frame
     //TODO should forward key-frame request from transport
     //TODO local ended should unview if in viewing state

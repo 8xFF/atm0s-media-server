@@ -91,7 +91,7 @@ pub enum ClusterEndpointControl {
 #[derive(Clone)]
 pub enum ClusterEndpointEvent {
     TrackStarted(PeerId, TrackName, TrackMeta),
-    TrackStoped(PeerId, TrackName),
+    TrackStopped(PeerId, TrackName),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackEvent),
     LocalTrack(LocalTrackId, ClusterLocalTrackEvent),
 }

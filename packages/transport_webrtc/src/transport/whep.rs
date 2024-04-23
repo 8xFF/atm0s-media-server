@@ -256,7 +256,7 @@ impl TransportWebrtcWhep {
         None
     }
 
-    //TODO try to get other tracks if avaiable
+    //TODO try to get other tracks if available
     fn try_unsubscribe<'a>(&mut self, peer: PeerId, track: TrackName) -> Option<InternalOutput<'a>> {
         log::info!("[TransportWebrtcWhep] try unsubscribe {peer} {track}");
         if self.subscribed.peer.eq(&Some(peer.clone())) {

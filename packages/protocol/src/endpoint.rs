@@ -131,7 +131,7 @@ mod test {
     }
 
     #[test]
-    fn cluster_conn_id_pase() {
+    fn cluster_conn_id_parse() {
         let conn = ClusterConnId {
             node: 1,
             node_session: 2,

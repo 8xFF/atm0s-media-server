@@ -246,7 +246,7 @@ mod tests {
     //TODO track started should SET key-value and pubsub START
     //TODO track feedback should fire event to endpoint
     //TODO track stopped should DEL key-value and pubsub STOP
-    //TODO subscibe track should SUB channel
+    //TODO subscribe track should SUB channel
     //TODO fedback track should FEEDBACK channel
     //TODO channel data should fire event to endpoint
     //TODO unsubscribe track should UNSUB channel

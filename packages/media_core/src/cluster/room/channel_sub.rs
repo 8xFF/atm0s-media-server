@@ -123,7 +123,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
 
 #[cfg(test)]
 mod tests {
-    //TODO First Subcribe channel should sending Sub
+    //TODO First Subscribe channel should sending Sub
     //TODO Last Unsubscribe channel should sending Unsub
     //TODO Sending key-frame request
     //TODO Sending bitrate request single sub

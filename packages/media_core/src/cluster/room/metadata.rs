@@ -2,7 +2,7 @@
 //! Medata part takecare of how cluster will store peer, track info.
 //! We have 3 level: Full, Track only and Manual
 //!
-//! - Full: subscribe on both peer and track infomation
+//! - Full: subscribe on both peer and track information
 //! - Track only: subscribe on track info, this method is useful with large users application like broadcast or webinar
 //! - Manual: client manual call subscribe on which peer it interested in, this method is useful with some spartial audio application
 //!
@@ -139,7 +139,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
         } else {
             let (peer, name, _meta) = self.remote_tracks.remove(&track)?;
             log::info!("[ClusterRoom {}] cluster: peer ({}) stopped track {}) => fire event to {:?}", self.room, peer, name, peers);
-            Some(Output::Endpoint(peers, ClusterEndpointEvent::TrackStoped(peer, name)))
+            Some(Output::Endpoint(peers, ClusterEndpointEvent::TrackStopped(peer, name)))
         }
     }
 }

@@ -23,7 +23,7 @@ Main functions:
 
 ### Transport
 
-Transport act and a protocol logic, it can be WebRTC SDK, Whip, Whep or RTMP, SIP or so on. For flexiblity, we should implement transport as a plugin.
+Transport act and a protocol logic, it can be WebRTC SDK, Whip, Whep or RTMP, SIP or so on. For flexibility, we should implement transport as a plugin.
 
 Main functions of transport:
 
@@ -33,7 +33,7 @@ Main functions of transport:
 
 ### Cluster
 
-Cluster module handle generic event and control from endpoint to ensure it work correct in cluster environtment. Image that endpoint only output very general event like:
+Cluster module handle generic event and control from endpoint to ensure it work correct in cluster environment. Image that endpoint only output very general event like:
 
 - User: user joined, leaved
 - RemoteTrack: started, media-data, meta-data, ended
