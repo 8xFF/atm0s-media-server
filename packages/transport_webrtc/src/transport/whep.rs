@@ -118,7 +118,14 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             }
             EndpointEvent::PeerTrackStopped(peer, track) => self.try_unsubscribe(peer, track),
             EndpointEvent::LocalMediaTrack(_track, event) => match event {
-                EndpointLocalTrackEvent::Media(pkt) => Some(InternalOutput::Str0mSendMedia(self.video_mid?, pkt)),
+                EndpointLocalTrackEvent::Media(pkt) => {
+                    let mid = if pkt.pt == 111 {
+                        self.audio_mid
+                    } else {
+                        self.video_mid
+                    }?;
+                    Some(InternalOutput::Str0mSendMedia(mid, pkt))
+                }
             },
             EndpointEvent::RemoteMediaTrack(_track, _event) => None,
             EndpointEvent::GoAway(_seconds, _reason) => None,
