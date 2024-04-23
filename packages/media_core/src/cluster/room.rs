@@ -70,7 +70,7 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> Task<Input<Owner>, Output<Owner>> 
     }
 
     fn pop_output(&mut self, now: Instant) -> Option<Output<Owner>> {
-        while let Some(out) = self.queue.pop_front() {
+        if let Some(out) = self.queue.pop_front() {
             return Some(out);
         }
         loop {
