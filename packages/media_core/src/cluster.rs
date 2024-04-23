@@ -15,7 +15,7 @@ use std::{
 
 use atm0s_sdn::features::{FeaturesControl, FeaturesEvent};
 use media_server_protocol::{
-    endpoint::{PeerId, RoomId, TrackMeta, TrackName},
+    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName},
     media::MediaPacket,
 };
 
@@ -43,7 +43,7 @@ pub enum ClusterRemoteTrackControl {
     Ended,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClusterRemoteTrackEvent {
     RequestKeyFrame,
     LimitBitrate { min: u32, max: u32 },
@@ -57,7 +57,7 @@ pub enum ClusterLocalTrackControl {
     Unsubscribe,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClusterLocalTrackEvent {
     Started,
     SourceChanged,
@@ -66,21 +66,8 @@ pub enum ClusterLocalTrackEvent {
 }
 
 #[derive(Debug)]
-pub enum ClusterRoomInfoPublishLevel {
-    Full,
-    TrackOnly,
-}
-
-#[derive(Debug)]
-pub enum ClusterRoomInfoSubscribeLevel {
-    Full,
-    TrackOnly,
-    Manual,
-}
-
-#[derive(Debug)]
 pub enum ClusterEndpointControl {
-    Join(PeerId, ClusterRoomInfoPublishLevel, ClusterRoomInfoSubscribeLevel),
+    Join(PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe),
     Leave,
     SubscribePeer(PeerId),
     UnsubscribePeer(PeerId),
@@ -88,8 +75,10 @@ pub enum ClusterEndpointControl {
     LocalTrack(LocalTrackId, ClusterLocalTrackControl),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClusterEndpointEvent {
+    PeerJoined(PeerId, PeerMeta),
+    PeerLeaved(PeerId),
     TrackStarted(PeerId, TrackName, TrackMeta),
     TrackStopped(PeerId, TrackName),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackEvent),

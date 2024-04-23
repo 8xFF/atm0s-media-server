@@ -7,7 +7,7 @@ use media_server_core::{
     endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointReq},
     transport::{LocalTrackEvent, LocalTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
-use media_server_protocol::endpoint::{PeerId, RoomId, TrackMeta, TrackName};
+use media_server_protocol::endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName};
 use str0m::{
     media::{Direction, MediaAdded, MediaKind, Mid},
     Event as Str0mEvent, IceConnectionState,
@@ -101,6 +101,8 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
 
     fn on_endpoint_event<'a>(&mut self, _now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
+            EndpointEvent::PeerJoined(_, _) => None,
+            EndpointEvent::PeerLeaved(_) => None,
             EndpointEvent::PeerTrackStarted(peer, track, meta) => {
                 if self.audio_mid.is_none() && meta.kind.is_audio() {
                     log::info!("[TransportWebrtcWhep] waiting local audio track => push Subscribe candidate to waits");
@@ -116,7 +118,14 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             }
             EndpointEvent::PeerTrackStopped(peer, track) => self.try_unsubscribe(peer, track),
             EndpointEvent::LocalMediaTrack(_track, event) => match event {
-                EndpointLocalTrackEvent::Media(pkt) => Some(InternalOutput::Str0mSendMedia(self.video_mid?, pkt)),
+                EndpointLocalTrackEvent::Media(pkt) => {
+                    let mid = if pkt.pt == 111 {
+                        self.audio_mid
+                    } else {
+                        self.video_mid
+                    }?;
+                    Some(InternalOutput::Str0mSendMedia(mid, pkt))
+                }
             },
             EndpointEvent::RemoteMediaTrack(_track, _event) => None,
             EndpointEvent::GoAway(_seconds, _reason) => None,
@@ -134,7 +143,13 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                 self.state = State::Connected;
                 self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(),
-                    EndpointReq::JoinRoom(self.room.clone(), self.peer.clone()),
+                    EndpointReq::JoinRoom(
+                        self.room.clone(),
+                        self.peer.clone(),
+                        PeerMeta {},
+                        RoomInfoPublish { peer: false, tracks: false },
+                        RoomInfoSubscribe { peers: false, tracks: true },
+                    ),
                 )));
                 return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
             }

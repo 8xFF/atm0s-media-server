@@ -2,12 +2,16 @@
 
 use std::{collections::VecDeque, time::Instant};
 
-use media_server_protocol::endpoint::{PeerId, RoomId};
+use media_server_protocol::{
+    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
+    transport::RpcError,
+};
 use media_server_utils::Small2dMap;
 use sans_io_runtime::{TaskGroup, TaskSwitcher};
 
 use crate::{
-    cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash, ClusterRoomInfoPublishLevel, ClusterRoomInfoSubscribeLevel},
+    cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
+    errors::EndpointErrors,
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportEvent, TransportState, TransportStats},
 };
 
@@ -34,7 +38,7 @@ pub enum InternalOutput {
 
 pub struct EndpointInternal {
     state: TransportState,
-    wait_join: Option<(RoomId, PeerId)>,
+    wait_join: Option<(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe)>,
     joined: Option<(ClusterRoomHash, RoomId, PeerId)>,
     local_tracks_id: Small2dMap<LocalTrackId, usize>,
     remote_tracks_id: Small2dMap<RemoteTrackId, usize>,
@@ -125,21 +129,37 @@ impl EndpointInternal {
 
     pub fn on_transport_rpc<'a>(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointReq) -> Option<InternalOutput> {
         match req {
-            EndpointReq::JoinRoom(room, peer) => {
+            EndpointReq::JoinRoom(room, peer, meta, publish, subscribe) => {
                 if matches!(self.state, TransportState::Connecting) {
                     log::info!("[EndpointInternal] join_room({room}, {peer}) but in Connecting state => wait");
-                    self.wait_join = Some((room, peer));
+                    self.wait_join = Some((room, peer, meta, publish, subscribe));
                     None
                 } else {
-                    self.join_room(now, room, peer)
+                    self.join_room(now, room, peer, meta, publish, subscribe)
                 }
             }
             EndpointReq::LeaveRoom => {
-                if let Some((room, peer)) = self.wait_join.take() {
+                if let Some((room, peer, _meta, _publish, _subscribe)) = self.wait_join.take() {
                     log::info!("[EndpointInternal] leave_room({room}, {peer}) but in Connecting state => only clear local");
                     None
                 } else {
                     self.leave_room(now)
+                }
+            }
+            EndpointReq::SubscribePeer(peer) => {
+                if let Some((room, _, _)) = &self.joined {
+                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::SubscribePeer(peer)));
+                    Some(InternalOutput::RpcRes(req_id, EndpointRes::SubscribePeer(Ok(()))))
+                } else {
+                    Some(InternalOutput::RpcRes(req_id, EndpointRes::SubscribePeer(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
+                }
+            }
+            EndpointReq::UnsubscribePeer(peer) => {
+                if let Some((room, _, _)) = &self.joined {
+                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::UnsubscribePeer(peer)));
+                    Some(InternalOutput::RpcRes(req_id, EndpointRes::UnsubscribePeer(Ok(()))))
+                } else {
+                    Some(InternalOutput::RpcRes(req_id, EndpointRes::UnsubscribePeer(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
                 }
             }
             EndpointReq::RemoteTrack(track_id, req) => {
@@ -168,9 +188,9 @@ impl EndpointInternal {
             }
             TransportState::Connected => {
                 log::info!("[EndpointInternal] connected");
-                let (room, peer) = self.wait_join.take()?;
+                let (room, peer, meta, publish, subscribe) = self.wait_join.take()?;
                 log::info!("[EndpointInternal] join_room({room}, {peer}) after connected");
-                self.join_room(now, room, peer)
+                self.join_room(now, room, peer, meta, publish, subscribe)
             }
             TransportState::Reconnecting => {
                 log::info!("[EndpointInternal] reconnecting");
@@ -215,7 +235,7 @@ impl EndpointInternal {
         None
     }
 
-    fn join_room<'a>(&mut self, now: Instant, room: RoomId, peer: PeerId) -> Option<InternalOutput> {
+    fn join_room<'a>(&mut self, now: Instant, room: RoomId, peer: PeerId, meta: PeerMeta, publish: RoomInfoPublish, subscribe: RoomInfoSubscribe) -> Option<InternalOutput> {
         let room_hash: ClusterRoomHash = (&room).into();
         log::info!("[EndpointInternal] join_room({room}, {peer}), room_hash {room_hash}");
 
@@ -224,10 +244,8 @@ impl EndpointInternal {
         }
 
         self.joined = Some(((&room).into(), room.clone(), peer.clone()));
-        self.queue.push_back(InternalOutput::Cluster(
-            (&room).into(),
-            ClusterEndpointControl::Join(peer, ClusterRoomInfoPublishLevel::Full, ClusterRoomInfoSubscribeLevel::Full),
-        ));
+        self.queue
+            .push_back(InternalOutput::Cluster((&room).into(), ClusterEndpointControl::Join(peer, meta, publish, subscribe)));
 
         for (track_id, index) in self.local_tracks_id.pairs() {
             if let Some(out) = self.local_tracks.on_event(now, index, local_track::Input::JoinRoom(room_hash)) {
@@ -276,6 +294,8 @@ impl EndpointInternal {
 impl EndpointInternal {
     pub fn on_cluster_event<'a>(&mut self, now: Instant, event: ClusterEndpointEvent) -> Option<InternalOutput> {
         match event {
+            ClusterEndpointEvent::PeerJoined(peer, meta) => Some(InternalOutput::Event(EndpointEvent::PeerJoined(peer, meta))),
+            ClusterEndpointEvent::PeerLeaved(peer) => Some(InternalOutput::Event(EndpointEvent::PeerLeaved(peer))),
             ClusterEndpointEvent::TrackStarted(peer, track, meta) => Some(InternalOutput::Event(EndpointEvent::PeerTrackStarted(peer, track, meta))),
             ClusterEndpointEvent::TrackStopped(peer, track) => Some(InternalOutput::Event(EndpointEvent::PeerTrackStopped(peer, track))),
             ClusterEndpointEvent::RemoteTrack(track, event) => self.on_cluster_remote_track(now, track, event),

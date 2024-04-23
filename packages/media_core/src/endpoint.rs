@@ -3,7 +3,7 @@
 use std::{marker::PhantomData, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{PeerId, RoomId, TrackMeta, TrackName},
+    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName},
     media::MediaPacket,
     transport::RpcResult,
 };
@@ -47,8 +47,10 @@ impl From<u64> for EndpointReqId {
 
 /// This is control APIs, which is used to control server from Endpoint SDK
 pub enum EndpointReq {
-    JoinRoom(RoomId, PeerId),
+    JoinRoom(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe),
     LeaveRoom,
+    SubscribePeer(PeerId),
+    UnsubscribePeer(PeerId),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackReq),
     LocalTrack(LocalTrackId, EndpointLocalTrackReq),
 }
@@ -57,6 +59,8 @@ pub enum EndpointReq {
 pub enum EndpointRes {
     JoinRoom(RpcResult<()>),
     LeaveRoom(RpcResult<()>),
+    SubscribePeer(RpcResult<()>),
+    UnsubscribePeer(RpcResult<()>),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackRes),
     LocalTrack(LocalTrackId, EndpointLocalTrackRes),
 }
@@ -73,6 +77,8 @@ pub enum EndpointRemoteTrackEvent {
 }
 
 pub enum EndpointEvent {
+    PeerJoined(PeerId, PeerMeta),
+    PeerLeaved(PeerId),
     PeerTrackStarted(PeerId, TrackName, TrackMeta),
     PeerTrackStopped(PeerId, TrackName),
     RemoteMediaTrack(RemoteTrackId, EndpointRemoteTrackEvent),

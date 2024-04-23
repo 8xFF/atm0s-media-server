@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::endpoint::{PeerId, TrackMeta, TrackName};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaKind {
     Audio,
     Video,
@@ -19,7 +19,7 @@ impl MediaKind {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaScaling {
     None,
     Simulcat,
@@ -34,7 +34,7 @@ pub enum MediaCodec {
     Vp9,
 }
 
-#[derive(Derivative, Clone, Serialize, Deserialize)]
+#[derive(Derivative, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[derivative(Debug)]
 pub struct MediaPacket {
     pub pt: u8,
@@ -52,23 +52,6 @@ impl MediaPacket {
     }
 
     pub fn deserialize(data: &[u8]) -> Option<MediaPacket> {
-        bincode::deserialize::<Self>(data).ok()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TrackInfo {
-    pub peer: PeerId,
-    pub track: TrackName,
-    pub meta: TrackMeta,
-}
-
-impl TrackInfo {
-    pub fn serialize(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("should ok")
-    }
-
-    pub fn deserialize(data: &[u8]) -> Option<TrackInfo> {
         bincode::deserialize::<Self>(data).ok()
     }
 }

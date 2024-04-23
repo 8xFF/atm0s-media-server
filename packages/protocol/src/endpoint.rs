@@ -102,19 +102,90 @@ impl ConnLayer for usize {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RoomInfoPublish {
+    pub peer: bool,
+    pub tracks: bool,
+}
+
+#[derive(Debug)]
+pub struct RoomInfoSubscribe {
+    pub peers: bool,
+    pub tracks: bool,
+}
+
 #[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RoomId(pub String);
 
 #[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PeerId(pub String);
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PeerMeta {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeerInfo {
+    pub peer: PeerId,
+    pub meta: PeerMeta,
+}
+
+impl PeerInfo {
+    pub fn new(peer: PeerId, meta: PeerMeta) -> Self {
+        Self { peer, meta }
+    }
+}
+
+impl PeerInfo {
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("should ok")
+    }
+
+    pub fn deserialize(data: &[u8]) -> Option<PeerInfo> {
+        bincode::deserialize::<Self>(data).ok()
+    }
+}
+
 #[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TrackName(pub String);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrackMeta {
     pub kind: MediaKind,
     pub scaling: MediaScaling,
+}
+
+impl TrackMeta {
+    pub fn default_audio() -> Self {
+        Self {
+            kind: MediaKind::Audio,
+            scaling: MediaScaling::None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrackInfo {
+    pub peer: PeerId,
+    pub track: TrackName,
+    pub meta: TrackMeta,
+}
+
+impl TrackInfo {
+    pub fn simple_audio(peer: PeerId) -> Self {
+        Self {
+            peer,
+            track: "audio_main".to_string().into(),
+            meta: TrackMeta::default_audio(),
+        }
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("should ok")
+    }
+
+    pub fn deserialize(data: &[u8]) -> Option<TrackInfo> {
+        bincode::deserialize::<Self>(data).ok()
+    }
 }
 
 #[cfg(test)]

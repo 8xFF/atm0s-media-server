@@ -1,8 +1,9 @@
 #[derive(Debug, num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
 #[repr(u16)]
 pub enum EndpointErrors {
-    LocalTrackSwitchNotInRoom = 0x0000,
-    LocalTrackSwitchNotPin = 0x0001,
+    EndpointNotInRoom = 0x0001,
+    LocalTrackNotPinSource = 0x1001,
+    RemoteTrack_ = 0x2001,
 }
 
 impl ToString for EndpointErrors {
