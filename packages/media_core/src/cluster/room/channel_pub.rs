@@ -8,17 +8,32 @@ use std::{
 
 use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId, Feedback};
 use media_server_protocol::{
-    endpoint::{PeerId, TrackMeta, TrackName},
+    endpoint::{PeerId, TrackName},
     media::MediaPacket,
 };
 
 use crate::{
-    cluster::{ClusterEndpointEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
+    cluster::{id_generator, ClusterEndpointEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
     transport::RemoteTrackId,
 };
 
-use super::FeedbackKind;
+pub enum FeedbackKind {
+    Bitrate { min: u64, max: u64 },
+    KeyFrameRequest,
+}
 
+impl TryFrom<Feedback> for FeedbackKind {
+    type Error = ();
+    fn try_from(value: Feedback) -> Result<Self, Self::Error> {
+        match value.kind {
+            0 => Ok(FeedbackKind::Bitrate { min: value.min, max: value.max }),
+            1 => Ok(FeedbackKind::KeyFrameRequest),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum Output<Owner> {
     Endpoint(Vec<Owner>, ClusterEndpointEvent),
     Pubsub(pubsub::Control),
@@ -42,17 +57,20 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
     }
 
     pub fn on_channel_feedback(&mut self, channel: ChannelId, fb: Feedback) -> Option<Output<Owner>> {
-        let fb_kind = FeedbackKind::try_from(fb.kind).ok()?;
+        let fb = FeedbackKind::try_from(fb).ok()?;
         let (owner, track_id) = self.tracks_source.get(&channel)?;
-        match fb_kind {
-            FeedbackKind::Bitrate => todo!(),
+        match fb {
+            FeedbackKind::Bitrate { min, max } => Some(Output::Endpoint(
+                vec![*owner],
+                ClusterEndpointEvent::RemoteTrack(*track_id, ClusterRemoteTrackEvent::LimitBitrate { min, max }),
+            )),
             FeedbackKind::KeyFrameRequest => Some(Output::Endpoint(vec![*owner], ClusterEndpointEvent::RemoteTrack(*track_id, ClusterRemoteTrackEvent::RequestKeyFrame))),
         }
     }
 
     pub fn on_track_publish(&mut self, owner: Owner, track: RemoteTrackId, peer: PeerId, name: TrackName) -> Option<Output<Owner>> {
         log::info!("[ClusterRoom {}] peer ({peer} started track {name})", self.room);
-        let channel_id = super::gen_channel_id(self.room, &peer, &name);
+        let channel_id = id_generator::gen_channel_id(self.room, &peer, &name);
         self.tracks.insert((owner, track), (peer.clone(), name.clone(), channel_id));
         self.tracks_source.insert(channel_id, (owner, track));
 
@@ -80,9 +98,84 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
 
 #[cfg(test)]
 mod tests {
-    //TODO Track start => should register with SDN
-    //TODO Track stop => should unregister with SDN
-    //TODO Track media => should send data over SDN
+    use atm0s_sdn::features::pubsub::{ChannelControl, Control, Feedback};
+    use media_server_protocol::media::MediaPacket;
+
+    use crate::{
+        cluster::{ClusterEndpointEvent, ClusterRemoteTrackEvent},
+        transport::RemoteTrackId,
+    };
+
+    use super::id_generator::gen_channel_id;
+    use super::{Output, RoomChannelPublisher};
+
+    pub fn fake_audio() -> MediaPacket {
+        MediaPacket {
+            pt: 111,
+            ts: 0,
+            seq: 0,
+            marker: true,
+            nackable: false,
+            data: vec![1, 2, 3, 4],
+        }
+    }
+
+    //Track start => should register with SDN
+    //Track stop => should unregister with SDN
+    //Track media => should send data over SDN
+    #[test]
+    fn channel_publish_data() {
+        let room = 1.into();
+        let mut publisher = RoomChannelPublisher::<u8>::new(room);
+
+        let owner = 2;
+        let track = RemoteTrackId(3);
+        let peer = "peer1".to_string().into();
+        let name = "audio_main".to_string().into();
+        let channel_id = gen_channel_id(room, &peer, &name);
+        let out = publisher.on_track_publish(owner, track, peer, name);
+        assert_eq!(out, Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
+        assert_eq!(publisher.pop_output(), None);
+
+        let media = fake_audio();
+        let out = publisher.on_track_data(owner, track, media.clone());
+        assert_eq!(out, Some(Output::Pubsub(Control(channel_id, ChannelControl::PubData(media.serialize())))));
+        assert_eq!(publisher.pop_output(), None);
+
+        let out = publisher.on_track_unpublish(owner, track);
+        assert_eq!(out, Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
+        assert_eq!(publisher.pop_output(), None);
+    }
+
     //TODO Handle feedback: should handle KeyFrame feedback
     //TODO Handle feedback: should handle Bitrate feedback
+    #[test]
+    fn channel_feedback() {
+        let room = 1.into();
+        let mut publisher = RoomChannelPublisher::<u8>::new(room);
+
+        let owner = 2;
+        let track = RemoteTrackId(3);
+        let peer = "peer1".to_string().into();
+        let name = "audio_main".to_string().into();
+        let channel_id = gen_channel_id(room, &peer, &name);
+        let out = publisher.on_track_publish(owner, track, peer, name);
+        assert_eq!(out, Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
+        assert_eq!(publisher.pop_output(), None);
+
+        let out = publisher.on_channel_feedback(channel_id, Feedback::simple(0, 1000, 100, 200));
+        assert_eq!(
+            out,
+            Some(Output::Endpoint(
+                vec![owner],
+                ClusterEndpointEvent::RemoteTrack(track, ClusterRemoteTrackEvent::LimitBitrate { min: 1000, max: 1000 })
+            ))
+        );
+
+        let out = publisher.on_channel_feedback(channel_id, Feedback::simple(1, 1, 100, 200));
+        assert_eq!(
+            out,
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::RemoteTrack(track, ClusterRemoteTrackEvent::RequestKeyFrame)))
+        );
+    }
 }
