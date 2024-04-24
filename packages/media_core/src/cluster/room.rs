@@ -7,15 +7,9 @@
 //! - Send/Receive pubsub channel
 //!
 
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    hash::{Hash, Hasher},
-    time::Instant,
-};
+use std::{collections::VecDeque, fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::features::{dht_kv, pubsub, FeaturesControl, FeaturesEvent};
-use media_server_protocol::endpoint::{PeerId, TrackName};
 use sans_io_runtime::{Task, TaskSwitcher};
 
 use crate::transport::{LocalTrackId, RemoteTrackId};
@@ -36,7 +30,6 @@ pub enum Input<Owner> {
 pub enum Output<Owner> {
     Sdn(ClusterRoomHash, FeaturesControl),
     Endpoint(Vec<Owner>, ClusterEndpointEvent),
-    Continue,
     Destroy,
 }
 
@@ -249,7 +242,7 @@ mod tests {
     //TODO track feedback should fire event to endpoint
     //TODO track stopped should DEL key-value and pubsub STOP
     //TODO subscribe track should SUB channel
-    //TODO fedback track should FEEDBACK channel
+    //TODO feddback track should FEEDBACK channel
     //TODO channel data should fire event to endpoint
     //TODO unsubscribe track should UNSUB channel
 }

@@ -151,7 +151,6 @@ impl<Owner: Debug + Hash + Copy + Clone + Debug + Eq> MediaCluster<Owner> {
         match out {
             room::Output::Sdn(userdata, control) => Output::Sdn(userdata, control),
             room::Output::Endpoint(owners, event) => Output::Endpoint(owners, event),
-            room::Output::Continue => Output::Continue,
             room::Output::Destroy => {
                 self.rooms.remove_task(index);
                 Output::Continue
