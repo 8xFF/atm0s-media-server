@@ -22,22 +22,22 @@ use crate::transport::{LocalTrackId, RemoteTrackId};
 
 use self::{channel_pub::RoomChannelPublisher, channel_sub::RoomChannelSubscribe, metadata::RoomMetadata};
 
-use super::{ClusterEndpointControl, ClusterLocalTrackControl, ClusterRemoteTrackControl, ClusterRoomHash, Output};
+use super::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackControl, ClusterRemoteTrackControl, ClusterRoomHash};
 
 mod channel_pub;
 mod channel_sub;
 mod metadata;
 
-#[derive(num_enum::TryFromPrimitive)]
-#[repr(u8)]
-pub enum FeedbackKind {
-    Bitrate = 0,
-    KeyFrameRequest = 1,
-}
-
 pub enum Input<Owner> {
     Sdn(FeaturesEvent),
     Endpoint(Owner, ClusterEndpointControl),
+}
+
+pub enum Output<Owner> {
+    Sdn(ClusterRoomHash, FeaturesControl),
+    Endpoint(Vec<Owner>, ClusterEndpointEvent),
+    Continue,
+    Destroy,
 }
 
 #[derive(num_enum::TryFromPrimitive)]
@@ -55,6 +55,7 @@ pub struct ClusterRoom<Owner> {
     subscriber: RoomChannelSubscribe<Owner>,
     switcher: TaskSwitcher,
     queue: VecDeque<Output<Owner>>,
+    destroyed: bool, //this flag for avoiding multi-time output destroy output
 }
 
 impl<Owner: Debug + Copy + Clone + Hash + Eq> Task<Input<Owner>, Output<Owner>> for ClusterRoom<Owner> {
@@ -73,8 +74,8 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> Task<Input<Owner>, Output<Owner>> 
         if let Some(out) = self.queue.pop_front() {
             return Some(out);
         }
-        loop {
-            match self.switcher.queue_current()?.try_into().ok()? {
+        while let Some(c) = self.switcher.queue_current() {
+            match c.try_into().ok()? {
                 TaskType::Metadata => {
                     if let Some(out) = self.switcher.queue_process(self.metadata.pop_output(now)) {
                         return Some(self.process_meta_output(out));
@@ -92,6 +93,14 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> Task<Input<Owner>, Output<Owner>> 
                 }
             }
         }
+
+        if self.metadata.peers() == 0 && !self.destroyed {
+            log::info!("[ClusterRoom {}] leave last peer => remove room", self.room);
+            self.destroyed = true;
+            Some(Output::Destroy)
+        } else {
+            None
+        }
     }
 
     fn shutdown(&mut self, _now: Instant) -> Option<Output<Owner>> {
@@ -108,6 +117,7 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Owner> {
             subscriber: RoomChannelSubscribe::new(room),
             switcher: TaskSwitcher::new(3),
             queue: VecDeque::new(),
+            destroyed: false,
         }
     }
 
@@ -145,8 +155,8 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Owner> {
                 Some(self.process_meta_output(out))
             }
             ClusterEndpointControl::Leave => {
-                let out = self.metadata.on_leave(owner)?;
-                Some(self.process_meta_output(out))
+                let out = self.metadata.on_leave(owner);
+                Some(self.process_meta_output(out?))
             }
             ClusterEndpointControl::SubscribePeer(target) => {
                 let out = self.metadata.on_subscribe_peer(owner, target)?;
@@ -195,11 +205,11 @@ impl<Owner: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Owner> {
         }
     }
 
-    fn control_local_track(&mut self, _now: Instant, owner: Owner, track_id: LocalTrackId, control: ClusterLocalTrackControl) -> Option<Output<Owner>> {
+    fn control_local_track(&mut self, now: Instant, owner: Owner, track_id: LocalTrackId, control: ClusterLocalTrackControl) -> Option<Output<Owner>> {
         let out = match control {
             ClusterLocalTrackControl::Subscribe(target_peer, target_track) => self.subscriber.on_track_subscribe(owner, track_id, target_peer, target_track),
             ClusterLocalTrackControl::RequestKeyFrame => self.subscriber.on_track_request_key(owner, track_id),
-            ClusterLocalTrackControl::DesiredBitrate(bitrate) => self.subscriber.on_track_desired_bitrate(owner, track_id, bitrate),
+            ClusterLocalTrackControl::DesiredBitrate(bitrate) => self.subscriber.on_track_desired_bitrate(now, owner, track_id, bitrate),
             ClusterLocalTrackControl::Unsubscribe => self.subscriber.on_track_unsubscribe(owner, track_id),
         }?;
         Some(self.process_subscriber_output(out))
@@ -228,14 +238,6 @@ impl<Owner: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Owner> {
             channel_sub::Output::Endpoint(owners, event) => Output::Endpoint(owners, event),
         }
     }
-}
-
-pub fn gen_channel_id<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track: &TrackName) -> T {
-    let mut h = std::hash::DefaultHasher::new();
-    room.as_ref().hash(&mut h);
-    peer.as_ref().hash(&mut h);
-    track.as_ref().hash(&mut h);
-    h.finish().into()
 }
 
 #[cfg(test)]

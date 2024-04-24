@@ -19,7 +19,7 @@ use media_server_protocol::endpoint::{PeerId, PeerInfo, PeerMeta, RoomInfoPublis
 use smallmap::{Map as SmallMap, Set as SmallSet};
 
 use crate::{
-    cluster::{ClusterEndpointEvent, ClusterRoomHash},
+    cluster::{id_generator, ClusterEndpointEvent, ClusterRoomHash},
     transport::RemoteTrackId,
 };
 
@@ -54,8 +54,8 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
             room,
-            peers_map: Self::peers_map(room),
-            tracks_map: Self::tracks_map(room),
+            peers_map: id_generator::peers_map(room),
+            tracks_map: id_generator::tracks_map(room),
             peers: SmallMap::new(),
             peers_map_subscribers: SmallMap::new(),
             tracks_map_subscribers: SmallMap::new(),
@@ -66,32 +66,8 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
         }
     }
 
-    fn peer_map(room: ClusterRoomHash, peer: &PeerId) -> Map {
-        let mut h = DefaultHasher::new();
-        room.as_ref().hash(&mut h);
-        peer.as_ref().hash(&mut h);
-        h.finish().into()
-    }
-
-    fn peers_map(room: ClusterRoomHash) -> Map {
-        room.0.into()
-    }
-
-    fn peers_key(peer: &PeerId) -> Key {
-        let mut h = DefaultHasher::new();
-        peer.as_ref().hash(&mut h);
-        h.finish().into()
-    }
-
-    fn tracks_map(room: ClusterRoomHash) -> Map {
-        (room.0 + 1).into()
-    }
-
-    fn tracks_key(peer: &PeerId, track: &TrackName) -> Key {
-        let mut h = DefaultHasher::new();
-        peer.as_ref().hash(&mut h);
-        track.as_ref().hash(&mut h);
-        h.finish().into()
+    pub fn peers(&self) -> usize {
+        self.peers.len()
     }
 
     pub fn get_peer_from_owner(&self, owner: Owner) -> Option<PeerId> {
@@ -111,7 +87,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 pub_tracks: SmallMap::new(),
             },
         );
-        let peer_key = Self::peers_key(&peer);
+        let peer_key = id_generator::peers_key(&peer);
 
         // Let Set to peers_map if need need publisj.peer
         if publish.peer {
@@ -160,18 +136,18 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
     }
 
     pub fn on_leave(&mut self, owner: Owner) -> Option<Output<Owner>> {
-        let peer = self.peers.remove(&owner).expect("Should have owner");
+        let peer = self.peers.remove(&owner)?;
         log::info!("[ClusterRoom {}] leave peer {}", self.room, peer.peer);
-        let peer_key = Self::peers_key(&peer.peer);
+        let peer_key = id_generator::peers_key(&peer.peer);
         // If remain remote tracks, must to delete from list.
         if peer.publish.peer {
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.peers_map, MapControl::Del(peer_key))))
         }
 
         // If remain remote tracks, must to delete from list.
-        let peer_map = Self::peer_map(self.room, &peer.peer);
+        let peer_map = id_generator::peer_map(self.room, &peer.peer);
         for (_, track) in peer.pub_tracks.into_iter() {
-            let track_key = Self::tracks_key(&peer.peer, &track);
+            let track_key = id_generator::tracks_key(&peer.peer, &track);
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Del(track_key))));
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(peer_map, MapControl::Del(track_key))));
         }
@@ -192,7 +168,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
 
         // check if this peer manual subscribe to some private peer map => need send Unsub
         for (target, _) in peer.sub_peers.into_iter() {
-            let target_peer_map = Self::peer_map(self.room, &target);
+            let target_peer_map = id_generator::peer_map(self.room, &target);
             let subs = self.peers_tracks_subs.get_mut(&target_peer_map).expect("Should have private peer_map");
             subs.remove(&owner);
             if subs.is_empty() {
@@ -206,7 +182,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
 
     pub fn on_subscribe_peer(&mut self, owner: Owner, target: PeerId) -> Option<Output<Owner>> {
         let peer = self.peers.get_mut(&owner).expect("Should have peer");
-        let target_peer_map = Self::peer_map(self.room, &target);
+        let target_peer_map = id_generator::peer_map(self.room, &target);
         let subs = self.peers_tracks_subs.entry(target_peer_map).or_default();
         let need_sub = subs.is_empty();
         subs.insert(owner, ());
@@ -221,7 +197,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
 
     pub fn on_unsubscribe_peer(&mut self, owner: Owner, target: PeerId) -> Option<Output<Owner>> {
         let peer = self.peers.get_mut(&owner).expect("Should have peer");
-        let target_peer_map = Self::peer_map(self.room, &target);
+        let target_peer_map = id_generator::peer_map(self.room, &target);
         let subs = self.peers_tracks_subs.entry(target_peer_map).or_default();
         subs.remove(&owner);
         peer.sub_peers.remove(&target);
@@ -241,10 +217,10 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 track: track.clone(),
                 meta,
             };
-            let track_key = Self::tracks_key(&peer.peer, &track);
+            let track_key = id_generator::tracks_key(&peer.peer, &track);
             peer.pub_tracks.insert(track_id, track);
 
-            let peer_map = Self::peer_map(self.room, &peer.peer);
+            let peer_map = id_generator::peer_map(self.room, &peer.peer);
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(peer_map, MapControl::Set(track_key, info.serialize()))));
 
             Some(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Set(track_key, info.serialize()))))
@@ -256,9 +232,9 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
     pub fn on_track_unpublish(&mut self, owner: Owner, track_id: RemoteTrackId) -> Option<Output<Owner>> {
         let peer = self.peers.get_mut(&owner)?;
         let track = peer.pub_tracks.remove(&track_id)?;
-        let track_key = Self::tracks_key(&peer.peer, &track);
+        let track_key = id_generator::tracks_key(&peer.peer, &track);
 
-        let peer_map = Self::peer_map(self.room, &peer.peer);
+        let peer_map = id_generator::peer_map(self.room, &peer.peer);
         self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(peer_map, MapControl::Del(track_key))));
 
         Some(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Del(track_key))))
@@ -398,7 +374,7 @@ mod tests {
     use media_server_protocol::endpoint::{PeerId, PeerInfo, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, TrackInfo, TrackName};
 
     use crate::{
-        cluster::{ClusterEndpointEvent, ClusterRoomHash},
+        cluster::{id_generator, ClusterEndpointEvent, ClusterRoomHash},
         transport::RemoteTrackId,
     };
 
@@ -429,13 +405,13 @@ mod tests {
     #[test]
     fn join_peer_only() {
         let room: ClusterRoomHash = 1.into();
-        let peers_map = RoomMetadata::<u8>::peers_map(room);
-        let tracks_map = RoomMetadata::<u8>::tracks_map(room);
+        let peers_map = id_generator::peers_map(room);
+        let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta {};
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
-        let peer_key = RoomMetadata::<u8>::peers_key(&peer_id);
+        let peer_key = id_generator::peers_key(&peer_id);
         let owner = 1;
         let out = room_meta.on_join(
             owner,
@@ -455,8 +431,8 @@ mod tests {
 
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
-        let track_key = RoomMetadata::<u8>::tracks_key(&peer_id, &track_name);
-        let out = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
+        let track_key = id_generator::tracks_key(&peer_id, &track_name);
+        let out: Option<Output<u8>> = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
         assert_eq!(out, None);
 
         // should only handle remove peer event, reject track
@@ -477,11 +453,11 @@ mod tests {
     #[test]
     fn join_sub_peer_only_should_restore_old_peers() {
         let room: ClusterRoomHash = 1.into();
-        let peers_map = RoomMetadata::<u8>::peers_map(room);
+        let peers_map = id_generator::peers_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
 
         let peer2: PeerId = "peer2".to_string().into();
-        let peer2_key = RoomMetadata::<u8>::peers_key(&peer2);
+        let peer2_key = id_generator::peers_key(&peer2);
         let peer2_info = PeerInfo::new(peer2, PeerMeta {});
 
         let out = room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer2_key, 0, peer2_info.serialize()));
@@ -509,13 +485,13 @@ mod tests {
     #[test]
     fn join_track_only() {
         let room: ClusterRoomHash = 1.into();
-        let peers_map = RoomMetadata::<u8>::peers_map(room);
-        let tracks_map = RoomMetadata::<u8>::tracks_map(room);
+        let peers_map = id_generator::peers_map(room);
+        let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta {};
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
-        let peer_key = RoomMetadata::<u8>::peers_key(&peer_id);
+        let peer_key = id_generator::peers_key(&peer_id);
         let owner = 1;
         let out = room_meta.on_join(
             owner,
@@ -533,7 +509,7 @@ mod tests {
 
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
-        let track_key = RoomMetadata::<u8>::tracks_key(&peer_id, &track_name);
+        let track_key = id_generator::tracks_key(&peer_id, &track_name);
         let out = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
         assert_eq!(
             out,
@@ -562,12 +538,12 @@ mod tests {
     #[test]
     fn join_sub_track_only_should_restore_old_tracks() {
         let room: ClusterRoomHash = 1.into();
-        let tracks_map = RoomMetadata::<u8>::tracks_map(room);
+        let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
 
         let peer2: PeerId = "peer2".to_string().into();
         let track_name: TrackName = "audio_main".to_string().into();
-        let track_key = RoomMetadata::<u8>::tracks_key(&peer2, &track_name);
+        let track_key = id_generator::tracks_key(&peer2, &track_name);
         let track_info = TrackInfo::simple_audio(peer2);
 
         let out = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
@@ -598,13 +574,13 @@ mod tests {
     #[test]
     fn join_manual_no_subscribe_peer() {
         let room: ClusterRoomHash = 1.into();
-        let peers_map = RoomMetadata::<u8>::peers_map(room);
-        let tracks_map = RoomMetadata::<u8>::tracks_map(room);
+        let peers_map = id_generator::peers_map(room);
+        let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta {};
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
-        let peer_key = RoomMetadata::<u8>::peers_key(&peer_id);
+        let peer_key = id_generator::peers_key(&peer_id);
         let owner = 1;
         let out = room_meta.on_join(
             owner,
@@ -621,7 +597,7 @@ mod tests {
 
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
-        let track_key = RoomMetadata::<u8>::tracks_key(&peer_id, &track_name);
+        let track_key = id_generator::tracks_key(&peer_id, &track_name);
         let out = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
         assert_eq!(out, None);
 
@@ -655,7 +631,7 @@ mod tests {
         assert_eq!(out, None);
 
         let peer2: PeerId = "peer1".to_string().into();
-        let peer2_map = RoomMetadata::<u8>::peer_map(room, &peer2);
+        let peer2_map = id_generator::peer_map(room, &peer2);
         let out = room_meta.on_subscribe_peer(owner, peer2.clone());
         assert_eq!(out, Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Sub))));
         assert_eq!(room_meta.pop_output(Instant::now()), None);
@@ -663,7 +639,7 @@ mod tests {
         // should handle incoming event with only track and reject peer
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
-        let track_key = RoomMetadata::<u8>::tracks_key(&peer2, &track_name);
+        let track_key = id_generator::tracks_key(&peer2, &track_name);
         let out = room_meta.on_kv_event(peer2_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
         assert_eq!(
             out,
@@ -693,7 +669,7 @@ mod tests {
     #[test]
     fn track_publish_enable() {
         let room: ClusterRoomHash = 1.into();
-        let tracks_map = RoomMetadata::<u8>::tracks_map(room);
+        let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
 
         let owner = 1;
@@ -711,8 +687,8 @@ mod tests {
         let track_id: RemoteTrackId = RemoteTrackId(1);
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
-        let peer_map = RoomMetadata::<u8>::peer_map(room, &peer_id);
-        let track_key = RoomMetadata::<u8>::tracks_key(&peer_id, &track_name);
+        let peer_map = id_generator::peer_map(room, &peer_id);
+        let track_key = id_generator::tracks_key(&peer_id, &track_name);
         let out = room_meta.on_track_publish(owner, track_id, track_name, track_info.meta.clone());
         assert_eq!(out, Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Set(track_key, track_info.serialize())))));
         assert_eq!(
@@ -769,7 +745,7 @@ mod tests {
     #[test]
     fn leave_room_auto_del_remote_tracks() {
         let room: ClusterRoomHash = 1.into();
-        let tracks_map = RoomMetadata::<u8>::tracks_map(room);
+        let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
 
         let owner = 1;
@@ -787,8 +763,8 @@ mod tests {
         let track_id: RemoteTrackId = RemoteTrackId(1);
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
-        let peer_map = RoomMetadata::<u8>::peer_map(room, &peer_id);
-        let track_key = RoomMetadata::<u8>::tracks_key(&peer_id, &track_name);
+        let peer_map = id_generator::peer_map(room, &peer_id);
+        let track_key = id_generator::tracks_key(&peer_id, &track_name);
         let out = room_meta.on_track_publish(owner, track_id, track_name, track_info.meta.clone());
         assert_eq!(out, Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Set(track_key, track_info.serialize())))));
         assert_eq!(
@@ -822,7 +798,7 @@ mod tests {
         assert_eq!(out, None);
 
         let peer2: PeerId = "peer1".to_string().into();
-        let peer2_map = RoomMetadata::<u8>::peer_map(room, &peer2);
+        let peer2_map = id_generator::peer_map(room, &peer2);
         let out = room_meta.on_subscribe_peer(owner, peer2.clone());
         assert_eq!(out, Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Sub))));
         assert_eq!(room_meta.pop_output(Instant::now()), None);
