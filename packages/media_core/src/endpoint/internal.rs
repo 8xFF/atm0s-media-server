@@ -15,10 +15,11 @@ use crate::{
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportEvent, TransportState, TransportStats},
 };
 
-use self::{local_track::EndpointLocalTrack, remote_track::EndpointRemoteTrack};
+use self::{bitrate_allocator::BitrateAllocator, local_track::EndpointLocalTrack, remote_track::EndpointRemoteTrack};
 
-use super::{middleware::EndpointMiddleware, EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
+use super::{middleware::EndpointMiddleware, EndpointCfg, EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
+mod bitrate_allocator;
 mod local_track;
 mod remote_track;
 
@@ -37,6 +38,7 @@ pub enum InternalOutput {
 }
 
 pub struct EndpointInternal {
+    cfg: EndpointCfg,
     state: TransportState,
     wait_join: Option<(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe)>,
     joined: Option<(ClusterRoomHash, RoomId, PeerId)>,
@@ -47,11 +49,13 @@ pub struct EndpointInternal {
     _middlewares: Vec<Box<dyn EndpointMiddleware>>,
     queue: VecDeque<InternalOutput>,
     switcher: TaskSwitcher,
+    bitrate_allocator: BitrateAllocator,
 }
 
 impl EndpointInternal {
-    pub fn new() -> Self {
+    pub fn new(cfg: EndpointCfg) -> Self {
         Self {
+            cfg,
             state: TransportState::Connecting,
             wait_join: None,
             joined: None,
@@ -62,10 +66,25 @@ impl EndpointInternal {
             _middlewares: Default::default(),
             queue: Default::default(),
             switcher: TaskSwitcher::new(2),
+            bitrate_allocator: BitrateAllocator::default(),
         }
     }
 
     pub fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput> {
+        self.bitrate_allocator.on_tick();
+        if let Some(out) = self.bitrate_allocator.pop_output() {
+            match out {
+                bitrate_allocator::Output::SetTrackBitrate(track, bitrate) => {
+                    if let Some(index) = self.local_tracks_id.get1(&track) {
+                        let out = self.local_tracks.on_event(now, *index, local_track::Input::LimitBitrate(bitrate))?;
+                        if let Some(out) = self.convert_local_track_output(now, track, out) {
+                            return Some(out);
+                        }
+                    }
+                }
+            }
+        }
+
         loop {
             match self.switcher.looper_current(now)?.try_into().ok()? {
                 TaskType::LocalTracks => {
@@ -124,6 +143,12 @@ impl EndpointInternal {
             TransportEvent::RemoteTrack(track, event) => self.on_transport_remote_track(now, track, event),
             TransportEvent::LocalTrack(track, event) => self.on_transport_local_track(now, track, event),
             TransportEvent::Stats(stats) => self.on_transport_stats(now, stats),
+            TransportEvent::EgressBitrateEstimate(bitrate) => {
+                let bitrate2 = bitrate.min(self.cfg.max_egress_bitrate as u64);
+                log::debug!("[EndpointInternal] limit egress bitrate {bitrate2}, rewrite from {bitrate}");
+                self.bitrate_allocator.set_egress_bitrate(bitrate2);
+                None
+            }
         }
     }
 
@@ -220,10 +245,10 @@ impl EndpointInternal {
     }
 
     fn on_transport_local_track<'a>(&mut self, now: Instant, track: LocalTrackId, event: LocalTrackEvent) -> Option<InternalOutput> {
-        if event.need_create() {
+        if let Some(kind) = event.need_create() {
             log::info!("[EndpointInternal] create local track {:?}", track);
             let room = self.joined.as_ref().map(|j| j.0.clone());
-            let index = self.local_tracks.add_task(EndpointLocalTrack::new(room));
+            let index = self.local_tracks.add_task(EndpointLocalTrack::new(kind, room));
             self.local_tracks_id.insert(track, index);
         }
         let index = self.local_tracks_id.get1(&track)?;
@@ -333,6 +358,22 @@ impl EndpointInternal {
             local_track::Output::Event(event) => Some(InternalOutput::Event(EndpointEvent::LocalMediaTrack(id, event))),
             local_track::Output::Cluster(room, control) => Some(InternalOutput::Cluster(room, ClusterEndpointControl::LocalTrack(id, control))),
             local_track::Output::RpcRes(req_id, res) => Some(InternalOutput::RpcRes(req_id, EndpointRes::LocalTrack(id, res))),
+            local_track::Output::DesiredBitrate(bitrate) => Some(InternalOutput::Event(EndpointEvent::BweConfig {
+                current: bitrate,
+                desired: bitrate + 100_000.max(bitrate * 1 / 5),
+            })),
+            local_track::Output::Started(kind, priority) => {
+                if kind.is_video() {
+                    self.bitrate_allocator.set_video_track(id, priority);
+                }
+                None
+            }
+            local_track::Output::Stopped(kind) => {
+                if kind.is_video() {
+                    self.bitrate_allocator.del_video_track(id);
+                }
+                None
+            }
         }
     }
 }

@@ -1,4 +1,8 @@
-use std::{net::SocketAddr, ops::Deref, time::Instant};
+use std::{
+    net::SocketAddr,
+    ops::Deref,
+    time::{Duration, Instant},
+};
 
 use media_server_core::{
     endpoint::{EndpointEvent, EndpointReqId, EndpointRes},
@@ -23,6 +27,7 @@ use str0m::{
 
 use crate::WebrtcError;
 
+mod bwe_state;
 mod whep;
 mod whip;
 
@@ -50,6 +55,8 @@ enum InternalOutput<'a> {
     Str0mKeyframe(Mid, KeyframeRequestKind),
     Str0mLimitBitrate(Mid, u64),
     Str0mSendMedia(Mid, MediaPacket),
+    Str0mBwe(u64, u64),
+    Str0mResetBwe(u64),
     TransportOutput(TransportOutput<'a, ExtOut>),
 }
 
@@ -62,7 +69,12 @@ trait TransportWebrtcInternal {
     fn pop_output<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>>;
 }
 
+pub struct TransportWebrtcCfg {
+    pub max_ingress_bitrate: u32,
+}
+
 pub struct TransportWebrtc {
+    cfg: TransportWebrtcCfg,
     next_tick: Option<Instant>,
     rtc: Rtc,
     internal: Box<dyn TransportWebrtcInternal>,
@@ -70,9 +82,15 @@ pub struct TransportWebrtc {
 }
 
 impl TransportWebrtc {
-    pub fn new(variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
+    pub fn new(cfg: TransportWebrtcCfg, variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
         let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::SdpError))?;
-        let rtc_config = Rtc::builder().set_rtp_mode(true).set_ice_lite(true).set_dtls_cert(dtls_cert).set_local_ice_credentials(IceCreds::new());
+        let rtc_config = Rtc::builder()
+            .set_rtp_mode(true)
+            .set_ice_lite(true)
+            .set_dtls_cert(dtls_cert)
+            .set_local_ice_credentials(IceCreds::new())
+            .set_stats_interval(Some(Duration::from_secs(1)))
+            .enable_bwe(Some(Bitrate::kbps(3000)));
         let ice_ufrag = rtc_config.local_ice_credentials().as_ref().expect("should have ice credentials").ufrag.clone();
 
         let mut rtc = rtc_config.build();
@@ -87,6 +105,7 @@ impl TransportWebrtc {
 
         Ok((
             Self {
+                cfg,
                 next_tick: None,
                 rtc,
                 internal: match variant {
@@ -108,7 +127,16 @@ impl TransportWebrtc {
                 self.pop_event(now)
             }
             InternalOutput::Str0mLimitBitrate(mid, bitrate) => {
-                self.rtc.direct_api().stream_rx_by_mid(mid, None)?.request_remb(Bitrate::bps(bitrate));
+                let bitrate2 = bitrate.min(self.cfg.max_ingress_bitrate as u64);
+                log::debug!("Rewrite ingress limit bitrate from {bitrate} to {bitrate2}");
+                self.rtc.direct_api().stream_rx_by_mid(mid, None)?.request_remb(Bitrate::bps(bitrate2));
+                self.pop_event(now)
+            }
+            InternalOutput::Str0mBwe(current, desired) => {
+                log::debug!("Setting str0m bwe {current}, desired {desired}");
+                let mut bwe = self.rtc.bwe();
+                bwe.set_current_bitrate(current.into());
+                bwe.set_desired_bitrate(desired.into());
                 self.pop_event(now)
             }
             InternalOutput::Str0mSendMedia(mid, pkt) => {
@@ -118,6 +146,11 @@ impl TransportWebrtc {
                     .stream_tx_by_mid(mid, None)?
                     .write_rtp(pkt.pt.into(), pkt.seq.into(), pkt.ts, now, pkt.marker, ExtensionValues::default(), pkt.nackable, pkt.data)
                     .ok()?;
+                self.pop_event(now)
+            }
+            InternalOutput::Str0mResetBwe(init_bitrate) => {
+                log::info!("Reset str0m bwe to init_bitrate {init_bitrate} bps");
+                self.rtc.bwe().reset(init_bitrate.into());
                 self.pop_event(now)
             }
             InternalOutput::TransportOutput(out) => Some(out),
