@@ -23,12 +23,14 @@ pub enum Input {
     Cluster(ClusterLocalTrackEvent),
     Event(LocalTrackEvent),
     RpcReq(EndpointReqId, EndpointLocalTrackReq),
+    LimitBitrate(u64),
 }
 
 pub enum Output {
     Event(EndpointLocalTrackEvent),
     Cluster(ClusterRoomHash, ClusterLocalTrackControl),
     RpcRes(EndpointReqId, EndpointLocalTrackRes),
+    DesiredBitrate(u64),
 }
 
 pub struct EndpointLocalTrack {
@@ -135,6 +137,11 @@ impl Task<Input, Output> for EndpointLocalTrack {
             Input::Cluster(event) => self.on_cluster_event(now, event),
             Input::Event(event) => self.on_transport_event(now, event),
             Input::RpcReq(req_id, req) => self.on_rpc_req(now, req_id, req),
+            Input::LimitBitrate(bitrate) => {
+                log::debug!("[EndpointLocalTrack] Limit send bitrate {bitrate}");
+                self.queue.push_back(Output::DesiredBitrate(bitrate));
+                Some(Output::Cluster(self.room?, ClusterLocalTrackControl::DesiredBitrate(bitrate)))
+            }
         }
     }
 

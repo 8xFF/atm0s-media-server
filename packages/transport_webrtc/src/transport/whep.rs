@@ -9,11 +9,12 @@ use media_server_core::{
 };
 use media_server_protocol::endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName};
 use str0m::{
+    bwe::BweKind,
     media::{Direction, MediaAdded, MediaKind, Mid},
     Event as Str0mEvent, IceConnectionState,
 };
 
-use super::{InternalOutput, TransportWebrtcInternal};
+use super::{bwe_state::BweState, InternalOutput, TransportWebrtcInternal};
 
 const TIMEOUT_SEC: u64 = 10;
 const AUDIO_TRACK: LocalTrackId = LocalTrackId(0);
@@ -50,6 +51,7 @@ pub struct TransportWebrtcWhep {
     subscribed: SubscribeStreams,
     audio_subscribe_waits: VecDeque<(PeerId, TrackName, TrackMeta)>,
     video_subscribe_waits: VecDeque<(PeerId, TrackName, TrackMeta)>,
+    bwe_state: BweState,
     queue: VecDeque<InternalOutput<'static>>,
 }
 
@@ -65,12 +67,17 @@ impl TransportWebrtcWhep {
             queue: VecDeque::new(),
             audio_subscribe_waits: VecDeque::new(),
             video_subscribe_waits: VecDeque::new(),
+            bwe_state: Default::default(),
         }
     }
 }
 
 impl TransportWebrtcInternal for TransportWebrtcWhep {
     fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
+        if let Some(init_bitrate) = self.bwe_state.on_tick(now) {
+            self.queue.push_back(InternalOutput::Str0mResetBwe(init_bitrate));
+        }
+
         match &self.state {
             State::New => {
                 self.state = State::Connecting { at: now };
@@ -99,7 +106,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
         None
     }
 
-    fn on_endpoint_event<'a>(&mut self, _now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
+    fn on_endpoint_event<'a>(&mut self, now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
             EndpointEvent::PeerJoined(_, _) => None,
             EndpointEvent::PeerLeaved(_) => None,
@@ -120,14 +127,22 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             EndpointEvent::LocalMediaTrack(_track, event) => match event {
                 EndpointLocalTrackEvent::Media(pkt) => {
                     let mid = if pkt.pt == 111 {
-                        self.audio_mid
+                        self.audio_mid?
                     } else {
-                        self.video_mid
-                    }?;
+                        let mid = self.video_mid?;
+                        self.bwe_state.on_send_video(now);
+                        mid
+                    };
+                    //log::info!("send {} size {}", pkt.pt, pkt.data.len());
                     Some(InternalOutput::Str0mSendMedia(mid, pkt))
                 }
+                EndpointLocalTrackEvent::DesiredBitrate(_) => None,
             },
             EndpointEvent::RemoteMediaTrack(_track, _event) => None,
+            EndpointEvent::BweConfig { current, desired } => {
+                let (current, desired) = self.bwe_state.filter_bwe_config(current, desired);
+                Some(InternalOutput::Str0mBwe(current, desired))
+            }
             EndpointEvent::GoAway(_seconds, _reason) => None,
         }
     }
@@ -165,6 +180,20 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                 } else {
                     None
                 }
+            }
+            Str0mEvent::EgressBitrateEstimate(BweKind::Remb(_, bitrate)) | Str0mEvent::EgressBitrateEstimate(BweKind::Twcc(bitrate)) => {
+                let bitrate2 = self.bwe_state.filter_bwe(bitrate.as_u64());
+                log::debug!("on  rewrite bwe {bitrate} => {bitrate2} bps");
+                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::EgressBitrateEstimate(bitrate2))))
+            }
+            Str0mEvent::PeerStats(_stats) => None,
+            Str0mEvent::MediaIngressStats(stats) => {
+                log::debug!("ingress rtt {} {:?}", stats.mid, stats.rtt);
+                None
+            }
+            Str0mEvent::MediaEgressStats(stats) => {
+                log::debug!("egress rtt {} {:?}", stats.mid, stats.rtt);
+                None
             }
             _ => None,
         }

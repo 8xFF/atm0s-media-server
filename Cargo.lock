@@ -2336,9 +2336,8 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "str0m"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d46b4e8ed4564139b193e67ae630f7389d500c2bad89117b5f266e66c311bdb"
+version = "0.5.1"
+source = "git+https://github.com/giangndm/str0m.git?branch=fix-bwe-slow-increase-with-audio-first#4a0a78e22d154af40f7b08676f701cee2d60c284"
 dependencies = [
  "combine",
  "crc",

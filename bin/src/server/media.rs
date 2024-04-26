@@ -39,7 +39,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             node: node.clone(),
             media: MediaConfig { webrtc_addrs: webrtc_addrs.clone() },
         };
-        controller.add_worker::<_, _, MediaRuntimeWorker, PollingBackend<_, 128, 512>>(Duration::from_millis(100), cfg, None);
+        controller.add_worker::<_, _, MediaRuntimeWorker, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);
     }
 
     let mut req_id_seed = 0;

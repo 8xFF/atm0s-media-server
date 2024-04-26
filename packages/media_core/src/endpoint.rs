@@ -68,6 +68,7 @@ pub enum EndpointRes {
 /// This is used for controlling the local track, which is sent from endpoint
 pub enum EndpointLocalTrackEvent {
     Media(MediaPacket),
+    DesiredBitrate(u64),
 }
 
 /// This is used for controlling the remote track, which is sent from endpoint
@@ -83,6 +84,11 @@ pub enum EndpointEvent {
     PeerTrackStopped(PeerId, TrackName),
     RemoteMediaTrack(RemoteTrackId, EndpointRemoteTrackEvent),
     LocalMediaTrack(LocalTrackId, EndpointLocalTrackEvent),
+    /// Egress est params
+    BweConfig {
+        current: u64,
+        desired: u64,
+    },
     /// This session will be disconnect after some seconds
     GoAway(u8, Option<String>),
 }

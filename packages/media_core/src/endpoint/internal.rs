@@ -124,6 +124,13 @@ impl EndpointInternal {
             TransportEvent::RemoteTrack(track, event) => self.on_transport_remote_track(now, track, event),
             TransportEvent::LocalTrack(track, event) => self.on_transport_local_track(now, track, event),
             TransportEvent::Stats(stats) => self.on_transport_stats(now, stats),
+            TransportEvent::EgressBitrateEstimate(bitrate) => {
+                //TODO implement bitrate allocator
+                const INDEX: usize = 1;
+                let out = self.local_tracks.on_event(now, INDEX, local_track::Input::LimitBitrate(bitrate))?;
+                let track = self.local_tracks_id.get2(&INDEX)?;
+                self.convert_local_track_output(now, *track, out)
+            }
         }
     }
 
@@ -333,6 +340,10 @@ impl EndpointInternal {
             local_track::Output::Event(event) => Some(InternalOutput::Event(EndpointEvent::LocalMediaTrack(id, event))),
             local_track::Output::Cluster(room, control) => Some(InternalOutput::Cluster(room, ClusterEndpointControl::LocalTrack(id, control))),
             local_track::Output::RpcRes(req_id, res) => Some(InternalOutput::RpcRes(req_id, EndpointRes::LocalTrack(id, res))),
+            local_track::Output::DesiredBitrate(bitrate) => Some(InternalOutput::Event(EndpointEvent::BweConfig {
+                current: bitrate,
+                desired: bitrate + 100_000.max(bitrate * 1 / 5),
+            })),
         }
     }
 }

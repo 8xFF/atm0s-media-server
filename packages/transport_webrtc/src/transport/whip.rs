@@ -111,7 +111,8 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                 }
             },
             EndpointEvent::LocalMediaTrack(_, _) => None,
-            EndpointEvent::GoAway(_seconds, _reason) => None,
+            EndpointEvent::BweConfig { .. } => None,
+            EndpointEvent::GoAway(_, _) => None,
         }
     }
 
@@ -149,6 +150,15 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                     track,
                     RemoteTrackEvent::Media(pkt),
                 ))))
+            }
+            Str0mEvent::PeerStats(stats) => None,
+            Str0mEvent::MediaIngressStats(stats) => {
+                log::debug!("ingress rtt {} {:?}", stats.mid, stats.rtt);
+                None
+            }
+            Str0mEvent::MediaEgressStats(stats) => {
+                log::debug!("egress rtt {} {:?}", stats.mid, stats.rtt);
+                None
             }
             _ => None,
         }

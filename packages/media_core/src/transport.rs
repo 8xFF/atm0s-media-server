@@ -89,6 +89,7 @@ pub enum TransportEvent {
     RemoteTrack(RemoteTrackId, RemoteTrackEvent),
     LocalTrack(LocalTrackId, LocalTrackEvent),
     Stats(TransportStats),
+    EgressBitrateEstimate(u64),
 }
 
 /// This is control message from endpoint
