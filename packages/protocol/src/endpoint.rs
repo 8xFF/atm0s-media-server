@@ -148,6 +148,9 @@ impl PeerInfo {
 #[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TrackName(pub String);
 
+#[derive(From, AsRef, Debug, derive_more::Display, derive_more::Add, derive_more::AddAssign, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TrackPriority(pub u16);
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrackMeta {
     pub kind: MediaKind,
@@ -186,6 +189,14 @@ impl TrackInfo {
     pub fn deserialize(data: &[u8]) -> Option<TrackInfo> {
         bincode::deserialize::<Self>(data).ok()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BitrateControlMode {
+    /// Only limit with sender network and CAP with fixed MAX_BITRATE
+    MaxBitrate,
+    /// Calc limit based on MAX_BITRATE and consumers requested bitrate
+    DynamicConsumers,
 }
 
 #[cfg(test)]

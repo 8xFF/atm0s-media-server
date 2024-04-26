@@ -3,7 +3,7 @@
 use std::{marker::PhantomData, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName},
+    endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
     media::MediaPacket,
     transport::RpcResult,
 };
@@ -31,7 +31,7 @@ pub enum EndpointRemoteTrackReq {}
 pub enum EndpointRemoteTrackRes {}
 
 pub enum EndpointLocalTrackReq {
-    Switch(Option<(PeerId, TrackName)>),
+    Switch(Option<(PeerId, TrackName, TrackPriority)>),
 }
 
 pub enum EndpointLocalTrackRes {
@@ -115,6 +115,11 @@ enum TaskType {
     Internal = 1,
 }
 
+pub struct EndpointCfg {
+    pub max_egress_bitrate: u32,
+    pub bitrate_control: BitrateControlMode,
+}
+
 pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
     transport: T,
     internal: EndpointInternal,
@@ -123,10 +128,10 @@ pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
 }
 
 impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
-    pub fn new(transport: T) -> Self {
+    pub fn new(cfg: EndpointCfg, transport: T) -> Self {
         Self {
             transport,
-            internal: EndpointInternal::new(),
+            internal: EndpointInternal::new(cfg),
             switcher: TaskSwitcher::new(2),
             _tmp: PhantomData::default(),
         }

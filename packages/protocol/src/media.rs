@@ -1,9 +1,7 @@
 use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 
-use crate::endpoint::{PeerId, TrackMeta, TrackName};
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaKind {
     Audio,
     Video,

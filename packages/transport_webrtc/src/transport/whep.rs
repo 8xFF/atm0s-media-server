@@ -7,10 +7,13 @@ use media_server_core::{
     endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointReq},
     transport::{LocalTrackEvent, LocalTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
-use media_server_protocol::endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName};
+use media_server_protocol::{
+    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
+    media::MediaKind,
+};
 use str0m::{
     bwe::BweKind,
-    media::{Direction, MediaAdded, MediaKind, Mid},
+    media::{Direction, MediaAdded, Mid},
     Event as Str0mEvent, IceConnectionState,
 };
 
@@ -19,6 +22,7 @@ use super::{bwe_state::BweState, InternalOutput, TransportWebrtcInternal};
 const TIMEOUT_SEC: u64 = 10;
 const AUDIO_TRACK: LocalTrackId = LocalTrackId(0);
 const VIDEO_TRACK: LocalTrackId = LocalTrackId(1);
+const DEFAULT_PRIORITY: TrackPriority = TrackPriority(1);
 
 #[derive(Debug)]
 enum State {
@@ -183,16 +187,16 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             }
             Str0mEvent::EgressBitrateEstimate(BweKind::Remb(_, bitrate)) | Str0mEvent::EgressBitrateEstimate(BweKind::Twcc(bitrate)) => {
                 let bitrate2 = self.bwe_state.filter_bwe(bitrate.as_u64());
-                log::debug!("on  rewrite bwe {bitrate} => {bitrate2} bps");
+                log::debug!("[TransportWebrtcWhep] on rewrite bwe {bitrate} => {bitrate2} bps");
                 Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::EgressBitrateEstimate(bitrate2))))
             }
             Str0mEvent::PeerStats(_stats) => None,
             Str0mEvent::MediaIngressStats(stats) => {
-                log::debug!("ingress rtt {} {:?}", stats.mid, stats.rtt);
+                log::debug!("[TransportWebrtcWhep] ingress rtt {} {:?}", stats.mid, stats.rtt);
                 None
             }
             Str0mEvent::MediaEgressStats(stats) => {
-                log::debug!("egress rtt {} {:?}", stats.mid, stats.rtt);
+                log::debug!("[TransportWebrtcWhep] egress rtt {} {:?}", stats.mid, stats.rtt);
                 None
             }
             _ => None,
@@ -242,7 +246,7 @@ impl TransportWebrtcWhep {
         if matches!(media.direction, Direction::RecvOnly | Direction::Inactive) {
             return None;
         }
-        if media.kind == MediaKind::Audio {
+        if media.kind == str0m::media::MediaKind::Audio {
             if self.audio_mid.is_some() {
                 return None;
             }
@@ -254,7 +258,7 @@ impl TransportWebrtcWhep {
             }
             Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
                 AUDIO_TRACK,
-                LocalTrackEvent::Started,
+                LocalTrackEvent::Started(MediaKind::Audio),
             ))))
         } else {
             if self.video_mid.is_some() {
@@ -268,7 +272,7 @@ impl TransportWebrtcWhep {
             }
             Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
                 VIDEO_TRACK,
-                LocalTrackEvent::Started,
+                LocalTrackEvent::Started(MediaKind::Video),
             ))))
         }
     }
@@ -283,7 +287,7 @@ impl TransportWebrtcWhep {
                 log::info!("[TransportWebrtcWhep] send subscribe {peer} {track}");
                 return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(), //TODO generate req_id
-                    EndpointReq::LocalTrack(AUDIO_TRACK, EndpointLocalTrackReq::Switch(Some((peer, track)))),
+                    EndpointReq::LocalTrack(AUDIO_TRACK, EndpointLocalTrackReq::Switch(Some((peer, track, DEFAULT_PRIORITY)))),
                 )));
             }
 
@@ -292,7 +296,7 @@ impl TransportWebrtcWhep {
                 log::info!("[TransportWebrtcWhep] send subscribe {peer} {track}");
                 return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(), //TODO generate req_id
-                    EndpointReq::LocalTrack(VIDEO_TRACK, EndpointLocalTrackReq::Switch(Some((peer, track)))),
+                    EndpointReq::LocalTrack(VIDEO_TRACK, EndpointLocalTrackReq::Switch(Some((peer, track, DEFAULT_PRIORITY)))),
                 )));
             }
         }

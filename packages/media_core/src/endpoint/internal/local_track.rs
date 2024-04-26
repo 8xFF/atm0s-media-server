@@ -5,7 +5,8 @@
 use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{PeerId, TrackName},
+    endpoint::{PeerId, TrackName, TrackPriority},
+    media::MediaKind,
     transport::RpcError,
 };
 use sans_io_runtime::Task;
@@ -31,24 +32,28 @@ pub enum Output {
     Cluster(ClusterRoomHash, ClusterLocalTrackControl),
     RpcRes(EndpointReqId, EndpointLocalTrackRes),
     DesiredBitrate(u64),
+    Started(MediaKind, TrackPriority),
+    Stopped(MediaKind),
 }
 
 pub struct EndpointLocalTrack {
+    kind: MediaKind,
     room: Option<ClusterRoomHash>,
     bind: Option<(PeerId, TrackName)>,
     queue: VecDeque<Output>,
 }
 
 impl EndpointLocalTrack {
-    pub fn new(room: Option<ClusterRoomHash>) -> Self {
+    pub fn new(kind: MediaKind, room: Option<ClusterRoomHash>) -> Self {
         Self {
+            kind,
             room,
             bind: None,
             queue: VecDeque::new(),
         }
     }
 
-    fn on_join_room(&mut self, now: Instant, room: ClusterRoomHash) -> Option<Output> {
+    fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) -> Option<Output> {
         assert_eq!(self.room, None);
         assert_eq!(self.bind, None);
         log::info!("[EndpointLocalTrack] join room {room}");
@@ -81,10 +86,10 @@ impl EndpointLocalTrack {
         }
     }
 
-    fn on_transport_event(&mut self, now: Instant, event: LocalTrackEvent) -> Option<Output> {
+    fn on_transport_event(&mut self, _now: Instant, event: LocalTrackEvent) -> Option<Output> {
         log::info!("[EndpointLocalTrack] on event {:?}", event);
         match event {
-            LocalTrackEvent::Started => None,
+            LocalTrackEvent::Started(_) => None,
             LocalTrackEvent::RequestKeyFrame => {
                 let room = self.room.as_ref()?;
                 Some(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame))
@@ -93,13 +98,19 @@ impl EndpointLocalTrack {
         }
     }
 
-    fn on_rpc_req(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) -> Option<Output> {
+    fn on_rpc_req(&mut self, _now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) -> Option<Output> {
         match req {
-            EndpointLocalTrackReq::Switch(Some((peer, track))) => {
+            EndpointLocalTrackReq::Switch(Some((peer, track, priority))) => {
                 if let Some(room) = self.room.as_ref() {
                     log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track}");
+                    if let Some((_peer, _track)) = self.bind.take() {
+                        log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track} => unsubscribe current {_peer} {_track}");
+                        self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
+                        self.queue.push_back(Output::Stopped(self.kind));
+                    }
                     self.bind = Some((peer.clone(), track.clone()));
                     self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer, track)));
+                    self.queue.push_back(Output::Started(self.kind, priority));
                     Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
                 } else {
                     log::warn!("[EndpointLocalTrack] view but not in room");
@@ -110,6 +121,7 @@ impl EndpointLocalTrack {
                 if let Some(room) = self.room.as_ref() {
                     if let Some((peer, track)) = self.bind.take() {
                         self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
+                        self.queue.push_back(Output::Stopped(self.kind));
                         log::info!("[EndpointLocalTrack] unview room {room} peer {peer} track {track}");
                         Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
                     } else {
@@ -126,7 +138,7 @@ impl EndpointLocalTrack {
 }
 
 impl Task<Input, Output> for EndpointLocalTrack {
-    fn on_tick(&mut self, now: Instant) -> Option<Output> {
+    fn on_tick(&mut self, _now: Instant) -> Option<Output> {
         None
     }
 
@@ -145,11 +157,11 @@ impl Task<Input, Output> for EndpointLocalTrack {
         }
     }
 
-    fn pop_output(&mut self, now: Instant) -> Option<Output> {
+    fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         self.queue.pop_front()
     }
 
-    fn shutdown(&mut self, now: Instant) -> Option<Output> {
+    fn shutdown(&mut self, _now: Instant) -> Option<Output> {
         None
     }
 }

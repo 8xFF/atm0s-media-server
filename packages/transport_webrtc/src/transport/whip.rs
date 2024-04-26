@@ -151,7 +151,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                     RemoteTrackEvent::Media(pkt),
                 ))))
             }
-            Str0mEvent::PeerStats(stats) => None,
+            Str0mEvent::PeerStats(_stats) => None,
             Str0mEvent::MediaIngressStats(stats) => {
                 log::debug!("ingress rtt {} {:?}", stats.mid, stats.rtt);
                 None
