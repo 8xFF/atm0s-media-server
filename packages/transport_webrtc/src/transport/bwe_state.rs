@@ -11,7 +11,7 @@ use std::time::Instant;
 ///
 /// - It start with Inactive state, in this state all bwe = bwe.max(DEFAULT_BWE_BPS)
 /// - In WarmUp state, it have 2 phase, each phase is 1 seconds.
-/// After first phase, the Bwe will be reset with lastest_bwe.max(DEFAULT_BWE_BPS).
+/// After first phase, the Bwe will be reset with latest_bwe.max(DEFAULT_BWE_BPS).
 /// In this phase, bwe = bwe.max(DEFAULT_BWE_BPS). After WarmUp end it will be switched to Active
 /// - In Active, bwe = bwe.min(MAX_BITRATE_BPS). If after TIMEOUT_MS, we dont have video packet, it will be reset to Inactive
 ///
