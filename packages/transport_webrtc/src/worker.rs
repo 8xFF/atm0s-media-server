@@ -4,7 +4,7 @@ use media_server_core::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterRoomHash},
     endpoint::{Endpoint, EndpointCfg, EndpointInput, EndpointOutput},
 };
-use media_server_protocol::{endpoint::BitrateControlMode, transport::RpcResult};
+use media_server_protocol::transport::RpcResult;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     group_owner_type, group_task, TaskSwitcher,
@@ -13,7 +13,7 @@ use str0m::change::DtlsCert;
 
 use crate::{
     shared_port::SharedUdpPort,
-    transport::{ExtIn, ExtOut, TransportWebrtc, TransportWebrtcCfg, VariantParams},
+    transport::{ExtIn, ExtOut, TransportWebrtc, VariantParams},
 };
 
 group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, EndpointInput<'a, ExtIn>, EndpointOutput<'a, ExtOut>);
@@ -57,17 +57,16 @@ impl MediaWorkerWebrtc {
     pub fn spawn(&mut self, variant: VariantParams, offer: &str) -> RpcResult<(String, usize)> {
         let cfg = match &variant {
             VariantParams::Whip(_, _) => EndpointCfg {
+                max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
-                bitrate_control: BitrateControlMode::MaxBitrate,
             },
             VariantParams::Whep(_, _) => EndpointCfg {
+                max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
-                bitrate_control: BitrateControlMode::MaxBitrate,
             },
             VariantParams::Sdk => todo!(),
         };
-        let trans_cfg = TransportWebrtcCfg { max_ingress_bitrate: 2_500_000 };
-        let (tran, ufrag, sdp) = TransportWebrtc::new(trans_cfg, variant, offer, self.dtls_cert.clone(), self.addrs.clone())?;
+        let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone())?;
         let endpoint = Endpoint::new(cfg, tran);
         let index = self.endpoints.add_task(endpoint);
         self.shared_port.add_ufrag(ufrag, index);

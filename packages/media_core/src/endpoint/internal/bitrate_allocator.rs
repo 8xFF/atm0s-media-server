@@ -1,90 +1,69 @@
-use derivative::Derivative;
-use std::collections::VecDeque;
+use crate::transport::{LocalTrackId, RemoteTrackId};
 
+use self::{egress::EgressBitrateAllocator, ingress::IngressBitrateAllocator};
+
+mod egress;
+mod ingress;
+
+pub use egress::Action as EgressAction;
+pub use ingress::Action as IngressAction;
 use media_server_protocol::endpoint::TrackPriority;
-
-use crate::transport::LocalTrackId;
-
-const DEFAULT_BITRATE_BPS: u64 = 800_000;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Output {
-    SetTrackBitrate(LocalTrackId, u64),
+    RemoteTrack(RemoteTrackId, IngressAction),
+    LocalTrack(LocalTrackId, EgressAction),
+    BweConfig(u64, u64),
 }
 
-#[derive(Derivative)]
-#[derivative(Default)]
 pub struct BitrateAllocator {
-    changed: bool,
-    #[derivative(Default(value = "DEFAULT_BITRATE_BPS"))]
-    egress_bitrate: u64,
-    tracks: smallmap::Map<LocalTrackId, TrackPriority>,
-    queue: VecDeque<Output>,
+    egress: EgressBitrateAllocator,
+    ingress: IngressBitrateAllocator,
 }
 
 impl BitrateAllocator {
+    pub fn new(max_ingress_bitrate: u64, max_egress_bitrate: u64) -> Self {
+        Self {
+            egress: EgressBitrateAllocator::new(max_egress_bitrate),
+            ingress: IngressBitrateAllocator::new(max_ingress_bitrate),
+        }
+    }
+
     pub fn on_tick(&mut self) {
-        self.process();
+        self.egress.on_tick();
+        self.ingress.on_tick();
     }
 
-    pub fn set_egress_bitrate(&mut self, bitrate: u64) {
-        self.egress_bitrate = bitrate;
-        self.changed = true;
+    pub fn set_egress_estimate(&mut self, bitrate: u64) {
+        self.egress.set_egress_estimate(bitrate);
     }
 
-    pub fn set_video_track(&mut self, track: LocalTrackId, priority: TrackPriority) {
-        self.tracks.insert(track, priority);
-        self.changed = true;
+    pub fn set_egress_video_track(&mut self, track: LocalTrackId, priority: TrackPriority) {
+        self.egress.set_video_track(track, priority);
     }
 
-    pub fn del_video_track(&mut self, track: LocalTrackId) {
-        self.tracks.remove(&track);
-        self.changed = true;
+    pub fn del_egress_video_track(&mut self, track: LocalTrackId) {
+        self.egress.del_video_track(track);
+    }
+
+    pub fn set_ingress_video_track(&mut self, track: RemoteTrackId, priority: TrackPriority) {
+        self.ingress.set_video_track(track, priority);
+    }
+
+    pub fn del_ingress_video_track(&mut self, track: RemoteTrackId) {
+        self.ingress.del_video_track(track);
     }
 
     pub fn pop_output(&mut self) -> Option<Output> {
-        self.queue.pop_front()
-    }
-
-    fn process(&mut self) {
-        if !self.changed {
-            return;
-        }
-        self.changed = false;
-        let mut sum = TrackPriority(0);
-        for (_track, priority) in self.tracks.iter() {
-            sum = sum + *priority;
+        if let Some(out) = self.egress.pop_output() {
+            let out = match out {
+                egress::Output::Track(track, action) => Output::LocalTrack(track, action),
+                egress::Output::BweConfig(current, desired) => Output::BweConfig(current, desired),
+            };
+            return Some(out);
         }
 
-        if *(sum.as_ref()) != 0 {
-            for (track, priority) in self.tracks.iter() {
-                self.queue.push_back(Output::SetTrackBitrate(*track, (self.egress_bitrate * priority.0 as u64) / sum.0 as u64));
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::{BitrateAllocator, Output, DEFAULT_BITRATE_BPS};
-
-    #[test]
-    fn single_source() {
-        let mut allocator = BitrateAllocator::default();
-        allocator.set_video_track(0.into(), 1.into());
-
-        allocator.on_tick();
-        assert_eq!(allocator.pop_output(), Some(Output::SetTrackBitrate(0.into(), DEFAULT_BITRATE_BPS)));
-    }
-
-    #[test]
-    fn multi_source() {
-        let mut allocator = BitrateAllocator::default();
-        allocator.set_video_track(0.into(), 1.into());
-        allocator.set_video_track(1.into(), 3.into());
-
-        allocator.on_tick();
-        assert_eq!(allocator.pop_output(), Some(Output::SetTrackBitrate(0.into(), DEFAULT_BITRATE_BPS * 1 / 4)));
-        assert_eq!(allocator.pop_output(), Some(Output::SetTrackBitrate(1.into(), DEFAULT_BITRATE_BPS * 3 / 4)));
+        let (track, action) = self.ingress.pop_output()?;
+        Some(Output::RemoteTrack(track, action))
     }
 }
