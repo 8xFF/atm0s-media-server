@@ -151,7 +151,9 @@ impl<Owner: Debug + Hash + Copy + Clone + Debug + Eq> MediaCluster<Owner> {
         match out {
             room::Output::Sdn(userdata, control) => Output::Sdn(userdata, control),
             room::Output::Endpoint(owners, event) => Output::Endpoint(owners, event),
-            room::Output::Destroy => {
+            room::Output::Destroy(room) => {
+                log::info!("[MediaCluster] remove room index {index}, hash {room}");
+                self.rooms_map.remove(&room).expect("Should have room with index");
                 self.rooms.remove_task(index);
                 Output::Continue
             }
@@ -212,6 +214,7 @@ mod tests {
         );
         assert_eq!(cluster.pop_output(Instant::now()), None);
         assert_eq!(cluster.rooms.tasks(), 1);
+        assert_eq!(cluster.rooms_map.len(), 1);
 
         // Correct forward to room
         let out = cluster.on_sdn_event(
@@ -235,5 +238,6 @@ mod tests {
         assert_eq!(cluster.pop_output(Instant::now()), Some(Output::Continue)); //this is for destroy event
         assert_eq!(cluster.pop_output(Instant::now()), None);
         assert_eq!(cluster.rooms.tasks(), 0);
+        assert_eq!(cluster.rooms_map.len(), 0);
     }
 }

@@ -30,7 +30,7 @@ pub enum Input<Owner> {
 pub enum Output<Owner> {
     Sdn(ClusterRoomHash, FeaturesControl),
     Endpoint(Vec<Owner>, ClusterEndpointEvent),
-    Destroy,
+    Destroy(ClusterRoomHash),
 }
 
 #[derive(num_enum::TryFromPrimitive)]
@@ -90,7 +90,7 @@ impl<Owner: Debug + Copy + Clone + Hash + Eq> Task<Input<Owner>, Output<Owner>> 
         if self.metadata.peers() == 0 && !self.destroyed {
             log::info!("[ClusterRoom {}] leave last peer => remove room", self.room);
             self.destroyed = true;
-            Some(Output::Destroy)
+            Some(Output::Destroy(self.room))
         } else {
             None
         }
