@@ -4,7 +4,7 @@ use media_server_core::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterRoomHash},
     endpoint::{Endpoint, EndpointCfg, EndpointInput, EndpointOutput},
 };
-use media_server_protocol::{endpoint::BitrateControlMode, transport::RpcResult};
+use media_server_protocol::transport::RpcResult;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     group_owner_type, group_task, TaskSwitcher,
@@ -57,12 +57,12 @@ impl MediaWorkerWebrtc {
     pub fn spawn(&mut self, variant: VariantParams, offer: &str) -> RpcResult<(String, usize)> {
         let cfg = match &variant {
             VariantParams::Whip(_, _) => EndpointCfg {
+                max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
-                bitrate_control: BitrateControlMode::MaxBitrate,
             },
             VariantParams::Whep(_, _) => EndpointCfg {
+                max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
-                bitrate_control: BitrateControlMode::MaxBitrate,
             },
             VariantParams::Sdk => todo!(),
         };

@@ -8,7 +8,7 @@ use media_server_core::{
     transport::{RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
 use media_server_protocol::{
-    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta},
+    endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackPriority},
     media::{MediaKind, MediaScaling},
 };
 use str0m::{
@@ -220,7 +220,9 @@ impl TransportWebrtcWhip {
                     meta: TrackMeta {
                         kind: MediaKind::Audio,
                         scaling: MediaScaling::None,
+                        control: BitrateControlMode::NonControl,
                     },
+                    priority: TrackPriority(1),
                 },
             ))))
         } else {
@@ -236,7 +238,9 @@ impl TransportWebrtcWhip {
                     meta: TrackMeta {
                         kind: MediaKind::Video,
                         scaling: MediaScaling::None,
+                        control: BitrateControlMode::MaxBitrate,
                     },
+                    priority: TrackPriority(1),
                 },
             ))))
         }

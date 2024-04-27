@@ -155,6 +155,7 @@ pub struct TrackPriority(pub u16);
 pub struct TrackMeta {
     pub kind: MediaKind,
     pub scaling: MediaScaling,
+    pub control: BitrateControlMode,
 }
 
 impl TrackMeta {
@@ -162,6 +163,7 @@ impl TrackMeta {
         Self {
             kind: MediaKind::Audio,
             scaling: MediaScaling::None,
+            control: BitrateControlMode::MaxBitrate,
         }
     }
 }
@@ -191,8 +193,10 @@ impl TrackInfo {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BitrateControlMode {
+    /// None is used for non-controllable track, like audio
+    NonControl,
     /// Only limit with sender network and CAP with fixed MAX_BITRATE
     MaxBitrate,
     /// Calc limit based on MAX_BITRATE and consumers requested bitrate

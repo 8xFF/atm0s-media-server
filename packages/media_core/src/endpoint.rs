@@ -116,8 +116,8 @@ enum TaskType {
 }
 
 pub struct EndpointCfg {
-    pub max_egress_bitrate: u32,
-    pub bitrate_control: BitrateControlMode,
+    pub max_egress_bitrate: u64,
+    pub max_ingress_bitrate: u64,
 }
 
 pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {

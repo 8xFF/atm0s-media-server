@@ -1,8 +1,11 @@
 //! RemoteTrack take care about publish local media to sdn, and react with feedback from consumers
 
-use std::time::Instant;
+use std::{collections::VecDeque, time::Instant};
 
-use media_server_protocol::endpoint::{TrackMeta, TrackName};
+use media_server_protocol::{
+    endpoint::{BitrateControlMode, TrackMeta, TrackName, TrackPriority},
+    media::MediaKind,
+};
 use sans_io_runtime::Task;
 
 use crate::{
@@ -11,29 +14,42 @@ use crate::{
     transport::RemoteTrackEvent,
 };
 
+use super::bitrate_allocator::IngressAction;
+
 pub enum Input {
     JoinRoom(ClusterRoomHash),
     LeaveRoom,
     Cluster(ClusterRemoteTrackEvent),
     Event(RemoteTrackEvent),
     RpcReq(EndpointReqId, EndpointRemoteTrackReq),
+    BitrateAllocation(IngressAction),
 }
 
 pub enum Output {
     Event(EndpointRemoteTrackEvent),
     Cluster(ClusterRoomHash, ClusterRemoteTrackControl),
     RpcRes(EndpointReqId, EndpointRemoteTrackRes),
+    Started(MediaKind, TrackPriority),
+    Stopped(MediaKind),
 }
 
 pub struct EndpointRemoteTrack {
     meta: TrackMeta,
     room: Option<ClusterRoomHash>,
     name: Option<String>,
+    queue: VecDeque<Output>,
+    allocate_bitrate: Option<u64>,
 }
 
 impl EndpointRemoteTrack {
     pub fn new(room: Option<ClusterRoomHash>, meta: TrackMeta) -> Self {
-        Self { meta, room, name: None }
+        Self {
+            meta,
+            room,
+            name: None,
+            queue: VecDeque::new(),
+            allocate_bitrate: None,
+        }
     }
 
     fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) -> Option<Output> {
@@ -56,18 +72,25 @@ impl EndpointRemoteTrack {
         match event {
             ClusterRemoteTrackEvent::RequestKeyFrame => Some(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
             ClusterRemoteTrackEvent::LimitBitrate { min, max } => {
-                //TODO based on scaling type
-                Some(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps(min as u64)))
+                match self.meta.control {
+                    BitrateControlMode::MaxBitrate | BitrateControlMode::NonControl => None,
+                    BitrateControlMode::DynamicConsumers => {
+                        //TODO dynamic with type of scaling
+                        let bitrate = min.min(self.allocate_bitrate?);
+                        Some(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps(bitrate)))
+                    }
+                }
             }
         }
     }
 
     fn on_transport_event(&mut self, _now: Instant, event: RemoteTrackEvent) -> Option<Output> {
         match event {
-            RemoteTrackEvent::Started { name, meta: _ } => {
+            RemoteTrackEvent::Started { name, priority, meta: _ } => {
                 self.name = Some(name.clone());
                 let room = self.room.as_ref()?;
                 log::info!("[EndpointRemoteTrack] started as name {name}");
+                self.queue.push_back(Output::Started(self.meta.kind, priority));
                 Some(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())))
             }
             RemoteTrackEvent::Paused => None,
@@ -80,6 +103,7 @@ impl EndpointRemoteTrack {
                 let name = self.name.take()?;
                 let room = self.room.as_ref()?;
                 log::info!("[EndpointRemoteTrack] stopped with name {name}");
+                self.queue.push_back(Output::Stopped(self.meta.kind));
                 Some(Output::Cluster(*room, ClusterRemoteTrackControl::Ended))
             }
         }
@@ -87,6 +111,15 @@ impl EndpointRemoteTrack {
 
     fn on_rpc_req(&mut self, _now: Instant, _req_id: EndpointReqId, _req: EndpointRemoteTrackReq) -> Option<Output> {
         None
+    }
+
+    fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) -> Option<Output> {
+        match action {
+            IngressAction::SetBitrate(bitrate) => match self.meta.control {
+                BitrateControlMode::MaxBitrate => Some(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps(bitrate))),
+                BitrateControlMode::DynamicConsumers | BitrateControlMode::NonControl => None,
+            },
+        }
     }
 }
 
@@ -102,6 +135,7 @@ impl Task<Input, Output> for EndpointRemoteTrack {
             Input::Cluster(event) => self.on_cluster_event(now, event),
             Input::Event(event) => self.on_transport_event(now, event),
             Input::RpcReq(req_id, req) => self.on_rpc_req(now, req_id, req),
+            Input::BitrateAllocation(action) => self.on_bitrate_allocation_action(now, action),
         }
     }
 

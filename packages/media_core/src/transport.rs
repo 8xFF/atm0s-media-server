@@ -2,7 +2,7 @@ use derive_more::{Display, From};
 use std::{hash::Hash, time::Instant};
 
 use media_server_protocol::{
-    endpoint::TrackMeta,
+    endpoint::{TrackMeta, TrackPriority},
     media::{MediaKind, MediaPacket},
 };
 use media_server_utils::F16u;
@@ -74,7 +74,7 @@ impl LocalTrackEvent {
 /// This is used for notifying state of remote track to endpoint
 #[derive(Debug)]
 pub enum RemoteTrackEvent {
-    Started { name: String, meta: TrackMeta },
+    Started { name: String, priority: TrackPriority, meta: TrackMeta },
     Paused,
     Resumed,
     Media(MediaPacket),

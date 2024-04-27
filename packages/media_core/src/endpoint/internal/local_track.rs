@@ -18,20 +18,21 @@ use crate::{
     transport::LocalTrackEvent,
 };
 
+use super::bitrate_allocator::EgressAction;
+
 pub enum Input {
     JoinRoom(ClusterRoomHash),
     LeaveRoom,
     Cluster(ClusterLocalTrackEvent),
     Event(LocalTrackEvent),
     RpcReq(EndpointReqId, EndpointLocalTrackReq),
-    LimitBitrate(u64),
+    BitrateAllocation(EgressAction),
 }
 
 pub enum Output {
     Event(EndpointLocalTrackEvent),
     Cluster(ClusterRoomHash, ClusterLocalTrackControl),
     RpcRes(EndpointReqId, EndpointLocalTrackRes),
-    DesiredBitrate(u64),
     Started(MediaKind, TrackPriority),
     Stopped(MediaKind),
 }
@@ -135,6 +136,15 @@ impl EndpointLocalTrack {
             }
         }
     }
+
+    fn on_bitrate_allocation_action(&mut self, _now: Instant, action: EgressAction) -> Option<Output> {
+        match action {
+            EgressAction::SetBitrate(bitrate) => {
+                log::debug!("[EndpointLocalTrack] Limit send bitrate {bitrate}");
+                Some(Output::Cluster(self.room?, ClusterLocalTrackControl::DesiredBitrate(bitrate)))
+            }
+        }
+    }
 }
 
 impl Task<Input, Output> for EndpointLocalTrack {
@@ -149,11 +159,7 @@ impl Task<Input, Output> for EndpointLocalTrack {
             Input::Cluster(event) => self.on_cluster_event(now, event),
             Input::Event(event) => self.on_transport_event(now, event),
             Input::RpcReq(req_id, req) => self.on_rpc_req(now, req_id, req),
-            Input::LimitBitrate(bitrate) => {
-                log::debug!("[EndpointLocalTrack] Limit send bitrate {bitrate}");
-                self.queue.push_back(Output::DesiredBitrate(bitrate));
-                Some(Output::Cluster(self.room?, ClusterLocalTrackControl::DesiredBitrate(bitrate)))
-            }
+            Input::BitrateAllocation(action) => self.on_bitrate_allocation_action(now, action),
         }
     }
 
