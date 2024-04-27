@@ -107,6 +107,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                 }
                 media_server_core::endpoint::EndpointRemoteTrackEvent::LimitBitrateBps(bitrate) => {
                     let mid = self.video_mid?;
+                    log::debug!("[TransportWebrtcWhip] limit video track {mid} with bitrate {bitrate} bps");
                     Some(InternalOutput::Str0mLimitBitrate(mid, bitrate))
                 }
             },

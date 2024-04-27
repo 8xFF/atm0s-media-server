@@ -69,12 +69,7 @@ trait TransportWebrtcInternal {
     fn pop_output<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>>;
 }
 
-pub struct TransportWebrtcCfg {
-    pub max_ingress_bitrate: u32,
-}
-
 pub struct TransportWebrtc {
-    cfg: TransportWebrtcCfg,
     next_tick: Option<Instant>,
     rtc: Rtc,
     internal: Box<dyn TransportWebrtcInternal>,
@@ -82,7 +77,7 @@ pub struct TransportWebrtc {
 }
 
 impl TransportWebrtc {
-    pub fn new(cfg: TransportWebrtcCfg, variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
+    pub fn new(variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
         let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::SdpError))?;
         let rtc_config = Rtc::builder()
             .set_rtp_mode(true)
@@ -105,7 +100,6 @@ impl TransportWebrtc {
 
         Ok((
             Self {
-                cfg,
                 next_tick: None,
                 rtc,
                 internal: match variant {
@@ -127,9 +121,8 @@ impl TransportWebrtc {
                 self.pop_event(now)
             }
             InternalOutput::Str0mLimitBitrate(mid, bitrate) => {
-                let bitrate2 = bitrate.min(self.cfg.max_ingress_bitrate as u64);
-                log::debug!("Rewrite ingress limit bitrate from {bitrate} to {bitrate2}");
-                self.rtc.direct_api().stream_rx_by_mid(mid, None)?.request_remb(Bitrate::bps(bitrate2));
+                log::debug!("Limit ingress bitrate of track {mid} with {bitrate} bps");
+                self.rtc.direct_api().stream_rx_by_mid(mid, None)?.request_remb(Bitrate::bps(bitrate));
                 self.pop_event(now)
             }
             InternalOutput::Str0mBwe(current, desired) => {

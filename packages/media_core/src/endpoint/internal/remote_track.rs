@@ -71,7 +71,7 @@ impl EndpointRemoteTrack {
     fn on_cluster_event(&mut self, _now: Instant, event: ClusterRemoteTrackEvent) -> Option<Output> {
         match event {
             ClusterRemoteTrackEvent::RequestKeyFrame => Some(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
-            ClusterRemoteTrackEvent::LimitBitrate { min, max } => {
+            ClusterRemoteTrackEvent::LimitBitrate { min, max: _ } => {
                 match self.meta.control {
                     BitrateControlMode::MaxBitrate | BitrateControlMode::NonControl => None,
                     BitrateControlMode::DynamicConsumers => {
@@ -124,7 +124,7 @@ impl EndpointRemoteTrack {
 }
 
 impl Task<Input, Output> for EndpointRemoteTrack {
-    fn on_tick(&mut self, now: Instant) -> Option<Output> {
+    fn on_tick(&mut self, _now: Instant) -> Option<Output> {
         None
     }
 
@@ -139,11 +139,11 @@ impl Task<Input, Output> for EndpointRemoteTrack {
         }
     }
 
-    fn pop_output(&mut self, now: Instant) -> Option<Output> {
-        None
+    fn pop_output(&mut self, _now: Instant) -> Option<Output> {
+        self.queue.pop_front()
     }
 
-    fn shutdown(&mut self, now: Instant) -> Option<Output> {
+    fn shutdown(&mut self, _now: Instant) -> Option<Output> {
         None
     }
 }

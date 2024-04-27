@@ -3,7 +3,6 @@ const DEFAULT_DESIRED_BPS: u64 = 1_000_000; // in inatve or warm-up state we wil
 const WARM_UP_FIRST_STAGE_MS: u128 = 1000;
 const WARM_UP_MS: u128 = 2000;
 const TIMEOUT_MS: u128 = 2000;
-const MAX_BITRATE_BPS: u64 = 3_000_000;
 
 use std::time::Instant;
 
@@ -13,9 +12,7 @@ use std::time::Instant;
 /// - In WarmUp state, it have 2 phase, each phase is 1 seconds.
 /// After first phase, the Bwe will be reset with latest_bwe.max(DEFAULT_BWE_BPS).
 /// In this phase, bwe = bwe.max(DEFAULT_BWE_BPS). After WarmUp end it will be switched to Active
-/// - In Active, bwe = bwe.min(MAX_BITRATE_BPS). If after TIMEOUT_MS, we dont have video packet, it will be reset to Inactive
-///
-/// In all state, bwe will have threshold MAX_BITRATE_BPS
+/// - In Active, dont change result. If after TIMEOUT_MS, we dont have video packet, it will be reset to Inactive
 ///
 #[derive(Default, Debug, PartialEq, Eq)]
 pub enum BweState {
@@ -90,14 +87,14 @@ impl BweState {
         match self {
             Self::Inactive => {
                 log::debug!("[BweState] rewrite bwe {bwe} to {} with Inactive or WarmUp state", bwe.max(DEFAULT_BWE_BPS));
-                bwe.max(DEFAULT_BWE_BPS).min(MAX_BITRATE_BPS)
+                bwe.max(DEFAULT_BWE_BPS)
             }
             Self::WarmUp { last_bwe, .. } => {
                 log::debug!("[BweState] rewrite bwe {bwe} to {} with Inactive or WarmUp state", bwe.max(DEFAULT_BWE_BPS));
                 *last_bwe = Some(bwe);
-                bwe.max(DEFAULT_BWE_BPS).min(MAX_BITRATE_BPS)
+                bwe.max(DEFAULT_BWE_BPS)
             }
-            Self::Active { .. } => bwe.min(MAX_BITRATE_BPS),
+            Self::Active { .. } => bwe,
         }
     }
 
@@ -109,9 +106,9 @@ impl BweState {
                     current.max(DEFAULT_BWE_BPS),
                     desired.max(DEFAULT_DESIRED_BPS)
                 );
-                (current.max(DEFAULT_BWE_BPS).min(MAX_BITRATE_BPS), desired.max(DEFAULT_DESIRED_BPS).min(MAX_BITRATE_BPS))
+                (current.max(DEFAULT_BWE_BPS), desired.max(DEFAULT_DESIRED_BPS))
             }
-            Self::Active { .. } => (current.min(MAX_BITRATE_BPS), desired.min(MAX_BITRATE_BPS)),
+            Self::Active { .. } => (current, desired),
         }
     }
 }

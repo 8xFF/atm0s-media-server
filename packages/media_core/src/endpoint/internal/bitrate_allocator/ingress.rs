@@ -30,17 +30,14 @@ impl IngressBitrateAllocator {
         self.process();
     }
 
-    pub fn set_ingress_bitrate(&mut self, bitrate: u64) {
-        self.ingress_bitrate = bitrate;
-        self.changed = true;
-    }
-
     pub fn set_video_track(&mut self, track: RemoteTrackId, priority: TrackPriority) {
+        log::info!("[IngressBitrateAllocator] set video track {track} priority {priority}");
         self.tracks.insert(track, priority);
         self.changed = true;
     }
 
     pub fn del_video_track(&mut self, track: RemoteTrackId) {
+        log::info!("[IngressBitrateAllocator] del video track {track}");
         self.tracks.remove(&track);
         self.changed = true;
     }
@@ -61,7 +58,9 @@ impl IngressBitrateAllocator {
 
         if *(sum.as_ref()) != 0 {
             for (track, priority) in self.tracks.iter() {
-                self.queue.push_back((*track, Action::SetBitrate((self.ingress_bitrate * priority.0 as u64) / sum.0 as u64)));
+                let bitrate = (self.ingress_bitrate * priority.0 as u64) / sum.0 as u64;
+                log::debug!("[IngressBitrateAllocator] set track {track} with bitrate {bitrate}");
+                self.queue.push_back((*track, Action::SetBitrate(bitrate)));
             }
         }
     }

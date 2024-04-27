@@ -65,7 +65,7 @@ impl EndpointInternal {
             _middlewares: Default::default(),
             queue: Default::default(),
             switcher: TaskSwitcher::new(2),
-            bitrate_allocator: BitrateAllocator::new(cfg.max_ingress_bitrate),
+            bitrate_allocator: BitrateAllocator::new(cfg.max_ingress_bitrate, cfg.max_ingress_bitrate),
             cfg,
         }
     }

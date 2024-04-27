@@ -22,9 +22,9 @@ pub struct BitrateAllocator {
 }
 
 impl BitrateAllocator {
-    pub fn new(max_ingress_bitrate: u64) -> Self {
+    pub fn new(max_ingress_bitrate: u64, max_egress_bitrate: u64) -> Self {
         Self {
-            egress: Default::default(),
+            egress: EgressBitrateAllocator::new(max_egress_bitrate),
             ingress: IngressBitrateAllocator::new(max_ingress_bitrate),
         }
     }

@@ -13,7 +13,7 @@ use str0m::change::DtlsCert;
 
 use crate::{
     shared_port::SharedUdpPort,
-    transport::{ExtIn, ExtOut, TransportWebrtc, TransportWebrtcCfg, VariantParams},
+    transport::{ExtIn, ExtOut, TransportWebrtc, VariantParams},
 };
 
 group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, EndpointInput<'a, ExtIn>, EndpointOutput<'a, ExtOut>);
@@ -66,8 +66,7 @@ impl MediaWorkerWebrtc {
             },
             VariantParams::Sdk => todo!(),
         };
-        let trans_cfg = TransportWebrtcCfg { max_ingress_bitrate: 2_500_000 };
-        let (tran, ufrag, sdp) = TransportWebrtc::new(trans_cfg, variant, offer, self.dtls_cert.clone(), self.addrs.clone())?;
+        let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone())?;
         let endpoint = Endpoint::new(cfg, tran);
         let index = self.endpoints.add_task(endpoint);
         self.shared_port.add_ufrag(ufrag, index);
