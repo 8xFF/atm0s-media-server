@@ -16,8 +16,8 @@ pub type MediaSeqRewrite = SeqRewrite<SEQ_MAX, 1000>;
 pub type MediaTsRewrite = TsRewrite<TS_MAX, 10>;
 
 trait VideoSelector {
+    fn on_init(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64);
     fn on_tick(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64);
-    fn on_source_changed(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64);
     fn set_target_bitrate(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, bitrate: u64);
     fn selector(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, channel: u64, pkt: &mut MediaPacket) -> Option<()>;
     fn pop_action(&mut self) -> Option<Action>;
@@ -30,6 +30,7 @@ pub enum Action {
 pub struct VideoSelectorCtx {
     pub ts_rewrite: MediaTsRewrite,
     pub seq_rewrite: MediaSeqRewrite,
+    pub vp8_ctx: video_vp8_sim::Ctx,
 }
 
 pub struct PacketSelector {
@@ -50,6 +51,7 @@ impl PacketSelector {
             ctx: VideoSelectorCtx {
                 ts_rewrite: MediaTsRewrite::new(kind.sample_rate()),
                 seq_rewrite: MediaSeqRewrite::default(),
+                vp8_ctx: Default::default(),
             },
             selected_channel: None,
             need_key_frame: false,
@@ -130,7 +132,7 @@ impl PacketSelector {
             self.ctx.ts_rewrite.reinit();
             self.ctx.seq_rewrite.reinit();
             self.selected_channel = Some(channel);
-            self.selector.as_mut().map(|s| s.on_source_changed(&mut self.ctx, now_ms));
+            self.selector = None;
 
             //if first pkt is not key, we need request it
             if !pkt.meta.is_video_key() {
@@ -139,8 +141,6 @@ impl PacketSelector {
                 self.need_key_frame = true;
                 self.last_key_frame_ts = Some(now_ms);
             }
-
-            //TODO clear self.selector if codec changed
         }
 
         let bitrate = self.bitrate?;
@@ -160,7 +160,7 @@ impl PacketSelector {
                 MediaMeta::Vp8 { sim: Some(_), .. } => {
                     let layers = pkt.layers.as_ref()?;
                     log::info!("[LocalTrack/PacketSelector] create Vp8SimSelector");
-                    Some(Box::new(video_vp8_sim::Vp8SimSelector::new(bitrate, layers.clone())))
+                    Some(Box::new(video_vp8_sim::Selector::new(bitrate, layers.clone())))
                 }
                 MediaMeta::Vp9 { svc: Some(_), .. } => todo!(),
                 MediaMeta::H264 { sim: None, .. } | MediaMeta::Vp8 { sim: None, .. } | MediaMeta::Vp9 { svc: None, .. } => {
@@ -168,6 +168,8 @@ impl PacketSelector {
                     Some(Box::new(video_single::VideoSingleSelector::default()))
                 }
             };
+
+            self.selector.as_mut().map(|s| s.on_init(&mut self.ctx, now_ms));
         }
 
         self.selector.as_mut()?.selector(&mut self.ctx, now_ms, channel, pkt)

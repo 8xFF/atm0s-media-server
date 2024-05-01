@@ -8,17 +8,21 @@ use super::{Action, VideoSelector, VideoSelectorCtx};
 const PIC_ID_MAX: u64 = 1 << 15;
 const TL0IDX_MAX: u64 = 1 << 8;
 
-pub struct Vp8SimSelector {
+#[derive(Default)]
+pub struct Ctx {
+    pic_id_rewrite: SeqRewrite<PIC_ID_MAX, 60>,
+    tl0idx_rewrite: SeqRewrite<TL0IDX_MAX, 60>,
+}
+
+pub struct Selector {
     bitrate_kbps: u16,
     layers: MediaLayersBitrate,
     current: Option<MediaLayerSelection>,
     target: Option<MediaLayerSelection>,
     queue: VecDeque<Action>,
-    pic_id_rewrite: SeqRewrite<PIC_ID_MAX, 60>,
-    tl0idx_rewrite: SeqRewrite<TL0IDX_MAX, 60>,
 }
 
-impl Vp8SimSelector {
+impl Selector {
     pub fn new(bitrate: u64, layers: MediaLayersBitrate) -> Self {
         let bitrate_kbps = (bitrate / 1000) as u16;
         let target = layers.select_layer(bitrate_kbps);
@@ -29,8 +33,6 @@ impl Vp8SimSelector {
             current: None,
             target,
             queue: VecDeque::new(),
-            pic_id_rewrite: SeqRewrite::default(),
-            tl0idx_rewrite: SeqRewrite::default(),
         }
     }
 
@@ -81,8 +83,8 @@ impl Vp8SimSelector {
                             log::info!("[Vp8SimSelector] down {},{} => {},{} with key", current.spatial, current.temporal, target.spatial, target.temporal);
                             // with other spatial we have difference tl0xidx and pic_id offset
                             // therefore we need reinit both tl0idx and pic_id
-                            self.tl0idx_rewrite.reinit();
-                            self.pic_id_rewrite.reinit();
+                            ctx.vp8_ctx.tl0idx_rewrite.reinit();
+                            ctx.vp8_ctx.pic_id_rewrite.reinit();
                             ctx.seq_rewrite.reinit();
                             ctx.ts_rewrite.reinit();
                             current.spatial = target.spatial;
@@ -102,8 +104,8 @@ impl Vp8SimSelector {
                             log::info!("[Vp8SimSelector] up {},{} => {},{} with key", current.spatial, current.temporal, target.spatial, target.temporal);
                             // with other spatial we have difference tl0xidx and pic_id offset
                             // therefore we need reinit both tl0idx and pic_id
-                            self.tl0idx_rewrite.reinit();
-                            self.pic_id_rewrite.reinit();
+                            ctx.vp8_ctx.tl0idx_rewrite.reinit();
+                            ctx.vp8_ctx.pic_id_rewrite.reinit();
                             ctx.seq_rewrite.reinit();
                             ctx.ts_rewrite.reinit();
                             current.spatial = target.spatial;
@@ -125,8 +127,8 @@ impl Vp8SimSelector {
                         log::info!("[Vp8SimSelector] resume to {},{} with key", target.spatial, target.temporal);
                         // with other spatial we have difference tl0xidx and pic_id offset
                         // therefore we need reinit both tl0idx and pic_id
-                        self.tl0idx_rewrite.reinit();
-                        self.pic_id_rewrite.reinit();
+                        ctx.vp8_ctx.tl0idx_rewrite.reinit();
+                        ctx.vp8_ctx.pic_id_rewrite.reinit();
                         self.current = Some(target.clone());
                     }
                 }
@@ -152,11 +154,11 @@ impl Vp8SimSelector {
                         sim.picture_id
                     );
                     if let Some(tl0idx) = sim.tl0_pic_idx {
-                        sim.tl0_pic_idx = Some(self.tl0idx_rewrite.generate(tl0idx as u64)? as u8);
+                        sim.tl0_pic_idx = Some(ctx.vp8_ctx.tl0idx_rewrite.generate(tl0idx as u64)? as u8);
                     }
 
                     if let Some(pic_id) = sim.picture_id {
-                        sim.picture_id = Some(self.pic_id_rewrite.generate(pic_id as u64)? as u16);
+                        sim.picture_id = Some(ctx.vp8_ctx.pic_id_rewrite.generate(pic_id as u64)? as u16);
                     }
 
                     Some(())
@@ -165,7 +167,7 @@ impl Vp8SimSelector {
                     // We don't need drop tl01picidx because it only increment in base layer
                     // with TID (temporal) = 0, which never drop
                     if let Some(pic_id) = sim.picture_id {
-                        self.pic_id_rewrite.drop_value(pic_id as u64);
+                        ctx.vp8_ctx.pic_id_rewrite.drop_value(pic_id as u64);
                     }
 
                     ctx.seq_rewrite.drop_value(pkt.seq as u64);
@@ -180,13 +182,13 @@ impl Vp8SimSelector {
     }
 }
 
-impl VideoSelector for Vp8SimSelector {
-    fn on_tick(&mut self, ctx: &mut VideoSelectorCtx, _now_ms: u64) {}
-
-    fn on_source_changed(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64) {
-        self.pic_id_rewrite.reinit();
-        self.tl0idx_rewrite.reinit();
+impl VideoSelector for Selector {
+    fn on_init(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64) {
+        ctx.vp8_ctx.pic_id_rewrite.reinit();
+        ctx.vp8_ctx.tl0idx_rewrite.reinit();
     }
+
+    fn on_tick(&mut self, ctx: &mut VideoSelectorCtx, _now_ms: u64) {}
 
     fn set_target_bitrate(&mut self, ctx: &mut VideoSelectorCtx, _now_ms: u64, bitrate: u64) {
         let bitrate_kbps = (bitrate / 1000) as u16;

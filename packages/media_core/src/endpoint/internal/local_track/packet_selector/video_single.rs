@@ -6,9 +6,9 @@ pub struct VideoSingleSelector {
 }
 
 impl VideoSelector for VideoSingleSelector {
-    fn on_tick(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64) {}
+    fn on_init(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64) {}
 
-    fn on_source_changed(&mut self, _ctx: &mut VideoSelectorCtx, now_ms: u64) {}
+    fn on_tick(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64) {}
 
     fn set_target_bitrate(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, _bitrate: u64) {}
 
