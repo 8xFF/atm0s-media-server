@@ -76,15 +76,17 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
         let pkt = MediaPacket::deserialize(&data)?;
         let channel_container = self.channels.get(&channel)?;
         log::trace!(
-            "[ClusterRoom {}] on channel media payload {} seq {} to {} subscribers",
+            "[ClusterRoom {}] on channel media meta {:?} seq {} to {} subscribers",
             self.room,
-            pkt.pt,
+            pkt.meta,
             pkt.seq,
             channel_container.owners.len()
         );
         for (owner, track) in &channel_container.owners {
-            self.queue
-                .push_back(Output::Endpoint(vec![*owner], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::Media(pkt.clone()))))
+            self.queue.push_back(Output::Endpoint(
+                vec![*owner],
+                ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::Media(*channel, pkt.clone())),
+            ))
         }
         self.queue.pop_front()
     }
@@ -171,7 +173,7 @@ mod tests {
     use atm0s_sdn::features::pubsub::{ChannelControl, Control, Feedback};
     use media_server_protocol::{
         endpoint::{PeerId, TrackName},
-        media::MediaPacket,
+        media::{MediaMeta, MediaPacket},
     };
 
     use crate::{
@@ -187,11 +189,12 @@ mod tests {
 
     pub fn fake_audio() -> MediaPacket {
         MediaPacket {
-            pt: 111,
             ts: 0,
             seq: 0,
             marker: true,
             nackable: false,
+            layers: None,
+            meta: MediaMeta::Opus { audio_level: None },
             data: vec![1, 2, 3, 4],
         }
     }
@@ -214,7 +217,10 @@ mod tests {
 
         let pkt = fake_audio();
         let out = subscriber.on_channel_data(channel_id, pkt.serialize());
-        assert_eq!(out, Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::LocalTrack(track, ClusterLocalTrackEvent::Media(pkt)))));
+        assert_eq!(
+            out,
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::LocalTrack(track, ClusterLocalTrackEvent::Media(*channel_id, pkt))))
+        );
         assert_eq!(subscriber.pop_output(Instant::now()), None);
 
         let out = subscriber.on_track_unsubscribe(owner, track);

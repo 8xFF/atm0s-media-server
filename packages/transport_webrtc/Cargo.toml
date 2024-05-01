@@ -7,11 +7,11 @@ edition = "2021"
 
 [dependencies]
 log = { workspace = true }
+num_enum = { workspace = true }
+smallmap = { workspace = true }
 sans-io-runtime = { workspace = true, default-features = false }
 media-server-utils = { path = "../media_utils" }
 media-server-protocol = { path = "../protocol" }
 media-server-core = { path = "../media_core" }
-num_enum = { workspace = true }
-str0m = { git = "https://github.com/giangndm/str0m.git", branch = "fix-bwe-slow-increase-with-audio-first" }
-smallmap = "1.4.2"
+str0m = { git = "https://github.com/8xff/str0m.git", rev = "24e208c6a12418709a499706fb3eb481ef57a3d2" }
 stun-rs = "0.1.8"

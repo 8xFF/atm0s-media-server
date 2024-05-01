@@ -12,11 +12,12 @@ use media_server_protocol::{
     media::{MediaKind, MediaScaling},
 };
 use str0m::{
+    format::CodecConfig,
     media::{Direction, KeyframeRequestKind, MediaAdded, Mid},
     Event as Str0mEvent, IceConnectionState,
 };
 
-use crate::utils::rtp_to_media_packet;
+use crate::media::RemoteMediaConvert;
 
 use super::{InternalOutput, TransportWebrtcInternal};
 
@@ -48,6 +49,7 @@ pub struct TransportWebrtcWhip {
     audio_mid: Option<Mid>,
     video_mid: Option<Mid>,
     queue: VecDeque<InternalOutput<'static>>,
+    media_convert: RemoteMediaConvert,
 }
 
 impl TransportWebrtcWhip {
@@ -59,11 +61,16 @@ impl TransportWebrtcWhip {
             audio_mid: None,
             video_mid: None,
             queue: VecDeque::new(),
+            media_convert: RemoteMediaConvert::default(),
         }
     }
 }
 
 impl TransportWebrtcInternal for TransportWebrtcWhip {
+    fn on_codec_config(&mut self, cfg: &CodecConfig) {
+        self.media_convert.set_config(cfg);
+    }
+
     fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
         match &self.state {
             State::New => {
@@ -146,7 +153,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                 } else {
                     VIDEO_TRACK
                 };
-                let pkt = rtp_to_media_packet(pkt);
+                let pkt = self.media_convert.convert(pkt)?;
                 Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
                     track,
                     RemoteTrackEvent::Media(pkt),
@@ -238,7 +245,11 @@ impl TransportWebrtcWhip {
                     name: VIDEO_NAME.to_string(),
                     meta: TrackMeta {
                         kind: MediaKind::Video,
-                        scaling: MediaScaling::None,
+                        scaling: if media.simulcast.is_some() {
+                            MediaScaling::Simulcast
+                        } else {
+                            MediaScaling::None
+                        },
                         control: BitrateControlMode::MaxBitrate,
                     },
                     priority: TrackPriority(1),

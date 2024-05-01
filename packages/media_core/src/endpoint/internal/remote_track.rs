@@ -4,7 +4,7 @@ use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::{
     endpoint::{BitrateControlMode, TrackMeta, TrackName, TrackPriority},
-    media::MediaKind,
+    media::{MediaKind, MediaLayersBitrate},
 };
 use sans_io_runtime::Task;
 
@@ -39,6 +39,8 @@ pub struct EndpointRemoteTrack {
     name: Option<String>,
     queue: VecDeque<Output>,
     allocate_bitrate: Option<u64>,
+    /// This is for storing current stream layers, everytime key-frame arrived we will set this if it not set
+    last_layers: Option<MediaLayersBitrate>,
 }
 
 impl EndpointRemoteTrack {
@@ -49,6 +51,7 @@ impl EndpointRemoteTrack {
             name: None,
             queue: VecDeque::new(),
             allocate_bitrate: None,
+            last_layers: None,
         }
     }
 
@@ -95,7 +98,19 @@ impl EndpointRemoteTrack {
             }
             RemoteTrackEvent::Paused => None,
             RemoteTrackEvent::Resumed => None,
-            RemoteTrackEvent::Media(media) => {
+            RemoteTrackEvent::Media(mut media) => {
+                //TODO clear self.last_layer if switched to new track
+                if media.layers.is_some() {
+                    log::info!("[EndpointRemoteTrack] on layers info {:?}", media.layers);
+                    self.last_layers = media.layers.clone();
+                }
+
+                // We restore last_layer if key frame not containt for allow consumers fast switching
+                if media.meta.is_video_key() && media.layers.is_some() {
+                    log::info!("[EndpointRemoteTrack] set layers info to key-frame {:?}", media.layers);
+                    media.layers = self.last_layers.clone();
+                }
+
                 let room = self.room.as_ref()?;
                 Some(Output::Cluster(*room, ClusterRemoteTrackControl::Media(media)))
             }

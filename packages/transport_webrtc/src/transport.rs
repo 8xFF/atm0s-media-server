@@ -13,11 +13,12 @@ use media_server_protocol::{
     media::MediaPacket,
     transport::{RpcError, RpcResult},
 };
-use media_server_utils::Small2dMap;
+use media_server_utils::{RtpSeqExtend, Small2dMap};
 use sans_io_runtime::backend::{BackendIncoming, BackendOutgoing};
 use str0m::{
     bwe::Bitrate,
     change::{DtlsCert, SdpOffer},
+    format::CodecConfig,
     ice::IceCreds,
     media::{KeyframeRequestKind, Mid},
     net::{Protocol, Receive},
@@ -25,7 +26,7 @@ use str0m::{
     Candidate, Rtc,
 };
 
-use crate::WebrtcError;
+use crate::{media::LocalMediaConvert, WebrtcError};
 
 mod bwe_state;
 mod whep;
@@ -61,6 +62,7 @@ enum InternalOutput<'a> {
 }
 
 trait TransportWebrtcInternal {
+    fn on_codec_config(&mut self, cfg: &CodecConfig);
     fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>>;
     fn on_transport_rpc_res<'a>(&mut self, now: Instant, req_id: EndpointReqId, res: EndpointRes) -> Option<InternalOutput<'a>>;
     fn on_endpoint_event<'a>(&mut self, now: Instant, input: EndpointEvent) -> Option<InternalOutput<'a>>;
@@ -74,6 +76,8 @@ pub struct TransportWebrtc {
     rtc: Rtc,
     internal: Box<dyn TransportWebrtcInternal>,
     ports: Small2dMap<SocketAddr, usize>,
+    local_convert: LocalMediaConvert,
+    seq_extends: smallmap::Map<Mid, RtpSeqExtend>,
 }
 
 impl TransportWebrtc {
@@ -85,6 +89,10 @@ impl TransportWebrtc {
             .set_dtls_cert(dtls_cert)
             .set_local_ice_credentials(IceCreds::new())
             .set_stats_interval(Some(Duration::from_secs(1)))
+            .set_extension(
+                9,
+                str0m::rtp::Extension::with_serializer("http://www.webrtc.org/experiments/rtp-hdrext/video-layers-allocation00", str0m::rtp::vla::Serializer),
+            )
             .enable_bwe(Some(Bitrate::kbps(3000)));
         let ice_ufrag = rtc_config.local_ice_credentials().as_ref().expect("should have ice credentials").ufrag.clone();
 
@@ -97,17 +105,23 @@ impl TransportWebrtc {
             rtc.add_local_candidate(Candidate::host(local_addr, Protocol::Udp).expect("Should add local candidate"));
         }
         let answer = rtc.sdp_api().accept_offer(offer).map_err(|_e| RpcError::new2(WebrtcError::Str0mError))?;
+        let mut local_convert = LocalMediaConvert::default();
+        let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
+            VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
+            VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
+            VariantParams::Sdk => unimplemented!(),
+        };
+        internal.on_codec_config(rtc.codec_config());
+        local_convert.set_config(rtc.codec_config());
 
         Ok((
             Self {
                 next_tick: None,
+                internal,
                 rtc,
-                internal: match variant {
-                    VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
-                    VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
-                    VariantParams::Sdk => unimplemented!(),
-                },
                 ports,
+                local_convert,
+                seq_extends: Default::default(),
             },
             ice_ufrag,
             answer.to_sdp_string(),
@@ -133,11 +147,14 @@ impl TransportWebrtc {
                 self.pop_event(now)
             }
             InternalOutput::Str0mSendMedia(mid, pkt) => {
-                log::trace!("[TransportWebrtc] sending media payload {} seq {} to mid {mid}", pkt.pt, pkt.seq);
+                let seq_extend = self.seq_extends.entry(mid).or_default();
+                let pt = self.local_convert.convert_codec(pkt.meta.codec())?;
+                let seq2 = seq_extend.generate(pkt.seq)?;
+                log::debug!("[TransportWebrtc] sending media meta {:?} => pt {pt} seq {} => extended seq {seq2} to mid {mid}", pkt.meta, pkt.seq);
                 self.rtc
                     .direct_api()
                     .stream_tx_by_mid(mid, None)?
-                    .write_rtp(pkt.pt.into(), pkt.seq.into(), pkt.ts, now, pkt.marker, ExtensionValues::default(), pkt.nackable, pkt.data)
+                    .write_rtp(pt, seq2.into(), pkt.ts, now, pkt.marker, ExtensionValues::default(), pkt.nackable, pkt.data)
                     .ok()?;
                 self.pop_event(now)
             }

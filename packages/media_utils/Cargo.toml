@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 smallmap = { workspace = true }
+sorted-vec = "0.8"
+log = { workspace = true }
