@@ -13,7 +13,7 @@ sans-io-runtime = { git = "https://github.com/giangndm/sans-io-runtime.git", rev
 atm0s-sdn = { git = "https://github.com/giangndm/8xFF-decentralized-sdn.git", rev = "3c2945754926bd014c36e8ec20c228051a45603f" }
 convert-enum = "0.1"
 num_enum = "0.7"
-log = "0.4"
+log = "0.4.21"
 smallmap = "1.4"
 derivative = "2.2"
 derive_more = "0.99"
