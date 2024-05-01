@@ -45,6 +45,12 @@ impl MediaLayerBitrate {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaLayerSelection {
+    pub spatial: u8,
+    pub temporal: u8,
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, From)]
 pub struct MediaLayersBitrate([Option<MediaLayerBitrate>; 3]);
 
@@ -53,22 +59,28 @@ impl MediaLayersBitrate {
         self.0[index] = Some(layer);
     }
 
-    pub fn select_layer(&self, target_bitrate_kbps: u16) -> (u8, u8) {
-        let mut target_spatial = 0;
-        let mut target_temporal = 0;
+    pub fn has_layer(&self, index: usize) -> bool {
+        self.0[index].is_some()
+    }
+
+    /// Select best layer for target bitrate
+    /// TODO: return None if target_bitrate cannot provide stable connection
+    pub fn select_layer(&self, target_bitrate_kbps: u16) -> Option<MediaLayerSelection> {
+        let mut spatial = 0;
+        let mut temporal = 0;
         for i in 0..3 {
-            if let Some(spatial) = &self.0[i] {
+            if let Some(layer) = &self.0[i] {
                 for j in 0..3 {
-                    if let Some(bitrate) = spatial.0[j] {
+                    if let Some(bitrate) = layer.0[j] {
                         if target_bitrate_kbps >= bitrate {
-                            target_spatial = i as u8;
-                            target_temporal = j as u8;
+                            spatial = i as u8;
+                            temporal = j as u8;
                         }
                     }
                 }
             }
         }
-        (target_spatial, target_temporal)
+        Some(MediaLayerSelection { spatial, temporal })
     }
 }
 

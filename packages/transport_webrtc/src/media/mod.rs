@@ -93,6 +93,19 @@ impl LocalMediaConvert {
     pub fn convert_codec(&self, codec: MediaCodec) -> Option<Pt> {
         self.map.get(&codec).cloned()
     }
+
+    pub fn rewrite_pkt(&self, pkt: &mut MediaPacket) {
+        match &mut pkt.meta {
+            MediaMeta::Opus { audio_level } => {}
+            MediaMeta::H264 { key, profile, sim } => todo!(),
+            MediaMeta::Vp8 { key, sim } => {
+                if let Some(sim) = sim {
+                    vp8::rewrite_rtp(&mut pkt.data, sim);
+                }
+            }
+            MediaMeta::Vp9 { key, profile, svc } => todo!(),
+        }
+    }
 }
 
 fn extract_simulcast(vla: &VideoLayersAllocation) -> Option<MediaLayersBitrate> {

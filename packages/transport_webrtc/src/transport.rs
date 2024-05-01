@@ -146,11 +146,17 @@ impl TransportWebrtc {
                 bwe.set_desired_bitrate(desired.into());
                 self.pop_event(now)
             }
-            InternalOutput::Str0mSendMedia(mid, pkt) => {
+            InternalOutput::Str0mSendMedia(mid, mut pkt) => {
                 let seq_extend = self.seq_extends.entry(mid).or_default();
                 let pt = self.local_convert.convert_codec(pkt.meta.codec())?;
                 let seq2 = seq_extend.generate(pkt.seq)?;
-                log::debug!("[TransportWebrtc] sending media meta {:?} => pt {pt} seq {} => extended seq {seq2} to mid {mid}", pkt.meta, pkt.seq);
+                self.local_convert.rewrite_pkt(&mut pkt);
+                log::trace!(
+                    "[TransportWebrtc] sending media meta {:?} => pt {pt} seq {} ts {} => extended seq {seq2} to mid {mid}",
+                    pkt.meta,
+                    pkt.seq,
+                    pkt.ts
+                );
                 self.rtc
                     .direct_api()
                     .stream_tx_by_mid(mid, None)?

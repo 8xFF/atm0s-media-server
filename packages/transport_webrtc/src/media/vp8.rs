@@ -98,6 +98,43 @@ pub fn parse_rtp(packet: &[u8], rid: Option<u8>) -> Option<MediaMeta> {
     }
 }
 
+#[allow(unused_assignments)]
+pub fn rewrite_rtp(payload: &mut [u8], sim: &Vp8Sim) {
+    let mut payload_index = 0;
+
+    let b = payload[payload_index];
+    payload_index += 1;
+
+    let x = (b & 0x80) >> 7;
+    let mut i = 0;
+    let mut l = 0;
+    if x == 1 {
+        let b = payload[payload_index];
+        payload_index += 1;
+        i = (b & 0x80) >> 7;
+        l = (b & 0x40) >> 6;
+    }
+
+    // has PictureID
+    if i == 1 {
+        if payload[payload_index] & 0x80 > 0 {
+            // M == 1, PID is 16bit
+            payload[payload_index] = 0x80 | (sim.picture_id.unwrap_or(0) >> 8) as u8;
+            payload[payload_index + 1] = sim.picture_id.unwrap_or(0) as u8;
+            payload_index += 2;
+        } else {
+            //8bit
+            payload[payload_index] = 0x7F & sim.picture_id.unwrap_or(0) as u8;
+            payload_index += 1;
+        }
+    }
+
+    if l == 1 {
+        payload[payload_index] = sim.tl0_pic_idx.unwrap_or(0);
+        payload_index += 1;
+    }
+}
+
 //    0 1 2 3 4 5 6 7                      0 1 2 3 4 5 6 7
 //    +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
 //    |X|R|N|S|R| PID | (REQUIRED)        |X|R|N|S|R| PID | (REQUIRED)

@@ -110,7 +110,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                 media_server_core::endpoint::EndpointRemoteTrackEvent::RequestKeyFrame => {
                     let mid = self.video_mid?;
                     log::info!("[TransportWebrtcWhip] request key-frame");
-                    Some(InternalOutput::Str0mKeyframe(mid, KeyframeRequestKind::Pli))
+                    Some(InternalOutput::Str0mKeyframe(mid, KeyframeRequestKind::Fir))
                 }
                 media_server_core::endpoint::EndpointRemoteTrackEvent::LimitBitrateBps(bitrate) => {
                     let mid = self.video_mid?;

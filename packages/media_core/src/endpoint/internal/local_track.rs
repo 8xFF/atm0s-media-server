@@ -122,8 +122,8 @@ impl EndpointLocalTrack {
                         self.queue.push_back(Output::Stopped(self.kind));
                     }
                     self.bind = Some((peer.clone(), track.clone()));
-                    self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer, track)));
                     self.queue.push_back(Output::Started(self.kind, priority));
+                    self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer, track)));
                     self.selector.reset();
                     Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
                 } else {
@@ -134,8 +134,8 @@ impl EndpointLocalTrack {
             EndpointLocalTrackReq::Switch(None) => {
                 if let Some(room) = self.room.as_ref() {
                     if let Some((peer, track)) = self.bind.take() {
-                        self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
                         self.queue.push_back(Output::Stopped(self.kind));
+                        self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
                         log::info!("[EndpointLocalTrack] unview room {room} peer {peer} track {track}");
                         Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
                     } else {
@@ -157,6 +157,9 @@ impl EndpointLocalTrack {
                 log::debug!("[EndpointLocalTrack] Limit send bitrate {bitrate}");
                 self.selector.set_target_bitrate(now_ms, bitrate);
                 self.pop_selector(now_ms);
+                if let Some(room) = self.room {
+                    self.queue.push_back(Output::Cluster(room, ClusterLocalTrackControl::DesiredBitrate(bitrate)));
+                }
                 self.queue.pop_front()
             }
         }
@@ -173,9 +176,6 @@ impl EndpointLocalTrack {
                 packet_selector::Action::RequestKeyFrame => {
                     self.queue.push_back(Output::Cluster(room, ClusterLocalTrackControl::RequestKeyFrame));
                 }
-                packet_selector::Action::DesiredBitrate(bitrate) => {
-                    self.queue.push_back(Output::Cluster(room, ClusterLocalTrackControl::DesiredBitrate(bitrate)));
-                }
             }
         }
     }
@@ -184,6 +184,7 @@ impl EndpointLocalTrack {
 impl Task<Input, Output> for EndpointLocalTrack {
     fn on_tick(&mut self, now: Instant) -> Option<Output> {
         let now_ms = self.timer.timestamp_ms(now);
+        self.selector.on_tick(now_ms);
         self.pop_selector(now_ms);
         self.queue.pop_front()
     }
