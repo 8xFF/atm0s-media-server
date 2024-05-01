@@ -134,7 +134,7 @@ pub enum MediaMeta {
     Opus { audio_level: Option<i8> },
     H264 { key: bool, profile: H264Profile, sim: Option<H264Sim> },
     Vp8 { key: bool, sim: Option<Vp8Sim> },
-    Vp9 { key: bool, profile: Vp9Profile, sim: Option<Vp9Svc> },
+    Vp9 { key: bool, profile: Vp9Profile, svc: Option<Vp9Svc> },
 }
 
 impl MediaMeta {
