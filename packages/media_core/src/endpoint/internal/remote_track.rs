@@ -105,7 +105,7 @@ impl EndpointRemoteTrack {
                     self.last_layers = media.layers.clone();
                 }
 
-                // We restore last_layer if key frame not containt for allow consumers fast switching
+                // We restore last_layer if key frame not contain for allow consumers fast switching
                 if media.meta.is_video_key() && media.layers.is_none() {
                     log::info!("[EndpointRemoteTrack] set layers info to key-frame {:?}", media.layers);
                     media.layers = self.last_layers.clone();

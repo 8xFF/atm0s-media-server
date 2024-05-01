@@ -117,7 +117,7 @@ impl Selector {
                 }
                 (Some(current), None) => {
                     //need pause
-                    //TODO wait current frame finished for avoiding interupt client
+                    //TODO wait current frame finished for avoiding interrupt client
                     log::info!("[Vp8SimSelector] pause from {},{}", current.spatial, current.temporal);
                     self.current = None;
                 }
