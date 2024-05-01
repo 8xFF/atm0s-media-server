@@ -12,7 +12,7 @@ members = [
 sans-io-runtime = { git = "https://github.com/giangndm/sans-io-runtime.git", rev = "9d16b9c224c2d1cd3015c9a2e60f51914c9bd880" }
 atm0s-sdn = { git = "https://github.com/giangndm/8xFF-decentralized-sdn.git", rev = "3c2945754926bd014c36e8ec20c228051a45603f" }
 convert-enum = "0.1"
-num_enum = "0.7"
+num_enum = "0.7.2"
 log = "0.4"
 smallmap = "1.4"
 derivative = "2.2"
