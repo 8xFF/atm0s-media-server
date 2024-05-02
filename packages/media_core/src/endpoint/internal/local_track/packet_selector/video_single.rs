@@ -1,5 +1,5 @@
 //! Single stream video selector.
-//! This selector allow all video because parrent PacketSelector allready wait for key-frame
+//! This selector allow all video because parent PacketSelector already wait for key-frame
 
 use super::{VideoSelector, VideoSelectorCtx};
 
