@@ -76,12 +76,12 @@ impl Selector {
                         if target.temporal > current.temporal {
                             //up temporal => need wait layer_sync
                             if sim.spatial == current.spatial && sim.temporal <= target.temporal && sim.layer_sync {
-                                log::info!("[Vp8SimSelector] up temporal {} => {}", current.temporal, target.temporal);
+                                log::info!("[Vp8SimSelector] up temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
                                 current.temporal = target.temporal;
                             }
                         } else if target.temporal < current.temporal {
                             //down temporal => do now
-                            log::info!("[Vp8SimSelector] down temporal {} => {}", current.temporal, target.temporal);
+                            log::info!("[Vp8SimSelector] down temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
                             current.temporal = target.temporal;
                         }
                     } else if target.spatial < current.spatial {
@@ -108,12 +108,12 @@ impl Selector {
                         //up spatial => need wait key-frame
                         //first we try to up temporal for trying increase bandwidth
                         if sim.spatial == current.spatial && current.temporal != 2 && sim.layer_sync {
-                            log::info!("[Vp8SimSelector] up spatial then up temporal from {} => 2 with layer_sync", current.temporal);
+                            log::info!("[Vp8SimSelector] up spatial then up temporal from {} => 2 before layer_sync arrived", current.temporal);
                             current.temporal = 2;
                         }
 
                         if *key {
-                            log::info!("[Vp8SimSelector] up {},{} => {},{} with any key", current.spatial, current.temporal, target.spatial, target.temporal);
+                            log::info!("[Vp8SimSelector] up {},{} => {},{} with key-frame", current.spatial, current.temporal, target.spatial, target.temporal);
                             // with other spatial we have difference tl0xidx and pic_id offset
                             // therefore we need reinit both tl0idx and pic_id
                             ctx.vp8_ctx.tl0idx_rewrite.reinit();

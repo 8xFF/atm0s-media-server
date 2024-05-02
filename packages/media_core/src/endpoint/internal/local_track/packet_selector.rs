@@ -103,7 +103,7 @@ impl PacketSelector {
 
     /// Set target bitrate, which is used to select best layer for avoiding freezes or lags
     pub fn set_target_bitrate(&mut self, now_ms: u64, bitrate: u64) {
-        log::info!("[LocalTrack/PacketSelector] set target bitrate to {}", bitrate);
+        log::debug!("[LocalTrack/PacketSelector] set target bitrate to {}", bitrate);
         self.bitrate = Some(bitrate);
         self.selector.as_mut().map(|s| s.set_target_bitrate(&mut self.ctx, now_ms, bitrate));
     }
