@@ -6,7 +6,7 @@
 //! is not disconnect, and also call drop_value and reinit on shared state (seq_rewrite, ts_rewrite) when
 //! it switch to other spatial layer.
 //!
-//! Note that, in svc stream, all spatial layers have continuos seq, ts.
+//! Note that, in svc stream, all spatial layers have continuous seq, ts.
 //!
 //! Vp9 have 2 mode: k-svc and full-svc
 //!
