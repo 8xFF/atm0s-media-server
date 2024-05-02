@@ -1,29 +1,20 @@
+//! Single stream video selector.
+//! This selector allow all video because parrent PacketSelector allready wait for key-frame
+
 use super::{VideoSelector, VideoSelectorCtx};
 
 #[derive(Default)]
-pub struct VideoSingleSelector {
-    has_key: bool,
-}
+pub struct VideoSingleSelector {}
 
 impl VideoSelector for VideoSingleSelector {
-    fn on_init(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64) {}
+    fn on_init(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64) {}
 
     fn on_tick(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64) {}
 
     fn set_target_bitrate(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, _bitrate: u64) {}
 
-    fn selector(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, _channel: u64, pkt: &mut media_server_protocol::media::MediaPacket) -> Option<()> {
-        if !self.has_key && pkt.meta.is_video_key() {
-            log::info!("[VideoSingleSelector] first key-frame {} arrived => switch to live mode", pkt.seq);
-            self.has_key = true;
-        }
-
-        if self.has_key {
-            Some(())
-        } else {
-            log::debug!("[VideoSingleSelector] wait first key-frame => reject {}", pkt.seq);
-            None
-        }
+    fn select(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, _channel: u64, _pkt: &mut media_server_protocol::media::MediaPacket) -> Option<()> {
+        Some(())
     }
 
     fn pop_action(&mut self) -> Option<super::Action> {

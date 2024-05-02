@@ -11,7 +11,11 @@ num_enum = { workspace = true }
 smallmap = { workspace = true }
 derivative = { workspace = true }
 derive_more = { workspace = true }
+mockall = { workspace = true }
 sans-io-runtime = { workspace = true, default-features = false }
 atm0s-sdn = { workspace = true }
 media-server-protocol = { path = "../protocol" }
 media-server-utils = { path = "../media_utils" }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }

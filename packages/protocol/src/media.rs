@@ -36,6 +36,10 @@ pub struct MediaSimple {
 pub struct MediaLayerBitrate([Option<u16>; 3]);
 
 impl MediaLayerBitrate {
+    pub fn new(data: &[u16; 3]) -> Self {
+        Self([Some(data[0]), Some(data[1]), Some(data[2])])
+    }
+
     pub fn set_layer(&mut self, index: usize, bitrate: u16) {
         self.0[index] = Some(bitrate);
     }

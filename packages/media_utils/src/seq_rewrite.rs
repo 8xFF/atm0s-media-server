@@ -25,6 +25,7 @@ impl<const MAX: u64, const DROPPED_QUEUE_LEN: usize> Default for SeqRewrite<MAX,
     }
 }
 
+#[allow(unused)]
 impl<const MAX: u64, const DROPPED_QUEUE_LEN: usize> SeqRewrite<MAX, DROPPED_QUEUE_LEN> {
     /// Using for marking that we have new stream.
     pub fn reinit(&mut self) {
@@ -42,6 +43,7 @@ impl<const MAX: u64, const DROPPED_QUEUE_LEN: usize> SeqRewrite<MAX, DROPPED_QUE
 
     /// Mark the input as dropped.
     pub fn drop_value(&mut self, input: u64) {
+        log::trace!("drop value {input}");
         assert!(input < MAX, "{} should < MAX {}", input, MAX);
 
         if self.reinit {
@@ -68,6 +70,7 @@ impl<const MAX: u64, const DROPPED_QUEUE_LEN: usize> SeqRewrite<MAX, DROPPED_QUE
 
     /// Using for generate new seq from input seq
     pub fn generate(&mut self, input: u64) -> Option<u64> {
+        log::trace!("generate value {input}");
         assert!(input < MAX, "{} should < MAX {}", input, MAX);
 
         if self.reinit {
@@ -492,6 +495,21 @@ mod test {
             (1, 6, false, false, None),
             (2, 7, false, false, None),
             (3, 8, false, false, None),
+        ]);
+    }
+
+    #[test]
+    fn after_reinit_input_dropped_value() {
+        const MAX: u64 = 0x01_u64 << 15;
+        run_test::<MAX>(vec![
+            (1, 1, false, false, None),
+            (2, 1, false, true, None), //drop
+            (3, 2, false, false, None),
+            (4, 3, false, false, None),
+            (1, 4, true, false, None),
+            (2, 5, false, false, None),
+            (3, 6, false, false, None),
+            (4, 7, false, false, None),
         ]);
     }
 }

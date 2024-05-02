@@ -1234,9 +1234,11 @@ dependencies = [
  "log",
  "media-server-protocol",
  "media-server-utils",
+ "mockall",
  "num_enum",
  "sans-io-runtime",
  "smallmap",
+ "tracing-subscriber",
 ]
 
 [[package]]
