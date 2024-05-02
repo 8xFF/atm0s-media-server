@@ -3,7 +3,7 @@
 ///
 /// Example usage:
 /// ```
-/// use atm0s_media_server_utils::RtpSeqExtend;
+/// use media_server_utils::RtpSeqExtend;
 ///
 /// let mut extender = RtpSeqExtend::default();
 ///
