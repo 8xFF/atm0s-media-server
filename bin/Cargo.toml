@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
+tracing-subscriber = { workspace = true }
 clap = { version = "4.5", features = ["env", "derive"] }
 log = { workspace = true }
 rand = { workspace = true }

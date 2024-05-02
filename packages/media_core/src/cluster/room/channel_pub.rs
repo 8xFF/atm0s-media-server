@@ -78,7 +78,7 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
     }
 
     pub fn on_track_data(&mut self, owner: Owner, track: RemoteTrackId, media: MediaPacket) -> Option<Output<Owner>> {
-        log::trace!("[ClusterRoom {}] peer {:?} track {track} publish media payload {} seq {}", self.room, owner, media.pt, media.seq);
+        log::trace!("[ClusterRoom {}] peer {:?} track {track} publish media meta {:?} seq {}", self.room, owner, media.meta, media.seq);
         let (_peer, _name, channel_id) = self.tracks.get(&(owner, track))?;
         let data = media.serialize();
         Some(Output::Pubsub(pubsub::Control(*channel_id, ChannelControl::PubData(data))))
@@ -99,7 +99,7 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
 #[cfg(test)]
 mod tests {
     use atm0s_sdn::features::pubsub::{ChannelControl, Control, Feedback};
-    use media_server_protocol::media::MediaPacket;
+    use media_server_protocol::media::{MediaMeta, MediaPacket};
 
     use crate::{
         cluster::{ClusterEndpointEvent, ClusterRemoteTrackEvent},
@@ -111,11 +111,12 @@ mod tests {
 
     pub fn fake_audio() -> MediaPacket {
         MediaPacket {
-            pt: 111,
             ts: 0,
             seq: 0,
             marker: true,
             nackable: false,
+            layers: None,
+            meta: MediaMeta::Opus { audio_level: None },
             data: vec![1, 2, 3, 4],
         }
     }
