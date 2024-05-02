@@ -93,6 +93,10 @@ impl TransportWebrtc {
                 9,
                 str0m::rtp::Extension::with_serializer("http://www.webrtc.org/experiments/rtp-hdrext/video-layers-allocation00", str0m::rtp::vla::Serializer),
             )
+            .enable_vp8(false)
+            .enable_vp9(false)
+            .enable_h264(true)
+            .enable_opus(true)
             .enable_bwe(Some(Bitrate::kbps(3000)));
         let ice_ufrag = rtc_config.local_ice_credentials().as_ref().expect("should have ice credentials").ufrag.clone();
 

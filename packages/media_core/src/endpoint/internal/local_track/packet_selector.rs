@@ -204,7 +204,11 @@ impl PacketSelector {
 fn create_selector(pkt: &MediaPacket, bitrate: u64) -> Option<Box<dyn VideoSelector>> {
     match &pkt.meta {
         MediaMeta::Opus { .. } => None,
-        MediaMeta::H264 { sim: Some(_), .. } => todo!(),
+        MediaMeta::H264 { sim: Some(_), .. } => {
+            let layers = pkt.layers.as_ref()?;
+            log::info!("[LocalTrack/PacketSelector] create H264SimSelector");
+            Some(Box::new(video_h264_sim::Selector::new(bitrate, layers.clone())))
+        }
         MediaMeta::Vp8 { sim: Some(_), .. } => {
             let layers = pkt.layers.as_ref()?;
             log::info!("[LocalTrack/PacketSelector] create Vp8SimSelector");

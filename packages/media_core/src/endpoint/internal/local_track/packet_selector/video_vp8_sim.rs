@@ -92,7 +92,7 @@ impl Selector {
                             current.temporal = 0;
                         }
                         if *key {
-                            log::info!("[Vp8SimSelector] down {},{} => {},{} with ant key", current.spatial, current.temporal, target.spatial, target.temporal);
+                            log::info!("[Vp8SimSelector] down {},{} => {},{} with key", current.spatial, current.temporal, target.spatial, target.temporal);
                             // with other spatial we have difference tl0xidx and pic_id offset
                             // therefore we need reinit both tl0idx and pic_id
                             ctx.vp8_ctx.tl0idx_rewrite.reinit();

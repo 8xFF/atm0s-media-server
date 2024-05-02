@@ -47,8 +47,10 @@ impl RemoteMediaConvert {
                     audio_level: rtp.header.ext_vals.audio_level,
                 },
             ),
-            MediaCodec::H264(_) => {
-                todo!()
+            MediaCodec::H264(profile) => {
+                let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().map(extract_simulcast).flatten();
+                let meta = h264::parse_rtp(&rtp.payload, profile, spatial)?;
+                (true, layers, meta)
             }
             MediaCodec::Vp8 => {
                 let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().map(extract_simulcast).flatten();
@@ -96,14 +98,18 @@ impl LocalMediaConvert {
 
     pub fn rewrite_pkt(&self, pkt: &mut MediaPacket) {
         match &mut pkt.meta {
-            MediaMeta::Opus { audio_level } => {}
-            MediaMeta::H264 { key, profile, sim } => todo!(),
-            MediaMeta::Vp8 { key, sim } => {
+            MediaMeta::Opus { .. } => {}
+            MediaMeta::H264 { sim, .. } => {
+                if let Some(sim) = sim {
+                    h264::rewrite_rtp(&mut pkt.data, sim);
+                }
+            }
+            MediaMeta::Vp8 { sim, .. } => {
                 if let Some(sim) = sim {
                     vp8::rewrite_rtp(&mut pkt.data, sim);
                 }
             }
-            MediaMeta::Vp9 { key, profile, svc } => todo!(),
+            MediaMeta::Vp9 { svc, .. } => todo!(),
         }
     }
 }
