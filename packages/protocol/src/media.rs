@@ -47,6 +47,22 @@ impl MediaLayerBitrate {
     pub fn get_layer(&mut self, index: usize) -> Option<u16> {
         self.0[index]
     }
+
+    pub fn number_temporals(&self) -> u8 {
+        if self.0[0].is_none() {
+            return 0;
+        }
+
+        if self.0[1].is_none() {
+            return 1;
+        }
+
+        if self.0[2].is_none() {
+            return 2;
+        }
+
+        return 3;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +81,26 @@ impl MediaLayersBitrate {
 
     pub fn has_layer(&self, index: usize) -> bool {
         self.0[index].is_some()
+    }
+
+    pub fn number_layers(&self) -> u8 {
+        if self.0[0].is_none() {
+            return 0;
+        }
+
+        if self.0[1].is_none() {
+            return 1;
+        }
+
+        if self.0[2].is_none() {
+            return 2;
+        }
+
+        return 3;
+    }
+
+    pub fn number_temporals(&self) -> u8 {
+        self.0[0].as_ref().map(|l| l.number_temporals()).unwrap_or(0)
     }
 
     /// Select best layer for target bitrate

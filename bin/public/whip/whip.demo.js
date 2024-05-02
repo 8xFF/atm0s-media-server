@@ -28,8 +28,8 @@ window.start = async () => {
       direction: "sendonly",
       streams: [stream],
       sendEncodings: [
-        { rid: "0", active: true, scaleResolutionDownBy: 2 },
-        { rid: "1", active: true, scaleResolutionDownBy: 2 },
+        { rid: "0", active: true },
+        { rid: "1", active: true },
         { rid: "2", active: true },
       ],
     });

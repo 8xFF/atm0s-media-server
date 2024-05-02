@@ -57,8 +57,10 @@ impl RemoteMediaConvert {
                 let meta = vp8::parse_rtp(&rtp.payload, spatial)?;
                 (true, layers, meta)
             }
-            MediaCodec::Vp9(_) => {
-                todo!()
+            MediaCodec::Vp9(profile) => {
+                let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().map(extract_svc).flatten();
+                let meta = vp9::parse_rtp(&rtp.payload, profile)?;
+                (true, layers, meta)
             }
         };
 
@@ -109,7 +111,11 @@ impl LocalMediaConvert {
                     vp8::rewrite_rtp(&mut pkt.data, sim);
                 }
             }
-            MediaMeta::Vp9 { svc, .. } => todo!(),
+            MediaMeta::Vp9 { svc, .. } => {
+                if let Some(svc) = svc {
+                    vp9::rewrite_rtp(&mut pkt.data, svc);
+                }
+            }
         }
     }
 }
@@ -139,11 +145,13 @@ fn extract_svc(vla: &VideoLayersAllocation) -> Option<MediaLayersBitrate> {
 
     let stream = vla.simulcast_streams.first()?;
     let mut layers = MediaLayersBitrate::default();
+    let mut previous_bitrate = 0;
     for (spatial, meta) in stream.spatial_layers.iter().enumerate() {
         let mut layer = MediaLayerBitrate::default();
         for (temporal, bitrate) in meta.temporal_layers.iter().enumerate() {
-            layer.set_layer(temporal, bitrate.cumulative_kbps as u16)
+            layer.set_layer(temporal, bitrate.cumulative_kbps as u16 + previous_bitrate)
         }
+        previous_bitrate += meta.temporal_layers.last().map(|t| t.cumulative_kbps).unwrap_or(0) as u16;
         layers.set_layer(spatial, layer);
     }
 

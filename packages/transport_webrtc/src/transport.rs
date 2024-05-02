@@ -93,8 +93,8 @@ impl TransportWebrtc {
                 9,
                 str0m::rtp::Extension::with_serializer("http://www.webrtc.org/experiments/rtp-hdrext/video-layers-allocation00", str0m::rtp::vla::Serializer),
             )
-            .enable_vp8(false)
-            .enable_vp9(false)
+            .enable_vp8(true)
+            .enable_vp9(true)
             .enable_h264(true)
             .enable_opus(true)
             .enable_bwe(Some(Bitrate::kbps(3000)));
@@ -156,10 +156,12 @@ impl TransportWebrtc {
                 let seq2 = seq_extend.generate(pkt.seq)?;
                 self.local_convert.rewrite_pkt(&mut pkt);
                 log::trace!(
-                    "[TransportWebrtc] sending media meta {:?} => pt {pt} seq {} ts {} => extended seq {seq2} to mid {mid}",
+                    "[TransportWebrtc] sending media meta {:?} => pt {pt} seq {} ts {} marker {} payload: {}",
                     pkt.meta,
                     pkt.seq,
-                    pkt.ts
+                    pkt.ts,
+                    pkt.marker,
+                    pkt.data.len(),
                 );
                 self.rtc
                     .direct_api()

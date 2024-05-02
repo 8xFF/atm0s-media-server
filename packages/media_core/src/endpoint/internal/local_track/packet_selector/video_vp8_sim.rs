@@ -108,7 +108,7 @@ impl Selector {
                         //up spatial => need wait key-frame
                         //first we try to up temporal for trying increase bandwidth
                         if sim.spatial == current.spatial && current.temporal != 2 && sim.layer_sync {
-                            log::info!("[Vp8SimSelector] up spatial then up temporal from {} => 2 before layer_sync arrived", current.temporal);
+                            log::info!("[Vp8SimSelector] up spatial then up temporal from {} => 2 before key arrived", current.temporal);
                             current.temporal = 2;
                         }
 
@@ -122,7 +122,7 @@ impl Selector {
                             ctx.ts_rewrite.reinit();
                             current.spatial = target.spatial;
                             current.temporal = target.temporal;
-                        } else if !*key {
+                        } else {
                             self.queue.push_back(Action::RequestKeyFrame);
                         }
                     }
@@ -135,7 +135,7 @@ impl Selector {
                 }
                 (None, Some(target)) => {
                     //need resume or start => need wait key_frame
-                    if sim.spatial == target.spatial && *key {
+                    if *key {
                         log::info!("[Vp8SimSelector] resume to {},{} with key", target.spatial, target.temporal);
                         // with other spatial we have difference tl0xidx and pic_id offset
                         // therefore we need reinit both tl0idx and pic_id

@@ -154,6 +154,14 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                     VIDEO_TRACK
                 };
                 let pkt = self.media_convert.convert(pkt)?;
+                log::trace!(
+                    "[TransportWebrtcWhip] incoming pkt codec {:?}, seq {} ts {}, marker {}, payload {}",
+                    pkt.meta,
+                    pkt.seq,
+                    pkt.ts,
+                    pkt.marker,
+                    pkt.data.len(),
+                );
                 Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
                     track,
                     RemoteTrackEvent::Media(pkt),

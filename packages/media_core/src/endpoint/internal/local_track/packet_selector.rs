@@ -34,7 +34,7 @@ trait VideoSelector {
     fn pop_action(&mut self) -> Option<Action>;
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     RequestKeyFrame,
 }
@@ -44,6 +44,8 @@ pub struct VideoSelectorCtx {
     pub seq_rewrite: MediaSeqRewrite,
     //TODO beterway to store codec specific state
     pub vp8_ctx: video_vp8_sim::Ctx,
+    //TODO beterway to store codec specific state
+    pub vp9_ctx: video_vp9_svc::Ctx,
 }
 
 impl VideoSelectorCtx {
@@ -52,6 +54,7 @@ impl VideoSelectorCtx {
             ts_rewrite: MediaTsRewrite::new(kind.sample_rate()),
             seq_rewrite: MediaSeqRewrite::default(),
             vp8_ctx: Default::default(),
+            vp9_ctx: Default::default(),
         }
     }
 }
@@ -214,7 +217,11 @@ fn create_selector(pkt: &MediaPacket, bitrate: u64) -> Option<Box<dyn VideoSelec
             log::info!("[LocalTrack/PacketSelector] create Vp8SimSelector");
             Some(Box::new(video_vp8_sim::Selector::new(bitrate, layers.clone())))
         }
-        MediaMeta::Vp9 { svc: Some(_), .. } => todo!(),
+        MediaMeta::Vp9 { svc: Some(_), .. } => {
+            let layers = pkt.layers.as_ref()?;
+            log::info!("[LocalTrack/PacketSelector] create Vp9SvcSelector");
+            Some(Box::new(video_vp9_svc::Selector::new(false, bitrate, layers.clone())))
+        }
         MediaMeta::H264 { sim: None, .. } | MediaMeta::Vp8 { sim: None, .. } | MediaMeta::Vp9 { svc: None, .. } => {
             log::info!("[LocalTrack/PacketSelector] create VideoSingleSelector");
             Some(Box::new(video_single::VideoSingleSelector::default()))
