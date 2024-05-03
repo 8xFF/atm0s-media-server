@@ -133,7 +133,7 @@ Each node also has embedded monitoring page at `http://localhost:3001/dashboard/
 
 ## Resources
 
-- [Summary](./docs/summary.md)
+- [Summary](./docs/SUMMARY.md)
 - [Getting Started](./docs/getting-started/README.md)
 - [User Guide](./docs/user-guide/README.md)
 - [Contributor Guide](./docs/contributor-guide/README.md)
