@@ -41,6 +41,7 @@ pub struct EndpointRemoteTrack {
     allocate_bitrate: Option<u64>,
     /// This is for storing current stream layers, everytime key-frame arrived we will set this if it not set
     last_layers: Option<MediaLayersBitrate>,
+    cluster_bitrate_limit: Option<(u64, u64)>,
 }
 
 impl EndpointRemoteTrack {
@@ -52,6 +53,7 @@ impl EndpointRemoteTrack {
             queue: VecDeque::new(),
             allocate_bitrate: None,
             last_layers: None,
+            cluster_bitrate_limit: None,
         }
     }
 
@@ -74,16 +76,13 @@ impl EndpointRemoteTrack {
     fn on_cluster_event(&mut self, _now: Instant, event: ClusterRemoteTrackEvent) -> Option<Output> {
         match event {
             ClusterRemoteTrackEvent::RequestKeyFrame => Some(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
-            ClusterRemoteTrackEvent::LimitBitrate { min, max: _ } => {
-                match self.meta.control {
-                    BitrateControlMode::MaxBitrate | BitrateControlMode::NonControl => None,
-                    BitrateControlMode::DynamicConsumers => {
-                        //TODO dynamic with type of scaling
-                        let bitrate = min.min(self.allocate_bitrate?);
-                        Some(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps(bitrate)))
-                    }
+            ClusterRemoteTrackEvent::LimitBitrate { min, max } => match self.meta.control {
+                Some(BitrateControlMode::MaxBitrate) | None => None,
+                Some(BitrateControlMode::DynamicConsumers) => {
+                    self.cluster_bitrate_limit = Some((min, max));
+                    self.calc_limit_bitrate().map(|(min, max)| Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }))
                 }
-            }
+            },
         }
     }
 
@@ -130,10 +129,22 @@ impl EndpointRemoteTrack {
 
     fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) -> Option<Output> {
         match action {
-            IngressAction::SetBitrate(bitrate) => match self.meta.control {
-                BitrateControlMode::MaxBitrate => Some(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps(bitrate))),
-                BitrateControlMode::DynamicConsumers | BitrateControlMode::NonControl => None,
-            },
+            IngressAction::SetBitrate(bitrate) => {
+                self.allocate_bitrate = Some(bitrate);
+                match self.meta.control {
+                    Some(BitrateControlMode::MaxBitrate) => self.calc_limit_bitrate().map(|(min, max)| Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max })),
+                    Some(BitrateControlMode::DynamicConsumers) | None => None,
+                }
+            }
+        }
+    }
+
+    fn calc_limit_bitrate(&self) -> Option<(u64, u64)> {
+        match (self.allocate_bitrate, self.cluster_bitrate_limit) {
+            (Some(b1), Some((min, max))) => Some((min.min(b1), max.min(b1))),
+            (Some(b1), None) => Some((b1, b1)),
+            (None, Some((min, max))) => Some((min, max)),
+            (None, None) => None,
         }
     }
 }

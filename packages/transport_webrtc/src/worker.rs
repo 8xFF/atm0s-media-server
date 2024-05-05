@@ -64,7 +64,10 @@ impl MediaWorkerWebrtc {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
             },
-            VariantParams::Sdk => todo!(),
+            VariantParams::Webrtc(_, _, _, _) => EndpointCfg {
+                max_ingress_bitrate: 2_500_000,
+                max_egress_bitrate: 2_500_000,
+            },
         };
         let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone())?;
         let endpoint = Endpoint::new(cfg, tran);

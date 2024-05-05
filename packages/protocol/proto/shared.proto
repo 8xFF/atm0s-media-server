@@ -1,0 +1,82 @@
+syntax = "proto2";
+
+package shared;
+
+enum Kind {
+    AUDIO = 0;
+    VIDEO = 1;
+}
+
+message Receiver {
+    message Source {
+        required string peer = 1;
+        required string track = 2;
+    }
+
+    message Limit {
+        required uint32 max_spatial = 2;
+        required uint32 max_temporal = 3;
+        optional uint32 min_spatial = 4;
+        optional uint32 min_temporal = 5;
+    }
+
+    message State {
+        required uint32 priority = 1;
+        optional Source source = 2;
+        optional Limit limit = 3;
+    }
+
+    required Kind kind = 1;
+    required string name = 2;
+    required State state = 3;
+}
+
+message Sender {
+    message Source {
+        required string id = 1;
+        required bool screen = 2;
+    }
+
+    message State {
+        required uint32 priority = 1;
+        optional Source source = 2;
+    }
+
+    required Kind kind = 1;
+    required string name = 2;
+    required State state = 3;
+    optional BitrateControlMode bitrate = 4;
+}
+
+
+message Tracks {
+    repeated Receiver receivers = 1;
+    repeated Sender senders = 2;
+}
+
+message RoomInfoPublish {
+    required bool peer = 1;
+    required bool tracks = 2;
+}
+
+message RoomInfoSubscribe {
+    required bool peers = 1;
+    required bool tracks = 2;
+}
+
+message RoomJoin {
+    required string room = 1;
+    required string peer = 2;
+    required RoomInfoPublish publish = 3;
+    required RoomInfoSubscribe subscribe = 4;
+}
+
+enum BitrateControlMode {
+    MAX_BITRATE = 0;
+    DYNAMIC_CONSUMERS = 1;
+}
+
+message Error {
+    required uint32 code = 1;
+    required string message = 2;
+}

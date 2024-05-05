@@ -5,11 +5,12 @@ use std::{
 
 use media_server_core::{
     endpoint::{EndpointEvent, EndpointReq},
-    transport::{RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
+    transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
 use media_server_protocol::{
     endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackPriority},
     media::{MediaKind, MediaScaling},
+    protobuf::gateway::ConnectRequest,
 };
 use str0m::{
     format::CodecConfig,
@@ -19,13 +20,14 @@ use str0m::{
 
 use crate::media::RemoteMediaConvert;
 
+use self::{local_track::LocalTrack, remote_track::RemoteTrack};
+
 use super::{InternalOutput, TransportWebrtcInternal};
 
 const TIMEOUT_SEC: u64 = 10;
-const AUDIO_TRACK: RemoteTrackId = RemoteTrackId(0);
-const AUDIO_NAME: &str = "audio_main";
-const VIDEO_TRACK: RemoteTrackId = RemoteTrackId(1);
-const VIDEO_NAME: &str = "video_main";
+
+mod local_track;
+mod remote_track;
 
 #[derive(Debug)]
 enum State {
@@ -42,35 +44,42 @@ enum TransportWebrtcError {
     Timeout,
 }
 
-pub struct TransportWebrtcWhip {
-    room: RoomId,
-    peer: PeerId,
+pub struct TransportWebrtcSdk {
+    join: Option<(RoomId, PeerId, RoomInfoPublish, RoomInfoSubscribe)>,
     state: State,
-    audio_mid: Option<Mid>,
-    ///mid and simulcast flag
-    video_mid: Option<(Mid, bool)>,
     queue: VecDeque<InternalOutput<'static>>,
+    local_tracks: Vec<LocalTrack>,
+    remote_tracks: Vec<RemoteTrack>,
     media_convert: RemoteMediaConvert,
 }
 
-impl TransportWebrtcWhip {
-    pub fn new(room: RoomId, peer: PeerId) -> Self {
+impl TransportWebrtcSdk {
+    pub fn new(req: ConnectRequest) -> Self {
         Self {
-            room,
-            peer,
+            join: req.join.map(|j| (j.room.into(), j.peer.into(), j.publish.into(), j.subscribe.into())),
             state: State::New,
-            audio_mid: None,
-            video_mid: None,
+            local_tracks: req.tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect(),
+            remote_tracks: req.tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect(),
             queue: VecDeque::new(),
             media_convert: RemoteMediaConvert::default(),
         }
     }
+
+    fn remote_track(&mut self, track_id: RemoteTrackId) -> Option<&mut RemoteTrack> {
+        self.remote_tracks.iter_mut().find(|t| t.id() == track_id)
+    }
+
+    fn remote_track_by_mid(&mut self, mid: Mid) -> Option<&mut RemoteTrack> {
+        self.remote_tracks.iter_mut().find(|t| t.mid() == Some(mid))
+    }
+
+    fn local_track(&mut self, track_id: LocalTrackId) -> Option<&mut LocalTrack> {
+        self.local_tracks.iter_mut().find(|t| t.id() == track_id)
+    }
 }
 
-impl TransportWebrtcInternal for TransportWebrtcWhip {
-    fn on_codec_config(&mut self, cfg: &CodecConfig) {
-        self.media_convert.set_config(cfg);
-    }
+impl TransportWebrtcInternal for TransportWebrtcSdk {
+    fn on_codec_config(&mut self, cfg: &CodecConfig) {}
 
     fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
         match &self.state {
@@ -80,7 +89,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             }
             State::Connecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
-                    log::info!("[TransportWebrtcWhip] connect timed out after {:?} => switched to ConnectError", now - *at);
+                    log::info!("[TransportWebrtcSdk] connect timed out after {:?} => switched to ConnectError", now - *at);
                     self.state = State::ConnectError(TransportWebrtcError::Timeout);
                     return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::ConnectError(
                         TransportError::Timeout,
@@ -89,7 +98,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             }
             State::Reconnecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
-                    log::info!("[TransportWebrtcWhip] reconnect timed out after {:?} => switched to Disconnected", now - *at);
+                    log::info!("[TransportWebrtcSdk] reconnect timed out after {:?} => switched to Disconnected", now - *at);
                     self.state = State::Disconnected;
                     return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
                         TransportError::Timeout,
@@ -107,20 +116,17 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             EndpointEvent::PeerLeaved(_) => None,
             EndpointEvent::PeerTrackStarted(_, _, _) => None,
             EndpointEvent::PeerTrackStopped(_, _) => None,
-            EndpointEvent::RemoteMediaTrack(_, event) => match event {
+            EndpointEvent::RemoteMediaTrack(track_id, event) => match event {
                 media_server_core::endpoint::EndpointRemoteTrackEvent::RequestKeyFrame => {
-                    let mid = self.video_mid?.0;
-                    log::info!("[TransportWebrtcWhip] request key-frame");
+                    let mid = self.remote_track(track_id)?.mid()?;
+                    log::info!("[TransportWebrtcSdk] request key-frame");
                     Some(InternalOutput::Str0mKeyframe(mid, KeyframeRequestKind::Fir))
                 }
                 media_server_core::endpoint::EndpointRemoteTrackEvent::LimitBitrateBps { min, max } => {
-                    let (mid, sim) = self.video_mid?;
-                    let bitrate = if sim {
-                        max
-                    } else {
-                        min
-                    };
-                    log::debug!("[TransportWebrtcWhip] limit video track {mid} with bitrate {bitrate} bps");
+                    let track = self.remote_track(track_id)?;
+                    let mid = track.mid()?;
+                    let bitrate = track.calc_limit_bitrate(min, max);
+                    log::debug!("[TransportWebrtcSdk] limit video track {mid} with bitrate {bitrate} bps");
                     Some(InternalOutput::Str0mLimitBitrate(mid, bitrate))
                 }
             },
@@ -136,29 +142,29 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
 
     fn on_str0m_event<'a>(&mut self, now: Instant, event: Str0mEvent) -> Option<InternalOutput<'a>> {
         match event {
-            Str0mEvent::Connected => {
+            Str0mEvent::ChannelOpen(_channel, name) => {
                 self.state = State::Connected;
-                log::info!("[TransportWebrtcWhip] connected");
-                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
-                    0.into(),
-                    EndpointReq::JoinRoom(
-                        self.room.clone(),
-                        self.peer.clone(),
-                        PeerMeta {},
-                        RoomInfoPublish { peer: true, tracks: true },
-                        RoomInfoSubscribe { peers: false, tracks: false },
-                    ),
-                )));
-                return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
+                log::info!("[TransportWebrtcSdk] channel opened, join state {:?}", self.join);
+                if let Some((room, peer, publish, subscribe)) = &self.join {
+                    self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                        0.into(),
+                        EndpointReq::JoinRoom(room.clone(), peer.clone(), PeerMeta {}, publish.clone(), subscribe.clone()),
+                    )));
+                }
+                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
+            }
+            Str0mEvent::ChannelClose(_channel) => {
+                log::info!("[TransportWebrtcSdk] channel closed, leave room {:?}", self.join);
+                self.state = State::Disconnected;
+                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
+                    TransportError::Timeout,
+                ))))))
             }
             Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
             Str0mEvent::MediaAdded(media) => self.on_str0m_media_added(now, media),
             Str0mEvent::RtpPacket(pkt) => {
-                let track = if *pkt.header.payload_type == 111 {
-                    AUDIO_TRACK
-                } else {
-                    VIDEO_TRACK
-                };
+                let mid = self.media_convert.get_mid(pkt.header.ssrc, pkt.header.ext_vals.mid)?;
+                let track = self.remote_track_by_mid(mid)?.id();
                 let pkt = self.media_convert.convert(pkt)?;
                 log::trace!(
                     "[TransportWebrtcWhip] incoming pkt codec {:?}, seq {} ts {}, marker {}, payload {}",
@@ -187,7 +193,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
     }
 
     fn close<'a>(&mut self, _now: Instant) -> Option<InternalOutput<'a>> {
-        log::info!("[TransportWebrtcWhip] switched to disconnected with close action");
+        log::info!("[TransportWebrtcSdk] switched to disconnected with close action");
         self.state = State::Disconnected;
         Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
     }
@@ -197,16 +203,16 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
     }
 }
 
-impl TransportWebrtcWhip {
+impl TransportWebrtcSdk {
     fn on_str0m_state<'a>(&mut self, now: Instant, state: IceConnectionState) -> Option<InternalOutput<'a>> {
-        log::info!("[TransportWebrtcWhip] str0m state changed {:?}", state);
+        log::info!("[TransportWebrtcSdk] str0m state changed {:?}", state);
 
         match state {
             IceConnectionState::New => None,
             IceConnectionState::Checking => None,
             IceConnectionState::Connected | IceConnectionState::Completed => match &self.state {
                 State::Reconnecting { at } => {
-                    log::info!("[TransportWebrtcWhip] switched to reconnected after {:?}", now - *at);
+                    log::info!("[TransportWebrtcSdk] switched to reconnected after {:?}", now - *at);
                     self.state = State::Connected;
                     Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
                 }
@@ -215,7 +221,7 @@ impl TransportWebrtcWhip {
             IceConnectionState::Disconnected => {
                 if matches!(self.state, State::Connected) {
                     self.state = State::Reconnecting { at: now };
-                    log::info!("[TransportWebrtcWhip] switched to reconnecting");
+                    log::info!("[TransportWebrtcSdk] switched to reconnecting");
                     return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Reconnecting))));
                 } else {
                     return None;
@@ -225,60 +231,44 @@ impl TransportWebrtcWhip {
     }
 
     fn on_str0m_media_added<'a>(&mut self, _now: Instant, media: MediaAdded) -> Option<InternalOutput<'a>> {
-        log::info!("[TransportWebrtcWhip] str0m media added {:?}", media);
-        if matches!(media.direction, Direction::SendOnly | Direction::Inactive) {
-            return None;
-        }
-        if media.kind == str0m::media::MediaKind::Audio {
-            if self.audio_mid.is_some() {
-                return None;
-            }
-            self.audio_mid = Some(media.mid);
-            log::info!("[TransportWebrtcWhip] started remote track {AUDIO_NAME}");
-            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
-                AUDIO_TRACK,
-                RemoteTrackEvent::Started {
-                    name: AUDIO_NAME.to_string(),
-                    meta: TrackMeta {
-                        kind: MediaKind::Audio,
-                        scaling: MediaScaling::None,
-                        control: None,
-                    },
-                    priority: TrackPriority(1),
-                },
-            ))))
-        } else {
-            if self.video_mid.is_some() {
-                return None;
-            }
-            self.video_mid = Some((media.mid, media.simulcast.is_some()));
-            log::info!("[TransportWebrtcWhip] started remote track {VIDEO_NAME}");
-            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
-                VIDEO_TRACK,
-                RemoteTrackEvent::Started {
-                    name: VIDEO_NAME.to_string(),
-                    meta: TrackMeta {
-                        kind: MediaKind::Video,
-                        scaling: if media.simulcast.is_some() {
-                            MediaScaling::Simulcast
-                        } else {
-                            MediaScaling::None
+        match media.direction {
+            Direction::RecvOnly | Direction::SendRecv => {
+                if let Some(track) = self.remote_tracks.iter_mut().find(|t| t.mid().is_none()) {
+                    log::info!("[TransportWebrtcSdk] config mid {} to remote track {}", media.mid, track.name());
+                    track.set_str0m(media.mid, media.simulcast.is_some());
+                    Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+                        track.id(),
+                        RemoteTrackEvent::Started {
+                            name: track.name().to_string(),
+                            priority: track.priority(),
+                            meta: track.meta(),
                         },
-                        control: Some(BitrateControlMode::MaxBitrate),
-                    },
-                    priority: TrackPriority(1),
-                },
-            ))))
+                    ))))
+                } else {
+                    log::warn!("[TransportWebrtcSdk] not found track for mid {}", media.mid);
+                    None
+                }
+            }
+            Direction::SendOnly => {
+                if let Some(track) = self.local_tracks.iter_mut().find(|t| t.mid().is_none()) {
+                    log::info!("[TransportWebrtcSdk] config mid {} to local track {}", media.mid, track.name());
+                    track.set_mid(media.mid);
+                    Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
+                        track.id(),
+                        LocalTrackEvent::Started(MediaKind::Audio),
+                    ))))
+                } else {
+                    log::warn!("[TransportWebrtcSdk] not found track for mid {}", media.mid);
+                    None
+                }
+            }
+            Direction::Inactive => {
+                log::warn!("[TransportWebrtcSdk] unsupported direct Inactive");
+                None
+            }
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    //TODO test handle str0m connected event
-    //TODO test handle str0m state changed event
-    //TODO test handle str0m track started event
-    //TODO test handle endpoint event: request key-frame
-    //TODO test handle endpoint event: limit bitrate
-    //TODO test handle close request
-}
+mod tests {}

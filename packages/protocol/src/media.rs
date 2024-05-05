@@ -2,6 +2,8 @@ use derivative::Derivative;
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 
+use crate::protobuf::shared::Kind;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaKind {
     Audio,
@@ -22,6 +24,15 @@ impl MediaKind {
             48000
         } else {
             90000
+        }
+    }
+}
+
+impl From<Kind> for MediaKind {
+    fn from(value: Kind) -> Self {
+        match value {
+            Kind::Audio => MediaKind::Audio,
+            Kind::Video => MediaKind::Video,
         }
     }
 }
@@ -167,7 +178,7 @@ pub struct Vp9Svc {
     pub predicted_frame: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaScaling {
     None,
     Simulcast,

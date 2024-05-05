@@ -1,5 +1,5 @@
 use std::{
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     ops::Deref,
     time::{Duration, Instant},
 };
@@ -11,6 +11,7 @@ use media_server_core::{
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
     media::MediaPacket,
+    protobuf::gateway::ConnectRequest,
     transport::{RpcError, RpcResult},
 };
 use media_server_utils::{RtpSeqExtend, Small2dMap};
@@ -29,19 +30,20 @@ use str0m::{
 use crate::{media::LocalMediaConvert, WebrtcError};
 
 mod bwe_state;
+mod webrtc;
 mod whep;
 mod whip;
 
 pub enum VariantParams {
     Whip(RoomId, PeerId),
     Whep(RoomId, PeerId),
-    Sdk,
+    Webrtc(IpAddr, String, String, ConnectRequest),
 }
 
 pub enum Variant {
     Whip,
     Whep,
-    Sdk,
+    Webrtc,
 }
 
 pub enum ExtIn {
@@ -113,7 +115,7 @@ impl TransportWebrtc {
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
             VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
             VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
-            VariantParams::Sdk => unimplemented!(),
+            VariantParams::Webrtc(ip, token, user_agent, req) => Box::new(webrtc::TransportWebrtcSdk::new(req)),
         };
         internal.on_codec_config(rtc.codec_config());
         local_convert.set_config(rtc.codec_config());

@@ -4,6 +4,7 @@ use std::{fmt::Display, str::FromStr};
 
 use crate::{
     media::{MediaKind, MediaScaling},
+    protobuf,
     transport::ConnLayer,
 };
 
@@ -108,10 +109,28 @@ pub struct RoomInfoPublish {
     pub tracks: bool,
 }
 
-#[derive(Debug)]
+impl From<protobuf::shared::RoomInfoPublish> for RoomInfoPublish {
+    fn from(value: protobuf::shared::RoomInfoPublish) -> Self {
+        Self {
+            peer: value.peer,
+            tracks: value.tracks,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct RoomInfoSubscribe {
     pub peers: bool,
     pub tracks: bool,
+}
+
+impl From<protobuf::shared::RoomInfoSubscribe> for RoomInfoSubscribe {
+    fn from(value: protobuf::shared::RoomInfoSubscribe) -> Self {
+        Self {
+            peers: value.peers,
+            tracks: value.tracks,
+        }
+    }
 }
 
 #[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -149,13 +168,13 @@ impl PeerInfo {
 pub struct TrackName(pub String);
 
 #[derive(From, AsRef, Debug, derive_more::Display, derive_more::Add, derive_more::AddAssign, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct TrackPriority(pub u16);
+pub struct TrackPriority(pub u32);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrackMeta {
     pub kind: MediaKind,
     pub scaling: MediaScaling,
-    pub control: BitrateControlMode,
+    pub control: Option<BitrateControlMode>,
 }
 
 impl TrackMeta {
@@ -163,7 +182,7 @@ impl TrackMeta {
         Self {
             kind: MediaKind::Audio,
             scaling: MediaScaling::None,
-            control: BitrateControlMode::MaxBitrate,
+            control: None,
         }
     }
 }
@@ -193,14 +212,21 @@ impl TrackInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BitrateControlMode {
-    /// None is used for non-controllable track, like audio
-    NonControl,
     /// Only limit with sender network and CAP with fixed MAX_BITRATE
     MaxBitrate,
     /// Calc limit based on MAX_BITRATE and consumers requested bitrate
     DynamicConsumers,
+}
+
+impl From<protobuf::shared::BitrateControlMode> for BitrateControlMode {
+    fn from(value: protobuf::shared::BitrateControlMode) -> Self {
+        match value {
+            protobuf::shared::BitrateControlMode::MaxBitrate => Self::MaxBitrate,
+            protobuf::shared::BitrateControlMode::DynamicConsumers => Self::DynamicConsumers,
+        }
+    }
 }
 
 #[cfg(test)]

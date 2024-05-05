@@ -74,7 +74,7 @@ pub enum EndpointLocalTrackEvent {
 /// This is used for controlling the remote track, which is sent from endpoint
 pub enum EndpointRemoteTrackEvent {
     RequestKeyFrame,
-    LimitBitrateBps(u64),
+    LimitBitrateBps { min: u64, max: u64 },
 }
 
 pub enum EndpointEvent {

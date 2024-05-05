@@ -1,7 +1,7 @@
 use media_server_protocol::media::{H264Profile, MediaCodec, MediaLayerBitrate, MediaLayersBitrate, MediaMeta, MediaPacket, Vp9Profile};
 use str0m::{
     format::{CodecConfig, CodecSpec},
-    media::{Pt, Rid},
+    media::{Mid, Pt, Rid},
     rtp::{vla::VideoLayersAllocation, RtpPacket, Ssrc},
 };
 
@@ -13,7 +13,8 @@ mod vp9;
 #[derive(Default)]
 pub struct RemoteMediaConvert {
     map: smallmap::Map<Pt, MediaCodec>,
-    ssrcs: smallmap::Map<Ssrc, u8>,
+    ssrcs_rid: smallmap::Map<Ssrc, u8>,
+    ssrcs_mid: smallmap::Map<Ssrc, Mid>,
 }
 
 impl RemoteMediaConvert {
@@ -25,17 +26,27 @@ impl RemoteMediaConvert {
         }
     }
 
+    pub fn get_mid(&mut self, ssrc: Ssrc, mid: Option<Mid>) -> Option<Mid> {
+        if let Some(mid) = self.ssrcs_mid.get(&ssrc) {
+            Some(*mid)
+        } else {
+            let mid = mid?;
+            self.ssrcs_mid.insert(ssrc, mid);
+            Some(mid)
+        }
+    }
+
     /// This method convert rtp to internal media packet.
     /// It convert VideoLayersAllocation ext to simple layers for using for both simulcast and svc
     pub fn convert(&mut self, rtp: RtpPacket) -> Option<MediaPacket> {
         let spatial = if let Some(rid) = rtp.header.ext_vals.rid {
             let layer = rid_to_spatial(&rid);
-            if !self.ssrcs.contains_key(&rtp.header.ssrc) {
-                self.ssrcs.insert(rtp.header.ssrc, layer);
+            if !self.ssrcs_rid.contains_key(&rtp.header.ssrc) {
+                self.ssrcs_rid.insert(rtp.header.ssrc, layer);
             }
             Some(layer)
         } else {
-            self.ssrcs.get(&rtp.header.ssrc).cloned()
+            self.ssrcs_rid.get(&rtp.header.ssrc).cloned()
         };
 
         let codec = self.remote_pt_to_codec(rtp.header.payload_type)?;

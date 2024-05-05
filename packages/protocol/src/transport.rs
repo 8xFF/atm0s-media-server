@@ -18,6 +18,7 @@ pub trait ConnLayer {
 pub enum RpcReq<Conn> {
     Whep(whep::RpcReq<Conn>),
     Whip(whip::RpcReq<Conn>),
+    Webrtc(webrtc::RpcReq<Conn>),
 }
 
 impl<Conn: ConnLayer> RpcReq<Conn> {
@@ -31,6 +32,10 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
                 let (req, layer) = req.down();
                 (RpcReq::Whep(req), layer)
             }
+            Self::Webrtc(req) => {
+                let (req, layer) = req.down();
+                (RpcReq::Webrtc(req), layer)
+            }
         }
     }
 }
@@ -39,6 +44,7 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
 pub enum RpcRes<Conn> {
     Whep(whep::RpcRes<Conn>),
     Whip(whip::RpcRes<Conn>),
+    Webrtc(webrtc::RpcRes<Conn>),
 }
 
 impl<Conn: ConnLayer> RpcRes<Conn> {
@@ -46,6 +52,7 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
         match self {
             Self::Whip(req) => RpcRes::Whip(req.up(param)),
             Self::Whep(req) => RpcRes::Whep(req.up(param)),
+            Self::Webrtc(req) => RpcRes::Webrtc(req.up(param)),
         }
     }
 }
