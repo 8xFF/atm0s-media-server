@@ -1,9 +1,5 @@
 use media_server_core::transport::LocalTrackId;
-use media_server_protocol::{
-    endpoint::TrackName,
-    media::MediaKind,
-    protobuf::{self, shared::Kind},
-};
+use media_server_protocol::{endpoint::TrackName, media::MediaKind, protobuf};
 use str0m::media::Mid;
 
 pub struct LocalTrack {

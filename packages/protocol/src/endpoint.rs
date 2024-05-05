@@ -140,7 +140,9 @@ pub struct RoomId(pub String);
 pub struct PeerId(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PeerMeta {}
+pub struct PeerMeta {
+    pub metadata: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {
@@ -175,6 +177,7 @@ pub struct TrackMeta {
     pub kind: MediaKind,
     pub scaling: MediaScaling,
     pub control: Option<BitrateControlMode>,
+    pub metadata: Option<String>,
 }
 
 impl TrackMeta {
@@ -183,6 +186,7 @@ impl TrackMeta {
             kind: MediaKind::Audio,
             scaling: MediaScaling::None,
             control: None,
+            metadata: None,
         }
     }
 }

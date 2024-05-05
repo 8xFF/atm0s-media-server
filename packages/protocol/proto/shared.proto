@@ -13,7 +13,8 @@ message Receiver {
         required string track = 2;
     }
 
-    message Limit {
+    message Config {
+        required uint32 priority = 1;
         required uint32 max_spatial = 2;
         required uint32 max_temporal = 3;
         optional uint32 min_spatial = 4;
@@ -21,9 +22,8 @@ message Receiver {
     }
 
     message State {
-        required uint32 priority = 1;
+        required Config config = 1;
         optional Source source = 2;
-        optional Limit limit = 3;
     }
 
     required Kind kind = 1;
@@ -35,17 +35,22 @@ message Sender {
     message Source {
         required string id = 1;
         required bool screen = 2;
+        optional string metadata = 3;
+    }
+
+    message Config {
+        required uint32 priority = 1;
+        optional BitrateControlMode bitrate = 2;
     }
 
     message State {
-        required uint32 priority = 1;
+        required Config config = 1;
         optional Source source = 2;
     }
 
     required Kind kind = 1;
     required string name = 2;
     required State state = 3;
-    optional BitrateControlMode bitrate = 4;
 }
 
 
@@ -69,6 +74,7 @@ message RoomJoin {
     required string peer = 2;
     required RoomInfoPublish publish = 3;
     required RoomInfoSubscribe subscribe = 4;
+    optional string metadata = 5;
 }
 
 enum BitrateControlMode {

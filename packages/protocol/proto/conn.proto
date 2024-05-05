@@ -35,37 +35,24 @@ message Request {
     message Sender {
         message Switch {
             optional shared.Sender.Source source = 1;
-            optional uint32 priority = 2;
-            optional string metadata = 3;
-        }
-
-        message Config {
-            required uint32 priority = 1;
         }
 
         required string name = 1;
         oneof request {
             Switch switch = 2;
-            Config config = 3;
+            shared.Sender.Config config = 3;
         }
     }
 
     message Receiver {
         message Switch {
             optional shared.Receiver.Source source = 1;
-            required uint32 priority = 2;
-            optional shared.Receiver.Limit limit = 3;
-        }
-
-        message Config {
-            required uint32 priority = 1;
-            optional shared.Receiver.Limit limit = 2;
         }
 
         required string name = 1;
         oneof request {
             Switch switch = 2;
-            Config config = 3;
+            shared.Receiver.Config config = 3;
         }
     }
 
@@ -267,5 +254,13 @@ message ServerEvent {
         Room room = 3;
         Sender sender = 4;
         Receiver receiver = 5;
+        Response response = 6;
+    }
+}
+
+message ClientEvent {
+    required uint32 seq = 1;
+    oneof event {
+        Request request = 2;
     }
 }

@@ -19,6 +19,7 @@ use sans_io_runtime::backend::{BackendIncoming, BackendOutgoing};
 use str0m::{
     bwe::Bitrate,
     change::{DtlsCert, SdpOffer},
+    channel::ChannelId,
     format::CodecConfig,
     ice::IceCreds,
     media::{KeyframeRequestKind, Mid},
@@ -58,6 +59,7 @@ enum InternalOutput<'a> {
     Str0mKeyframe(Mid, KeyframeRequestKind),
     Str0mLimitBitrate(Mid, u64),
     Str0mSendMedia(Mid, MediaPacket),
+    Str0mSendData(ChannelId, Vec<u8>),
     Str0mBwe(u64, u64),
     Str0mResetBwe(u64),
     TransportOutput(TransportOutput<'a, ExtOut>),
@@ -141,12 +143,12 @@ impl TransportWebrtc {
                 self.pop_event(now)
             }
             InternalOutput::Str0mLimitBitrate(mid, bitrate) => {
-                log::debug!("Limit ingress bitrate of track {mid} with {bitrate} bps");
+                log::debug!("[TransportWebrtc] Limit ingress bitrate of track {mid} with {bitrate} bps");
                 self.rtc.direct_api().stream_rx_by_mid(mid, None)?.request_remb(Bitrate::bps(bitrate));
                 self.pop_event(now)
             }
             InternalOutput::Str0mBwe(current, desired) => {
-                log::debug!("Setting str0m bwe {current}, desired {desired}");
+                log::debug!("[TransportWebrtc] Setting str0m bwe {current}, desired {desired}");
                 let mut bwe = self.rtc.bwe();
                 bwe.set_current_bitrate(current.into());
                 bwe.set_desired_bitrate(desired.into());
@@ -170,6 +172,12 @@ impl TransportWebrtc {
                     .stream_tx_by_mid(mid, None)?
                     .write_rtp(pt, seq2.into(), pkt.ts, now, pkt.marker, ExtensionValues::default(), pkt.nackable, pkt.data)
                     .ok()?;
+                self.pop_event(now)
+            }
+            InternalOutput::Str0mSendData(channel, data) => {
+                if let Err(e) = self.rtc.channel(channel)?.write(true, &data) {
+                    log::error!("[TransportWebrtc] write datachannel error {}", e);
+                }
                 self.pop_event(now)
             }
             InternalOutput::Str0mResetBwe(init_bitrate) => {

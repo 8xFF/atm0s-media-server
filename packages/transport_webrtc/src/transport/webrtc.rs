@@ -10,9 +10,20 @@ use media_server_core::{
 use media_server_protocol::{
     endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackPriority},
     media::{MediaKind, MediaScaling},
-    protobuf::gateway::ConnectRequest,
+    protobuf::{
+        self,
+        conn::server_event::{
+            receiver::Event as ProtoReceiverEvent2,
+            room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted},
+            sender::Event as ProtoSenderEvent2,
+            Event as ProtoServerEvent, Receiver as ProtoReceiverEvent, Room as ProtoRoomEvent, Sender as ProtoSenderEvent,
+        },
+        gateway::ConnectRequest,
+    },
 };
+use prost::Message;
 use str0m::{
+    channel::ChannelId,
     format::CodecConfig,
     media::{Direction, KeyframeRequestKind, MediaAdded, Mid},
     Event as Str0mEvent, IceConnectionState,
@@ -45,9 +56,11 @@ enum TransportWebrtcError {
 }
 
 pub struct TransportWebrtcSdk {
-    join: Option<(RoomId, PeerId, RoomInfoPublish, RoomInfoSubscribe)>,
+    join: Option<(RoomId, PeerId, Option<String>, RoomInfoPublish, RoomInfoSubscribe)>,
     state: State,
     queue: VecDeque<InternalOutput<'static>>,
+    channel: Option<ChannelId>,
+    event_seq: u32,
     local_tracks: Vec<LocalTrack>,
     remote_tracks: Vec<RemoteTrack>,
     media_convert: RemoteMediaConvert,
@@ -56,11 +69,13 @@ pub struct TransportWebrtcSdk {
 impl TransportWebrtcSdk {
     pub fn new(req: ConnectRequest) -> Self {
         Self {
-            join: req.join.map(|j| (j.room.into(), j.peer.into(), j.publish.into(), j.subscribe.into())),
+            join: req.join.map(|j| (j.room.into(), j.peer.into(), j.metadata, j.publish.into(), j.subscribe.into())),
             state: State::New,
             local_tracks: req.tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect(),
             remote_tracks: req.tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect(),
             queue: VecDeque::new(),
+            channel: None,
+            event_seq: 0,
             media_convert: RemoteMediaConvert::default(),
         }
     }
@@ -75,6 +90,13 @@ impl TransportWebrtcSdk {
 
     fn local_track(&mut self, track_id: LocalTrackId) -> Option<&mut LocalTrack> {
         self.local_tracks.iter_mut().find(|t| t.id() == track_id)
+    }
+
+    fn build_event<'a>(&mut self, event: protobuf::conn::server_event::Event) -> Option<InternalOutput<'a>> {
+        let seq = self.event_seq;
+        self.event_seq += 1;
+        let event = protobuf::conn::ServerEvent { seq, event: Some(event) };
+        Some(InternalOutput::Str0mSendData(self.channel?, event.encode_to_vec()))
     }
 }
 
@@ -112,9 +134,31 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
 
     fn on_endpoint_event<'a>(&mut self, _now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
-            EndpointEvent::PeerJoined(_, _) => None,
-            EndpointEvent::PeerLeaved(_) => None,
-            EndpointEvent::PeerTrackStarted(_, _, _) => None,
+            EndpointEvent::PeerJoined(peer, meta) => {
+                log::info!("[TransportWebrtcSdk] peer {peer} joined");
+                self.build_event(ProtoServerEvent::Room(ProtoRoomEvent {
+                    event: Some(ProtoRoomEvent2::PeerJoined(PeerJoined {
+                        peer: peer.0,
+                        metadata: meta.metadata,
+                    })),
+                }))
+            }
+            EndpointEvent::PeerLeaved(peer) => {
+                log::info!("[TransportWebrtcSdk] peer {peer} leaved");
+                self.build_event(ProtoServerEvent::Room(ProtoRoomEvent {
+                    event: Some(ProtoRoomEvent2::PeerLeaved(PeerLeaved { peer: peer.0 })),
+                }))
+            }
+            EndpointEvent::PeerTrackStarted(peer, track, meta) => {
+                log::info!("[TransportWebrtcSdk] peer {peer} track {track} started");
+                self.build_event(ProtoServerEvent::Room(ProtoRoomEvent {
+                    event: Some(ProtoRoomEvent2::TrackStarted(TrackStarted {
+                        peer: peer.0,
+                        track: track.0,
+                        metadata: meta.metadata,
+                    })),
+                }))
+            }
             EndpointEvent::PeerTrackStopped(_, _) => None,
             EndpointEvent::RemoteMediaTrack(track_id, event) => match event {
                 media_server_core::endpoint::EndpointRemoteTrackEvent::RequestKeyFrame => {
@@ -142,13 +186,14 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
 
     fn on_str0m_event<'a>(&mut self, now: Instant, event: Str0mEvent) -> Option<InternalOutput<'a>> {
         match event {
-            Str0mEvent::ChannelOpen(_channel, name) => {
+            Str0mEvent::ChannelOpen(channel, name) => {
                 self.state = State::Connected;
-                log::info!("[TransportWebrtcSdk] channel opened, join state {:?}", self.join);
-                if let Some((room, peer, publish, subscribe)) = &self.join {
+                self.channel = Some(channel);
+                log::info!("[TransportWebrtcSdk] channel {name} opened, join state {:?}", self.join);
+                if let Some((room, peer, metadata, publish, subscribe)) = &self.join {
                     self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                         0.into(),
-                        EndpointReq::JoinRoom(room.clone(), peer.clone(), PeerMeta {}, publish.clone(), subscribe.clone()),
+                        EndpointReq::JoinRoom(room.clone(), peer.clone(), PeerMeta { metadata: metadata.clone() }, publish.clone(), subscribe.clone()),
                     )));
                 }
                 Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))

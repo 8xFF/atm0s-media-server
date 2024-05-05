@@ -167,7 +167,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                     EndpointReq::JoinRoom(
                         self.room.clone(),
                         self.peer.clone(),
-                        PeerMeta {},
+                        PeerMeta { metadata: None },
                         RoomInfoPublish { peer: false, tracks: false },
                         RoomInfoSubscribe { peers: false, tracks: true },
                     ),

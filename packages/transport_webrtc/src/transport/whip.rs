@@ -144,7 +144,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                     EndpointReq::JoinRoom(
                         self.room.clone(),
                         self.peer.clone(),
-                        PeerMeta {},
+                        PeerMeta { metadata: None },
                         RoomInfoPublish { peer: true, tracks: true },
                         RoomInfoSubscribe { peers: false, tracks: false },
                     ),
@@ -243,6 +243,7 @@ impl TransportWebrtcWhip {
                         kind: MediaKind::Audio,
                         scaling: MediaScaling::None,
                         control: None,
+                        metadata: None,
                     },
                     priority: TrackPriority(1),
                 },
@@ -265,6 +266,7 @@ impl TransportWebrtcWhip {
                             MediaScaling::None
                         },
                         control: Some(BitrateControlMode::MaxBitrate),
+                        metadata: None,
                     },
                     priority: TrackPriority(1),
                 },

@@ -10,6 +10,7 @@ log = { workspace = true }
 num_enum = { workspace = true }
 smallmap = { workspace = true }
 sans-io-runtime = { workspace = true, default-features = false }
+prost = { workspace = true }
 media-server-utils = { path = "../media_utils" }
 media-server-protocol = { path = "../protocol" }
 media-server-core = { path = "../media_core" }

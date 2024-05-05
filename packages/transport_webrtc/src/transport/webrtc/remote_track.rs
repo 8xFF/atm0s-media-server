@@ -1,6 +1,6 @@
 use media_server_core::transport::RemoteTrackId;
 use media_server_protocol::{
-    endpoint::{BitrateControlMode, TrackMeta, TrackName, TrackPriority},
+    endpoint::{TrackMeta, TrackName, TrackPriority},
     media::{MediaKind, MediaScaling},
     protobuf,
 };
@@ -12,20 +12,20 @@ pub struct RemoteTrack {
     id: RemoteTrackId,
     name: TrackName,
     kind: MediaKind,
-    priority: TrackPriority,
-    control: Option<BitrateControlMode>,
+    source: Option<protobuf::shared::sender::Source>,
+    config: protobuf::shared::sender::Config,
     scaling: MediaScaling,
     mid: Option<Mid>,
 }
 
 impl RemoteTrack {
-    pub fn new(id: RemoteTrackId, config: protobuf::shared::Sender) -> Self {
+    pub fn new(id: RemoteTrackId, cfg: protobuf::shared::Sender) -> Self {
         Self {
             id,
-            name: config.name.clone().into(),
-            kind: config.kind().into(),
-            priority: config.state.priority.into(),
-            control: config.bitrate.map(|b| protobuf::shared::BitrateControlMode::try_from(b).ok().expect("Should have").into()),
+            name: cfg.name.clone().into(),
+            kind: cfg.kind().into(),
+            source: cfg.state.source,
+            config: cfg.state.config,
             scaling: MediaScaling::None,
             mid: None,
         }
@@ -40,7 +40,7 @@ impl RemoteTrack {
     }
 
     pub fn priority(&self) -> TrackPriority {
-        self.priority
+        self.config.priority.into()
     }
 
     pub fn kind(&self) -> MediaKind {
@@ -63,7 +63,8 @@ impl RemoteTrack {
         TrackMeta {
             kind: self.kind(),
             scaling: self.scaling,
-            control: self.control,
+            control: self.config.bitrate.map(|b| protobuf::shared::BitrateControlMode::try_from(b).ok().expect("Should have").into()),
+            metadata: self.source.as_ref().map(|s| s.metadata.clone()).flatten(),
         }
     }
 

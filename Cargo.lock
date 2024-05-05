@@ -2775,6 +2775,7 @@ dependencies = [
  "media-server-protocol",
  "media-server-utils",
  "num_enum",
+ "prost",
  "sans-io-runtime",
  "smallmap",
  "str0m",
