@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::protobuf;
+
 pub mod webrtc;
 pub mod whep;
 pub mod whip;
@@ -59,7 +61,7 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
 
 #[derive(Debug, Clone)]
 pub struct RpcError {
-    pub code: u16,
+    pub code: u32,
     pub message: String,
 }
 
@@ -70,17 +72,26 @@ impl Display for RpcError {
 }
 
 impl RpcError {
-    pub fn new<C: Into<u16>>(code: C, message: &str) -> Self {
+    pub fn new<C: Into<u32>>(code: C, message: &str) -> Self {
         Self {
             code: code.into(),
             message: message.to_string(),
         }
     }
 
-    pub fn new2<C: Into<u16> + ToString>(code: C) -> Self {
+    pub fn new2<C: Into<u32> + Display>(code: C) -> Self {
         Self {
             message: code.to_string(),
             code: code.into(),
+        }
+    }
+}
+
+impl Into<protobuf::shared::Error> for RpcError {
+    fn into(self) -> protobuf::shared::Error {
+        protobuf::shared::Error {
+            code: self.code,
+            message: self.message,
         }
     }
 }

@@ -56,9 +56,11 @@ message Request {
         }
     }
 
-    required uint32 seq = 1;
+    required uint32 req_id = 1;
     oneof request {
         Session session = 2;
+        Sender sender = 3;
+        Receiver receiver = 4;
     }
 }
 
@@ -113,7 +115,7 @@ message Response {
         }
     }
 
-    required uint32 seq = 1;
+    required uint32 req_id = 1;
     oneof response {
         shared.Error error = 2;
         Session session = 3;

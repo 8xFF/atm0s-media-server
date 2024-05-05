@@ -12,24 +12,28 @@ use media_server_protocol::{
     media::{MediaKind, MediaScaling},
     protobuf::{
         self,
-        conn::server_event::{
-            receiver::Event as ProtoReceiverEvent2,
-            room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted},
-            sender::Event as ProtoSenderEvent2,
-            Event as ProtoServerEvent, Receiver as ProtoReceiverEvent, Room as ProtoRoomEvent, Sender as ProtoSenderEvent,
+        conn::{
+            server_event::{
+                receiver::Event as ProtoReceiverEvent2,
+                room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted},
+                sender::Event as ProtoSenderEvent2,
+                Event as ProtoServerEvent, Receiver as ProtoReceiverEvent, Room as ProtoRoomEvent, Sender as ProtoSenderEvent,
+            },
+            ClientEvent,
         },
         gateway::ConnectRequest,
     },
+    transport::RpcError,
 };
 use prost::Message;
 use str0m::{
-    channel::ChannelId,
+    channel::{ChannelData, ChannelId},
     format::CodecConfig,
     media::{Direction, KeyframeRequestKind, MediaAdded, Mid},
     Event as Str0mEvent, IceConnectionState,
 };
 
-use crate::media::RemoteMediaConvert;
+use crate::{media::RemoteMediaConvert, WebrtcError};
 
 use self::{local_track::LocalTrack, remote_track::RemoteTrack};
 
@@ -92,11 +96,20 @@ impl TransportWebrtcSdk {
         self.local_tracks.iter_mut().find(|t| t.id() == track_id)
     }
 
+    fn local_track_by_name(&mut self, name: &str) -> Option<&mut LocalTrack> {
+        self.local_tracks.iter_mut().find(|t| t.name() == name)
+    }
+
     fn build_event<'a>(&mut self, event: protobuf::conn::server_event::Event) -> Option<InternalOutput<'a>> {
         let seq = self.event_seq;
         self.event_seq += 1;
         let event = protobuf::conn::ServerEvent { seq, event: Some(event) };
         Some(InternalOutput::Str0mSendData(self.channel?, event.encode_to_vec()))
+    }
+
+    fn build_res_err<'a>(&mut self, req_id: u32, err: RpcError) -> Option<InternalOutput<'a>> {
+        let response = protobuf::conn::response::Response::Error(err.into());
+        self.build_event(protobuf::conn::server_event::Event::Response(protobuf::conn::Response { req_id, response: Some(response) }))
     }
 }
 
@@ -198,6 +211,7 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                 }
                 Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
             }
+            Str0mEvent::ChannelData(data) => self.on_str0m_channel_data(data),
             Str0mEvent::ChannelClose(_channel) => {
                 log::info!("[TransportWebrtcSdk] channel closed, leave room {:?}", self.join);
                 self.state = State::Disconnected;
@@ -312,6 +326,12 @@ impl TransportWebrtcSdk {
                 None
             }
         }
+    }
+
+    fn on_str0m_channel_data<'a>(&mut self, data: ChannelData) -> Option<InternalOutput<'a>> {
+        let event = ClientEvent::decode(data.data.as_slice()).ok()?;
+        log::info!("[TransportWebrtcSdk] on client event {:?}", event);
+        None
     }
 }
 
