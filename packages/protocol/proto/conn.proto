@@ -225,7 +225,7 @@ message ServerEvent {
     message Sender {
         message State {
             enum StateType {
-                WATING = 0;
+                WAITING = 0;
                 NO_SOURCE = 1;
                 ACTIVE = 2;
                 INACTIVE = 3;

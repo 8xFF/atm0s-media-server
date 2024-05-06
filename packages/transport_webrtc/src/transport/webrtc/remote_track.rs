@@ -54,7 +54,7 @@ impl RemoteTrack {
 
     pub fn set_str0m(&mut self, mid: Mid, sim: bool) {
         log::info!("[TransportWebrcSdk/RemoteTrack] set_mid {}/{} => {}, simulcast {}", self.id, self.name, mid, sim);
-        assert_eq!(self.mid, None, "LocalTrack mid {:?} already configed", self.mid);
+        assert_eq!(self.mid, None, "LocalTrack mid {:?} already configured", self.mid);
         self.mid = Some(mid);
         if sim {
             self.scaling = MediaScaling::Simulcast;

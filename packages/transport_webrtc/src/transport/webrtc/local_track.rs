@@ -38,7 +38,7 @@ impl LocalTrack {
 
     pub fn set_mid(&mut self, mid: Mid) {
         log::info!("[TransportWebrcSdk/LocalTrack] set_mid {}/{} => {}", self.id, self.name, mid);
-        assert_eq!(self.mid, None, "LocalTrack mid {:?} already configed", self.mid);
+        assert_eq!(self.mid, None, "LocalTrack mid {:?} already configured", self.mid);
         self.mid = Some(mid);
     }
 }
