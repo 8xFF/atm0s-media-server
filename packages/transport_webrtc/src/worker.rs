@@ -27,6 +27,7 @@ pub enum GroupInput<'a, Ext> {
     Close(WebrtcOwner),
 }
 
+#[derive(Debug)]
 pub enum GroupOutput<'a, Ext> {
     Net(BackendOutgoing<'a>),
     Cluster(WebrtcOwner, ClusterRoomHash, ClusterEndpointControl),

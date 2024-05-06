@@ -144,7 +144,6 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                     };
                     Some(InternalOutput::Str0mSendMedia(mid, pkt))
                 }
-                EndpointLocalTrackEvent::DesiredBitrate(_) => None,
             },
             EndpointEvent::RemoteMediaTrack(_track, _event) => None,
             EndpointEvent::BweConfig { current, desired } => {

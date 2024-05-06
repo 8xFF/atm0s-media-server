@@ -64,7 +64,11 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
 
     pub fn on_channel_relay_changed(&mut self, channel: ChannelId, _relay: NodeId) -> Option<Output<Owner>> {
         let channel_container = self.channels.get(&channel)?;
-        log::info!("[ClusterRoom {}] cluster: channel {channel} source changed => fire event to {:?}", self.room, channel_container.owners);
+        log::info!(
+            "[ClusterRoom {}/Subscribers] cluster: channel {channel} source changed => fire event to {:?}",
+            self.room,
+            channel_container.owners
+        );
         for (owner, track) in &channel_container.owners {
             self.queue
                 .push_back(Output::Endpoint(vec![*owner], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::SourceChanged)))
@@ -76,7 +80,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
         let pkt = MediaPacket::deserialize(&data)?;
         let channel_container = self.channels.get(&channel)?;
         log::trace!(
-            "[ClusterRoom {}] on channel media meta {:?} seq {} to {} subscribers",
+            "[ClusterRoom {}/Subscribers] on channel media meta {:?} seq {} to {} subscribers",
             self.room,
             pkt.meta,
             pkt.seq,
@@ -94,7 +98,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
     pub fn on_track_subscribe(&mut self, owner: Owner, track: LocalTrackId, target_peer: PeerId, target_track: TrackName) -> Option<Output<Owner>> {
         let channel_id: ChannelId = id_generator::gen_channel_id(self.room, &target_peer, &target_track);
         log::info!(
-            "[ClusterRoom {}] owner {:?} track {track} subscribe peer {target_peer} track {target_track}), channel: {channel_id}",
+            "[ClusterRoom {}/Subscribers] owner {:?} track {track} subscribe peer {target_peer} track {target_track}), channel: {channel_id}",
             self.room,
             owner
         );
@@ -102,7 +106,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
         let channel_container = self.channels.entry(channel_id).or_insert(Default::default());
         channel_container.owners.push((owner, track));
         if channel_container.owners.len() == 1 {
-            log::info!("[ClusterRoom {}] first subscriber => Sub channel {channel_id}", self.room);
+            log::info!("[ClusterRoom {}/Subscribers] first subscriber => Sub channel {channel_id}", self.room);
             Some(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::SubAuto)))
         } else {
             None
@@ -111,7 +115,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
 
     pub fn on_track_request_key(&mut self, owner: Owner, track: LocalTrackId) -> Option<Output<Owner>> {
         let (channel_id, peer, track) = self.subscribers.get(&(owner, track))?;
-        log::info!("[ClusterRoom {}] request key-frame {channel_id} {peer} {track}", self.room);
+        log::info!("[ClusterRoom {}/Subscribers] request key-frame {channel_id} {peer} {track}", self.room);
         Some(Output::Pubsub(pubsub::Control(
             *channel_id,
             ChannelControl::FeedbackAuto(Feedback::simple(KEYFRAME_FEEDBACK_KIND, 1, KEYFRAME_FEEDBACK_INTERVAL, KEYFRAME_FEEDBACK_TIMEOUT)),
@@ -138,13 +142,14 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
                 sum_fb = Some(fb.clone());
             }
         }
+        log::debug!("[ClusterRoom {}/Subscribers] channel {channel_id} setting desired bitrate {:?}", self.room, sum_fb);
         Some(Output::Pubsub(pubsub::Control(*channel_id, ChannelControl::FeedbackAuto(sum_fb?))))
     }
 
     pub fn on_track_unsubscribe(&mut self, owner: Owner, track: LocalTrackId) -> Option<Output<Owner>> {
         let (channel_id, target_peer, target_track) = self.subscribers.remove(&(owner, track))?;
         log::info!(
-            "[ClusterRoom {}] owner {:?} track {track} unsubscribe from source {target_peer} {target_track}, channel {channel_id}",
+            "[ClusterRoom {}/Subscribers] owner {:?} track {track} unsubscribe from source {target_peer} {target_track}, channel {channel_id}",
             self.room,
             owner
         );
@@ -154,7 +159,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
 
         if channel_container.owners.is_empty() {
             self.channels.remove(&channel_id);
-            log::info!("[ClusterRoom {}] last unsubscriber => Unsub channel {channel_id}", self.room);
+            log::info!("[ClusterRoom {}/Subscribers] last unsubscriber => Unsub channel {channel_id}", self.room);
             Some(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)))
         } else {
             None

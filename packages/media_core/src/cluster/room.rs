@@ -170,6 +170,7 @@ impl<Owner: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Owner> {
         match control {
             ClusterRemoteTrackControl::Started(name, meta) => {
                 let peer = self.metadata.get_peer_from_owner(owner)?;
+                log::info!("[ClusterRoom {}] started track {:?}/{track} => {peer}/{name}", self.room, owner);
                 if let Some(out) = self.publisher.on_track_publish(owner, track, peer, name.clone()) {
                     let out = self.process_publisher_output(out);
                     self.queue.push_back(out);
@@ -185,6 +186,7 @@ impl<Owner: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Owner> {
                 Some(self.process_publisher_output(out))
             }
             ClusterRemoteTrackControl::Ended => {
+                log::info!("[ClusterRoom {}] stopped track {:?}/{track}", self.room, owner);
                 if let Some(out) = self.publisher.on_track_unpublish(owner, track) {
                     let out = self.process_publisher_output(out);
                     self.queue.push_back(out);

@@ -24,6 +24,7 @@ use media_server_protocol::{
 };
 use prost::Message;
 use str0m::{
+    bwe::BweKind,
     channel::{ChannelData, ChannelId},
     format::CodecConfig,
     media::{Direction, KeyframeRequestKind, MediaAdded, Mid},
@@ -215,10 +216,10 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     log::trace!("[TransportWebrtcSdk] send {:?} size {}", pkt.meta, pkt.data.len());
                     Some(InternalOutput::Str0mSendMedia(mid, pkt))
                 }
-                EndpointLocalTrackEvent::DesiredBitrate(_) => None,
             },
             EndpointEvent::BweConfig { current, desired } => {
                 let (current, desired) = self.bwe_state.filter_bwe_config(current, desired);
+                log::debug!("[TransportWebrtcSdk] config bwe current {current} desired {desired}");
                 Some(InternalOutput::Str0mBwe(current, desired))
             }
             EndpointEvent::GoAway(_, _) => None,
@@ -307,7 +308,7 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                 let track = self.remote_track_by_mid(mid)?.id();
                 let pkt = self.media_convert.convert(pkt)?;
                 log::trace!(
-                    "[TransportWebrtcWhip] incoming pkt codec {:?}, seq {} ts {}, marker {}, payload {}",
+                    "[TransportWebrtcSdk] incoming pkt codec {:?}, seq {} ts {}, marker {}, payload {}",
                     pkt.meta,
                     pkt.seq,
                     pkt.ts,
@@ -318,6 +319,11 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     track,
                     RemoteTrackEvent::Media(pkt),
                 ))))
+            }
+            Str0mEvent::EgressBitrateEstimate(BweKind::Remb(_, bitrate)) | Str0mEvent::EgressBitrateEstimate(BweKind::Twcc(bitrate)) => {
+                let bitrate2 = self.bwe_state.filter_bwe(bitrate.as_u64());
+                log::debug!("[TransportWebrtcSdk] on rewrite bwe {bitrate} => {bitrate2} bps");
+                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::EgressBitrateEstimate(bitrate2))))
             }
             Str0mEvent::PeerStats(_stats) => None,
             Str0mEvent::MediaIngressStats(stats) => {

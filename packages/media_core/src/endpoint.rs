@@ -131,7 +131,6 @@ pub enum EndpointRes {
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointLocalTrackEvent {
     Media(MediaPacket),
-    DesiredBitrate(u64),
 }
 
 /// This is used for controlling the remote track, which is sent from endpoint

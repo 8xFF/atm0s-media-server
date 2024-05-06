@@ -60,16 +60,22 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
         let fb = FeedbackKind::try_from(fb).ok()?;
         let (owner, track_id) = self.tracks_source.get(&channel)?;
         match fb {
-            FeedbackKind::Bitrate { min, max } => Some(Output::Endpoint(
-                vec![*owner],
-                ClusterEndpointEvent::RemoteTrack(*track_id, ClusterRemoteTrackEvent::LimitBitrate { min, max }),
-            )),
-            FeedbackKind::KeyFrameRequest => Some(Output::Endpoint(vec![*owner], ClusterEndpointEvent::RemoteTrack(*track_id, ClusterRemoteTrackEvent::RequestKeyFrame))),
+            FeedbackKind::Bitrate { min, max } => {
+                log::debug!("[ClusterRoom {}/Publishers] channel {channel} limit bitrate [{min},{max}]", self.room);
+                Some(Output::Endpoint(
+                    vec![*owner],
+                    ClusterEndpointEvent::RemoteTrack(*track_id, ClusterRemoteTrackEvent::LimitBitrate { min, max }),
+                ))
+            }
+            FeedbackKind::KeyFrameRequest => {
+                log::debug!("[ClusterRoom {}/Publishers] channel {channel} request key_frame", self.room);
+                Some(Output::Endpoint(vec![*owner], ClusterEndpointEvent::RemoteTrack(*track_id, ClusterRemoteTrackEvent::RequestKeyFrame)))
+            }
         }
     }
 
     pub fn on_track_publish(&mut self, owner: Owner, track: RemoteTrackId, peer: PeerId, name: TrackName) -> Option<Output<Owner>> {
-        log::info!("[ClusterRoom {}] peer ({peer} started track ({name})", self.room);
+        log::info!("[ClusterRoom {}/Publishers] peer ({peer} started track ({name})", self.room);
         let channel_id = id_generator::gen_channel_id(self.room, &peer, &name);
         self.tracks.insert((owner, track), (peer.clone(), name.clone(), channel_id));
         self.tracks_source.insert(channel_id, (owner, track));
@@ -78,7 +84,13 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
     }
 
     pub fn on_track_data(&mut self, owner: Owner, track: RemoteTrackId, media: MediaPacket) -> Option<Output<Owner>> {
-        log::trace!("[ClusterRoom {}] peer {:?} track {track} publish media meta {:?} seq {}", self.room, owner, media.meta, media.seq);
+        log::trace!(
+            "[ClusterRoom {}/Publishers] peer {:?} track {track} publish media meta {:?} seq {}",
+            self.room,
+            owner,
+            media.meta,
+            media.seq
+        );
         let (_peer, _name, channel_id) = self.tracks.get(&(owner, track))?;
         let data = media.serialize();
         Some(Output::Pubsub(pubsub::Control(*channel_id, ChannelControl::PubData(data))))
@@ -87,7 +99,7 @@ impl<Owner: Debug + Hash + Eq + Copy> RoomChannelPublisher<Owner> {
     pub fn on_track_unpublish(&mut self, owner: Owner, track: RemoteTrackId) -> Option<Output<Owner>> {
         let (peer, name, channel_id) = self.tracks.remove(&(owner, track))?;
         self.tracks_source.remove(&channel_id).expect("Should have track_source");
-        log::info!("[ClusterRoom {}] peer ({peer} stopped track {name})", self.room);
+        log::info!("[ClusterRoom {}/Publishers] peer ({peer} stopped track {name})", self.room);
         Some(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)))
     }
 

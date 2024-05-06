@@ -25,6 +25,7 @@ pub enum Input {
     BitrateAllocation(IngressAction),
 }
 
+#[derive(Debug)]
 pub enum Output {
     Event(EndpointRemoteTrackEvent),
     Cluster(ClusterRoomHash, ClusterRemoteTrackControl),
@@ -46,6 +47,7 @@ pub struct EndpointRemoteTrack {
 
 impl EndpointRemoteTrack {
     pub fn new(room: Option<ClusterRoomHash>, meta: TrackMeta) -> Self {
+        log::info!("[EndpointRemoteTrack] created with room {:?} meta {:?}", room, meta);
         Self {
             meta,
             room,
@@ -77,7 +79,10 @@ impl EndpointRemoteTrack {
         match event {
             ClusterRemoteTrackEvent::RequestKeyFrame => Some(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
             ClusterRemoteTrackEvent::LimitBitrate { min, max } => match self.meta.control {
-                Some(BitrateControlMode::MaxBitrate) | None => None,
+                Some(BitrateControlMode::MaxBitrate) | None => {
+                    log::debug!("[EndpointRemoteTrack] dont control remote bitrate with mode is {:?}", self.meta.control);
+                    None
+                }
                 Some(BitrateControlMode::DynamicConsumers) => {
                     self.cluster_bitrate_limit = Some((min, max));
                     self.calc_limit_bitrate().map(|(min, max)| Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }))
@@ -91,7 +96,7 @@ impl EndpointRemoteTrack {
             RemoteTrackEvent::Started { name, priority, meta: _ } => {
                 self.name = Some(name.clone());
                 let room = self.room.as_ref()?;
-                log::info!("[EndpointRemoteTrack] started as name {name}");
+                log::info!("[EndpointRemoteTrack] started as name {name} in room {room}");
                 self.queue.push_back(Output::Started(self.meta.kind, priority));
                 Some(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())))
             }
@@ -116,7 +121,7 @@ impl EndpointRemoteTrack {
             RemoteTrackEvent::Ended => {
                 let name = self.name.take()?;
                 let room = self.room.as_ref()?;
-                log::info!("[EndpointRemoteTrack] stopped with name {name}");
+                log::info!("[EndpointRemoteTrack] stopped with name {name} in room {room}");
                 self.queue.push_back(Output::Stopped(self.meta.kind));
                 Some(Output::Cluster(*room, ClusterRemoteTrackControl::Ended))
             }
