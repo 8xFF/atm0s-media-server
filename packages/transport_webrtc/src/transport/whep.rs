@@ -4,7 +4,7 @@ use std::{
 };
 
 use media_server_core::{
-    endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointReq},
+    endpoint::{EndpointEvent, EndpointLocalTrackConfig, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointLocalTrackSource, EndpointReq},
     transport::{LocalTrackEvent, LocalTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
 use media_server_protocol::{
@@ -290,7 +290,19 @@ impl TransportWebrtcWhep {
                 log::info!("[TransportWebrtcWhep] send subscribe {peer} {track}");
                 return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(), //TODO generate req_id
-                    EndpointReq::LocalTrack(AUDIO_TRACK, EndpointLocalTrackReq::Switch(Some((peer, track, DEFAULT_PRIORITY)))),
+                    EndpointReq::LocalTrack(
+                        AUDIO_TRACK,
+                        EndpointLocalTrackReq::Attach(
+                            EndpointLocalTrackSource { peer, track },
+                            EndpointLocalTrackConfig {
+                                priority: DEFAULT_PRIORITY,
+                                max_spatial: 2,
+                                max_temporal: 2,
+                                min_spatial: None,
+                                min_temporal: None,
+                            },
+                        ),
+                    ),
                 )));
             }
 
@@ -300,7 +312,19 @@ impl TransportWebrtcWhep {
                 log::info!("[TransportWebrtcWhep] send subscribe {peer} {track}");
                 return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(), //TODO generate req_id
-                    EndpointReq::LocalTrack(VIDEO_TRACK, EndpointLocalTrackReq::Switch(Some((peer, track, DEFAULT_PRIORITY)))),
+                    EndpointReq::LocalTrack(
+                        VIDEO_TRACK,
+                        EndpointLocalTrackReq::Attach(
+                            EndpointLocalTrackSource { peer, track },
+                            EndpointLocalTrackConfig {
+                                priority: DEFAULT_PRIORITY,
+                                max_spatial: 2,
+                                max_temporal: 2,
+                                min_spatial: None,
+                                min_temporal: None,
+                            },
+                        ),
+                    ),
                 )));
             }
         }
@@ -317,7 +341,7 @@ impl TransportWebrtcWhep {
                 log::info!("[TransportWebrtcWhep] send unsubscribe {peer} {track}");
                 return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(), //TODO generate req_id
-                    EndpointReq::LocalTrack(AUDIO_TRACK, EndpointLocalTrackReq::Switch(None)),
+                    EndpointReq::LocalTrack(AUDIO_TRACK, EndpointLocalTrackReq::Detach()),
                 )));
             }
 
@@ -326,7 +350,7 @@ impl TransportWebrtcWhep {
                 log::info!("[TransportWebrtcWhep] send unsubscribe {peer} {track}");
                 return Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(), //TODO generate req_id
-                    EndpointReq::LocalTrack(VIDEO_TRACK, EndpointLocalTrackReq::Switch(None)),
+                    EndpointReq::LocalTrack(VIDEO_TRACK, EndpointLocalTrackReq::Detach()),
                 )));
             }
 

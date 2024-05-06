@@ -124,7 +124,7 @@ impl EndpointRemoteTrack {
     }
 
     fn on_rpc_req(&mut self, _now: Instant, _req_id: EndpointReqId, _req: EndpointRemoteTrackReq) -> Option<Output> {
-        None
+        todo!()
     }
 
     fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) -> Option<Output> {

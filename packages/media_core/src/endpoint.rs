@@ -3,8 +3,9 @@
 use std::{marker::PhantomData, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
+    endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
     media::MediaPacket,
+    protobuf,
     transport::RpcResult,
 };
 use sans_io_runtime::{
@@ -26,21 +27,77 @@ mod middleware;
 
 pub struct EndpointSession(pub u64);
 
-pub enum EndpointRemoteTrackReq {}
+pub struct EndpointRemoteTrackConfig {
+    pub priority: TrackPriority,
+    pub control: Option<BitrateControlMode>,
+}
 
-pub enum EndpointRemoteTrackRes {}
+impl From<protobuf::shared::sender::Config> for EndpointRemoteTrackConfig {
+    fn from(value: protobuf::shared::sender::Config) -> Self {
+        Self {
+            priority: value.priority.into(),
+            control: value.bitrate.map(|v| protobuf::shared::BitrateControlMode::try_from(v).ok()).flatten().map(|v| v.into()),
+        }
+    }
+}
+
+pub enum EndpointRemoteTrackReq {
+    Config(EndpointRemoteTrackConfig),
+}
+
+pub enum EndpointRemoteTrackRes {
+    Config(RpcResult<()>),
+}
+
+pub struct EndpointLocalTrackSource {
+    pub peer: PeerId,
+    pub track: TrackName,
+}
+
+impl From<protobuf::shared::receiver::Source> for EndpointLocalTrackSource {
+    fn from(value: protobuf::shared::receiver::Source) -> Self {
+        Self {
+            peer: value.peer.into(),
+            track: value.track.into(),
+        }
+    }
+}
+
+pub struct EndpointLocalTrackConfig {
+    pub priority: TrackPriority,
+    pub max_spatial: u8,
+    pub max_temporal: u8,
+    pub min_spatial: Option<u8>,
+    pub min_temporal: Option<u8>,
+}
+
+impl From<protobuf::shared::receiver::Config> for EndpointLocalTrackConfig {
+    fn from(value: protobuf::shared::receiver::Config) -> Self {
+        Self {
+            priority: value.priority.into(),
+            max_spatial: value.max_spatial as u8,
+            max_temporal: value.max_temporal as u8,
+            min_spatial: value.min_spatial.map(|m| m as u8),
+            min_temporal: value.min_temporal.map(|m| m as u8),
+        }
+    }
+}
 
 pub enum EndpointLocalTrackReq {
-    Switch(Option<(PeerId, TrackName, TrackPriority)>),
+    Attach(EndpointLocalTrackSource, EndpointLocalTrackConfig),
+    Detach(),
+    Config(EndpointLocalTrackConfig),
 }
 
 pub enum EndpointLocalTrackRes {
-    Switch(RpcResult<()>),
+    Attach(RpcResult<()>),
+    Detach(RpcResult<()>),
+    Config(RpcResult<()>),
 }
 
-pub struct EndpointReqId(pub u64);
-impl From<u64> for EndpointReqId {
-    fn from(value: u64) -> Self {
+pub struct EndpointReqId(pub u32);
+impl From<u32> for EndpointReqId {
+    fn from(value: u32) -> Self {
         Self(value)
     }
 }

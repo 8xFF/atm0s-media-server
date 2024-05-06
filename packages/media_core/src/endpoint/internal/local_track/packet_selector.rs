@@ -163,6 +163,8 @@ impl PacketSelector {
                 self.queue.push_back(Action::RequestKeyFrame);
                 self.need_key_frame = true;
                 self.last_key_frame_ts = Some(now_ms);
+            } else {
+                log::info!("[LocalTrack/PacketSelector] video source changed and first pkt is key");
             }
         }
 

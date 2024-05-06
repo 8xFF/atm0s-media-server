@@ -20,6 +20,7 @@ pub struct RemoteTrack {
 
 impl RemoteTrack {
     pub fn new(id: RemoteTrackId, cfg: protobuf::shared::Sender) -> Self {
+        log::info!("[TransportWebrcSdk/RemoteTrack] create {id} config {:?}", cfg);
         Self {
             id,
             name: cfg.name.clone().into(),
@@ -52,6 +53,7 @@ impl RemoteTrack {
     }
 
     pub fn set_str0m(&mut self, mid: Mid, sim: bool) {
+        log::info!("[TransportWebrcSdk/RemoteTrack] set_mid {}/{} => {}, simulcast {}", self.id, self.name, mid, sim);
         assert_eq!(self.mid, None, "LocalTrack mid {:?} already configed", self.mid);
         self.mid = Some(mid);
         if sim {

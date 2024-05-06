@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protobuf::shared::Kind;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, derive_more::Display)]
 pub enum MediaKind {
     Audio,
     Video,

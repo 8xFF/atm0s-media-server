@@ -10,11 +10,12 @@ pub struct LocalTrack {
 }
 
 impl LocalTrack {
-    pub fn new(id: LocalTrackId, config: protobuf::shared::Receiver) -> Self {
+    pub fn new(id: LocalTrackId, cfg: protobuf::shared::Receiver) -> Self {
+        log::info!("[TransportWebrcSdk/LocalTrack] create {id} config {:?}", cfg);
         Self {
             id,
-            name: config.name.clone().into(),
-            kind: config.kind().into(),
+            name: cfg.name.clone().into(),
+            kind: cfg.kind().into(),
             mid: None,
         }
     }
@@ -36,6 +37,7 @@ impl LocalTrack {
     }
 
     pub fn set_mid(&mut self, mid: Mid) {
+        log::info!("[TransportWebrcSdk/LocalTrack] set_mid {}/{} => {}", self.id, self.name, mid);
         assert_eq!(self.mid, None, "LocalTrack mid {:?} already configed", self.mid);
         self.mid = Some(mid);
     }

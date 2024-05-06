@@ -33,26 +33,38 @@ message Request {
     }
 
     message Sender {
-        message Switch {
-            optional shared.Sender.Source source = 1;
+        message Attach {
+            required shared.Sender.Source source = 1;
+            required shared.Sender.Config config = 2;
+        }
+
+        message Detach {
+
         }
 
         required string name = 1;
         oneof request {
-            Switch switch = 2;
-            shared.Sender.Config config = 3;
+            Attach attach = 2;
+            Detach detach = 3;
+            shared.Sender.Config config = 4;
         }
     }
 
     message Receiver {
-        message Switch {
-            optional shared.Receiver.Source source = 1;
+        message Attach {
+            required shared.Receiver.Source source = 1;
+            required shared.Receiver.Config config = 2;
+        }
+
+        message Detach {
+
         }
 
         required string name = 1;
         oneof request {
-            Switch switch = 2;
-            shared.Receiver.Config config = 3;
+            Attach attach = 2;
+            Detach detach = 3;
+            shared.Receiver.Config config = 4;
         }
     }
 
@@ -91,27 +103,42 @@ message Response {
     }
 
     message Sender {
-        message Switch {
+        message Attach {
+
+        }
+
+        message Detach {
+
+        }
+
+        message Config {
 
         }
 
         oneof response {
-            Switch switch = 1;
+            Attach attach = 1;
+            Detach detach = 2;
+            Config config = 3;
         }
     }
 
     message Receiver {
-        message Switch {
+        message Attach {
 
         }
 
-        message Limit {
+        message Detach {
+
+        }
+
+        message Config {
 
         }
 
         oneof response {
-            Switch switch = 1;
-            Limit limit = 2;
+            Attach attach = 1;
+            Detach detach = 2;
+            Config config = 3;
         }
     }
 

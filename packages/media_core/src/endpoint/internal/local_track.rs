@@ -53,6 +53,7 @@ pub struct EndpointLocalTrack {
 
 impl EndpointLocalTrack {
     pub fn new(kind: MediaKind, room: Option<ClusterRoomHash>) -> Self {
+        log::info!("[EndpointLocalTrack] track {kind}, room {:?}", room);
         Self {
             kind,
             room,
@@ -113,8 +114,11 @@ impl EndpointLocalTrack {
 
     fn on_rpc_req(&mut self, _now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) -> Option<Output> {
         match req {
-            EndpointLocalTrackReq::Switch(Some((peer, track, priority))) => {
+            EndpointLocalTrackReq::Attach(source, config) => {
+                //TODO process config here
                 if let Some(room) = self.room.as_ref() {
+                    let peer = source.peer;
+                    let track = source.track;
                     log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track}");
                     if let Some((_peer, _track)) = self.bind.take() {
                         log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track} => unsubscribe current {_peer} {_track}");
@@ -122,30 +126,34 @@ impl EndpointLocalTrack {
                         self.queue.push_back(Output::Stopped(self.kind));
                     }
                     self.bind = Some((peer.clone(), track.clone()));
-                    self.queue.push_back(Output::Started(self.kind, priority));
+                    self.queue.push_back(Output::Started(self.kind, config.priority));
                     self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer, track)));
                     self.selector.reset();
-                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
+                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Ok(()))))
                 } else {
                     log::warn!("[EndpointLocalTrack] view but not in room");
-                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
+                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
                 }
             }
-            EndpointLocalTrackReq::Switch(None) => {
+            EndpointLocalTrackReq::Detach() => {
+                //TODO process config here
                 if let Some(room) = self.room.as_ref() {
                     if let Some((peer, track)) = self.bind.take() {
                         self.queue.push_back(Output::Stopped(self.kind));
                         self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
                         log::info!("[EndpointLocalTrack] unview room {room} peer {peer} track {track}");
-                        Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
+                        Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Detach(Ok(()))))
                     } else {
                         log::warn!("[EndpointLocalTrack] unview but not bind to any source");
-                        Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::LocalTrackNotPinSource)))))
+                        Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Detach(Err(RpcError::new2(EndpointErrors::LocalTrackNotPinSource)))))
                     }
                 } else {
                     log::warn!("[EndpointLocalTrack] unview but not in room");
-                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
+                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Detach(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
                 }
+            }
+            EndpointLocalTrackReq::Config(config) => {
+                todo!()
             }
         }
     }
