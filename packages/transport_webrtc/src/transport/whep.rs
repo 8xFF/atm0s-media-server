@@ -87,15 +87,17 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
         match &self.state {
             State::New => {
                 self.state = State::Connecting { at: now };
-                return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting))));
+                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting))))
             }
             State::Connecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
                     log::info!("[TransportWebrtcWhep] connect timed out after {:?} => switched to ConnectError", now - *at);
                     self.state = State::ConnectError(TransportWebrtcError::Timeout);
-                    return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::ConnectError(
+                    Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::ConnectError(
                         TransportError::Timeout,
-                    )))));
+                    )))))
+                } else {
+                    self.pop_output(now)
                 }
             }
             State::Reconnecting { at } => {
@@ -105,11 +107,12 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                     return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
                         TransportError::Timeout,
                     ))))));
+                } else {
+                    self.pop_output(now)
                 }
             }
-            _ => {}
+            _ => self.pop_output(now),
         }
-        None
     }
 
     fn on_endpoint_event<'a>(&mut self, now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
@@ -139,7 +142,6 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                         self.bwe_state.on_send_video(now);
                         mid
                     };
-                    //log::info!("send {} size {}", pkt.pt, pkt.data.len());
                     Some(InternalOutput::Str0mSendMedia(mid, pkt))
                 }
                 EndpointLocalTrackEvent::DesiredBitrate(_) => None,

@@ -103,7 +103,7 @@ impl ConnLayer for usize {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoomInfoPublish {
     pub peer: bool,
     pub tracks: bool,
@@ -118,7 +118,7 @@ impl From<protobuf::shared::RoomInfoPublish> for RoomInfoPublish {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoomInfoSubscribe {
     pub peers: bool,
     pub tracks: bool,
@@ -136,8 +136,20 @@ impl From<protobuf::shared::RoomInfoSubscribe> for RoomInfoSubscribe {
 #[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RoomId(pub String);
 
-#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+impl From<&str> for RoomId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+#[derive(From, AsRef, Debug, derive_more::Display, derive_more::FromStr, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PeerId(pub String);
+
+impl From<&str> for PeerId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerMeta {
@@ -168,6 +180,12 @@ impl PeerInfo {
 
 #[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TrackName(pub String);
+
+impl From<&str> for TrackName {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
 
 #[derive(From, AsRef, Debug, derive_more::Display, derive_more::Add, derive_more::AddAssign, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TrackPriority(pub u32);

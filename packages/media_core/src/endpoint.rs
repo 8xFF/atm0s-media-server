@@ -27,6 +27,7 @@ mod middleware;
 
 pub struct EndpointSession(pub u64);
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct EndpointRemoteTrackConfig {
     pub priority: TrackPriority,
     pub control: Option<BitrateControlMode>,
@@ -41,14 +42,17 @@ impl From<protobuf::shared::sender::Config> for EndpointRemoteTrackConfig {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRemoteTrackReq {
     Config(EndpointRemoteTrackConfig),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRemoteTrackRes {
     Config(RpcResult<()>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct EndpointLocalTrackSource {
     pub peer: PeerId,
     pub track: TrackName,
@@ -63,6 +67,7 @@ impl From<protobuf::shared::receiver::Source> for EndpointLocalTrackSource {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct EndpointLocalTrackConfig {
     pub priority: TrackPriority,
     pub max_spatial: u8,
@@ -83,26 +88,25 @@ impl From<protobuf::shared::receiver::Config> for EndpointLocalTrackConfig {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointLocalTrackReq {
     Attach(EndpointLocalTrackSource, EndpointLocalTrackConfig),
     Detach(),
     Config(EndpointLocalTrackConfig),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointLocalTrackRes {
     Attach(RpcResult<()>),
     Detach(RpcResult<()>),
     Config(RpcResult<()>),
 }
 
+#[derive(Debug, PartialEq, Eq, derive_more::From)]
 pub struct EndpointReqId(pub u32);
-impl From<u32> for EndpointReqId {
-    fn from(value: u32) -> Self {
-        Self(value)
-    }
-}
 
 /// This is control APIs, which is used to control server from Endpoint SDK
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointReq {
     JoinRoom(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe),
     LeaveRoom,
@@ -113,6 +117,7 @@ pub enum EndpointReq {
 }
 
 /// This is response, which is used to send response back to Endpoint SDK
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRes {
     JoinRoom(RpcResult<()>),
     LeaveRoom(RpcResult<()>),
@@ -123,17 +128,20 @@ pub enum EndpointRes {
 }
 
 /// This is used for controlling the local track, which is sent from endpoint
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointLocalTrackEvent {
     Media(MediaPacket),
     DesiredBitrate(u64),
 }
 
 /// This is used for controlling the remote track, which is sent from endpoint
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRemoteTrackEvent {
     RequestKeyFrame,
     LimitBitrateBps { min: u64, max: u64 },
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointEvent {
     PeerJoined(PeerId, PeerMeta),
     PeerLeaved(PeerId),

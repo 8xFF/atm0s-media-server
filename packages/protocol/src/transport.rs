@@ -59,7 +59,7 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RpcError {
     pub code: u32,
     pub message: String,

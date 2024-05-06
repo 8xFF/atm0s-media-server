@@ -41,6 +41,7 @@ pub enum VariantParams {
     Webrtc(IpAddr, String, String, ConnectRequest),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Variant {
     Whip,
     Whep,
@@ -51,10 +52,12 @@ pub enum ExtIn {
     RemoteIce(u64, Variant, String),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum ExtOut {
     RemoteIce(u64, Variant, RpcResult<()>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum InternalOutput<'a> {
     Str0mKeyframe(Mid, KeyframeRequestKind),
     Str0mLimitBitrate(Mid, u64),

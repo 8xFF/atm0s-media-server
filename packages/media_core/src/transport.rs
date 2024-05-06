@@ -33,11 +33,12 @@ impl Hash for LocalTrackId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TransportError {
     Timeout,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum TransportState {
     Connecting,
     ConnectError(TransportError),
@@ -46,6 +47,7 @@ pub enum TransportState {
     Disconnected(Option<TransportError>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct TransportStats {
     pub sent_bytes: u64,
     pub recv_bytes: u64,
@@ -54,7 +56,7 @@ pub struct TransportStats {
 }
 
 /// This is used for notifying state of local track to endpoint
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum LocalTrackEvent {
     Started(MediaKind),
     RequestKeyFrame,
@@ -72,7 +74,7 @@ impl LocalTrackEvent {
 }
 
 /// This is used for notifying state of remote track to endpoint
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RemoteTrackEvent {
     Started { name: String, priority: TrackPriority, meta: TrackMeta },
     Paused,
@@ -91,6 +93,7 @@ impl RemoteTrackEvent {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum TransportEvent {
     State(TransportState),
     RemoteTrack(RemoteTrackId, RemoteTrackEvent),
@@ -109,6 +112,7 @@ pub enum TransportInput<'a, Ext> {
 }
 
 /// This is event from transport, in general is is result of transport protocol
+#[derive(Debug, PartialEq, Eq)]
 pub enum TransportOutput<'a, Ext> {
     Net(BackendOutgoing<'a>),
     Event(TransportEvent),

@@ -37,7 +37,7 @@ impl From<&RoomId> for ClusterRoomHash {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClusterRemoteTrackControl {
     Started(TrackName, TrackMeta),
     Media(MediaPacket),
@@ -50,7 +50,7 @@ pub enum ClusterRemoteTrackEvent {
     LimitBitrate { min: u64, max: u64 },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClusterLocalTrackControl {
     Subscribe(PeerId, TrackName),
     RequestKeyFrame,
@@ -66,7 +66,7 @@ pub enum ClusterLocalTrackEvent {
     Ended,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ClusterEndpointControl {
     Join(PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe),
     Leave,

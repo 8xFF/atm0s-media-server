@@ -9,7 +9,6 @@ use media_server_core::{
 };
 use media_server_protocol::{
     endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
-    media::MediaKind,
     protobuf::{
         self,
         conn::{
@@ -35,7 +34,7 @@ use crate::{media::RemoteMediaConvert, WebrtcError};
 
 use self::{local_track::LocalTrack, remote_track::RemoteTrack};
 
-use super::{InternalOutput, TransportWebrtcInternal};
+use super::{bwe_state::BweState, InternalOutput, TransportWebrtcInternal};
 
 const TIMEOUT_SEC: u64 = 10;
 
@@ -66,6 +65,7 @@ pub struct TransportWebrtcSdk {
     local_tracks: Vec<LocalTrack>,
     remote_tracks: Vec<RemoteTrack>,
     media_convert: RemoteMediaConvert,
+    bwe_state: BweState,
 }
 
 impl TransportWebrtcSdk {
@@ -79,6 +79,7 @@ impl TransportWebrtcSdk {
             channel: None,
             event_seq: 0,
             media_convert: RemoteMediaConvert::default(),
+            bwe_state: BweState::default(),
         }
     }
 
@@ -125,6 +126,10 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
     }
 
     fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
+        if let Some(init_bitrate) = self.bwe_state.on_tick(now) {
+            self.queue.push_back(InternalOutput::Str0mResetBwe(init_bitrate));
+        }
+
         match &self.state {
             State::New => {
                 self.state = State::Connecting { at: now };
@@ -153,7 +158,7 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
         None
     }
 
-    fn on_endpoint_event<'a>(&mut self, _now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
+    fn on_endpoint_event<'a>(&mut self, now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
         match event {
             EndpointEvent::PeerJoined(peer, meta) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} joined");
@@ -202,21 +207,40 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
             },
             EndpointEvent::LocalMediaTrack(track_id, event) => match event {
                 EndpointLocalTrackEvent::Media(pkt) => {
-                    let mid = self.local_track(track_id)?.mid()?;
+                    let track = self.local_track(track_id)?;
+                    let mid = track.mid()?;
+                    if track.kind().is_video() {
+                        self.bwe_state.on_send_video(now);
+                    }
                     log::trace!("[TransportWebrtcSdk] send {:?} size {}", pkt.meta, pkt.data.len());
                     Some(InternalOutput::Str0mSendMedia(mid, pkt))
                 }
                 EndpointLocalTrackEvent::DesiredBitrate(_) => None,
             },
-            EndpointEvent::BweConfig { .. } => None,
+            EndpointEvent::BweConfig { current, desired } => {
+                let (current, desired) = self.bwe_state.filter_bwe_config(current, desired);
+                Some(InternalOutput::Str0mBwe(current, desired))
+            }
             EndpointEvent::GoAway(_, _) => None,
         }
     }
 
     fn on_transport_rpc_res<'a>(&mut self, _now: Instant, req_id: EndpointReqId, res: EndpointRes) -> Option<InternalOutput<'a>> {
         match res {
-            EndpointRes::JoinRoom(_) => todo!(),
-            EndpointRes::LeaveRoom(_) => todo!(),
+            EndpointRes::JoinRoom(Ok(_)) => self.build_rpc_res(
+                req_id.0,
+                protobuf::conn::response::Response::Session(protobuf::conn::response::Session {
+                    response: Some(protobuf::conn::response::session::Response::Join(protobuf::conn::response::session::RoomJoin {})),
+                }),
+            ),
+            EndpointRes::JoinRoom(Err(err)) => self.build_rpc_res_err(req_id.0, err),
+            EndpointRes::LeaveRoom(Ok(_)) => self.build_rpc_res(
+                req_id.0,
+                protobuf::conn::response::Response::Session(protobuf::conn::response::Session {
+                    response: Some(protobuf::conn::response::session::Response::Leave(protobuf::conn::response::session::RoomLeave {})),
+                }),
+            ),
+            EndpointRes::LeaveRoom(Err(err)) => self.build_rpc_res_err(req_id.0, err),
             EndpointRes::SubscribePeer(_) => todo!(),
             EndpointRes::UnsubscribePeer(_) => todo!(),
             EndpointRes::RemoteTrack(track_id, res) => match res {
@@ -447,4 +471,79 @@ impl TransportWebrtcSdk {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use std::time::Instant;
+
+    use media_server_core::{
+        endpoint::EndpointReq,
+        transport::{TransportEvent, TransportOutput, TransportState},
+    };
+    use media_server_protocol::{
+        endpoint::{PeerMeta, RoomInfoPublish, RoomInfoSubscribe},
+        protobuf::{gateway, shared},
+    };
+    use str0m::channel::ChannelId;
+
+    use crate::transport::{InternalOutput, TransportWebrtcInternal};
+
+    use super::TransportWebrtcSdk;
+
+    fn create_channel_id() -> ChannelId {
+        let mut rtc = str0m::RtcConfig::default().build();
+        rtc.direct_api().create_data_channel(Default::default())
+    }
+
+    #[test]
+    fn join_room_first() {
+        let req = gateway::ConnectRequest {
+            join: Some(shared::RoomJoin {
+                room: "room".to_string(),
+                peer: "peer".to_string(),
+                publish: shared::RoomInfoPublish { peer: true, tracks: true },
+                subscribe: shared::RoomInfoSubscribe { peers: true, tracks: true },
+                metadata: Some("metadata".to_string()),
+            }),
+            ..Default::default()
+        };
+
+        let channel_id = create_channel_id();
+
+        let now = Instant::now();
+        let mut transport = TransportWebrtcSdk::new(req);
+        assert_eq!(transport.pop_output(now), None);
+
+        let out = transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
+        assert_eq!(out, Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected)))));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                0.into(),
+                EndpointReq::JoinRoom(
+                    "room".to_string().into(),
+                    "peer".to_string().into(),
+                    PeerMeta {
+                        metadata: Some("metadata".to_string())
+                    },
+                    RoomInfoPublish { peer: true, tracks: true },
+                    RoomInfoSubscribe { peers: true, tracks: true }
+                )
+            )))
+        );
+        assert_eq!(transport.pop_output(now), None);
+    }
+
+    #[test]
+    fn join_room_lazy() {
+        let req = gateway::ConnectRequest::default();
+
+        let channel_id = create_channel_id();
+
+        let now = Instant::now();
+        let mut transport = TransportWebrtcSdk::new(req);
+        assert_eq!(transport.pop_output(now), None);
+
+        let out = transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
+        assert_eq!(out, Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected)))));
+        assert_eq!(transport.pop_output(now), None);
+    }
+}
