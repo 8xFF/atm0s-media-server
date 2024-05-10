@@ -1,7 +1,4 @@
-use std::{
-    collections::VecDeque,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use media_server_core::{
     endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointRemoteTrackReq, EndpointReq, EndpointReqId, EndpointRes},
@@ -23,6 +20,7 @@ use media_server_protocol::{
     transport::RpcError,
 };
 use prost::Message;
+use sans_io_runtime::{collections::DynamicDeque, return_if_err, return_if_none};
 use str0m::{
     bwe::BweKind,
     channel::{ChannelData, ChannelId},
@@ -60,7 +58,7 @@ enum TransportWebrtcError {
 pub struct TransportWebrtcSdk {
     join: Option<(RoomId, PeerId, Option<String>, RoomInfoPublish, RoomInfoSubscribe)>,
     state: State,
-    queue: VecDeque<InternalOutput<'static>>,
+    queue: DynamicDeque<InternalOutput, 4>,
     channel: Option<ChannelId>,
     event_seq: u32,
     local_tracks: Vec<LocalTrack>,
@@ -76,7 +74,7 @@ impl TransportWebrtcSdk {
             state: State::New,
             local_tracks: req.tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect(),
             remote_tracks: req.tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect(),
-            queue: VecDeque::new(),
+            queue: Default::default(),
             channel: None,
             event_seq: 0,
             media_convert: RemoteMediaConvert::default(),
@@ -104,20 +102,21 @@ impl TransportWebrtcSdk {
         self.local_tracks.iter_mut().find(|t| t.name() == name)
     }
 
-    fn build_event<'a>(&mut self, event: protobuf::conn::server_event::Event) -> Option<InternalOutput<'a>> {
+    fn send_event(&mut self, event: protobuf::conn::server_event::Event) {
+        let channel = return_if_none!(self.channel);
         let seq = self.event_seq;
         self.event_seq += 1;
         let event = protobuf::conn::ServerEvent { seq, event: Some(event) };
-        Some(InternalOutput::Str0mSendData(self.channel?, event.encode_to_vec()))
+        self.queue.push_back(InternalOutput::Str0mSendData(channel, event.encode_to_vec()));
     }
 
-    fn build_rpc_res<'a>(&mut self, req_id: u32, res: protobuf::conn::response::Response) -> Option<InternalOutput<'a>> {
-        self.build_event(protobuf::conn::server_event::Event::Response(protobuf::conn::Response { req_id, response: Some(res) }))
+    fn send_rpc_res(&mut self, req_id: u32, res: protobuf::conn::response::Response) {
+        self.send_event(protobuf::conn::server_event::Event::Response(protobuf::conn::Response { req_id, response: Some(res) }));
     }
 
-    fn build_rpc_res_err<'a>(&mut self, req_id: u32, err: RpcError) -> Option<InternalOutput<'a>> {
+    fn send_rpc_res_err(&mut self, req_id: u32, err: RpcError) {
         let response = protobuf::conn::response::Response::Error(err.into());
-        self.build_event(protobuf::conn::server_event::Event::Response(protobuf::conn::Response { req_id, response: Some(response) }))
+        self.send_event(protobuf::conn::server_event::Event::Response(protobuf::conn::Response { req_id, response: Some(response) }))
     }
 }
 
@@ -126,7 +125,7 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
         self.media_convert.set_config(cfg);
     }
 
-    fn on_tick<'a>(&mut self, now: Instant) -> Option<InternalOutput<'a>> {
+    fn on_tick(&mut self, now: Instant) {
         if let Some(init_bitrate) = self.bwe_state.on_tick(now) {
             self.queue.push_back(InternalOutput::Str0mResetBwe(init_bitrate));
         }
@@ -134,51 +133,53 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
         match &self.state {
             State::New => {
                 self.state = State::Connecting { at: now };
-                return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting))));
+                self.queue
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting))));
             }
             State::Connecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
                     log::info!("[TransportWebrtcSdk] connect timed out after {:?} => switched to ConnectError", now - *at);
                     self.state = State::ConnectError(TransportWebrtcError::Timeout);
-                    return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::ConnectError(
-                        TransportError::Timeout,
-                    )))));
+                    self.queue
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::ConnectError(
+                            TransportError::Timeout,
+                        )))));
                 }
             }
             State::Reconnecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
                     log::info!("[TransportWebrtcSdk] reconnect timed out after {:?} => switched to Disconnected", now - *at);
                     self.state = State::Disconnected;
-                    return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
-                        TransportError::Timeout,
-                    ))))));
+                    self.queue
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
+                            TransportError::Timeout,
+                        ))))));
                 }
             }
             _ => {}
         }
-        None
     }
 
-    fn on_endpoint_event<'a>(&mut self, now: Instant, event: EndpointEvent) -> Option<InternalOutput<'a>> {
+    fn on_endpoint_event(&mut self, now: Instant, event: EndpointEvent) {
         match event {
             EndpointEvent::PeerJoined(peer, meta) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} joined");
-                self.build_event(ProtoServerEvent::Room(ProtoRoomEvent {
+                self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::PeerJoined(PeerJoined {
                         peer: peer.0,
                         metadata: meta.metadata,
                     })),
-                }))
+                }));
             }
             EndpointEvent::PeerLeaved(peer) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} leaved");
-                self.build_event(ProtoServerEvent::Room(ProtoRoomEvent {
+                self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::PeerLeaved(PeerLeaved { peer: peer.0 })),
                 }))
             }
             EndpointEvent::PeerTrackStarted(peer, track, meta) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} track {track} started");
-                self.build_event(ProtoServerEvent::Room(ProtoRoomEvent {
+                self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::TrackStarted(TrackStarted {
                         peer: peer.0,
                         track: track.0,
@@ -188,125 +189,128 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
             }
             EndpointEvent::PeerTrackStopped(peer, track) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} track {track} stopped");
-                self.build_event(ProtoServerEvent::Room(ProtoRoomEvent {
+                self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::TrackStopped(TrackStopped { peer: peer.0, track: track.0 })),
-                }))
+                }));
             }
             EndpointEvent::RemoteMediaTrack(track_id, event) => match event {
                 media_server_core::endpoint::EndpointRemoteTrackEvent::RequestKeyFrame => {
-                    let mid = self.remote_track(track_id)?.mid()?;
+                    let track = return_if_none!(self.remote_track(track_id));
+                    let mid = return_if_none!(track.mid());
                     log::info!("[TransportWebrtcSdk] request key-frame");
-                    Some(InternalOutput::Str0mKeyframe(mid, KeyframeRequestKind::Fir))
+                    self.queue.push_back(InternalOutput::Str0mKeyframe(mid, KeyframeRequestKind::Fir));
                 }
                 media_server_core::endpoint::EndpointRemoteTrackEvent::LimitBitrateBps { min, max } => {
-                    let track = self.remote_track(track_id)?;
-                    let mid = track.mid()?;
+                    let track = return_if_none!(self.remote_track(track_id));
+                    let mid = return_if_none!(track.mid());
                     let bitrate = track.calc_limit_bitrate(min, max);
                     log::debug!("[TransportWebrtcSdk] limit video track {mid} with bitrate {bitrate} bps");
-                    Some(InternalOutput::Str0mLimitBitrate(mid, bitrate))
+                    self.queue.push_back(InternalOutput::Str0mLimitBitrate(mid, bitrate));
                 }
             },
             EndpointEvent::LocalMediaTrack(track_id, event) => match event {
                 EndpointLocalTrackEvent::Media(pkt) => {
-                    let track = self.local_track(track_id)?;
-                    let mid = track.mid()?;
+                    let track = return_if_none!(self.local_track(track_id));
+                    let mid = return_if_none!(track.mid());
                     if track.kind().is_video() {
                         self.bwe_state.on_send_video(now);
                     }
                     log::trace!("[TransportWebrtcSdk] send {:?} size {}", pkt.meta, pkt.data.len());
-                    Some(InternalOutput::Str0mSendMedia(mid, pkt))
+                    self.queue.push_back(InternalOutput::Str0mSendMedia(mid, pkt))
                 }
             },
             EndpointEvent::BweConfig { current, desired } => {
                 let (current, desired) = self.bwe_state.filter_bwe_config(current, desired);
                 log::debug!("[TransportWebrtcSdk] config bwe current {current} desired {desired}");
-                Some(InternalOutput::Str0mBwe(current, desired))
+                self.queue.push_back(InternalOutput::Str0mBwe(current, desired))
             }
-            EndpointEvent::GoAway(_, _) => None,
+            EndpointEvent::GoAway(_, _) => {}
         }
     }
 
-    fn on_transport_rpc_res<'a>(&mut self, _now: Instant, req_id: EndpointReqId, res: EndpointRes) -> Option<InternalOutput<'a>> {
+    fn on_transport_rpc_res(&mut self, _now: Instant, req_id: EndpointReqId, res: EndpointRes) {
         match res {
-            EndpointRes::JoinRoom(Ok(_)) => self.build_rpc_res(
+            EndpointRes::JoinRoom(Ok(_)) => self.send_rpc_res(
                 req_id.0,
                 protobuf::conn::response::Response::Session(protobuf::conn::response::Session {
                     response: Some(protobuf::conn::response::session::Response::Join(protobuf::conn::response::session::RoomJoin {})),
                 }),
             ),
-            EndpointRes::JoinRoom(Err(err)) => self.build_rpc_res_err(req_id.0, err),
-            EndpointRes::LeaveRoom(Ok(_)) => self.build_rpc_res(
+            EndpointRes::JoinRoom(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+            EndpointRes::LeaveRoom(Ok(_)) => self.send_rpc_res(
                 req_id.0,
                 protobuf::conn::response::Response::Session(protobuf::conn::response::Session {
                     response: Some(protobuf::conn::response::session::Response::Leave(protobuf::conn::response::session::RoomLeave {})),
                 }),
             ),
-            EndpointRes::LeaveRoom(Err(err)) => self.build_rpc_res_err(req_id.0, err),
+            EndpointRes::LeaveRoom(Err(err)) => self.send_rpc_res_err(req_id.0, err),
             EndpointRes::SubscribePeer(_) => todo!(),
             EndpointRes::UnsubscribePeer(_) => todo!(),
-            EndpointRes::RemoteTrack(track_id, res) => match res {
-                media_server_core::endpoint::EndpointRemoteTrackRes::Config(Ok(_)) => self.build_rpc_res(
+            EndpointRes::RemoteTrack(_track_id, res) => match res {
+                media_server_core::endpoint::EndpointRemoteTrackRes::Config(Ok(_)) => self.send_rpc_res(
                     req_id.0,
                     protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
                         response: Some(protobuf::conn::response::sender::Response::Config(protobuf::conn::response::sender::Config {})),
                     }),
                 ),
-                media_server_core::endpoint::EndpointRemoteTrackRes::Config(Err(err)) => self.build_rpc_res_err(req_id.0, err),
+                media_server_core::endpoint::EndpointRemoteTrackRes::Config(Err(err)) => self.send_rpc_res_err(req_id.0, err),
             },
             EndpointRes::LocalTrack(_track_id, res) => match res {
-                media_server_core::endpoint::EndpointLocalTrackRes::Attach(Ok(_)) => self.build_rpc_res(
+                media_server_core::endpoint::EndpointLocalTrackRes::Attach(Ok(_)) => self.send_rpc_res(
                     req_id.0,
                     protobuf::conn::response::Response::Receiver(protobuf::conn::response::Receiver {
                         response: Some(protobuf::conn::response::receiver::Response::Attach(protobuf::conn::response::receiver::Attach {})),
                     }),
                 ),
-                media_server_core::endpoint::EndpointLocalTrackRes::Detach(Ok(_)) => self.build_rpc_res(
+                media_server_core::endpoint::EndpointLocalTrackRes::Detach(Ok(_)) => self.send_rpc_res(
                     req_id.0,
                     protobuf::conn::response::Response::Receiver(protobuf::conn::response::Receiver {
                         response: Some(protobuf::conn::response::receiver::Response::Detach(protobuf::conn::response::receiver::Detach {})),
                     }),
                 ),
-                media_server_core::endpoint::EndpointLocalTrackRes::Config(Ok(_)) => self.build_rpc_res(
+                media_server_core::endpoint::EndpointLocalTrackRes::Config(Ok(_)) => self.send_rpc_res(
                     req_id.0,
                     protobuf::conn::response::Response::Receiver(protobuf::conn::response::Receiver {
                         response: Some(protobuf::conn::response::receiver::Response::Config(protobuf::conn::response::receiver::Config {})),
                     }),
                 ),
-                media_server_core::endpoint::EndpointLocalTrackRes::Attach(Err(err)) => self.build_rpc_res_err(req_id.0, err),
-                media_server_core::endpoint::EndpointLocalTrackRes::Detach(Err(err)) => self.build_rpc_res_err(req_id.0, err),
-                media_server_core::endpoint::EndpointLocalTrackRes::Config(Err(err)) => self.build_rpc_res_err(req_id.0, err),
+                media_server_core::endpoint::EndpointLocalTrackRes::Attach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+                media_server_core::endpoint::EndpointLocalTrackRes::Detach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+                media_server_core::endpoint::EndpointLocalTrackRes::Config(Err(err)) => self.send_rpc_res_err(req_id.0, err),
             },
         }
     }
 
-    fn on_str0m_event<'a>(&mut self, now: Instant, event: Str0mEvent) -> Option<InternalOutput<'a>> {
+    fn on_str0m_event(&mut self, now: Instant, event: Str0mEvent) {
         match event {
             Str0mEvent::ChannelOpen(channel, name) => {
                 self.state = State::Connected;
                 self.channel = Some(channel);
                 log::info!("[TransportWebrtcSdk] channel {name} opened, join state {:?}", self.join);
+                self.queue
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
                 if let Some((room, peer, metadata, publish, subscribe)) = &self.join {
                     self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                         0.into(),
                         EndpointReq::JoinRoom(room.clone(), peer.clone(), PeerMeta { metadata: metadata.clone() }, publish.clone(), subscribe.clone()),
                     )));
                 }
-                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
             }
             Str0mEvent::ChannelData(data) => self.on_str0m_channel_data(data),
             Str0mEvent::ChannelClose(_channel) => {
                 log::info!("[TransportWebrtcSdk] channel closed, leave room {:?}", self.join);
                 self.state = State::Disconnected;
-                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
-                    TransportError::Timeout,
-                ))))))
+                self.queue
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
+                        TransportError::Timeout,
+                    ))))));
             }
             Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
             Str0mEvent::MediaAdded(media) => self.on_str0m_media_added(now, media),
             Str0mEvent::RtpPacket(pkt) => {
-                let mid = self.media_convert.get_mid(pkt.header.ssrc, pkt.header.ext_vals.mid)?;
-                let track = self.remote_track_by_mid(mid)?.id();
-                let pkt = self.media_convert.convert(pkt)?;
+                let mid = return_if_none!(self.media_convert.get_mid(pkt.header.ssrc, pkt.header.ext_vals.mid));
+                let track = return_if_none!(self.remote_track_by_mid(mid)).id();
+                let pkt = return_if_none!(self.media_convert.convert(pkt));
                 log::trace!(
                     "[TransportWebrtcSdk] incoming pkt codec {:?}, seq {} ts {}, marker {}, payload {}",
                     pkt.meta,
@@ -315,74 +319,74 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     pkt.marker,
                     pkt.data.len(),
                 );
-                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
                     track,
                     RemoteTrackEvent::Media(pkt),
-                ))))
+                ))));
             }
             Str0mEvent::EgressBitrateEstimate(BweKind::Remb(_, bitrate)) | Str0mEvent::EgressBitrateEstimate(BweKind::Twcc(bitrate)) => {
                 let bitrate2 = self.bwe_state.filter_bwe(bitrate.as_u64());
                 log::debug!("[TransportWebrtcSdk] on rewrite bwe {bitrate} => {bitrate2} bps");
-                Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::EgressBitrateEstimate(bitrate2))))
+                self.queue
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::EgressBitrateEstimate(bitrate2))));
             }
-            Str0mEvent::PeerStats(_stats) => None,
+            Str0mEvent::PeerStats(_stats) => {}
             Str0mEvent::MediaIngressStats(stats) => {
                 log::debug!("ingress rtt {} {:?}", stats.mid, stats.rtt);
-                None
             }
             Str0mEvent::MediaEgressStats(stats) => {
                 log::debug!("egress rtt {} {:?}", stats.mid, stats.rtt);
-                None
             }
-            _ => None,
+            _ => {}
         }
     }
 
-    fn close<'a>(&mut self, _now: Instant) -> Option<InternalOutput<'a>> {
+    fn close(&mut self, _now: Instant) {
         log::info!("[TransportWebrtcSdk] switched to disconnected with close action");
         self.state = State::Disconnected;
-        Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+        self.queue
+            .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
     }
 
-    fn pop_output<'a>(&mut self, _now: Instant) -> Option<InternalOutput<'a>> {
+    fn pop_output(&mut self, _now: Instant) -> Option<InternalOutput> {
         self.queue.pop_front()
     }
 }
 
 impl TransportWebrtcSdk {
-    fn on_str0m_state<'a>(&mut self, now: Instant, state: IceConnectionState) -> Option<InternalOutput<'a>> {
+    fn on_str0m_state(&mut self, now: Instant, state: IceConnectionState) {
         log::info!("[TransportWebrtcSdk] str0m state changed {:?}", state);
 
         match state {
-            IceConnectionState::New => None,
-            IceConnectionState::Checking => None,
+            IceConnectionState::New => {}
+            IceConnectionState::Checking => {}
             IceConnectionState::Connected | IceConnectionState::Completed => match &self.state {
                 State::Reconnecting { at } => {
                     log::info!("[TransportWebrtcSdk] switched to reconnected after {:?}", now - *at);
                     self.state = State::Connected;
-                    Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
+                    self.queue
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
                 }
-                _ => None,
+                _ => {}
             },
             IceConnectionState::Disconnected => {
                 if matches!(self.state, State::Connected) {
                     self.state = State::Reconnecting { at: now };
                     log::info!("[TransportWebrtcSdk] switched to reconnecting");
-                    return Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Reconnecting))));
-                } else {
-                    return None;
+                    self.queue
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Reconnecting))));
                 }
             }
         }
     }
 
-    fn on_str0m_media_added<'a>(&mut self, _now: Instant, media: MediaAdded) -> Option<InternalOutput<'a>> {
+    fn on_str0m_media_added(&mut self, _now: Instant, media: MediaAdded) {
         match media.direction {
             Direction::RecvOnly | Direction::SendRecv => {
                 if let Some(track) = self.remote_tracks.iter_mut().find(|t| t.mid().is_none()) {
                     log::info!("[TransportWebrtcSdk] config mid {} to remote track {}", media.mid, track.name());
                     track.set_str0m(media.mid, media.simulcast.is_some());
-                    Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+                    self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
                         track.id(),
                         RemoteTrackEvent::Started {
                             name: track.name().to_string(),
@@ -392,82 +396,86 @@ impl TransportWebrtcSdk {
                     ))))
                 } else {
                     log::warn!("[TransportWebrtcSdk] not found track for mid {}", media.mid);
-                    None
                 }
             }
             Direction::SendOnly => {
                 if let Some(track) = self.local_tracks.iter_mut().find(|t| t.mid().is_none()) {
                     log::info!("[TransportWebrtcSdk] config mid {} to local track {}", media.mid, track.name());
                     track.set_mid(media.mid);
-                    Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
+                    self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
                         track.id(),
                         LocalTrackEvent::Started(track.kind()),
                     ))))
                 } else {
                     log::warn!("[TransportWebrtcSdk] not found track for mid {}", media.mid);
-                    None
                 }
             }
             Direction::Inactive => {
                 log::warn!("[TransportWebrtcSdk] unsupported direct Inactive");
-                None
             }
         }
     }
 
-    fn on_str0m_channel_data<'a>(&mut self, data: ChannelData) -> Option<InternalOutput<'a>> {
-        let event = ClientEvent::decode(data.data.as_slice()).ok()?;
+    fn on_str0m_channel_data(&mut self, data: ChannelData) {
+        let event = return_if_err!(ClientEvent::decode(data.data.as_slice()));
         log::info!("[TransportWebrtcSdk] on client event {:?}", event);
-        match event.event? {
+        match return_if_none!(event.event) {
             protobuf::conn::client_event::Event::Request(req) => {
                 let req_id = req.req_id;
-                let to_out = |req: EndpointReq| -> Option<InternalOutput<'static>> { Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), req))) };
-                match req.request? {
-                    protobuf::conn::request::Request::Session(req) => match req.request? {
+                let build_req = |req: EndpointReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), req));
+                match return_if_none!(req.request) {
+                    protobuf::conn::request::Request::Session(req) => match return_if_none!(req.request) {
                         protobuf::conn::request::session::Request::Join(req) => {
                             let meta = PeerMeta { metadata: req.info.metadata };
-                            to_out(EndpointReq::JoinRoom(
+                            self.queue.push_back(build_req(EndpointReq::JoinRoom(
                                 req.info.room.into(),
                                 req.info.peer.into(),
                                 meta,
                                 req.info.publish.into(),
                                 req.info.subscribe.into(),
-                            ))
+                            )));
                         }
-                        protobuf::conn::request::session::Request::Leave(_req) => to_out(EndpointReq::LeaveRoom),
+                        protobuf::conn::request::session::Request::Leave(_req) => self.queue.push_back(build_req(EndpointReq::LeaveRoom)),
                         protobuf::conn::request::session::Request::Sdp(_) => todo!(),
                         protobuf::conn::request::session::Request::Disconnect(_) => {
                             log::info!("[TransportWebrtcSdk] switched to disconnected with close action from client");
                             self.state = State::Disconnected;
-                            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+                            self.queue
+                                .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
                         }
                     },
                     protobuf::conn::request::Request::Sender(req) => {
                         let track = if let Some(track) = self.remote_track_by_name(&req.name) {
                             track
                         } else {
-                            return self.build_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
+                            return self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
                         };
+                        let track_id = track.id();
 
-                        match req.request? {
+                        match return_if_none!(req.request) {
                             protobuf::conn::request::sender::Request::Attach(attach) => todo!(),
                             protobuf::conn::request::sender::Request::Detach(_) => todo!(),
-                            protobuf::conn::request::sender::Request::Config(config) => to_out(EndpointReq::RemoteTrack(track.id(), EndpointRemoteTrackReq::Config(config.into()))),
+                            protobuf::conn::request::sender::Request::Config(config) => {
+                                self.queue.push_back(build_req(EndpointReq::RemoteTrack(track_id, EndpointRemoteTrackReq::Config(config.into()))))
+                            }
                         }
                     }
                     protobuf::conn::request::Request::Receiver(req) => {
                         let track = if let Some(track) = self.local_track_by_name(&req.name) {
                             track
                         } else {
-                            return self.build_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
+                            return self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
                         };
+                        let track_id = track.id();
 
-                        match req.request? {
-                            protobuf::conn::request::receiver::Request::Attach(attach) => {
-                                to_out(EndpointReq::LocalTrack(track.id(), EndpointLocalTrackReq::Attach(attach.source.into(), attach.config.into())))
+                        match return_if_none!(req.request) {
+                            protobuf::conn::request::receiver::Request::Attach(attach) => self
+                                .queue
+                                .push_back(build_req(EndpointReq::LocalTrack(track_id, EndpointLocalTrackReq::Attach(attach.source.into(), attach.config.into())))),
+                            protobuf::conn::request::receiver::Request::Detach(_) => self.queue.push_back(build_req(EndpointReq::LocalTrack(track_id, EndpointLocalTrackReq::Detach()))),
+                            protobuf::conn::request::receiver::Request::Config(config) => {
+                                self.queue.push_back(build_req(EndpointReq::LocalTrack(track_id, EndpointLocalTrackReq::Config(config.into()))))
                             }
-                            protobuf::conn::request::receiver::Request::Detach(_) => to_out(EndpointReq::LocalTrack(track.id(), EndpointLocalTrackReq::Detach())),
-                            protobuf::conn::request::receiver::Request::Config(config) => to_out(EndpointReq::LocalTrack(track.id(), EndpointLocalTrackReq::Config(config.into()))),
                         }
                     }
                 }
@@ -518,8 +526,11 @@ mod tests {
         let mut transport = TransportWebrtcSdk::new(req);
         assert_eq!(transport.pop_output(now), None);
 
-        let out = transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
-        assert_eq!(out, Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected)))));
+        transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
+        );
         assert_eq!(
             transport.pop_output(now),
             Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
@@ -548,8 +559,11 @@ mod tests {
         let mut transport = TransportWebrtcSdk::new(req);
         assert_eq!(transport.pop_output(now), None);
 
-        let out = transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
-        assert_eq!(out, Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected)))));
+        transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
+        );
         assert_eq!(transport.pop_output(now), None);
     }
 }

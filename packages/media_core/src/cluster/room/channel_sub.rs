@@ -17,6 +17,7 @@ use media_server_protocol::{
     endpoint::{PeerId, TrackName},
     media::MediaPacket,
 };
+use sans_io_runtime::{return_if_none, TaskSwitcherChild};
 
 use crate::{
     cluster::{id_generator, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRoomHash},
@@ -62,8 +63,8 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
         }
     }
 
-    pub fn on_channel_relay_changed(&mut self, channel: ChannelId, _relay: NodeId) -> Option<Output<Owner>> {
-        let channel_container = self.channels.get(&channel)?;
+    pub fn on_channel_relay_changed(&mut self, channel: ChannelId, _relay: NodeId) {
+        let channel_container = return_if_none!(self.channels.get(&channel));
         log::info!(
             "[ClusterRoom {}/Subscribers] cluster: channel {channel} source changed => fire event to {:?}",
             self.room,
@@ -73,12 +74,11 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
             self.queue
                 .push_back(Output::Endpoint(vec![*owner], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::SourceChanged)))
         }
-        self.queue.pop_front()
     }
 
-    pub fn on_channel_data(&mut self, channel: ChannelId, data: Vec<u8>) -> Option<Output<Owner>> {
-        let pkt = MediaPacket::deserialize(&data)?;
-        let channel_container = self.channels.get(&channel)?;
+    pub fn on_channel_data(&mut self, channel: ChannelId, data: Vec<u8>) {
+        let pkt = return_if_none!(MediaPacket::deserialize(&data));
+        let channel_container = return_if_none!(self.channels.get(&channel));
         log::trace!(
             "[ClusterRoom {}/Subscribers] on channel media meta {:?} seq {} to {} subscribers",
             self.room,
@@ -92,10 +92,9 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
                 ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::Media(*channel, pkt.clone())),
             ))
         }
-        self.queue.pop_front()
     }
 
-    pub fn on_track_subscribe(&mut self, owner: Owner, track: LocalTrackId, target_peer: PeerId, target_track: TrackName) -> Option<Output<Owner>> {
+    pub fn on_track_subscribe(&mut self, owner: Owner, track: LocalTrackId, target_peer: PeerId, target_track: TrackName) {
         let channel_id: ChannelId = id_generator::gen_channel_id(self.room, &target_peer, &target_track);
         log::info!(
             "[ClusterRoom {}/Subscribers] owner {:?} track {track} subscribe peer {target_peer} track {target_track}), channel: {channel_id}",
@@ -107,24 +106,22 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
         channel_container.owners.push((owner, track));
         if channel_container.owners.len() == 1 {
             log::info!("[ClusterRoom {}/Subscribers] first subscriber => Sub channel {channel_id}", self.room);
-            Some(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::SubAuto)))
-        } else {
-            None
+            self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::SubAuto)));
         }
     }
 
-    pub fn on_track_request_key(&mut self, owner: Owner, track: LocalTrackId) -> Option<Output<Owner>> {
-        let (channel_id, peer, track) = self.subscribers.get(&(owner, track))?;
+    pub fn on_track_request_key(&mut self, owner: Owner, track: LocalTrackId) {
+        let (channel_id, peer, track) = return_if_none!(self.subscribers.get(&(owner, track)));
         log::info!("[ClusterRoom {}/Subscribers] request key-frame {channel_id} {peer} {track}", self.room);
-        Some(Output::Pubsub(pubsub::Control(
+        self.queue.push_back(Output::Pubsub(pubsub::Control(
             *channel_id,
             ChannelControl::FeedbackAuto(Feedback::simple(KEYFRAME_FEEDBACK_KIND, 1, KEYFRAME_FEEDBACK_INTERVAL, KEYFRAME_FEEDBACK_TIMEOUT)),
-        )))
+        )));
     }
 
-    pub fn on_track_desired_bitrate(&mut self, now: Instant, owner: Owner, track: LocalTrackId, bitrate: u64) -> Option<Output<Owner>> {
-        let (channel_id, _peer, _track) = self.subscribers.get(&(owner, track))?;
-        let channel_container = self.channels.get_mut(channel_id)?;
+    pub fn on_track_desired_bitrate(&mut self, now: Instant, owner: Owner, track: LocalTrackId, bitrate: u64) {
+        let (channel_id, _peer, _track) = return_if_none!(self.subscribers.get(&(owner, track)));
+        let channel_container = return_if_none!(self.channels.get_mut(channel_id));
         let fb = Feedback::simple(BITRATE_FEEDBACK_KIND, bitrate, BITRATE_FEEDBACK_INTERVAL, BITRATE_FEEDBACK_TIMEOUT);
         channel_container.bitrate_fbs.insert(owner, (now, fb));
 
@@ -143,30 +140,32 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
             }
         }
         log::debug!("[ClusterRoom {}/Subscribers] channel {channel_id} setting desired bitrate {:?}", self.room, sum_fb);
-        Some(Output::Pubsub(pubsub::Control(*channel_id, ChannelControl::FeedbackAuto(sum_fb?))))
+        self.queue
+            .push_back(Output::Pubsub(pubsub::Control(*channel_id, ChannelControl::FeedbackAuto(return_if_none!(sum_fb)))));
     }
 
-    pub fn on_track_unsubscribe(&mut self, owner: Owner, track: LocalTrackId) -> Option<Output<Owner>> {
-        let (channel_id, target_peer, target_track) = self.subscribers.remove(&(owner, track))?;
+    pub fn on_track_unsubscribe(&mut self, owner: Owner, track: LocalTrackId) {
+        let (channel_id, target_peer, target_track) = return_if_none!(self.subscribers.remove(&(owner, track)));
         log::info!(
             "[ClusterRoom {}/Subscribers] owner {:?} track {track} unsubscribe from source {target_peer} {target_track}, channel {channel_id}",
             self.room,
             owner
         );
-        let channel_container = self.channels.get_mut(&channel_id)?;
-        let (index, _) = channel_container.owners.iter().enumerate().find(|e| e.1.eq(&(owner, track)))?;
+        let channel_container = return_if_none!(self.channels.get_mut(&channel_id));
+        let (index, _) = return_if_none!(channel_container.owners.iter().enumerate().find(|e| e.1.eq(&(owner, track))));
         channel_container.owners.swap_remove(index);
 
         if channel_container.owners.is_empty() {
             self.channels.remove(&channel_id);
             log::info!("[ClusterRoom {}/Subscribers] last unsubscriber => Unsub channel {channel_id}", self.room);
-            Some(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)))
-        } else {
-            None
+            self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)));
         }
     }
+}
 
-    pub fn pop_output(&mut self, _now: Instant) -> Option<Output<Owner>> {
+impl<Owner: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Owner>> for RoomChannelSubscribe<Owner> {
+    type Time = Instant;
+    fn pop_output(&mut self, now: Instant) -> Option<Output<Owner>> {
         self.queue.pop_front()
     }
 }
@@ -180,6 +179,7 @@ mod tests {
         endpoint::{PeerId, TrackName},
         media::{MediaMeta, MediaPacket},
     };
+    use sans_io_runtime::TaskSwitcherChild;
 
     use crate::{
         cluster::{
@@ -216,20 +216,20 @@ mod tests {
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
-        let out = subscriber.on_track_subscribe(owner, track, target_peer.clone(), target_track.clone());
-        assert_eq!(out, Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
+        subscriber.on_track_subscribe(owner, track, target_peer.clone(), target_track.clone());
+        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
         assert_eq!(subscriber.pop_output(Instant::now()), None);
 
         let pkt = fake_audio();
-        let out = subscriber.on_channel_data(channel_id, pkt.serialize());
+        subscriber.on_channel_data(channel_id, pkt.serialize());
         assert_eq!(
-            out,
+            subscriber.pop_output(Instant::now()),
             Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::LocalTrack(track, ClusterLocalTrackEvent::Media(*channel_id, pkt))))
         );
         assert_eq!(subscriber.pop_output(Instant::now()), None);
 
-        let out = subscriber.on_track_unsubscribe(owner, track);
-        assert_eq!(out, Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
+        subscriber.on_track_unsubscribe(owner, track);
+        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
         assert_eq!(subscriber.pop_output(Instant::now()), None);
     }
 
@@ -244,13 +244,13 @@ mod tests {
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
-        let out = subscriber.on_track_subscribe(owner, track, target_peer.clone(), target_track.clone());
-        assert_eq!(out, Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
+        subscriber.on_track_subscribe(owner, track, target_peer.clone(), target_track.clone());
+        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
         assert_eq!(subscriber.pop_output(Instant::now()), None);
 
-        let out = subscriber.on_track_request_key(owner, track);
+        subscriber.on_track_request_key(owner, track);
         assert_eq!(
-            out,
+            subscriber.pop_output(Instant::now()),
             Some(Output::Pubsub(Control(
                 channel_id,
                 ChannelControl::FeedbackAuto(Feedback::simple(KEYFRAME_FEEDBACK_KIND, 1, KEYFRAME_FEEDBACK_INTERVAL, KEYFRAME_FEEDBACK_TIMEOUT))
@@ -270,15 +270,15 @@ mod tests {
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
-        let out = subscriber.on_track_subscribe(owner1, track1, target_peer.clone(), target_track.clone());
-        assert_eq!(out, Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
+        subscriber.on_track_subscribe(owner1, track1, target_peer.clone(), target_track.clone());
+        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
         assert_eq!(subscriber.pop_output(Instant::now()), None);
 
         let mut now = Instant::now();
 
-        let out = subscriber.on_track_desired_bitrate(now, owner1, track1, 1000);
+        subscriber.on_track_desired_bitrate(now, owner1, track1, 1000);
         assert_eq!(
-            out,
+            subscriber.pop_output(Instant::now()),
             Some(Output::Pubsub(Control(
                 channel_id,
                 ChannelControl::FeedbackAuto(Feedback::simple(BITRATE_FEEDBACK_KIND, 1000, BITRATE_FEEDBACK_INTERVAL, BITRATE_FEEDBACK_TIMEOUT))
@@ -289,14 +289,14 @@ mod tests {
         // more local track sub that channel
         let owner2 = 3;
         let track2 = LocalTrackId(4);
-        let out = subscriber.on_track_subscribe(owner2, track2, target_peer.clone(), target_track.clone());
-        assert_eq!(out, None);
+        subscriber.on_track_subscribe(owner2, track2, target_peer.clone(), target_track.clone());
+        assert_eq!(subscriber.pop_output(Instant::now()), None);
 
         // more feedback from local track2
         now += Duration::from_millis(100);
-        let out = subscriber.on_track_desired_bitrate(now, owner2, track2, 2000);
+        subscriber.on_track_desired_bitrate(now, owner2, track2, 2000);
         assert_eq!(
-            out,
+            subscriber.pop_output(Instant::now()),
             Some(Output::Pubsub(Control(
                 channel_id,
                 ChannelControl::FeedbackAuto(Feedback {
@@ -314,9 +314,9 @@ mod tests {
 
         //now last update from track2 after long time cause track1 feedback will be timeout
         now += Duration::from_millis(BITRATE_FEEDBACK_TIMEOUT as u64 - 100);
-        let out = subscriber.on_track_desired_bitrate(now, owner2, track2, 3000);
+        subscriber.on_track_desired_bitrate(now, owner2, track2, 3000);
         assert_eq!(
-            out,
+            subscriber.pop_output(Instant::now()),
             Some(Output::Pubsub(Control(
                 channel_id,
                 ChannelControl::FeedbackAuto(Feedback {

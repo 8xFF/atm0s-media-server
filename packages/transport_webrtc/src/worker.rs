@@ -7,7 +7,7 @@ use media_server_core::{
 use media_server_protocol::transport::RpcResult;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
-    group_owner_type, group_task, TaskSwitcher,
+    group_owner_type, group_task, return_if_none, return_if_some, TaskSwitcher, TaskSwitcherChild,
 };
 use str0m::change::DtlsCert;
 
@@ -16,22 +16,21 @@ use crate::{
     transport::{ExtIn, ExtOut, TransportWebrtc, VariantParams},
 };
 
-group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, EndpointInput<'a, ExtIn>, EndpointOutput<'a, ExtOut>);
-
+group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, EndpointInput<ExtIn>, EndpointOutput<ExtOut>);
 group_owner_type!(WebrtcOwner);
 
-pub enum GroupInput<'a, Ext> {
-    Net(BackendIncoming<'a>),
+pub enum GroupInput {
+    Net(BackendIncoming),
     Cluster(WebrtcOwner, ClusterEndpointEvent),
-    Ext(WebrtcOwner, Ext),
+    Ext(WebrtcOwner, ExtIn),
     Close(WebrtcOwner),
 }
 
 #[derive(Debug)]
-pub enum GroupOutput<'a, Ext> {
-    Net(BackendOutgoing<'a>),
+pub enum GroupOutput {
+    Net(BackendOutgoing),
     Cluster(WebrtcOwner, ClusterRoomHash, ClusterEndpointControl),
-    Ext(WebrtcOwner, Ext),
+    Ext(WebrtcOwner, ExtOut),
     Shutdown(WebrtcOwner),
     Continue,
 }
@@ -41,7 +40,7 @@ pub struct MediaWorkerWebrtc {
     dtls_cert: DtlsCert,
     endpoints: Endpoints,
     addrs: Vec<(SocketAddr, usize)>,
-    queue: VecDeque<GroupOutput<'static, ExtOut>>,
+    queue: VecDeque<GroupOutput>,
 }
 
 impl MediaWorkerWebrtc {
@@ -77,7 +76,7 @@ impl MediaWorkerWebrtc {
         Ok((sdp, index))
     }
 
-    fn process_output<'a>(&mut self, index: usize, out: EndpointOutput<'a, ExtOut>) -> GroupOutput<'a, ExtOut> {
+    fn process_output(&mut self, index: usize, out: EndpointOutput<ExtOut>) -> GroupOutput {
         match out {
             EndpointOutput::Net(net) => GroupOutput::Net(net),
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcOwner(index), room, control),
@@ -97,48 +96,44 @@ impl MediaWorkerWebrtc {
         self.endpoints.tasks()
     }
 
-    pub fn on_tick<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a, ExtOut>> {
-        if let Some(out) = self.queue.pop_front() {
-            return Some(out);
-        }
-        self.endpoints.on_tick(now).map(|(index, out)| self.process_output(index, out))
+    pub fn on_tick(&mut self, now: Instant) {
+        self.endpoints.on_tick(now);
     }
 
-    pub fn on_event<'a>(&mut self, now: Instant, input: GroupInput<'a, ExtIn>) -> Option<GroupOutput<'a, ExtOut>> {
+    pub fn on_event(&mut self, now: Instant, input: GroupInput) {
         match input {
             GroupInput::Net(BackendIncoming::UdpListenResult { bind: _, result }) => {
-                let (addr, slot) = result.ok()?;
+                let (addr, slot) = result.expect("Should listen ok");
                 log::info!("[MediaWorkerWebrtc] UdpListenResult {addr}, slot {slot}");
                 self.addrs.push((addr, slot));
-                None
             }
             GroupInput::Net(BackendIncoming::UdpPacket { slot, from, data }) => {
-                let index = self.shared_port.map_remote(from, &data)?;
-                let out = self.endpoints.on_event(now, index, EndpointInput::Net(BackendIncoming::UdpPacket { slot, from, data }))?;
-                Some(self.process_output(index, out))
+                let index = return_if_none!(self.shared_port.map_remote(from, &data));
+                self.endpoints.on_event(now, index, EndpointInput::Net(BackendIncoming::UdpPacket { slot, from, data }));
             }
             GroupInput::Cluster(owner, event) => {
-                let out = self.endpoints.on_event(now, owner.index(), EndpointInput::Cluster(event))?;
-                Some(self.process_output(owner.index(), out))
+                self.endpoints.on_event(now, owner.index(), EndpointInput::Cluster(event));
             }
             GroupInput::Ext(owner, ext) => {
                 log::info!("[MediaWorkerWebrtc] on ext to owner {:?}", owner);
-                let out = self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ext))?;
-                Some(self.process_output(owner.index(), out))
+                self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ext));
             }
             GroupInput::Close(owner) => {
-                let out = self.endpoints.on_event(now, owner.index(), EndpointInput::Close)?;
-                Some(self.process_output(owner.index(), out))
+                self.endpoints.on_event(now, owner.index(), EndpointInput::Close);
             }
         }
     }
 
-    pub fn pop_output<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a, ExtOut>> {
+    pub fn shutdown(&mut self, now: Instant) {
+        self.endpoints.on_shutdown(now);
+    }
+}
+
+impl TaskSwitcherChild<GroupOutput> for MediaWorkerWebrtc {
+    type Time = Instant;
+    fn pop_output(&mut self, now: Instant) -> Option<GroupOutput> {
+        return_if_some!(self.queue.pop_front());
         let (index, out) = self.endpoints.pop_output(now)?;
         Some(self.process_output(index, out))
-    }
-
-    pub fn shutdown<'a>(&mut self, now: Instant) -> Option<GroupOutput<'a, ExtOut>> {
-        self.endpoints.shutdown(now).map(|(index, out)| self.process_output(index, out))
     }
 }

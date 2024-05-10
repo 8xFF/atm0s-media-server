@@ -36,13 +36,13 @@ pub struct ICfg {
 }
 type SCfg = ();
 
-type Input<'a> = WorkerInnerInput<'a, Owner, ExtIn, Channel, Event>;
-type Output<'a> = WorkerInnerOutput<'a, Owner, ExtOut, Channel, Event, SCfg>;
+type Input = WorkerInnerInput<Owner, ExtIn, Channel, Event>;
+type Output = WorkerInnerOutput<Owner, ExtOut, Channel, Event, SCfg>;
 
 pub struct MediaRuntimeWorker {
     index: u16,
     worker: MediaServerWorker,
-    queue: VecDeque<Output<'static>>,
+    queue: VecDeque<Output>,
 }
 
 impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRuntimeWorker {
@@ -89,24 +89,19 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
         self.worker.tasks()
     }
 
-    fn spawn(&mut self, now: Instant, cfg: SCfg) {
+    fn spawn(&mut self, _now: Instant, _cfg: SCfg) {
         panic!("Not supported")
     }
 
-    fn on_tick<'a>(&mut self, now: Instant) -> Option<Output<'a>> {
-        if !self.queue.is_empty() {
-            return self.queue.pop_front();
-        }
-        let out = self.worker.on_tick(now)?;
-        Some(self.process_out(out))
+    fn on_tick(&mut self, now: Instant) {
+        self.worker.on_tick(now);
     }
 
-    fn on_event<'a>(&mut self, now: Instant, event: Input<'a>) -> Option<Output<'a>> {
-        let out = self.worker.on_event(now, Self::convert_input(event))?;
-        Some(self.process_out(out))
+    fn on_event(&mut self, now: Instant, event: Input) {
+        self.worker.on_event(now, Self::convert_input(event));
     }
 
-    fn pop_output<'a>(&mut self, now: Instant) -> Option<Output<'a>> {
+    fn pop_output(&mut self, now: Instant) -> Option<Output> {
         if !self.queue.is_empty() {
             return self.queue.pop_front();
         }
@@ -114,14 +109,13 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
         Some(self.process_out(out))
     }
 
-    fn shutdown<'a>(&mut self, now: Instant) -> Option<Output<'a>> {
-        let out = self.worker.shutdown(now)?;
-        Some(self.process_out(out))
+    fn on_shutdown(&mut self, now: Instant) {
+        self.worker.shutdown(now);
     }
 }
 
 impl MediaRuntimeWorker {
-    fn process_out<'a>(&mut self, out: WorkerOutput<'a>) -> Output<'a> {
+    fn process_out(&mut self, out: WorkerOutput) -> Output {
         match out {
             WorkerOutput::ExtRpc(req_id, res) => Output::Ext(true, ExtOut::Rpc(req_id, self.index, res)),
             WorkerOutput::ExtSdn(out) => Output::Ext(false, ExtOut::Sdn(out)),
@@ -135,7 +129,7 @@ impl MediaRuntimeWorker {
         }
     }
 
-    fn convert_input<'a>(input: Input<'a>) -> WorkerInput<'a> {
+    fn convert_input(input: Input) -> WorkerInput {
         match input {
             Input::Bus(event) => match event {
                 BusEvent::Broadcast(_from, msg) => WorkerInput::Bus(msg),

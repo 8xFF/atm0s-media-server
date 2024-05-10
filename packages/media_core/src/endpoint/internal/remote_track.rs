@@ -6,7 +6,7 @@ use media_server_protocol::{
     endpoint::{BitrateControlMode, TrackMeta, TrackName, TrackPriority},
     media::{MediaKind, MediaLayersBitrate},
 };
-use sans_io_runtime::Task;
+use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
 use crate::{
     cluster::{ClusterRemoteTrackControl, ClusterRemoteTrackEvent, ClusterRoomHash},
@@ -59,49 +59,50 @@ impl EndpointRemoteTrack {
         }
     }
 
-    fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) -> Option<Output> {
+    fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) {
         assert_eq!(self.room, None);
         self.room = Some(room);
         log::info!("[EndpointRemoteTrack] join room {room}");
-        let name = self.name.clone()?;
+        let name = return_if_none!(self.name.clone());
         log::info!("[EndpointRemoteTrack] started as name {name} after join room");
-        Some(Output::Cluster(room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())))
+        self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())));
     }
-    fn on_leave_room(&mut self, _now: Instant) -> Option<Output> {
+    fn on_leave_room(&mut self, _now: Instant) {
         let room = self.room.take().expect("Must have room here");
         log::info!("[EndpointRemoteTrack] leave room {room}");
-        let name = self.name.as_ref()?;
+        let name = return_if_none!(self.name.as_ref());
         log::info!("[EndpointRemoteTrack] stopped as name {name} after leave room");
-        Some(Output::Cluster(room, ClusterRemoteTrackControl::Ended))
+        self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Ended));
     }
 
-    fn on_cluster_event(&mut self, _now: Instant, event: ClusterRemoteTrackEvent) -> Option<Output> {
+    fn on_cluster_event(&mut self, _now: Instant, event: ClusterRemoteTrackEvent) {
         match event {
-            ClusterRemoteTrackEvent::RequestKeyFrame => Some(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
+            ClusterRemoteTrackEvent::RequestKeyFrame => self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
             ClusterRemoteTrackEvent::LimitBitrate { min, max } => match self.meta.control {
                 Some(BitrateControlMode::MaxBitrate) | None => {
                     log::debug!("[EndpointRemoteTrack] dont control remote bitrate with mode is {:?}", self.meta.control);
-                    None
                 }
                 Some(BitrateControlMode::DynamicConsumers) => {
                     self.cluster_bitrate_limit = Some((min, max));
-                    self.calc_limit_bitrate().map(|(min, max)| Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }))
+                    if let Some((min, max)) = self.calc_limit_bitrate() {
+                        self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }));
+                    }
                 }
             },
         }
     }
 
-    fn on_transport_event(&mut self, _now: Instant, event: RemoteTrackEvent) -> Option<Output> {
+    fn on_transport_event(&mut self, _now: Instant, event: RemoteTrackEvent) {
         match event {
             RemoteTrackEvent::Started { name, priority, meta: _ } => {
                 self.name = Some(name.clone());
-                let room = self.room.as_ref()?;
+                let room = return_if_none!(self.room.as_ref());
                 log::info!("[EndpointRemoteTrack] started as name {name} in room {room}");
+                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())));
                 self.queue.push_back(Output::Started(self.meta.kind, priority));
-                Some(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())))
             }
-            RemoteTrackEvent::Paused => None,
-            RemoteTrackEvent::Resumed => None,
+            RemoteTrackEvent::Paused => {}
+            RemoteTrackEvent::Resumed => {}
             RemoteTrackEvent::Media(mut media) => {
                 //TODO clear self.last_layer if switched to new track
                 if media.layers.is_some() {
@@ -115,30 +116,34 @@ impl EndpointRemoteTrack {
                     media.layers = self.last_layers.clone();
                 }
 
-                let room = self.room.as_ref()?;
-                Some(Output::Cluster(*room, ClusterRemoteTrackControl::Media(media)))
+                let room = return_if_none!(self.room.as_ref());
+                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Media(media)));
             }
             RemoteTrackEvent::Ended => {
-                let name = self.name.take()?;
-                let room = self.room.as_ref()?;
+                let name = return_if_none!(self.name.take());
+                let room = return_if_none!(self.room.as_ref());
                 log::info!("[EndpointRemoteTrack] stopped with name {name} in room {room}");
+                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Ended));
                 self.queue.push_back(Output::Stopped(self.meta.kind));
-                Some(Output::Cluster(*room, ClusterRemoteTrackControl::Ended))
             }
         }
     }
 
-    fn on_rpc_req(&mut self, _now: Instant, _req_id: EndpointReqId, _req: EndpointRemoteTrackReq) -> Option<Output> {
+    fn on_rpc_req(&mut self, _now: Instant, _req_id: EndpointReqId, _req: EndpointRemoteTrackReq) {
         todo!()
     }
 
-    fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) -> Option<Output> {
+    fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) {
         match action {
             IngressAction::SetBitrate(bitrate) => {
                 self.allocate_bitrate = Some(bitrate);
                 match self.meta.control {
-                    Some(BitrateControlMode::MaxBitrate) => self.calc_limit_bitrate().map(|(min, max)| Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max })),
-                    Some(BitrateControlMode::DynamicConsumers) | None => None,
+                    Some(BitrateControlMode::MaxBitrate) => {
+                        if let Some((min, max)) = self.calc_limit_bitrate() {
+                            self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }))
+                        }
+                    }
+                    Some(BitrateControlMode::DynamicConsumers) | None => {}
                 }
             }
         }
@@ -155,11 +160,9 @@ impl EndpointRemoteTrack {
 }
 
 impl Task<Input, Output> for EndpointRemoteTrack {
-    fn on_tick(&mut self, _now: Instant) -> Option<Output> {
-        None
-    }
+    fn on_tick(&mut self, _now: Instant) {}
 
-    fn on_event(&mut self, now: Instant, input: Input) -> Option<Output> {
+    fn on_event(&mut self, now: Instant, input: Input) {
         match input {
             Input::JoinRoom(room) => self.on_join_room(now, room),
             Input::LeaveRoom => self.on_leave_room(now),
@@ -170,12 +173,13 @@ impl Task<Input, Output> for EndpointRemoteTrack {
         }
     }
 
+    fn on_shutdown(&mut self, _now: Instant) {}
+}
+
+impl TaskSwitcherChild<Output> for EndpointRemoteTrack {
+    type Time = Instant;
     fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         self.queue.pop_front()
-    }
-
-    fn shutdown(&mut self, _now: Instant) -> Option<Output> {
-        None
     }
 }
 

@@ -6,7 +6,10 @@ use media_server_protocol::{
     media::{MediaKind, MediaPacket},
 };
 use media_server_utils::F16u;
-use sans_io_runtime::backend::{BackendIncoming, BackendOutgoing};
+use sans_io_runtime::{
+    backend::{BackendIncoming, BackendOutgoing},
+    TaskSwitcherChild,
+};
 
 use crate::endpoint::{EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
@@ -103,8 +106,8 @@ pub enum TransportEvent {
 }
 
 /// This is control message from endpoint
-pub enum TransportInput<'a, Ext> {
-    Net(BackendIncoming<'a>),
+pub enum TransportInput<Ext> {
+    Net(BackendIncoming),
     Endpoint(EndpointEvent),
     RpcRes(EndpointReqId, EndpointRes),
     Ext(Ext),
@@ -113,15 +116,14 @@ pub enum TransportInput<'a, Ext> {
 
 /// This is event from transport, in general is is result of transport protocol
 #[derive(Debug, PartialEq, Eq)]
-pub enum TransportOutput<'a, Ext> {
-    Net(BackendOutgoing<'a>),
+pub enum TransportOutput<Ext> {
+    Net(BackendOutgoing),
     Event(TransportEvent),
     RpcReq(EndpointReqId, EndpointReq),
     Ext(Ext),
 }
 
-pub trait Transport<ExtIn, ExtOut> {
-    fn on_tick<'a>(&mut self, now: Instant) -> Option<TransportOutput<'a, ExtOut>>;
-    fn on_input<'a>(&mut self, now: Instant, input: TransportInput<'a, ExtIn>) -> Option<TransportOutput<'a, ExtOut>>;
-    fn pop_event<'a>(&mut self, now: Instant) -> Option<TransportOutput<'a, ExtOut>>;
+pub trait Transport<ExtIn, ExtOut>: TaskSwitcherChild<TransportOutput<ExtOut>> {
+    fn on_tick(&mut self, now: Instant);
+    fn on_input(&mut self, now: Instant, input: TransportInput<ExtIn>);
 }

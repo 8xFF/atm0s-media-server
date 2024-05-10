@@ -11,6 +11,7 @@ use std::{collections::VecDeque, fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::features::dht_kv::{self, Map, MapControl, MapEvent};
 use media_server_protocol::endpoint::{PeerId, PeerInfo, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, TrackInfo, TrackMeta, TrackName};
+use sans_io_runtime::{return_if_none, TaskSwitcherChild};
 use smallmap::{Map as SmallMap, Set as SmallSet};
 
 use crate::{
@@ -29,6 +30,7 @@ struct PeerContainer {
 pub enum Output<Owner> {
     Kv(dht_kv::Control),
     Endpoint(Vec<Owner>, ClusterEndpointEvent),
+    LastPeerLeaved,
 }
 
 pub struct RoomMetadata<Owner> {
@@ -61,16 +63,12 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
         }
     }
 
-    pub fn peers(&self) -> usize {
-        self.peers.len()
-    }
-
     pub fn get_peer_from_owner(&self, owner: Owner) -> Option<PeerId> {
         Some(self.peers.get(&owner)?.peer.clone())
     }
 
     /// We put peer to list and register owner to peers and tracks list subscriber based on level
-    pub fn on_join(&mut self, owner: Owner, peer: PeerId, meta: PeerMeta, publish: RoomInfoPublish, subscribe: RoomInfoSubscribe) -> Option<Output<Owner>> {
+    pub fn on_join(&mut self, owner: Owner, peer: PeerId, meta: PeerMeta, publish: RoomInfoPublish, subscribe: RoomInfoSubscribe) {
         log::info!("[ClusterRoom {}] join peer ({peer})", self.room);
         // First let insert to peers cache for reuse when we need information of owner
         self.peers.insert(
@@ -127,11 +125,10 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Sub)));
             }
         };
-        self.queue.pop_front()
     }
 
-    pub fn on_leave(&mut self, owner: Owner) -> Option<Output<Owner>> {
-        let peer = self.peers.remove(&owner)?;
+    pub fn on_leave(&mut self, owner: Owner) {
+        let peer = return_if_none!(self.peers.remove(&owner));
         log::info!("[ClusterRoom {}] leave peer {}", self.room, peer.peer);
         let peer_key = id_generator::peers_key(&peer.peer);
         // If remain remote tracks, must to delete from list.
@@ -172,10 +169,13 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
             }
         }
 
-        self.queue.pop_front()
+        if self.peers.is_empty() {
+            log::info!("[ClusterRoom {}] last peer leaed => destroy metadata", self.room);
+            self.queue.push_back(Output::LastPeerLeaved);
+        }
     }
 
-    pub fn on_subscribe_peer(&mut self, owner: Owner, target: PeerId) -> Option<Output<Owner>> {
+    pub fn on_subscribe_peer(&mut self, owner: Owner, target: PeerId) {
         let peer = self.peers.get_mut(&owner).expect("Should have peer");
         let target_peer_map = id_generator::peer_map(self.room, &target);
         let subs = self.peers_tracks_subs.entry(target_peer_map).or_default();
@@ -184,13 +184,11 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
         peer.sub_peers.insert(target, ());
 
         if need_sub {
-            Some(Output::Kv(dht_kv::Control::MapCmd(target_peer_map, MapControl::Sub)))
-        } else {
-            None
+            self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(target_peer_map, MapControl::Sub)));
         }
     }
 
-    pub fn on_unsubscribe_peer(&mut self, owner: Owner, target: PeerId) -> Option<Output<Owner>> {
+    pub fn on_unsubscribe_peer(&mut self, owner: Owner, target: PeerId) {
         let peer = self.peers.get_mut(&owner).expect("Should have peer");
         let target_peer_map = id_generator::peer_map(self.room, &target);
         let subs = self.peers_tracks_subs.entry(target_peer_map).or_default();
@@ -198,14 +196,12 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
         peer.sub_peers.remove(&target);
         if subs.is_empty() {
             self.peers_tracks_subs.remove(&target_peer_map);
-            Some(Output::Kv(dht_kv::Control::MapCmd(target_peer_map, MapControl::Unsub)))
-        } else {
-            None
+            self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(target_peer_map, MapControl::Unsub)));
         }
     }
 
-    pub fn on_track_publish(&mut self, owner: Owner, track_id: RemoteTrackId, track: TrackName, meta: TrackMeta) -> Option<Output<Owner>> {
-        let peer = self.peers.get_mut(&owner)?;
+    pub fn on_track_publish(&mut self, owner: Owner, track_id: RemoteTrackId, track: TrackName, meta: TrackMeta) {
+        let peer = return_if_none!(self.peers.get_mut(&owner));
         if peer.publish.tracks {
             let info = TrackInfo {
                 peer: peer.peer.clone(),
@@ -216,56 +212,47 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
             peer.pub_tracks.insert(track_id, track);
 
             let peer_map = id_generator::peer_map(self.room, &peer.peer);
+            self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Set(track_key, info.serialize()))));
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(peer_map, MapControl::Set(track_key, info.serialize()))));
-
-            Some(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Set(track_key, info.serialize()))))
-        } else {
-            None
         }
     }
 
-    pub fn on_track_unpublish(&mut self, owner: Owner, track_id: RemoteTrackId) -> Option<Output<Owner>> {
-        let peer = self.peers.get_mut(&owner)?;
-        let track = peer.pub_tracks.remove(&track_id)?;
+    pub fn on_track_unpublish(&mut self, owner: Owner, track_id: RemoteTrackId) {
+        let peer = return_if_none!(self.peers.get_mut(&owner));
+        let track = return_if_none!(peer.pub_tracks.remove(&track_id));
         let track_key = id_generator::tracks_key(&peer.peer, &track);
 
         let peer_map = id_generator::peer_map(self.room, &peer.peer);
-        self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(peer_map, MapControl::Del(track_key))));
 
-        Some(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Del(track_key))))
+        self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Del(track_key))));
+        self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(peer_map, MapControl::Del(track_key))));
     }
 
-    pub fn on_kv_event(&mut self, map: Map, event: MapEvent) -> Option<Output<Owner>> {
+    pub fn on_kv_event(&mut self, map: Map, event: MapEvent) {
         if self.peers_map == map {
             match event {
                 dht_kv::MapEvent::OnSet(peer_key, _source, data) => self.on_peers_kv_event(peer_key, Some(data)),
                 dht_kv::MapEvent::OnDel(peer_key, _source) => self.on_peers_kv_event(peer_key, None),
-                dht_kv::MapEvent::OnRelaySelected(_) => None,
+                dht_kv::MapEvent::OnRelaySelected(_) => {}
             }
         } else if self.tracks_map == map {
             match event {
                 dht_kv::MapEvent::OnSet(track_key, _source, data) => self.on_tracks_kv_event(track_key, Some(data)),
                 dht_kv::MapEvent::OnDel(track_key, _source) => self.on_tracks_kv_event(track_key, None),
-                dht_kv::MapEvent::OnRelaySelected(_) => None,
+                dht_kv::MapEvent::OnRelaySelected(_) => {}
             }
         } else if self.peers_tracks_subs.contains_key(&map) {
             match event {
                 dht_kv::MapEvent::OnSet(track_key, _source, data) => self.on_peers_tracks_kv_event(map, track_key, Some(data)),
                 dht_kv::MapEvent::OnDel(track_key, _source) => self.on_peers_tracks_kv_event(map, track_key, None),
-                dht_kv::MapEvent::OnRelaySelected(_) => None,
+                dht_kv::MapEvent::OnRelaySelected(_) => {}
             }
-        } else {
-            None
         }
     }
 
-    pub fn pop_output(&mut self, _now: Instant) -> Option<Output<Owner>> {
-        self.queue.pop_front()
-    }
-
-    fn on_peers_kv_event(&mut self, peer_key: dht_kv::Key, data: Option<Vec<u8>>) -> Option<Output<Owner>> {
+    fn on_peers_kv_event(&mut self, peer_key: dht_kv::Key, data: Option<Vec<u8>>) {
         let info = if let Some(data) = data {
-            Some(PeerInfo::deserialize(&data)?)
+            Some(return_if_none!(PeerInfo::deserialize(&data)))
         } else {
             None
         };
@@ -274,25 +261,21 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
         if let Some(info) = info {
             log::info!("[ClusterRoom {}] cluster: peer {} joined => fire event to {:?}", self.room, info.peer, subscribers);
             self.cluster_peers.insert(peer_key, info.clone());
-            if subscribers.is_empty() {
-                None
-            } else {
-                Some(Output::Endpoint(subscribers, ClusterEndpointEvent::PeerJoined(info.peer, info.meta)))
+            if !subscribers.is_empty() {
+                self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::PeerJoined(info.peer, info.meta)));
             }
         } else {
-            let info = self.cluster_peers.remove(&peer_key)?;
+            let info = return_if_none!(self.cluster_peers.remove(&peer_key));
             log::info!("[ClusterRoom {}] cluster: peer ({}) leaved => fire event to {:?}", self.room, info.peer, subscribers);
-            if subscribers.is_empty() {
-                None
-            } else {
-                Some(Output::Endpoint(subscribers, ClusterEndpointEvent::PeerLeaved(info.peer)))
+            if !subscribers.is_empty() {
+                self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::PeerLeaved(info.peer)));
             }
         }
     }
 
-    fn on_tracks_kv_event(&mut self, track: dht_kv::Key, data: Option<Vec<u8>>) -> Option<Output<Owner>> {
+    fn on_tracks_kv_event(&mut self, track: dht_kv::Key, data: Option<Vec<u8>>) {
         let info = if let Some(data) = data {
-            Some(TrackInfo::deserialize(&data)?)
+            Some(return_if_none!(TrackInfo::deserialize(&data)))
         } else {
             None
         };
@@ -307,13 +290,12 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 subscribers
             );
             self.cluster_tracks.insert(track, info.clone());
-            if subscribers.is_empty() {
-                None
-            } else {
-                Some(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStarted(info.peer, info.track, info.meta)))
+            if !subscribers.is_empty() {
+                self.queue
+                    .push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStarted(info.peer, info.track, info.meta)));
             }
         } else {
-            let info = self.cluster_tracks.remove(&track)?;
+            let info = return_if_none!(self.cluster_tracks.remove(&track));
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) stopped track {}) => fire event to {:?}",
                 self.room,
@@ -321,22 +303,20 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 info.track,
                 subscribers
             );
-            if subscribers.is_empty() {
-                None
-            } else {
-                Some(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStopped(info.peer, info.track)))
+            if !subscribers.is_empty() {
+                self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStopped(info.peer, info.track)));
             }
         }
     }
 
-    fn on_peers_tracks_kv_event(&mut self, peer_map: Map, track: dht_kv::Key, data: Option<Vec<u8>>) -> Option<Output<Owner>> {
+    fn on_peers_tracks_kv_event(&mut self, peer_map: Map, track: dht_kv::Key, data: Option<Vec<u8>>) {
         let info = if let Some(data) = data {
-            Some(TrackInfo::deserialize(&data)?)
+            Some(return_if_none!(TrackInfo::deserialize(&data)))
         } else {
             None
         };
 
-        let subscribers = self.peers_tracks_subs.get(&peer_map)?.iter().map(|a| a.0).collect::<Vec<_>>();
+        let subscribers = return_if_none!(self.peers_tracks_subs.get(&peer_map)).iter().map(|a| a.0).collect::<Vec<_>>();
         if let Some(info) = info {
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) started track {}) => fire event to {:?}",
@@ -346,9 +326,10 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 subscribers
             );
             self.cluster_tracks.insert(track, info.clone());
-            Some(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStarted(info.peer, info.track, info.meta)))
+            self.queue
+                .push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStarted(info.peer, info.track, info.meta)));
         } else {
-            let info = self.cluster_tracks.remove(&track)?;
+            let info = return_if_none!(self.cluster_tracks.remove(&track));
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) stopped track {}) => fire event to {:?}",
                 self.room,
@@ -356,8 +337,15 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 info.track,
                 subscribers
             );
-            Some(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStopped(info.peer, info.track)))
+            self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStopped(info.peer, info.track)));
         }
+    }
+}
+
+impl<Owner> TaskSwitcherChild<Output<Owner>> for RoomMetadata<Owner> {
+    type Time = Instant;
+    fn pop_output(&mut self, _now: Instant) -> Option<Output<Owner>> {
+        self.queue.pop_front()
     }
 }
 
@@ -367,6 +355,7 @@ mod tests {
 
     use atm0s_sdn::features::dht_kv::{Control, MapControl, MapEvent};
     use media_server_protocol::endpoint::{PeerId, PeerInfo, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, TrackInfo, TrackName};
+    use sans_io_runtime::TaskSwitcherChild;
 
     use crate::{
         cluster::{id_generator, ClusterEndpointEvent, ClusterRoomHash},
@@ -408,40 +397,50 @@ mod tests {
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
         let peer_key = id_generator::peers_key(&peer_id);
         let owner = 1;
-        let out = room_meta.on_join(
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
             RoomInfoPublish { peer: true, tracks: false },
             RoomInfoSubscribe { peers: true, tracks: false },
         );
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Set(peer_key, peer_info.serialize())))));
+        assert_eq!(
+            room_meta.pop_output(Instant::now()),
+            Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Set(peer_key, peer_info.serialize()))))
+        );
         assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Sub))));
         assert_eq!(room_meta.pop_output(Instant::now()), None);
 
         // should handle incoming event with only peer and reject track
-        let out = room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer_key, 0, peer_info.serialize()));
-        assert_eq!(out, Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerJoined(peer_id.clone(), peer_meta.clone()))));
+        room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer_key, 0, peer_info.serialize()));
+        assert_eq!(
+            room_meta.pop_output(Instant::now()),
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerJoined(peer_id.clone(), peer_meta.clone())))
+        );
         assert_eq!(room_meta.pop_output(Instant::now()), None);
 
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         let track_key = id_generator::tracks_key(&peer_id, &track_name);
-        let out: Option<Output<u8>> = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
+        assert_eq!(room_meta.pop_output(Instant::now()), None);
 
         // should only handle remove peer event, reject track
-        let out = room_meta.on_kv_event(tracks_map, MapEvent::OnDel(track_key, 0));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(tracks_map, MapEvent::OnDel(track_key, 0));
+        assert_eq!(room_meta.pop_output(Instant::now()), None);
 
-        let out = room_meta.on_kv_event(peers_map, MapEvent::OnDel(peer_key, 0));
-        assert_eq!(out, Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerLeaved(peer_id.clone()))));
+        room_meta.on_kv_event(peers_map, MapEvent::OnDel(peer_key, 0));
+        assert_eq!(
+            room_meta.pop_output(Instant::now()),
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerLeaved(peer_id.clone())))
+        );
         assert_eq!(room_meta.pop_output(Instant::now()), None);
 
         // peer leave should send unsub and del
-        let out = room_meta.on_leave(owner);
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Del(peer_key)))));
+        room_meta.on_leave(owner);
+        assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Del(peer_key)))));
         assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Unsub))));
+        assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::LastPeerLeaved));
         assert_eq!(room_meta.pop_output(Instant::now()), None);
     }
 
@@ -455,13 +454,13 @@ mod tests {
         let peer2_key = id_generator::peers_key(&peer2);
         let peer2_info = PeerInfo::new(peer2, PeerMeta { metadata: None });
 
-        let out = room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer2_key, 0, peer2_info.serialize()));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer2_key, 0, peer2_info.serialize()));
+        assert_eq!(room_meta.pop_output(Instant::now()), None);
 
         let owner = 1;
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
-        let out = room_meta.on_join(
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
@@ -469,7 +468,7 @@ mod tests {
             RoomInfoSubscribe { peers: true, tracks: false },
         );
         assert_eq!(
-            out,
+            room_meta.pop_output(Instant::now()),
             Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerJoined(peer2_info.peer.clone(), peer2_info.meta.clone())))
         );
         assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Sub))));
@@ -488,45 +487,50 @@ mod tests {
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
         let peer_key = id_generator::peers_key(&peer_id);
         let owner = 1;
-        let out = room_meta.on_join(
+        let now = Instant::now();
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
             RoomInfoPublish { peer: false, tracks: true },
             RoomInfoSubscribe { peers: false, tracks: true },
         );
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Sub))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Sub))));
+        assert_eq!(room_meta.pop_output(now), None);
 
         // should handle incoming event with only track and reject peer
-        let out = room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer_key, 0, peer_info.serialize()));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer_key, 0, peer_info.serialize()));
+        assert_eq!(room_meta.pop_output(now), None);
 
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         let track_key = id_generator::tracks_key(&peer_id, &track_name);
-        let out = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
+        room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
         assert_eq!(
-            out,
+            room_meta.pop_output(now),
             Some(Output::Endpoint(
                 vec![owner],
                 ClusterEndpointEvent::TrackStarted(peer_id.clone(), track_name.clone(), track_info.meta.clone())
             ))
         );
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         // should only handle remove track event, reject peer
-        let out = room_meta.on_kv_event(tracks_map, MapEvent::OnDel(track_key, 0));
-        assert_eq!(out, Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::TrackStopped(peer_id.clone(), track_name.clone()))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_kv_event(tracks_map, MapEvent::OnDel(track_key, 0));
+        assert_eq!(
+            room_meta.pop_output(now),
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::TrackStopped(peer_id.clone(), track_name.clone())))
+        );
+        assert_eq!(room_meta.pop_output(now), None);
 
-        let out = room_meta.on_kv_event(peers_map, MapEvent::OnDel(peer_key, 0));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(peers_map, MapEvent::OnDel(peer_key, 0));
+        assert_eq!(room_meta.pop_output(now), None);
 
         // peer leave should send unsub
-        let out = room_meta.on_leave(owner);
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_leave(owner);
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Unsub))));
+        assert_eq!(room_meta.pop_output(now), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(now), None);
     }
 
     //join track only should restore old tracks
@@ -541,13 +545,13 @@ mod tests {
         let track_key = id_generator::tracks_key(&peer2, &track_name);
         let track_info = TrackInfo::simple_audio(peer2);
 
-        let out = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
+        assert_eq!(room_meta.pop_output(Instant::now()), None);
 
         let owner = 1;
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
-        let out = room_meta.on_join(
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
@@ -555,7 +559,7 @@ mod tests {
             RoomInfoSubscribe { peers: false, tracks: true },
         );
         assert_eq!(
-            out,
+            room_meta.pop_output(Instant::now()),
             Some(Output::Endpoint(
                 vec![owner],
                 ClusterEndpointEvent::TrackStarted(track_info.peer.clone(), track_info.track.clone(), track_info.meta.clone())
@@ -577,35 +581,37 @@ mod tests {
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
         let peer_key = id_generator::peers_key(&peer_id);
         let owner = 1;
-        let out = room_meta.on_join(
+        let now = Instant::now();
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
             RoomInfoPublish { peer: false, tracks: false },
             RoomInfoSubscribe { peers: false, tracks: false },
         );
-        assert_eq!(out, None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         // should handle incoming event with only track and reject peer
-        let out = room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer_key, 0, peer_info.serialize()));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer_key, 0, peer_info.serialize()));
+        assert_eq!(room_meta.pop_output(now), None);
 
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         let track_key = id_generator::tracks_key(&peer_id, &track_name);
-        let out = room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(tracks_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
+        assert_eq!(room_meta.pop_output(now), None);
 
         // should only handle remove track event, reject peer
-        let out = room_meta.on_kv_event(tracks_map, MapEvent::OnDel(track_key, 0));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(tracks_map, MapEvent::OnDel(track_key, 0));
+        assert_eq!(room_meta.pop_output(now), None);
 
-        let out = room_meta.on_kv_event(peers_map, MapEvent::OnDel(peer_key, 0));
-        assert_eq!(out, None);
+        room_meta.on_kv_event(peers_map, MapEvent::OnDel(peer_key, 0));
+        assert_eq!(room_meta.pop_output(now), None);
 
         // peer leave should send unsub
-        let out = room_meta.on_leave(owner);
-        assert_eq!(out, None);
+        room_meta.on_leave(owner);
+        assert_eq!(room_meta.pop_output(now), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(now), None);
     }
 
     //TODO Test manual and subscribe peer => should fire event
@@ -616,48 +622,53 @@ mod tests {
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
         let owner = 1;
-        let out = room_meta.on_join(
+        let now = Instant::now();
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
             RoomInfoPublish { peer: false, tracks: false },
             RoomInfoSubscribe { peers: false, tracks: false },
         );
-        assert_eq!(out, None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         let peer2: PeerId = "peer1".to_string().into();
         let peer2_map = id_generator::peer_map(room, &peer2);
-        let out = room_meta.on_subscribe_peer(owner, peer2.clone());
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Sub))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_subscribe_peer(owner, peer2.clone());
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Sub))));
+        assert_eq!(room_meta.pop_output(now), None);
 
         // should handle incoming event with only track and reject peer
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         let track_key = id_generator::tracks_key(&peer2, &track_name);
-        let out = room_meta.on_kv_event(peer2_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
+        room_meta.on_kv_event(peer2_map, MapEvent::OnSet(track_key, 0, track_info.serialize()));
         assert_eq!(
-            out,
+            room_meta.pop_output(now),
             Some(Output::Endpoint(
                 vec![owner],
                 ClusterEndpointEvent::TrackStarted(peer2.clone(), track_name.clone(), track_info.meta.clone())
             ))
         );
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         // should only handle remove track event, reject peer
-        let out = room_meta.on_kv_event(peer2_map, MapEvent::OnDel(track_key, 0));
-        assert_eq!(out, Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::TrackStopped(peer2.clone(), track_name.clone()))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_kv_event(peer2_map, MapEvent::OnDel(track_key, 0));
+        assert_eq!(
+            room_meta.pop_output(now),
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::TrackStopped(peer2.clone(), track_name.clone())))
+        );
+        assert_eq!(room_meta.pop_output(now), None);
 
         // should send unsub when unsubscribe peer
-        let out = room_meta.on_unsubscribe_peer(owner, peer2.clone());
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_unsubscribe_peer(owner, peer2.clone());
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Unsub))));
+        assert_eq!(room_meta.pop_output(now), None);
 
         // peer leave should not send unsub
-        let out = room_meta.on_leave(owner);
-        assert_eq!(out, None);
+        room_meta.on_leave(owner);
+        assert_eq!(room_meta.pop_output(now), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(now), None);
     }
 
     //TODO Test track publish => should set key to both single peer map and tracks map
@@ -670,37 +681,42 @@ mod tests {
         let owner = 1;
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
-        let out = room_meta.on_join(
+        let now = Instant::now();
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
             RoomInfoPublish { peer: false, tracks: true },
             RoomInfoSubscribe { peers: false, tracks: false },
         );
-        assert_eq!(out, None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         let track_id: RemoteTrackId = RemoteTrackId(1);
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         let peer_map = id_generator::peer_map(room, &peer_id);
         let track_key = id_generator::tracks_key(&peer_id, &track_name);
-        let out = room_meta.on_track_publish(owner, track_id, track_name, track_info.meta.clone());
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Set(track_key, track_info.serialize())))));
+        room_meta.on_track_publish(owner, track_id, track_name, track_info.meta.clone());
         assert_eq!(
-            room_meta.pop_output(Instant::now()),
+            room_meta.pop_output(now),
+            Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Set(track_key, track_info.serialize()))))
+        );
+        assert_eq!(
+            room_meta.pop_output(now),
             Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Set(track_key, track_info.serialize()))))
         );
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         //after unpublish should delete all tracks
-        let out = room_meta.on_track_unpublish(owner, track_id);
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Del(track_key)))));
-        assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Del(track_key)))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_track_unpublish(owner, track_id);
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Del(track_key)))));
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Del(track_key)))));
+        assert_eq!(room_meta.pop_output(now), None);
 
         //should not pop anything after leave
-        let out = room_meta.on_leave(owner);
-        assert_eq!(out, None);
+        room_meta.on_leave(owner);
+        assert_eq!(room_meta.pop_output(now), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(now), None);
     }
 
     //TODO Test track publish in disable mode => should not set key to both single peer map and tracks map
@@ -709,31 +725,33 @@ mod tests {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
 
+        let now = Instant::now();
         let owner = 1;
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
-        let out = room_meta.on_join(
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
             RoomInfoPublish { peer: false, tracks: false },
             RoomInfoSubscribe { peers: false, tracks: false },
         );
-        assert_eq!(out, None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         let track_id: RemoteTrackId = RemoteTrackId(1);
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
-        let out = room_meta.on_track_publish(owner, track_id, track_name, track_info.meta.clone());
-        assert_eq!(out, None);
+        room_meta.on_track_publish(owner, track_id, track_name, track_info.meta.clone());
+        assert_eq!(room_meta.pop_output(now), None);
 
         //after unpublish should delete all tracks
-        let out = room_meta.on_track_unpublish(owner, track_id);
-        assert_eq!(out, None);
+        room_meta.on_track_unpublish(owner, track_id);
+        assert_eq!(room_meta.pop_output(now), None);
 
         //should not pop anything after leave
-        let out = room_meta.on_leave(owner);
-        assert_eq!(out, None);
+        room_meta.on_leave(owner);
+        assert_eq!(room_meta.pop_output(now), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(now), None);
     }
 
     /// Test leave room auto del remain remote tracks
@@ -743,36 +761,41 @@ mod tests {
         let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
 
+        let now = Instant::now();
         let owner = 1;
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
-        let out = room_meta.on_join(
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
             RoomInfoPublish { peer: false, tracks: true },
             RoomInfoSubscribe { peers: false, tracks: false },
         );
-        assert_eq!(out, None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         let track_id: RemoteTrackId = RemoteTrackId(1);
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         let peer_map = id_generator::peer_map(room, &peer_id);
         let track_key = id_generator::tracks_key(&peer_id, &track_name);
-        let out = room_meta.on_track_publish(owner, track_id, track_name, track_info.meta.clone());
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Set(track_key, track_info.serialize())))));
+        room_meta.on_track_publish(owner, track_id, track_name, track_info.meta.clone());
         assert_eq!(
-            room_meta.pop_output(Instant::now()),
+            room_meta.pop_output(now),
+            Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Set(track_key, track_info.serialize()))))
+        );
+        assert_eq!(
+            room_meta.pop_output(now),
             Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Set(track_key, track_info.serialize()))))
         );
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         //after leave should auto delete all tracks
-        let out = room_meta.on_leave(owner);
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Del(track_key)))));
-        assert_eq!(room_meta.pop_output(Instant::now()), Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Del(track_key)))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_leave(owner);
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Del(track_key)))));
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Del(track_key)))));
+        assert_eq!(room_meta.pop_output(now), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(now), None);
     }
 
     // Leave room auto unsub private peer maps
@@ -783,24 +806,26 @@ mod tests {
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
         let owner = 1;
-        let out = room_meta.on_join(
+        let now = Instant::now();
+        room_meta.on_join(
             owner,
             peer_id.clone(),
             peer_meta.clone(),
             RoomInfoPublish { peer: false, tracks: false },
             RoomInfoSubscribe { peers: false, tracks: false },
         );
-        assert_eq!(out, None);
+        assert_eq!(room_meta.pop_output(now), None);
 
         let peer2: PeerId = "peer1".to_string().into();
         let peer2_map = id_generator::peer_map(room, &peer2);
-        let out = room_meta.on_subscribe_peer(owner, peer2.clone());
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Sub))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_subscribe_peer(owner, peer2.clone());
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Sub))));
+        assert_eq!(room_meta.pop_output(now), None);
 
         // peer leave should send unsub of peer2_map
-        let out = room_meta.on_leave(owner);
-        assert_eq!(out, Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(Instant::now()), None);
+        room_meta.on_leave(owner);
+        assert_eq!(room_meta.pop_output(now), Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Unsub))));
+        assert_eq!(room_meta.pop_output(now), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(now), None);
     }
 }

@@ -9,8 +9,8 @@ members = [
 ]
 
 [workspace.dependencies]
-sans-io-runtime = { git = "https://github.com/giangndm/sans-io-runtime.git", rev = "fa76195140ca1e68e85a6aa0078209cc36742dc9" }
-atm0s-sdn = { git = "https://github.com/giangndm/8xFF-decentralized-sdn.git", rev = "d7d1b0fd573261abc46a6e36001ad79646d327ce" }
+sans-io-runtime = { git = "https://github.com/giangndm/sans-io-runtime.git", rev = "74d2e92e834aa170b12b791442b292976eeadcf0" }
+atm0s-sdn = { git = "https://github.com/giangndm/8xFF-decentralized-sdn.git", rev = "a5688dc280976979cf72cbb0c483444089c7d0d3" }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
 convert-enum = "0.1"
 num_enum = "0.7"
