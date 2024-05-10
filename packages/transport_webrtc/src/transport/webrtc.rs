@@ -636,4 +636,12 @@ mod tests {
         );
         assert_eq!(transport.pop_output(now), None);
     }
+
+    //TODO test remote track non-source
+    //TODO test remote track with source
+    //TODO test remote track attach, detach
+    //TODO test remote track lazy
+    //TODO test local track
+    //TODO test local track lazy
+    //TODO test local track attach, detach
 }
