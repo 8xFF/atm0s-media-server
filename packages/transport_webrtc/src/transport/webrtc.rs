@@ -402,6 +402,7 @@ impl TransportWebrtcSdk {
                 if let Some(track) = self.remote_tracks.iter_mut().find(|t| t.mid().is_none()) {
                     log::info!("[TransportWebrtcSdk] config mid {} to remote track {}", media.mid, track.name());
                     track.set_str0m(media.mid, media.simulcast.is_some());
+                    // If track don't have source, that mean it is empty sender, we need to wait attach request
                     if track.has_source() {
                         self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
                             track.id(),
@@ -440,115 +441,135 @@ impl TransportWebrtcSdk {
         let event = return_if_err!(ClientEvent::decode(data.data.as_slice()));
         log::info!("[TransportWebrtcSdk] on client event {:?}", event);
         match return_if_none!(event.event) {
-            protobuf::conn::client_event::Event::Request(req) => {
-                let req_id = req.req_id;
-                let build_req = |req: EndpointReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), req));
-                match return_if_none!(req.request) {
-                    protobuf::conn::request::Request::Session(req) => match return_if_none!(req.request) {
-                        protobuf::conn::request::session::Request::Join(req) => {
-                            let meta = PeerMeta { metadata: req.info.metadata };
-                            self.queue.push_back(build_req(EndpointReq::JoinRoom(
-                                req.info.room.into(),
-                                req.info.peer.into(),
-                                meta,
-                                req.info.publish.into(),
-                                req.info.subscribe.into(),
-                            )));
-                        }
-                        protobuf::conn::request::session::Request::Leave(_req) => self.queue.push_back(build_req(EndpointReq::LeaveRoom)),
-                        protobuf::conn::request::session::Request::Sdp(req) => {
-                            for (index, s) in req.tracks.senders.into_iter().enumerate() {
-                                if self.remote_track_by_name(&s.name).is_none() {
-                                    log::info!("[TransportWebrtcSdk] added new remote track {:?}", s);
-                                    self.remote_tracks.push(RemoteTrack::new((index as u16).into(), s));
-                                }
-                            }
+            protobuf::conn::client_event::Event::Request(req) => match req.request {
+                Some(protobuf::conn::request::Request::Session(session)) => match session.request {
+                    Some(session_req) => self.on_session_req(req.req_id, session_req),
+                    None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
+                },
+                Some(protobuf::conn::request::Request::Sender(sender)) => match sender.request {
+                    Some(sender_req) => self.on_sender_req(req.req_id, &sender.name, sender_req),
+                    None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
+                },
+                Some(protobuf::conn::request::Request::Receiver(receiver)) => match receiver.request {
+                    Some(receiver_req) => self.on_recever_req(req.req_id, &receiver.name, receiver_req),
+                    None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
+                },
+                None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
+            },
+        }
+    }
+}
 
-                            for (index, r) in req.tracks.receivers.into_iter().enumerate() {
-                                if self.local_track_by_name(&r.name).is_none() {
-                                    log::info!("[TransportWebrtcSdk] added new local track {:?}", r);
-                                    self.local_tracks.push(LocalTrack::new((index as u16).into(), r));
-                                }
-                            }
-                            self.queue.push_back(InternalOutput::RpcReq(req_id, InternalRpcReq::SetRemoteSdp(req.sdp)));
-                        }
-                        protobuf::conn::request::session::Request::Disconnect(_) => {
-                            log::info!("[TransportWebrtcSdk] switched to disconnected with close action from client");
-                            self.state = State::Disconnected;
-                            self.queue
-                                .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
-                        }
-                    },
-                    protobuf::conn::request::Request::Sender(req) => {
-                        let track = if let Some(track) = self.remote_track_by_name(&req.name) {
-                            track
-                        } else {
-                            log::warn!("[TransportWebrtcSdk] request from unknown sender {}", req.name);
-                            return self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
-                        };
-                        let track_id = track.id();
-
-                        match return_if_none!(req.request) {
-                            protobuf::conn::request::sender::Request::Attach(attach) => {
-                                if !track.has_source() {
-                                    track.set_source(attach.source);
-                                    let event = InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
-                                        track_id,
-                                        RemoteTrackEvent::Started {
-                                            name: track.name().to_string(),
-                                            priority: track.priority(),
-                                            meta: track.meta(),
-                                        },
-                                    )));
-                                    self.send_rpc_res(
-                                        req_id,
-                                        protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
-                                            response: Some(protobuf::conn::response::sender::Response::Attach(protobuf::conn::response::sender::Attach {})),
-                                        }),
-                                    );
-                                    self.queue.push_back(event);
-                                } else {
-                                    self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackAlreadyAttached));
-                                }
-                            }
-                            protobuf::conn::request::sender::Request::Detach(_) => {
-                                if track.has_source() {
-                                    track.del_source();
-                                    self.send_rpc_res(
-                                        req_id,
-                                        protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
-                                            response: Some(protobuf::conn::response::sender::Response::Detach(protobuf::conn::response::sender::Detach {})),
-                                        }),
-                                    );
-                                } else {
-                                    self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
-                                }
-                            }
-                            protobuf::conn::request::sender::Request::Config(config) => {
-                                self.queue.push_back(build_req(EndpointReq::RemoteTrack(track_id, EndpointRemoteTrackReq::Config(config.into()))))
-                            }
-                        }
-                    }
-                    protobuf::conn::request::Request::Receiver(req) => {
-                        let track = if let Some(track) = self.local_track_by_name(&req.name) {
-                            track
-                        } else {
-                            log::warn!("[TransportWebrtcSdk] request from unknown receiver {}", req.name);
-                            return self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
-                        };
-                        let track_id = track.id();
-
-                        match return_if_none!(req.request) {
-                            protobuf::conn::request::receiver::Request::Attach(attach) => self
-                                .queue
-                                .push_back(build_req(EndpointReq::LocalTrack(track_id, EndpointLocalTrackReq::Attach(attach.source.into(), attach.config.into())))),
-                            protobuf::conn::request::receiver::Request::Detach(_) => self.queue.push_back(build_req(EndpointReq::LocalTrack(track_id, EndpointLocalTrackReq::Detach()))),
-                            protobuf::conn::request::receiver::Request::Config(config) => {
-                                self.queue.push_back(build_req(EndpointReq::LocalTrack(track_id, EndpointLocalTrackReq::Config(config.into()))))
-                            }
-                        }
+///This is for handling rpc from client
+impl TransportWebrtcSdk {
+    fn on_session_req(&mut self, req_id: u32, req: protobuf::conn::request::session::Request) {
+        let build_req = |req: EndpointReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), req));
+        match req {
+            protobuf::conn::request::session::Request::Join(req) => {
+                let meta = PeerMeta { metadata: req.info.metadata };
+                self.queue.push_back(build_req(EndpointReq::JoinRoom(
+                    req.info.room.into(),
+                    req.info.peer.into(),
+                    meta,
+                    req.info.publish.into(),
+                    req.info.subscribe.into(),
+                )));
+            }
+            protobuf::conn::request::session::Request::Leave(_req) => self.queue.push_back(build_req(EndpointReq::LeaveRoom)),
+            protobuf::conn::request::session::Request::Sdp(req) => {
+                for (index, s) in req.tracks.senders.into_iter().enumerate() {
+                    if self.remote_track_by_name(&s.name).is_none() {
+                        log::info!("[TransportWebrtcSdk] added new remote track {:?}", s);
+                        self.remote_tracks.push(RemoteTrack::new((index as u16).into(), s));
                     }
                 }
+
+                for (index, r) in req.tracks.receivers.into_iter().enumerate() {
+                    if self.local_track_by_name(&r.name).is_none() {
+                        log::info!("[TransportWebrtcSdk] added new local track {:?}", r);
+                        self.local_tracks.push(LocalTrack::new((index as u16).into(), r));
+                    }
+                }
+                self.queue.push_back(InternalOutput::RpcReq(req_id, InternalRpcReq::SetRemoteSdp(req.sdp)));
+            }
+            protobuf::conn::request::session::Request::Disconnect(_) => {
+                log::info!("[TransportWebrtcSdk] switched to disconnected with close action from client");
+                self.state = State::Disconnected;
+                self.queue
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+            }
+        }
+    }
+
+    fn on_sender_req(&mut self, req_id: u32, name: &str, req: protobuf::conn::request::sender::Request) {
+        let track = if let Some(track) = self.remote_track_by_name(&name) {
+            track
+        } else {
+            log::warn!("[TransportWebrtcSdk] request from unknown sender {}", name);
+            return self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTrackNameNotFound));
+        };
+        let track_id = track.id();
+        let build_req = |req: EndpointReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), req));
+
+        match req {
+            protobuf::conn::request::sender::Request::Attach(attach) => {
+                if !track.has_source() {
+                    track.set_source(attach.source);
+                    let event = InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+                        track_id,
+                        RemoteTrackEvent::Started {
+                            name: track.name().to_string(),
+                            priority: track.priority(),
+                            meta: track.meta(),
+                        },
+                    )));
+                    self.send_rpc_res(
+                        req_id,
+                        protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
+                            response: Some(protobuf::conn::response::sender::Response::Attach(protobuf::conn::response::sender::Attach {})),
+                        }),
+                    );
+                    self.queue.push_back(event);
+                } else {
+                    self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTrackAlreadyAttached));
+                }
+            }
+            protobuf::conn::request::sender::Request::Detach(_) => {
+                if track.has_source() {
+                    track.del_source();
+                    self.send_rpc_res(
+                        req_id,
+                        protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
+                            response: Some(protobuf::conn::response::sender::Response::Detach(protobuf::conn::response::sender::Detach {})),
+                        }),
+                    );
+                } else {
+                    self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTrackNotAttached));
+                }
+            }
+            protobuf::conn::request::sender::Request::Config(config) => self.queue.push_back(build_req(EndpointReq::RemoteTrack(track_id, EndpointRemoteTrackReq::Config(config.into())))),
+        }
+    }
+
+    fn on_recever_req(&mut self, req_id: u32, name: &str, req: protobuf::conn::request::receiver::Request) {
+        let track = if let Some(track) = self.local_track_by_name(&name) {
+            track
+        } else {
+            log::warn!("[TransportWebrtcSdk] request from unknown receiver {}", name);
+            return self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTrackNameNotFound));
+        };
+        let track_id = track.id();
+        let build_req = |req: EndpointLocalTrackReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), EndpointReq::LocalTrack(track_id, req)));
+
+        match req {
+            protobuf::conn::request::receiver::Request::Attach(attach) => {
+                self.queue.push_back(build_req(EndpointLocalTrackReq::Attach(attach.source.into(), attach.config.into())));
+            }
+            protobuf::conn::request::receiver::Request::Detach(_) => {
+                self.queue.push_back(build_req(EndpointLocalTrackReq::Detach()));
+            }
+            protobuf::conn::request::receiver::Request::Config(config) => {
+                self.queue.push_back(build_req(EndpointLocalTrackReq::Config(config.into())));
             }
         }
     }
