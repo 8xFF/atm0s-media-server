@@ -216,7 +216,7 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
     }
 
     /// Note: Str0m only stop single incoming packet and we need to pop_output immediate
-    /// right after network packet incomming, it not we will lost some media packet.
+    /// right after network packet incoming, it not we will lost some media packet.
     /// But the charactis of sans-io-runtime is it will call pop_output after input any event.
     /// Then therefore the network event is not from other task then it will not generate race
     /// between tasks. With this reason we dont need pop from rtc here, and leave it to pop_output function
