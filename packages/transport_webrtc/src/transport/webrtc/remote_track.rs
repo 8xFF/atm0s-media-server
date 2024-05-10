@@ -52,6 +52,18 @@ impl RemoteTrack {
         self.mid
     }
 
+    pub fn has_source(&self) -> bool {
+        self.source.is_some()
+    }
+
+    pub fn set_source(&mut self, source: protobuf::shared::sender::Source) {
+        self.source = Some(source);
+    }
+
+    pub fn del_source(&mut self) {
+        self.source = None;
+    }
+
     pub fn set_str0m(&mut self, mid: Mid, sim: bool) {
         log::info!("[TransportWebrcSdk/RemoteTrack] set_mid {}/{} => {}, simulcast {}", self.id, self.name, mid, sim);
         assert_eq!(self.mid, None, "LocalTrack mid {:?} already configured", self.mid);

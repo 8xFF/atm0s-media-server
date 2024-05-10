@@ -12,4 +12,6 @@ pub enum WebrtcError {
     SdpError = 0,
     Str0mError = 1,
     TrackNameNotFound = 2,
+    TrackNotAttached = 3,
+    TrackAlreadyAttached = 4,
 }

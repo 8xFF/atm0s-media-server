@@ -402,14 +402,18 @@ impl TransportWebrtcSdk {
                 if let Some(track) = self.remote_tracks.iter_mut().find(|t| t.mid().is_none()) {
                     log::info!("[TransportWebrtcSdk] config mid {} to remote track {}", media.mid, track.name());
                     track.set_str0m(media.mid, media.simulcast.is_some());
-                    self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
-                        track.id(),
-                        RemoteTrackEvent::Started {
-                            name: track.name().to_string(),
-                            priority: track.priority(),
-                            meta: track.meta(),
-                        },
-                    ))))
+                    if track.has_source() {
+                        self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+                            track.id(),
+                            RemoteTrackEvent::Started {
+                                name: track.name().to_string(),
+                                priority: track.priority(),
+                                meta: track.meta(),
+                            },
+                        ))));
+                    } else {
+                        log::info!("[TransportWebrtcSdk] remote track without source => in waiting state");
+                    }
                 } else {
                     log::warn!("[TransportWebrtcSdk] not found track for mid {}", media.mid);
                 }
@@ -485,8 +489,41 @@ impl TransportWebrtcSdk {
                         let track_id = track.id();
 
                         match return_if_none!(req.request) {
-                            protobuf::conn::request::sender::Request::Attach(attach) => todo!(),
-                            protobuf::conn::request::sender::Request::Detach(_) => todo!(),
+                            protobuf::conn::request::sender::Request::Attach(attach) => {
+                                if !track.has_source() {
+                                    track.set_source(attach.source);
+                                    let event = InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+                                        track_id,
+                                        RemoteTrackEvent::Started {
+                                            name: track.name().to_string(),
+                                            priority: track.priority(),
+                                            meta: track.meta(),
+                                        },
+                                    )));
+                                    self.send_rpc_res(
+                                        req_id,
+                                        protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
+                                            response: Some(protobuf::conn::response::sender::Response::Attach(protobuf::conn::response::sender::Attach {})),
+                                        }),
+                                    );
+                                    self.queue.push_back(event);
+                                } else {
+                                    self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackAlreadyAttached));
+                                }
+                            }
+                            protobuf::conn::request::sender::Request::Detach(_) => {
+                                if track.has_source() {
+                                    track.del_source();
+                                    self.send_rpc_res(
+                                        req_id,
+                                        protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
+                                            response: Some(protobuf::conn::response::sender::Response::Detach(protobuf::conn::response::sender::Detach {})),
+                                        }),
+                                    );
+                                } else {
+                                    self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
+                                }
+                            }
                             protobuf::conn::request::sender::Request::Config(config) => {
                                 self.queue.push_back(build_req(EndpointReq::RemoteTrack(track_id, EndpointRemoteTrackReq::Config(config.into()))))
                             }
