@@ -479,6 +479,7 @@ impl TransportWebrtcSdk {
                         let track = if let Some(track) = self.remote_track_by_name(&req.name) {
                             track
                         } else {
+                            log::warn!("[TransportWebrtcSdk] request from unknown sender {}", req.name);
                             return self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
                         };
                         let track_id = track.id();
@@ -495,6 +496,7 @@ impl TransportWebrtcSdk {
                         let track = if let Some(track) = self.local_track_by_name(&req.name) {
                             track
                         } else {
+                            log::warn!("[TransportWebrtcSdk] request from unknown receiver {}", req.name);
                             return self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::TrackNameNotFound));
                         };
                         let track_id = track.id();
