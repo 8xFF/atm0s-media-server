@@ -115,6 +115,10 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
         }
     }
 
+    fn on_rpc_res(&mut self, req_id: u32, res: media_server_protocol::transport::RpcResult<super::InternalRpcRes>) {}
+
+    fn on_transport_rpc_res(&mut self, _now: Instant, _req_id: media_server_core::endpoint::EndpointReqId, _res: media_server_core::endpoint::EndpointRes) {}
+
     fn on_endpoint_event(&mut self, now: Instant, event: EndpointEvent) {
         match event {
             EndpointEvent::PeerJoined(_, _) => {}
@@ -153,8 +157,6 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             EndpointEvent::GoAway(_seconds, _reason) => {}
         }
     }
-
-    fn on_transport_rpc_res(&mut self, _now: Instant, _req_id: media_server_core::endpoint::EndpointReqId, _res: media_server_core::endpoint::EndpointRes) {}
 
     fn on_str0m_event(&mut self, now: Instant, event: str0m::Event) {
         match event {

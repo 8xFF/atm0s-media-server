@@ -17,7 +17,7 @@ use media_server_protocol::{
         },
         gateway::ConnectRequest,
     },
-    transport::RpcError,
+    transport::{RpcError, RpcResult},
 };
 use prost::Message;
 use sans_io_runtime::{collections::DynamicDeque, return_if_err, return_if_none};
@@ -29,11 +29,11 @@ use str0m::{
     Event as Str0mEvent, IceConnectionState,
 };
 
-use crate::{media::RemoteMediaConvert, WebrtcError};
+use crate::{media::RemoteMediaConvert, transport::InternalRpcReq, WebrtcError};
 
 use self::{local_track::LocalTrack, remote_track::RemoteTrack};
 
-use super::{bwe_state::BweState, InternalOutput, TransportWebrtcInternal};
+use super::{bwe_state::BweState, InternalOutput, InternalRpcRes, TransportWebrtcInternal};
 
 const TIMEOUT_SEC: u64 = 10;
 
@@ -157,6 +157,22 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn on_rpc_res(&mut self, req_id: u32, res: RpcResult<InternalRpcRes>) {
+        match res {
+            Ok(res) => match res {
+                InternalRpcRes::SetRemoteSdp(answer) => self.send_rpc_res(
+                    req_id,
+                    protobuf::conn::response::Response::Session(protobuf::conn::response::Session {
+                        response: Some(protobuf::conn::response::session::Response::Sdp(protobuf::conn::response::session::UpdateSdp { sdp: answer })),
+                    }),
+                ),
+            },
+            Err(err) => {
+                self.send_rpc_res_err(req_id, err);
+            }
         }
     }
 
@@ -436,7 +452,22 @@ impl TransportWebrtcSdk {
                             )));
                         }
                         protobuf::conn::request::session::Request::Leave(_req) => self.queue.push_back(build_req(EndpointReq::LeaveRoom)),
-                        protobuf::conn::request::session::Request::Sdp(_) => todo!(),
+                        protobuf::conn::request::session::Request::Sdp(req) => {
+                            for (index, s) in req.tracks.senders.into_iter().enumerate() {
+                                if self.remote_track_by_name(&s.name).is_none() {
+                                    log::info!("[TransportWebrtcSdk] added new remote track {:?}", s);
+                                    self.remote_tracks.push(RemoteTrack::new((index as u16).into(), s));
+                                }
+                            }
+
+                            for (index, r) in req.tracks.receivers.into_iter().enumerate() {
+                                if self.local_track_by_name(&r.name).is_none() {
+                                    log::info!("[TransportWebrtcSdk] added new local track {:?}", r);
+                                    self.local_tracks.push(LocalTrack::new((index as u16).into(), r));
+                                }
+                            }
+                            self.queue.push_back(InternalOutput::RpcReq(req_id, InternalRpcReq::SetRemoteSdp(req.sdp)));
+                        }
                         protobuf::conn::request::session::Request::Disconnect(_) => {
                             log::info!("[TransportWebrtcSdk] switched to disconnected with close action from client");
                             self.state = State::Disconnected;

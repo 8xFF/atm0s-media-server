@@ -62,6 +62,15 @@ pub enum ExtOut {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+enum InternalRpcReq {
+    SetRemoteSdp(String),
+}
+
+enum InternalRpcRes {
+    SetRemoteSdp(String),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 enum InternalOutput {
     Str0mKeyframe(Mid, KeyframeRequestKind),
     Str0mLimitBitrate(Mid, u64),
@@ -69,12 +78,14 @@ enum InternalOutput {
     Str0mSendData(ChannelId, Vec<u8>),
     Str0mBwe(u64, u64),
     Str0mResetBwe(u64),
+    RpcReq(u32, InternalRpcReq),
     TransportOutput(TransportOutput<ExtOut>),
 }
 
 trait TransportWebrtcInternal {
     fn on_codec_config(&mut self, cfg: &CodecConfig);
     fn on_tick(&mut self, now: Instant);
+    fn on_rpc_res(&mut self, req_id: u32, res: RpcResult<InternalRpcRes>);
     fn on_transport_rpc_res(&mut self, now: Instant, req_id: EndpointReqId, res: EndpointRes);
     fn on_endpoint_event(&mut self, now: Instant, input: EndpointEvent);
     fn on_str0m_event(&mut self, now: Instant, event: str0m::Event);
@@ -197,6 +208,19 @@ impl TransportWebrtc {
             InternalOutput::TransportOutput(out) => {
                 self.queue.push_back(out);
             }
+            InternalOutput::RpcReq(req_id, req) => match req {
+                InternalRpcReq::SetRemoteSdp(offer) => {
+                    if let Ok(offer) = SdpOffer::from_sdp_string(&offer) {
+                        if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
+                            self.internal.on_rpc_res(req_id, Ok(InternalRpcRes::SetRemoteSdp(answer.to_sdp_string())));
+                        } else {
+                            self.internal.on_rpc_res(req_id, Err(RpcError::new2(WebrtcError::Str0mError)));
+                        }
+                    } else {
+                        self.internal.on_rpc_res(req_id, Err(RpcError::new2(WebrtcError::SdpError)));
+                    }
+                }
+            },
         }
     }
 }
