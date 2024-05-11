@@ -36,12 +36,14 @@ pub struct Selector {
     queue: VecDeque<Action>,
     //for alert previous frame end then we can switch layer if need
     pre_end_frame: bool,
+    limit: (u8, u8),
 }
 
 impl Selector {
-    pub fn new(k_svc: bool, bitrate: u64, layers: MediaLayersBitrate) -> Self {
+    pub fn new(k_svc: bool, bitrate: u64, layers: MediaLayersBitrate, limit: Option<(u8, u8)>) -> Self {
         let bitrate_kbps = (bitrate / 1000) as u16;
-        let target = layers.select_layer(bitrate_kbps);
+        let (max_spatial, max_temporal) = limit.unwrap_or((2, 2));
+        let target = layers.select_layer(bitrate_kbps, max_spatial, max_temporal);
 
         log::info!("[Vp9SvcSelector] create with bitrate {bitrate_kbps} kbps, layers {:?} => init target {:?}", layers, target);
 
@@ -53,11 +55,12 @@ impl Selector {
             target,
             queue: VecDeque::new(),
             pre_end_frame: false,
+            limit: (max_spatial, max_temporal),
         }
     }
 
     fn select_layer(&mut self) {
-        let target = self.layers.select_layer(self.bitrate_kbps);
+        let target = self.layers.select_layer(self.bitrate_kbps, self.limit.0, self.limit.1);
         if target != self.target {
             log::info!("[Vp9SvcSelector] bitrate {} kbps, layers {:?} => changed target to {:?}", self.bitrate_kbps, self.layers, target);
             self.target = target;
@@ -222,6 +225,11 @@ impl VideoSelector for Selector {
         self.select_layer();
     }
 
+    fn set_limit_layer(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, max_spatial: u8, max_temporal: u8) {
+        self.limit = (max_spatial, max_temporal);
+        self.select_layer();
+    }
+
     fn select(&mut self, ctx: &mut VideoSelectorCtx, _now_ms: u64, _channel: u64, pkt: &mut MediaPacket) -> Option<()> {
         if let Some(layers) = pkt.layers.as_ref() {
             self.layers = layers.clone();
@@ -287,7 +295,7 @@ mod tests {
     fn test(bitrate: u64, layers: &[[u16; 3]], steps: Vec<Step>) {
         let mut ctx = VideoSelectorCtx::new(MediaKind::Video);
         ctx.seq_rewrite.reinit();
-        let mut selector = Selector::new(false, bitrate * 1000, layers_bitrate(&layers));
+        let mut selector = Selector::new(false, bitrate * 1000, layers_bitrate(&layers), None);
         selector.on_init(&mut ctx, 0);
 
         for step in steps {

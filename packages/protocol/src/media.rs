@@ -116,16 +116,16 @@ impl MediaLayersBitrate {
 
     /// Select best layer for target bitrate
     /// TODO: return None if target_bitrate cannot provide stable connection
-    pub fn select_layer(&self, target_bitrate_kbps: u16) -> Option<MediaLayerSelection> {
+    pub fn select_layer(&self, target_bitrate_kbps: u16, max_spatial: u8, max_temporal: u8) -> Option<MediaLayerSelection> {
         let mut spatial = 0;
         let mut temporal = 0;
-        for i in 0..3 {
-            if let Some(layer) = &self.0[i] {
-                for j in 0..3 {
-                    if let Some(bitrate) = layer.0[j] {
+        for i in 0..=max_spatial.min(2) {
+            if let Some(layer) = &self.0[i as usize] {
+                for j in 0..=max_temporal.min(2) {
+                    if let Some(bitrate) = layer.0[j as usize] {
                         if target_bitrate_kbps >= bitrate {
-                            spatial = i as u8;
-                            temporal = j as u8;
+                            spatial = i;
+                            temporal = j;
                         }
                     }
                 }

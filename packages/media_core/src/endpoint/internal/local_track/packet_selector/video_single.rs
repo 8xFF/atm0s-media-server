@@ -13,6 +13,8 @@ impl VideoSelector for VideoSingleSelector {
 
     fn set_target_bitrate(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, _bitrate: u64) {}
 
+    fn set_limit_layer(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, _max_spatial: u8, _max_temporal: u8) {}
+
     fn select(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, _channel: u64, _pkt: &mut media_server_protocol::media::MediaPacket) -> Option<()> {
         Some(())
     }

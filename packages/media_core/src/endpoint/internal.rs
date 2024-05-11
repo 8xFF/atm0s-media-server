@@ -317,6 +317,11 @@ impl EndpointInternal {
                     self.bitrate_allocator.input(&mut self.switcher).set_egress_video_track(id, priority);
                 }
             }
+            local_track::Output::Updated(kind, priority) => {
+                if kind.is_video() {
+                    self.bitrate_allocator.input(&mut self.switcher).set_egress_video_track(id, priority);
+                }
+            }
             local_track::Output::Stopped(kind) => {
                 if kind.is_video() {
                     self.bitrate_allocator.input(&mut self.switcher).del_egress_video_track(id);

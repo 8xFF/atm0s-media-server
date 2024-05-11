@@ -39,6 +39,7 @@ pub enum Output {
     Cluster(ClusterRoomHash, ClusterLocalTrackControl),
     RpcRes(EndpointReqId, EndpointLocalTrackRes),
     Started(MediaKind, TrackPriority),
+    Updated(MediaKind, TrackPriority),
     Stopped(MediaKind),
 }
 
@@ -112,7 +113,7 @@ impl EndpointLocalTrack {
         }
     }
 
-    fn on_rpc_req(&mut self, _now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) {
+    fn on_rpc_req(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) {
         match req {
             EndpointLocalTrackReq::Attach(source, config) => {
                 //TODO process config here
@@ -156,7 +157,10 @@ impl EndpointLocalTrack {
                 }
             }
             EndpointLocalTrackReq::Config(config) => {
-                todo!()
+                let now_ms = self.timer.timestamp_ms(now);
+                self.selector.set_limit_layer(now_ms, config.max_spatial, config.max_temporal);
+                self.queue.push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Config(Ok(()))));
+                self.queue.push_back(Output::Updated(self.kind, config.priority));
             }
         }
     }

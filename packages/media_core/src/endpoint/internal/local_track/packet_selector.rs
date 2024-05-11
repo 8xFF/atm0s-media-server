@@ -30,6 +30,7 @@ trait VideoSelector {
     fn on_init(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64);
     fn on_tick(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64);
     fn set_target_bitrate(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, bitrate: u64);
+    fn set_limit_layer(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, max_spatial: u8, max_temporal: u8);
     fn select(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, channel: u64, pkt: &mut MediaPacket) -> Option<()>;
     fn pop_action(&mut self) -> Option<Action>;
 }
@@ -68,6 +69,7 @@ pub struct PacketSelector {
     selector: Option<Box<dyn VideoSelector>>,
     queue: VecDeque<Action>,
     bitrate: Option<u64>,
+    limit: Option<(u8, u8)>,
 }
 
 impl PacketSelector {
@@ -81,6 +83,7 @@ impl PacketSelector {
             selector: None,
             queue: VecDeque::new(),
             bitrate: None,
+            limit: None,
         }
     }
 
@@ -102,6 +105,7 @@ impl PacketSelector {
         self.need_key_frame = false;
         self.last_key_frame_ts = None;
         self.bitrate = None;
+        self.limit = None;
     }
 
     /// Set target bitrate, which is used to select best layer for avoiding freezes or lags
@@ -109,6 +113,12 @@ impl PacketSelector {
         log::debug!("[LocalTrack/PacketSelector] set target bitrate to {}", bitrate);
         self.bitrate = Some(bitrate);
         self.selector.as_mut().map(|s| s.set_target_bitrate(&mut self.ctx, now_ms, bitrate));
+    }
+
+    /// Set limit layer, which is used for select best layer
+    pub fn set_limit_layer(&mut self, now_ms: u64, max_spatial: u8, min_spatial: u8) {
+        self.limit = Some((max_spatial, min_spatial));
+        self.selector.as_mut().map(|s| s.set_limit_layer(&mut self.ctx, now_ms, max_spatial, min_spatial));
     }
 
     pub fn select(&mut self, now_ms: u64, channel: u64, pkt: &mut MediaPacket) -> Option<()> {
@@ -179,7 +189,7 @@ impl PacketSelector {
             self.need_key_frame = false;
         }
         if self.selector.is_none() && pkt.meta.is_video_key() {
-            self.selector = create_selector(&pkt, bitrate);
+            self.selector = create_selector(&pkt, bitrate, self.limit);
             self.selector.as_mut().map(|s| s.on_init(&mut self.ctx, now_ms));
         }
 
@@ -206,23 +216,23 @@ impl PacketSelector {
     }
 }
 
-fn create_selector(pkt: &MediaPacket, bitrate: u64) -> Option<Box<dyn VideoSelector>> {
+fn create_selector(pkt: &MediaPacket, bitrate: u64, limit: Option<(u8, u8)>) -> Option<Box<dyn VideoSelector>> {
     match &pkt.meta {
         MediaMeta::Opus { .. } => None,
         MediaMeta::H264 { sim: Some(_), .. } => {
             let layers = pkt.layers.as_ref()?;
             log::info!("[LocalTrack/PacketSelector] create H264SimSelector");
-            Some(Box::new(video_h264_sim::Selector::new(bitrate, layers.clone())))
+            Some(Box::new(video_h264_sim::Selector::new(bitrate, layers.clone(), limit)))
         }
         MediaMeta::Vp8 { sim: Some(_), .. } => {
             let layers = pkt.layers.as_ref()?;
             log::info!("[LocalTrack/PacketSelector] create Vp8SimSelector");
-            Some(Box::new(video_vp8_sim::Selector::new(bitrate, layers.clone())))
+            Some(Box::new(video_vp8_sim::Selector::new(bitrate, layers.clone(), limit)))
         }
         MediaMeta::Vp9 { svc: Some(_), .. } => {
             let layers = pkt.layers.as_ref()?;
             log::info!("[LocalTrack/PacketSelector] create Vp9SvcSelector");
-            Some(Box::new(video_vp9_svc::Selector::new(false, bitrate, layers.clone())))
+            Some(Box::new(video_vp9_svc::Selector::new(false, bitrate, layers.clone(), limit)))
         }
         MediaMeta::H264 { sim: None, .. } | MediaMeta::Vp8 { sim: None, .. } | MediaMeta::Vp9 { svc: None, .. } => {
             log::info!("[LocalTrack/PacketSelector] create VideoSingleSelector");
