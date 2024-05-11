@@ -60,7 +60,7 @@ impl EndpointLocalTrack {
             room,
             bind: None,
             queue: VecDeque::new(),
-            selector: PacketSelector::new(kind),
+            selector: PacketSelector::new(kind, 2, 2),
             timer: TimePivot::build(),
         }
     }
@@ -104,7 +104,7 @@ impl EndpointLocalTrack {
     fn on_transport_event(&mut self, _now: Instant, event: LocalTrackEvent) {
         log::info!("[EndpointLocalTrack] on event {:?}", event);
         match event {
-            LocalTrackEvent::Started(_) => {}
+            LocalTrackEvent::Started { .. } => {}
             LocalTrackEvent::RequestKeyFrame => {
                 let room = return_if_none!(self.room.as_ref());
                 self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame));
@@ -121,6 +121,7 @@ impl EndpointLocalTrack {
                     self.queue.push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Ok(()))));
                     let peer = source.peer;
                     let track = source.track;
+                    let now_ms = self.timer.timestamp_ms(now);
                     log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track}");
                     if let Some((_peer, _track)) = self.bind.take() {
                         log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track} => unsubscribe current {_peer} {_track}");
@@ -128,6 +129,7 @@ impl EndpointLocalTrack {
                         self.queue.push_back(Output::Stopped(self.kind));
                     }
                     self.bind = Some((peer.clone(), track.clone()));
+                    self.selector.set_limit_layer(now_ms, config.max_spatial, config.max_temporal);
                     self.queue.push_back(Output::Started(self.kind, config.priority));
                     self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer, track)));
                     self.selector.reset();

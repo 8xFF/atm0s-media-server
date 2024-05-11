@@ -69,11 +69,11 @@ pub struct PacketSelector {
     selector: Option<Box<dyn VideoSelector>>,
     queue: VecDeque<Action>,
     bitrate: Option<u64>,
-    limit: Option<(u8, u8)>,
+    limit: (u8, u8),
 }
 
 impl PacketSelector {
-    pub fn new(kind: MediaKind) -> Self {
+    pub fn new(kind: MediaKind, max_spatial: u8, max_temporal: u8) -> Self {
         Self {
             kind,
             ctx: VideoSelectorCtx::new(kind),
@@ -83,7 +83,7 @@ impl PacketSelector {
             selector: None,
             queue: VecDeque::new(),
             bitrate: None,
-            limit: None,
+            limit: (max_spatial, max_temporal),
         }
     }
 
@@ -105,7 +105,6 @@ impl PacketSelector {
         self.need_key_frame = false;
         self.last_key_frame_ts = None;
         self.bitrate = None;
-        self.limit = None;
     }
 
     /// Set target bitrate, which is used to select best layer for avoiding freezes or lags
@@ -117,7 +116,7 @@ impl PacketSelector {
 
     /// Set limit layer, which is used for select best layer
     pub fn set_limit_layer(&mut self, now_ms: u64, max_spatial: u8, min_spatial: u8) {
-        self.limit = Some((max_spatial, min_spatial));
+        self.limit = (max_spatial, min_spatial);
         self.selector.as_mut().map(|s| s.set_limit_layer(&mut self.ctx, now_ms, max_spatial, min_spatial));
     }
 
@@ -216,7 +215,7 @@ impl PacketSelector {
     }
 }
 
-fn create_selector(pkt: &MediaPacket, bitrate: u64, limit: Option<(u8, u8)>) -> Option<Box<dyn VideoSelector>> {
+fn create_selector(pkt: &MediaPacket, bitrate: u64, limit: (u8, u8)) -> Option<Box<dyn VideoSelector>> {
     match &pkt.meta {
         MediaMeta::Opus { .. } => None,
         MediaMeta::H264 { sim: Some(_), .. } => {
@@ -273,7 +272,7 @@ mod tests {
 
     #[test]
     fn audio_should_not_request_key_frame() {
-        let mut selector = PacketSelector::new(MediaKind::Audio);
+        let mut selector = PacketSelector::new(MediaKind::Audio, 2, 2);
 
         let mut pkt = audio_pkt();
         assert_eq!(selector.select(0, 0, &mut pkt), Some(()));
@@ -282,7 +281,7 @@ mod tests {
 
     #[test]
     fn video_should_not_request_key_frame_with_first_is_key() {
-        let mut selector = PacketSelector::new(MediaKind::Video);
+        let mut selector = PacketSelector::new(MediaKind::Video, 2, 2);
 
         selector.set_target_bitrate(0, 2_000_000);
 
@@ -293,7 +292,7 @@ mod tests {
 
     #[test]
     fn video_should_request_key_frame_with_first_is_not_key() {
-        let mut selector = PacketSelector::new(MediaKind::Video);
+        let mut selector = PacketSelector::new(MediaKind::Video, 2, 2);
 
         selector.set_target_bitrate(0, 2_000_000);
 

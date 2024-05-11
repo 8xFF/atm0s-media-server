@@ -40,9 +40,9 @@ pub struct Selector {
 }
 
 impl Selector {
-    pub fn new(k_svc: bool, bitrate: u64, layers: MediaLayersBitrate, limit: Option<(u8, u8)>) -> Self {
+    pub fn new(k_svc: bool, bitrate: u64, layers: MediaLayersBitrate, limit: (u8, u8)) -> Self {
         let bitrate_kbps = (bitrate / 1000) as u16;
-        let (max_spatial, max_temporal) = limit.unwrap_or((2, 2));
+        let (max_spatial, max_temporal) = limit;
         let target = layers.select_layer(bitrate_kbps, max_spatial, max_temporal);
 
         log::info!("[Vp9SvcSelector] create with bitrate {bitrate_kbps} kbps, layers {:?} => init target {:?}", layers, target);
@@ -295,7 +295,7 @@ mod tests {
     fn test(bitrate: u64, layers: &[[u16; 3]], steps: Vec<Step>) {
         let mut ctx = VideoSelectorCtx::new(MediaKind::Video);
         ctx.seq_rewrite.reinit();
-        let mut selector = Selector::new(false, bitrate * 1000, layers_bitrate(&layers), None);
+        let mut selector = Selector::new(false, bitrate * 1000, layers_bitrate(&layers), (2, 2));
         selector.on_init(&mut ctx, 0);
 
         for step in steps {
