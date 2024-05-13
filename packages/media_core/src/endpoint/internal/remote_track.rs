@@ -5,12 +5,14 @@ use std::{collections::VecDeque, time::Instant};
 use media_server_protocol::{
     endpoint::{BitrateControlMode, TrackMeta, TrackName, TrackPriority},
     media::{MediaKind, MediaLayersBitrate},
+    transport::RpcError,
 };
 use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
 use crate::{
     cluster::{ClusterRemoteTrackControl, ClusterRemoteTrackEvent, ClusterRoomHash},
     endpoint::{EndpointRemoteTrackEvent, EndpointRemoteTrackReq, EndpointRemoteTrackRes, EndpointReqId},
+    errors::EndpointErrors,
     transport::RemoteTrackEvent,
 };
 
@@ -31,6 +33,7 @@ pub enum Output {
     Cluster(ClusterRoomHash, ClusterRemoteTrackControl),
     RpcRes(EndpointReqId, EndpointRemoteTrackRes),
     Started(MediaKind, TrackPriority),
+    Update(MediaKind, TrackPriority),
     Stopped(MediaKind),
 }
 
@@ -81,6 +84,7 @@ impl EndpointRemoteTrack {
             ClusterRemoteTrackEvent::LimitBitrate { min, max } => match self.meta.control {
                 Some(BitrateControlMode::MaxBitrate) => {
                     log::debug!("[EndpointRemoteTrack] dont control remote bitrate with mode is {:?}", self.meta.control);
+                    self.cluster_bitrate_limit = None;
                 }
                 Some(BitrateControlMode::DynamicConsumers) | None => {
                     self.cluster_bitrate_limit = Some((min, max));
@@ -129,8 +133,20 @@ impl EndpointRemoteTrack {
         }
     }
 
-    fn on_rpc_req(&mut self, _now: Instant, _req_id: EndpointReqId, _req: EndpointRemoteTrackReq) {
-        todo!()
+    fn on_rpc_req(&mut self, _now: Instant, req_id: EndpointReqId, req: EndpointRemoteTrackReq) {
+        match req {
+            EndpointRemoteTrackReq::Config(config) => {
+                if config.priority.0 == 0 {
+                    log::warn!("[EndpointLocalTrack] view with invalid priority");
+                    self.queue
+                        .push_back(Output::RpcRes(req_id, EndpointRemoteTrackRes::Config(Err(RpcError::new2(EndpointErrors::RemoteTrackInvalidPriority)))));
+                } else {
+                    self.meta.control = config.control;
+                    self.queue.push_back(Output::RpcRes(req_id, EndpointRemoteTrackRes::Config(Ok(()))));
+                    self.queue.push_back(Output::Update(self.meta.kind, config.priority));
+                }
+            }
+        }
     }
 
     fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) {

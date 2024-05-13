@@ -4,5 +4,5 @@ pub enum EndpointErrors {
     EndpointNotInRoom = 0x0001,
     LocalTrackNotPinSource = 0x1001,
     LocalTrackInvalidPriority = 0x1002,
-    RemoteTrack_ = 0x2001,
+    RemoteTrackInvalidPriority = 0x2001,
 }

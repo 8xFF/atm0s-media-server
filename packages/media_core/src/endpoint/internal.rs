@@ -291,6 +291,11 @@ impl EndpointInternal {
                     self.bitrate_allocator.input(&mut self.switcher).set_ingress_video_track(id, priority);
                 }
             }
+            remote_track::Output::Update(kind, priority) => {
+                if kind.is_video() {
+                    self.bitrate_allocator.input(&mut self.switcher).set_ingress_video_track(id, priority);
+                }
+            }
             remote_track::Output::Stopped(kind) => {
                 if kind.is_video() {
                     self.bitrate_allocator.input(&mut self.switcher).del_ingress_video_track(id);

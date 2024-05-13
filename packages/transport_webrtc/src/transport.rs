@@ -164,7 +164,7 @@ impl TransportWebrtc {
                 rx.request_keyframe(kind);
             }
             InternalOutput::Str0mLimitBitrate(mid, bitrate) => {
-                log::debug!("[TransportWebrtc] Limit ingress bitrate of track {mid} with {bitrate} bps");
+                log::info!("[TransportWebrtc] Limit ingress bitrate of track {mid} with {bitrate} bps");
                 let mut api = self.rtc.direct_api();
                 let rx = return_if_none!(api.stream_rx_by_mid(mid, None));
                 rx.request_remb(Bitrate::bps(bitrate));
