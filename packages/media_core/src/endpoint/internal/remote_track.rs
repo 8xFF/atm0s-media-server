@@ -79,10 +79,10 @@ impl EndpointRemoteTrack {
         match event {
             ClusterRemoteTrackEvent::RequestKeyFrame => self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
             ClusterRemoteTrackEvent::LimitBitrate { min, max } => match self.meta.control {
-                Some(BitrateControlMode::MaxBitrate) | None => {
+                Some(BitrateControlMode::MaxBitrate) => {
                     log::debug!("[EndpointRemoteTrack] dont control remote bitrate with mode is {:?}", self.meta.control);
                 }
-                Some(BitrateControlMode::DynamicConsumers) => {
+                Some(BitrateControlMode::DynamicConsumers) | None => {
                     self.cluster_bitrate_limit = Some((min, max));
                     if let Some((min, max)) = self.calc_limit_bitrate() {
                         self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }));
