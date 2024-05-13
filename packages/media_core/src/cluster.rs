@@ -16,7 +16,7 @@ use std::{
 use atm0s_sdn::features::{FeaturesControl, FeaturesEvent};
 use media_server_protocol::{
     endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName},
-    media::MediaPacket,
+    media::{MediaKind, MediaPacket},
 };
 
 use crate::transport::{LocalTrackId, RemoteTrackId};
@@ -79,9 +79,9 @@ pub enum ClusterEndpointControl {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClusterEndpointEvent {
     PeerJoined(PeerId, PeerMeta),
-    PeerLeaved(PeerId),
+    PeerLeaved(PeerId, PeerMeta),
     TrackStarted(PeerId, TrackName, TrackMeta),
-    TrackStopped(PeerId, TrackName),
+    TrackStopped(PeerId, TrackName, TrackMeta),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackEvent),
     LocalTrack(LocalTrackId, ClusterLocalTrackEvent),
 }

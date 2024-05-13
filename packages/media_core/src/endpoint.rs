@@ -4,7 +4,7 @@ use std::{marker::PhantomData, time::Instant};
 
 use media_server_protocol::{
     endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
-    media::MediaPacket,
+    media::{MediaKind, MediaPacket},
     protobuf,
     transport::RpcResult,
 };
@@ -143,9 +143,9 @@ pub enum EndpointRemoteTrackEvent {
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointEvent {
     PeerJoined(PeerId, PeerMeta),
-    PeerLeaved(PeerId),
+    PeerLeaved(PeerId, PeerMeta),
     PeerTrackStarted(PeerId, TrackName, TrackMeta),
-    PeerTrackStopped(PeerId, TrackName),
+    PeerTrackStopped(PeerId, TrackName, TrackMeta),
     RemoteMediaTrack(RemoteTrackId, EndpointRemoteTrackEvent),
     LocalMediaTrack(LocalTrackId, EndpointLocalTrackEvent),
     /// Egress est params

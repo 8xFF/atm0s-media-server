@@ -251,9 +251,9 @@ impl EndpointInternal {
     pub fn on_cluster_event<'a>(&mut self, now: Instant, event: ClusterEndpointEvent) {
         match event {
             ClusterEndpointEvent::PeerJoined(peer, meta) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerJoined(peer, meta))),
-            ClusterEndpointEvent::PeerLeaved(peer) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerLeaved(peer))),
+            ClusterEndpointEvent::PeerLeaved(peer, meta) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerLeaved(peer, meta))),
             ClusterEndpointEvent::TrackStarted(peer, track, meta) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerTrackStarted(peer, track, meta))),
-            ClusterEndpointEvent::TrackStopped(peer, track) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerTrackStopped(peer, track))),
+            ClusterEndpointEvent::TrackStopped(peer, track, meta) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerTrackStopped(peer, track, meta))),
             ClusterEndpointEvent::RemoteTrack(track, event) => self.on_cluster_remote_track(now, track, event),
             ClusterEndpointEvent::LocalTrack(track, event) => self.on_cluster_local_track(now, track, event),
         }
@@ -313,6 +313,7 @@ impl EndpointInternal {
                 self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::LocalTrack(id, res)));
             }
             local_track::Output::Started(kind, priority) => {
+                log::info!("[EndpointInternal] local track started {kind} priority {priority}");
                 if kind.is_video() {
                     self.bitrate_allocator.input(&mut self.switcher).set_egress_video_track(id, priority);
                 }
@@ -323,6 +324,7 @@ impl EndpointInternal {
                 }
             }
             local_track::Output::Stopped(kind) => {
+                log::info!("[EndpointInternal] local track stopped {kind}");
                 if kind.is_video() {
                     self.bitrate_allocator.input(&mut self.switcher).del_egress_video_track(id);
                 }

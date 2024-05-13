@@ -31,8 +31,17 @@ impl MediaKind {
 impl From<Kind> for MediaKind {
     fn from(value: Kind) -> Self {
         match value {
-            Kind::Audio => MediaKind::Audio,
-            Kind::Video => MediaKind::Video,
+            Kind::Audio => Self::Audio,
+            Kind::Video => Self::Video,
+        }
+    }
+}
+
+impl From<MediaKind> for Kind {
+    fn from(value: MediaKind) -> Self {
+        match value {
+            MediaKind::Audio => Self::Audio,
+            MediaKind::Video => Self::Video,
         }
     }
 }

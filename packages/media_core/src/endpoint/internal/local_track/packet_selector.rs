@@ -217,7 +217,10 @@ impl PacketSelector {
 
 fn create_selector(pkt: &MediaPacket, bitrate: u64, limit: (u8, u8)) -> Option<Box<dyn VideoSelector>> {
     match &pkt.meta {
-        MediaMeta::Opus { .. } => None,
+        MediaMeta::Opus { .. } => {
+            log::info!("[LocalTrack/PacketSelector] dont create Selector for audio");
+            None
+        }
         MediaMeta::H264 { sim: Some(_), .. } => {
             let layers = pkt.layers.as_ref()?;
             log::info!("[LocalTrack/PacketSelector] create H264SimSelector");

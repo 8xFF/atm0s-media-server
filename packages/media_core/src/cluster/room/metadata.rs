@@ -268,7 +268,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
             let info = return_if_none!(self.cluster_peers.remove(&peer_key));
             log::info!("[ClusterRoom {}] cluster: peer ({}) leaved => fire event to {:?}", self.room, info.peer, subscribers);
             if !subscribers.is_empty() {
-                self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::PeerLeaved(info.peer)));
+                self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::PeerLeaved(info.peer, info.meta)));
             }
         }
     }
@@ -304,7 +304,8 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 subscribers
             );
             if !subscribers.is_empty() {
-                self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStopped(info.peer, info.track)));
+                self.queue
+                    .push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStopped(info.peer, info.track, info.meta)));
             }
         }
     }
@@ -337,7 +338,8 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
                 info.track,
                 subscribers
             );
-            self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStopped(info.peer, info.track)));
+            self.queue
+                .push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStopped(info.peer, info.track, info.meta)));
         }
     }
 }
@@ -432,7 +434,7 @@ mod tests {
         room_meta.on_kv_event(peers_map, MapEvent::OnDel(peer_key, 0));
         assert_eq!(
             room_meta.pop_output(Instant::now()),
-            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerLeaved(peer_id.clone())))
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::PeerLeaved(peer_id.clone(), peer_info.meta)))
         );
         assert_eq!(room_meta.pop_output(Instant::now()), None);
 
@@ -519,7 +521,7 @@ mod tests {
         room_meta.on_kv_event(tracks_map, MapEvent::OnDel(track_key, 0));
         assert_eq!(
             room_meta.pop_output(now),
-            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::TrackStopped(peer_id.clone(), track_name.clone())))
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::TrackStopped(peer_id.clone(), track_name.clone(), track_info.meta)))
         );
         assert_eq!(room_meta.pop_output(now), None);
 
@@ -656,7 +658,7 @@ mod tests {
         room_meta.on_kv_event(peer2_map, MapEvent::OnDel(track_key, 0));
         assert_eq!(
             room_meta.pop_output(now),
-            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::TrackStopped(peer2.clone(), track_name.clone())))
+            Some(Output::Endpoint(vec![owner], ClusterEndpointEvent::TrackStopped(peer2.clone(), track_name.clone(), track_info.meta)))
         );
         assert_eq!(room_meta.pop_output(now), None);
 

@@ -116,8 +116,11 @@ impl EndpointLocalTrack {
     fn on_rpc_req(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) {
         match req {
             EndpointLocalTrackReq::Attach(source, config) => {
-                //TODO process config here
-                if let Some(room) = self.room.as_ref() {
+                if config.priority.0 == 0 {
+                    log::warn!("[EndpointLocalTrack] view with invalid priority");
+                    self.queue
+                        .push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Err(RpcError::new2(EndpointErrors::LocalTrackInvalidPriority)))));
+                } else if let Some(room) = self.room.as_ref() {
                     self.queue.push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Ok(()))));
                     let peer = source.peer;
                     let track = source.track;

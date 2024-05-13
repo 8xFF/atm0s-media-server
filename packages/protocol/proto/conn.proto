@@ -198,18 +198,21 @@ message ServerEvent {
         message TrackStarted {
             required string peer = 1;
             required string track = 2;
-            optional string metadata = 3;
+            required shared.Kind kind = 3;
+            optional string metadata = 4;
         }
 
         message TrackUpdated {
             required string peer = 1;
             required string track = 2;
-            optional string metadata = 3;
+            required shared.Kind kind = 3;
+            optional string metadata = 4;
         }
 
         message TrackStopped {
             required string peer = 1;
             required string track = 2;
+            required shared.Kind kind = 3;
         }
 
         oneof event {

@@ -111,9 +111,9 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
     fn on_endpoint_event(&mut self, _now: Instant, event: EndpointEvent) {
         match event {
             EndpointEvent::PeerJoined(_, _) => {}
-            EndpointEvent::PeerLeaved(_) => {}
+            EndpointEvent::PeerLeaved(_, _) => {}
             EndpointEvent::PeerTrackStarted(_, _, _) => {}
-            EndpointEvent::PeerTrackStopped(_, _) => {}
+            EndpointEvent::PeerTrackStopped(_, _, _) => {}
             EndpointEvent::RemoteMediaTrack(_, event) => match event {
                 media_server_core::endpoint::EndpointRemoteTrackEvent::RequestKeyFrame => {
                     let mid = return_if_none!(self.video_mid).0;

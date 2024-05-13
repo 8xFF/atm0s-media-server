@@ -16,6 +16,7 @@ use media_server_protocol::{
             ClientEvent,
         },
         gateway::ConnectRequest,
+        shared::Kind,
     },
     transport::{RpcError, RpcResult},
 };
@@ -187,7 +188,7 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     })),
                 }));
             }
-            EndpointEvent::PeerLeaved(peer) => {
+            EndpointEvent::PeerLeaved(peer, meta) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} leaved");
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::PeerLeaved(PeerLeaved { peer: peer.0 })),
@@ -199,14 +200,19 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     event: Some(ProtoRoomEvent2::TrackStarted(TrackStarted {
                         peer: peer.0,
                         track: track.0,
+                        kind: Kind::from(meta.kind) as i32,
                         metadata: meta.metadata,
                     })),
                 }))
             }
-            EndpointEvent::PeerTrackStopped(peer, track) => {
+            EndpointEvent::PeerTrackStopped(peer, track, meta) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} track {track} stopped");
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
-                    event: Some(ProtoRoomEvent2::TrackStopped(TrackStopped { peer: peer.0, track: track.0 })),
+                    event: Some(ProtoRoomEvent2::TrackStopped(TrackStopped {
+                        peer: peer.0,
+                        track: track.0,
+                        kind: Kind::from(meta.kind) as i32,
+                    })),
                 }));
             }
             EndpointEvent::RemoteMediaTrack(track_id, event) => match event {

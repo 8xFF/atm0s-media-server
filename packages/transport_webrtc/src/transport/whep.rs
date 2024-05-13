@@ -122,7 +122,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
     fn on_endpoint_event(&mut self, now: Instant, event: EndpointEvent) {
         match event {
             EndpointEvent::PeerJoined(_, _) => {}
-            EndpointEvent::PeerLeaved(_) => {}
+            EndpointEvent::PeerLeaved(_, _) => {}
             EndpointEvent::PeerTrackStarted(peer, track, meta) => {
                 if self.audio_mid.is_none() && meta.kind.is_audio() {
                     log::info!("[TransportWebrtcWhep] waiting local audio track => push Subscribe candidate to waits");
@@ -136,7 +136,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                 }
                 self.try_subscribe(peer, track, meta);
             }
-            EndpointEvent::PeerTrackStopped(peer, track) => self.try_unsubscribe(peer, track),
+            EndpointEvent::PeerTrackStopped(peer, track, meta) => self.try_unsubscribe(peer, track),
             EndpointEvent::LocalMediaTrack(_track, event) => match event {
                 EndpointLocalTrackEvent::Media(pkt) => {
                     let mid = if pkt.meta.is_audio() {
