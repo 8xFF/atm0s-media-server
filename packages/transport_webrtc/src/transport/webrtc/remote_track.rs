@@ -21,12 +21,14 @@ pub struct RemoteTrack {
 impl RemoteTrack {
     pub fn new(id: RemoteTrackId, cfg: protobuf::shared::Sender) -> Self {
         log::info!("[TransportWebrcSdk/RemoteTrack] create {id} config {:?}", cfg);
+        let kind = cfg.kind();
+        let state = cfg.state.unwrap_or_default();
         Self {
             id,
             name: cfg.name.clone().into(),
-            kind: cfg.kind().into(),
-            source: cfg.state.source,
-            config: cfg.state.config,
+            kind: kind.into(),
+            source: state.source,
+            config: state.config.unwrap_or_default(),
             scaling: MediaScaling::None,
             mid: None,
         }
@@ -77,7 +79,7 @@ impl RemoteTrack {
         TrackMeta {
             kind: self.kind(),
             scaling: self.scaling,
-            control: self.config.bitrate.map(|b| protobuf::shared::BitrateControlMode::try_from(b).ok().expect("Should have").into()),
+            control: self.config.bitrate().into(),
             metadata: self.source.as_ref().map(|s| s.metadata.clone()).flatten(),
         }
     }

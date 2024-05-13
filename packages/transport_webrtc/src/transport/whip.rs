@@ -245,7 +245,7 @@ impl TransportWebrtcWhip {
                     meta: TrackMeta {
                         kind: MediaKind::Audio,
                         scaling: MediaScaling::None,
-                        control: None,
+                        control: BitrateControlMode::MaxBitrate,
                         metadata: None,
                     },
                     priority: TrackPriority(1),
@@ -268,7 +268,7 @@ impl TransportWebrtcWhip {
                         } else {
                             MediaScaling::None
                         },
-                        control: Some(BitrateControlMode::MaxBitrate),
+                        control: BitrateControlMode::MaxBitrate,
                         metadata: None,
                     },
                     priority: TrackPriority(1),

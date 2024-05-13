@@ -194,7 +194,7 @@ pub struct TrackPriority(pub u32);
 pub struct TrackMeta {
     pub kind: MediaKind,
     pub scaling: MediaScaling,
-    pub control: Option<BitrateControlMode>,
+    pub control: BitrateControlMode,
     pub metadata: Option<String>,
 }
 
@@ -203,7 +203,7 @@ impl TrackMeta {
         Self {
             kind: MediaKind::Audio,
             scaling: MediaScaling::None,
-            control: None,
+            control: BitrateControlMode::MaxBitrate,
             metadata: None,
         }
     }

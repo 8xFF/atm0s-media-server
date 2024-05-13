@@ -70,11 +70,14 @@ pub struct TransportWebrtcSdk {
 
 impl TransportWebrtcSdk {
     pub fn new(req: ConnectRequest) -> Self {
+        let tracks = req.tracks.unwrap_or_default();
         Self {
-            join: req.join.map(|j| (j.room.into(), j.peer.into(), j.metadata, j.publish.into(), j.subscribe.into())),
+            join: req
+                .join
+                .map(|j| (j.room.into(), j.peer.into(), j.metadata, j.publish.unwrap_or_default().into(), j.subscribe.unwrap_or_default().into())),
             state: State::New,
-            local_tracks: req.tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect(),
-            remote_tracks: req.tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect(),
+            local_tracks: tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect(),
+            remote_tracks: tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect(),
             queue: Default::default(),
             channel: None,
             event_seq: 0,
@@ -472,25 +475,27 @@ impl TransportWebrtcSdk {
         let build_req = |req: EndpointReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), req));
         match req {
             protobuf::conn::request::session::Request::Join(req) => {
-                let meta = PeerMeta { metadata: req.info.metadata };
+                let info = req.info.unwrap_or_default();
+                let meta = PeerMeta { metadata: info.metadata };
                 self.queue.push_back(build_req(EndpointReq::JoinRoom(
-                    req.info.room.into(),
-                    req.info.peer.into(),
+                    info.room.into(),
+                    info.peer.into(),
                     meta,
-                    req.info.publish.into(),
-                    req.info.subscribe.into(),
+                    info.publish.unwrap_or_default().into(),
+                    info.subscribe.unwrap_or_default().into(),
                 )));
             }
             protobuf::conn::request::session::Request::Leave(_req) => self.queue.push_back(build_req(EndpointReq::LeaveRoom)),
             protobuf::conn::request::session::Request::Sdp(req) => {
-                for (index, s) in req.tracks.senders.into_iter().enumerate() {
+                let tracks = req.tracks.unwrap_or_default();
+                for (index, s) in tracks.senders.into_iter().enumerate() {
                     if self.remote_track_by_name(&s.name).is_none() {
                         log::info!("[TransportWebrtcSdk] added new remote track {:?}", s);
                         self.remote_tracks.push(RemoteTrack::new((index as u16).into(), s));
                     }
                 }
 
-                for (index, r) in req.tracks.receivers.into_iter().enumerate() {
+                for (index, r) in tracks.receivers.into_iter().enumerate() {
                     if self.local_track_by_name(&r.name).is_none() {
                         log::info!("[TransportWebrtcSdk] added new local track {:?}", r);
                         self.local_tracks.push(LocalTrack::new((index as u16).into(), r));
@@ -520,7 +525,7 @@ impl TransportWebrtcSdk {
         match req {
             protobuf::conn::request::sender::Request::Attach(attach) => {
                 if !track.has_source() {
-                    track.set_source(attach.source);
+                    track.set_source(attach.source.unwrap_or_default());
                     let event = InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
                         track_id,
                         RemoteTrackEvent::Started {
@@ -569,7 +574,10 @@ impl TransportWebrtcSdk {
 
         match req {
             protobuf::conn::request::receiver::Request::Attach(attach) => {
-                self.queue.push_back(build_req(EndpointLocalTrackReq::Attach(attach.source.into(), attach.config.into())));
+                self.queue.push_back(build_req(EndpointLocalTrackReq::Attach(
+                    attach.source.unwrap_or_default().into(),
+                    attach.config.unwrap_or_default().into(),
+                )));
             }
             protobuf::conn::request::receiver::Request::Detach(_) => {
                 self.queue.push_back(build_req(EndpointLocalTrackReq::Detach()));
@@ -610,8 +618,8 @@ mod tests {
             join: Some(shared::RoomJoin {
                 room: "room".to_string(),
                 peer: "peer".to_string(),
-                publish: shared::RoomInfoPublish { peer: true, tracks: true },
-                subscribe: shared::RoomInfoSubscribe { peers: true, tracks: true },
+                publish: Some(shared::RoomInfoPublish { peer: true, tracks: true }),
+                subscribe: Some(shared::RoomInfoSubscribe { peers: true, tracks: true }),
                 metadata: Some("metadata".to_string()),
             }),
             ..Default::default()

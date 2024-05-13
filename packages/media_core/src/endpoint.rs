@@ -30,14 +30,14 @@ pub struct EndpointSession(pub u64);
 #[derive(Debug, PartialEq, Eq)]
 pub struct EndpointRemoteTrackConfig {
     pub priority: TrackPriority,
-    pub control: Option<BitrateControlMode>,
+    pub control: BitrateControlMode,
 }
 
 impl From<protobuf::shared::sender::Config> for EndpointRemoteTrackConfig {
     fn from(value: protobuf::shared::sender::Config) -> Self {
         Self {
             priority: value.priority.into(),
-            control: value.bitrate.map(|v| protobuf::shared::BitrateControlMode::try_from(v).ok()).flatten().map(|v| v.into()),
+            control: value.bitrate().into(),
         }
     }
 }

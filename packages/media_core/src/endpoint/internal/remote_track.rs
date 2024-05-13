@@ -81,18 +81,14 @@ impl EndpointRemoteTrack {
     fn on_cluster_event(&mut self, _now: Instant, event: ClusterRemoteTrackEvent) {
         match event {
             ClusterRemoteTrackEvent::RequestKeyFrame => self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
-            ClusterRemoteTrackEvent::LimitBitrate { min, max } => match self.meta.control {
-                Some(BitrateControlMode::MaxBitrate) => {
-                    log::debug!("[EndpointRemoteTrack] dont control remote bitrate with mode is {:?}", self.meta.control);
-                    self.cluster_bitrate_limit = None;
-                }
-                Some(BitrateControlMode::DynamicConsumers) | None => {
-                    self.cluster_bitrate_limit = Some((min, max));
+            ClusterRemoteTrackEvent::LimitBitrate { min, max } => {
+                self.cluster_bitrate_limit = Some((min, max));
+                if self.meta.control.eq(&BitrateControlMode::DynamicConsumers) {
                     if let Some((min, max)) = self.calc_limit_bitrate() {
                         self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }));
                     }
                 }
-            },
+            }
         }
     }
 
@@ -137,7 +133,7 @@ impl EndpointRemoteTrack {
         match req {
             EndpointRemoteTrackReq::Config(config) => {
                 if config.priority.0 == 0 {
-                    log::warn!("[EndpointLocalTrack] view with invalid priority");
+                    log::warn!("[EndpointRemoteTrack] view with invalid priority");
                     self.queue
                         .push_back(Output::RpcRes(req_id, EndpointRemoteTrackRes::Config(Err(RpcError::new2(EndpointErrors::RemoteTrackInvalidPriority)))));
                 } else {
@@ -152,21 +148,18 @@ impl EndpointRemoteTrack {
     fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) {
         match action {
             IngressAction::SetBitrate(bitrate) => {
+                log::info!("[EndpointRemoteTrack] on allocation bitrate {bitrate}");
                 self.allocate_bitrate = Some(bitrate);
-                match self.meta.control {
-                    Some(BitrateControlMode::MaxBitrate) => {
-                        if let Some((min, max)) = self.calc_limit_bitrate() {
-                            self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }))
-                        }
-                    }
-                    Some(BitrateControlMode::DynamicConsumers) | None => {}
+                if let Some((min, max)) = self.calc_limit_bitrate() {
+                    self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }))
                 }
             }
         }
     }
 
     fn calc_limit_bitrate(&self) -> Option<(u64, u64)> {
-        match (self.allocate_bitrate, self.cluster_bitrate_limit) {
+        let cluster_limit = self.meta.control.eq(&BitrateControlMode::DynamicConsumers).then(|| self.cluster_bitrate_limit).flatten();
+        match (self.allocate_bitrate, cluster_limit) {
             (Some(b1), Some((min, max))) => Some((min.min(b1), max.min(b1))),
             (Some(b1), None) => Some((b1, b1)),
             (None, Some((min, max))) => Some((min, max)),

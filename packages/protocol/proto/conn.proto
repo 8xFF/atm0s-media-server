@@ -1,4 +1,4 @@
-syntax = "proto2";
+syntax = "proto3";
 
 import "shared.proto";
 
@@ -7,8 +7,8 @@ package conn;
 message Request {
     message Session {
         message RoomJoin {
-            required shared.RoomJoin info = 1;
-            required string token = 2;
+            shared.RoomJoin info = 1;
+            string token = 2;
         }
 
         message RoomLeave {
@@ -16,8 +16,8 @@ message Request {
         }
 
         message UpdateSdp {
-            required shared.Tracks tracks = 1;
-            required string sdp = 2;
+            shared.Tracks tracks = 1;
+            string sdp = 2;
         }
 
         message Disconnect {
@@ -34,15 +34,15 @@ message Request {
 
     message Sender {
         message Attach {
-            required shared.Sender.Source source = 1;
-            required shared.Sender.Config config = 2;
+            shared.Sender.Source source = 1;
+            shared.Sender.Config config = 2;
         }
 
         message Detach {
 
         }
 
-        required string name = 1;
+        string name = 1;
         oneof request {
             Attach attach = 2;
             Detach detach = 3;
@@ -52,15 +52,15 @@ message Request {
 
     message Receiver {
         message Attach {
-            required shared.Receiver.Source source = 1;
-            required shared.Receiver.Config config = 2;
+            shared.Receiver.Source source = 1;
+            shared.Receiver.Config config = 2;
         }
 
         message Detach {
 
         }
 
-        required string name = 1;
+        string name = 1;
         oneof request {
             Attach attach = 2;
             Detach detach = 3;
@@ -68,7 +68,7 @@ message Request {
         }
     }
 
-    required uint32 req_id = 1;
+    uint32 req_id = 1;
     oneof request {
         Session session = 2;
         Sender sender = 3;
@@ -87,7 +87,7 @@ message Response {
         }
 
         message UpdateSdp {
-            required string sdp = 1;
+            string sdp = 1;
         }
 
         message Disconnect {
@@ -142,7 +142,7 @@ message Response {
         }
     }
 
-    required uint32 req_id = 1;
+    uint32 req_id = 1;
     oneof response {
         shared.Error error = 2;
         Session session = 3;
@@ -158,18 +158,18 @@ message ServerEvent {
         }
 
         message JoinedRoom {
-            required string room = 1;
-            required string peer = 2;
-            required string token = 3;
+            string room = 1;
+            string peer = 2;
+            string token = 3;
         }
 
         message LeavedRoom {
-            required string room = 1;
-            required string peer = 2;
+            string room = 1;
+            string peer = 2;
         }
 
         message Disconnected {
-            required string reason =  1;
+            string reason =  1;
         }
 
         oneof event {
@@ -182,37 +182,37 @@ message ServerEvent {
 
     message Room {
         message PeerJoined {
-            required string peer = 1;
+            string peer = 1;
             optional string metadata = 2;
         }
 
         message PeerUpdated {
-            required string peer = 1;
+            string peer = 1;
             optional string metadata = 2;
         }
 
         message PeerLeaved {
-            required string peer = 1;
+            string peer = 1;
         }
 
         message TrackStarted {
-            required string peer = 1;
-            required string track = 2;
-            required shared.Kind kind = 3;
+            string peer = 1;
+            string track = 2;
+            shared.Kind kind = 3;
             optional string metadata = 4;
         }
 
         message TrackUpdated {
-            required string peer = 1;
-            required string track = 2;
-            required shared.Kind kind = 3;
+            string peer = 1;
+            string track = 2;
+            shared.Kind kind = 3;
             optional string metadata = 4;
         }
 
         message TrackStopped {
-            required string peer = 1;
-            required string track = 2;
-            required shared.Kind kind = 3;
+            string peer = 1;
+            string track = 2;
+            shared.Kind kind = 3;
         }
 
         oneof event {
@@ -234,10 +234,10 @@ message ServerEvent {
                 INACTIVE = 3;
             }
 
-            required StateType state = 1;
+            StateType state = 1;
         }
 
-        required string name = 1;
+        string name = 1;
         oneof event {
             State state = 2;
         }
@@ -252,35 +252,35 @@ message ServerEvent {
                 INACTIVE = 3;
             }
 
-            required StateType state = 1;
+            StateType state = 1;
         }
 
         message Stats {
             message Source {
-                required uint32 bitrate_kbps = 1;
-                required float rtt = 2;
-                required float lost = 3;
-                required float jitter = 4;
+                uint32 bitrate_kbps = 1;
+                float rtt = 2;
+                float lost = 3;
+                float jitter = 4;
             }
 
             message Transmit {
-                required uint32 spatial = 1;
-                required uint32 temporal = 2;
-                required uint32 bitrate_kbps = 3;
+                uint32 spatial = 1;
+                uint32 temporal = 2;
+                uint32 bitrate_kbps = 3;
             }
 
             optional Source source = 1;
             optional Transmit transmit = 2;
         }
 
-        required string name = 1;
+        string name = 1;
         oneof event {
             State state = 2;
             Stats stats = 3;
         }
     }
 
-    required uint32 seq = 1;
+    uint32 seq = 1;
     oneof event {
         Session session = 2;
         Room room = 3;
@@ -291,7 +291,7 @@ message ServerEvent {
 }
 
 message ClientEvent {
-    required uint32 seq = 1;
+    uint32 seq = 1;
     oneof event {
         Request request = 2;
     }

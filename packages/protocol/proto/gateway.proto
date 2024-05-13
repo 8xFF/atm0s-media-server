@@ -1,4 +1,4 @@
-syntax = "proto2";
+syntax = "proto3";
 
 import "shared.proto";
 import "features.proto";
@@ -6,21 +6,21 @@ import "features.proto";
 package gateway;
 
 message ConnectRequest {
-    required string version = 2;
+    string version = 2;
     optional shared.RoomJoin join = 3;
-    required features.Features features = 4;
-    required shared.Tracks tracks = 5;
-    required string sdp = 6;
+    features.Features features = 4;
+    shared.Tracks tracks = 5;
+    string sdp = 6;
 }
 
 message ConnectResponse {
-    required string conn_id = 1;
-    required string sdp = 2;
+    string conn_id = 1;
+    string sdp = 2;
 }
 
 message RemoteIceRequest {
-    required string conn_id = 1;
-    required string candidate = 2;
+    string conn_id = 1;
+    string candidate = 2;
 }
 
 message RemoteIceResponse {

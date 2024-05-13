@@ -1,4 +1,4 @@
-syntax = "proto2";
+syntax = "proto3";
 
 package shared;
 
@@ -9,48 +9,48 @@ enum Kind {
 
 message Receiver {
     message Source {
-        required string peer = 1;
-        required string track = 2;
+        string peer = 1;
+        string track = 2;
     }
 
     message Config {
-        required uint32 priority = 1;
-        required uint32 max_spatial = 2;
-        required uint32 max_temporal = 3;
+        uint32 priority = 1;
+        uint32 max_spatial = 2;
+        uint32 max_temporal = 3;
         optional uint32 min_spatial = 4;
         optional uint32 min_temporal = 5;
     }
 
     message State {
-        required Config config = 1;
+        Config config = 1;
         optional Source source = 2;
     }
 
-    required Kind kind = 1;
-    required string name = 2;
-    required State state = 3;
+    Kind kind = 1;
+    string name = 2;
+    State state = 3;
 }
 
 message Sender {
     message Source {
-        required string id = 1;
-        required bool screen = 2;
+        string id = 1;
+        bool screen = 2;
         optional string metadata = 3;
     }
 
     message Config {
-        required uint32 priority = 1;
-        optional BitrateControlMode bitrate = 2;
+        uint32 priority = 1;
+        BitrateControlMode bitrate = 2;
     }
 
     message State {
-        required Config config = 1;
+        Config config = 1;
         optional Source source = 2;
     }
 
-    required Kind kind = 1;
-    required string name = 2;
-    required State state = 3;
+    Kind kind = 1;
+    string name = 2;
+    State state = 3;
 }
 
 
@@ -60,29 +60,29 @@ message Tracks {
 }
 
 message RoomInfoPublish {
-    required bool peer = 1;
-    required bool tracks = 2;
+    bool peer = 1;
+    bool tracks = 2;
 }
 
 message RoomInfoSubscribe {
-    required bool peers = 1;
-    required bool tracks = 2;
+    bool peers = 1;
+    bool tracks = 2;
 }
 
 message RoomJoin {
-    required string room = 1;
-    required string peer = 2;
-    required RoomInfoPublish publish = 3;
-    required RoomInfoSubscribe subscribe = 4;
+    string room = 1;
+    string peer = 2;
+    RoomInfoPublish publish = 3;
+    RoomInfoSubscribe subscribe = 4;
     optional string metadata = 5;
 }
 
 enum BitrateControlMode {
-    MAX_BITRATE = 0;
-    DYNAMIC_CONSUMERS = 1;
+    DYNAMIC_CONSUMERS = 0;
+    MAX_BITRATE = 1;
 }
 
 message Error {
-    required uint32 code = 1;
-    required string message = 2;
+    uint32 code = 1;
+    string message = 2;
 }
