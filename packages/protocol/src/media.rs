@@ -95,6 +95,10 @@ pub struct MediaLayerSelection {
 pub struct MediaLayersBitrate([Option<MediaLayerBitrate>; 3]);
 
 impl MediaLayersBitrate {
+    pub fn default_sim() -> Self {
+        Self([Some(MediaLayerBitrate([Some(81), None, None])), None, None])
+    }
+
     pub fn set_layer(&mut self, index: usize, layer: MediaLayerBitrate) {
         self.0[index] = Some(layer);
     }

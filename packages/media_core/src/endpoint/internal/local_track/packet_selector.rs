@@ -8,7 +8,7 @@
 
 use std::collections::VecDeque;
 
-use media_server_protocol::media::{MediaKind, MediaMeta, MediaPacket};
+use media_server_protocol::media::{MediaKind, MediaLayersBitrate, MediaMeta, MediaPacket};
 use media_server_utils::{SeqRewrite, TsRewrite};
 
 mod video_h264_sim;
@@ -222,17 +222,17 @@ fn create_selector(pkt: &MediaPacket, bitrate: u64, limit: (u8, u8)) -> Option<B
             None
         }
         MediaMeta::H264 { sim: Some(_), .. } => {
-            let layers = pkt.layers.as_ref()?;
+            let layers = pkt.layers.clone().unwrap_or_else(|| MediaLayersBitrate::default_sim());
             log::info!("[LocalTrack/PacketSelector] create H264SimSelector");
             Some(Box::new(video_h264_sim::Selector::new(bitrate, layers.clone(), limit)))
         }
         MediaMeta::Vp8 { sim: Some(_), .. } => {
-            let layers = pkt.layers.as_ref()?;
+            let layers = pkt.layers.clone().unwrap_or_else(|| MediaLayersBitrate::default_sim());
             log::info!("[LocalTrack/PacketSelector] create Vp8SimSelector");
             Some(Box::new(video_vp8_sim::Selector::new(bitrate, layers.clone(), limit)))
         }
         MediaMeta::Vp9 { svc: Some(_), .. } => {
-            let layers = pkt.layers.as_ref()?;
+            let layers = pkt.layers.clone().unwrap_or_else(|| MediaLayersBitrate::default_sim());
             log::info!("[LocalTrack/PacketSelector] create Vp9SvcSelector");
             Some(Box::new(video_vp9_svc::Selector::new(false, bitrate, layers.clone(), limit)))
         }
