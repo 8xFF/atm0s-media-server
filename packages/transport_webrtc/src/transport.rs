@@ -54,11 +54,13 @@ pub enum Variant {
 
 pub enum ExtIn {
     RemoteIce(u64, Variant, String),
+    RestartIce(u64, Variant, IpAddr, String, String, ConnectRequest),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExtOut {
     RemoteIce(u64, Variant, RpcResult<()>),
+    RestartIce(u64, Variant, RpcResult<String>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -170,7 +172,7 @@ impl TransportWebrtc {
                 rx.request_remb(Bitrate::bps(bitrate));
             }
             InternalOutput::Str0mBwe(current, desired) => {
-                log::debug!("[TransportWebrtc] Setting str0m bwe {current}, desired {desired}");
+                log::info!("[TransportWebrtc] Setting str0m bwe {current}, desired {desired}");
                 let mut bwe = self.rtc.bwe();
                 bwe.set_current_bitrate(current.into());
                 bwe.set_desired_bitrate(desired.into());
@@ -267,6 +269,20 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
                 ExtIn::RemoteIce(req_id, variant, _ice) => {
                     //TODO handle remote-ice with str0m
                     self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(()))).into());
+                }
+                ExtIn::RestartIce(req_id, variant, ip, useragent, token, req) => {
+                    if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
+                        if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
+                            self.internal.on_codec_config(self.rtc.codec_config());
+                            self.queue.push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Ok(answer.to_sdp_string()))));
+                        } else {
+                            self.queue
+                                .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::Str0mError)))));
+                        }
+                    } else {
+                        self.queue
+                            .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::SdpError)))));
+                    }
                 }
             },
             TransportInput::Close => {

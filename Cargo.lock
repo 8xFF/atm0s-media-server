@@ -157,7 +157,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn"
 version = "0.1.10"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=a5688dc280976979cf72cbb0c483444089c7d0d3#a5688dc280976979cf72cbb0c483444089c7d0d3"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -177,7 +177,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.2.0"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=a5688dc280976979cf72cbb0c483444089c7d0d3#a5688dc280976979cf72cbb0c483444089c7d0d3"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
 dependencies = [
  "multiaddr",
  "rand",
@@ -187,7 +187,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-network"
 version = "0.3.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=a5688dc280976979cf72cbb0c483444089c7d0d3#a5688dc280976979cf72cbb0c483444089c7d0d3"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
 dependencies = [
  "aes-gcm",
  "atm0s-sdn-identity",
@@ -214,7 +214,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-router"
 version = "0.1.4"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=a5688dc280976979cf72cbb0c483444089c7d0d3#a5688dc280976979cf72cbb0c483444089c7d0d3"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -226,7 +226,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.1.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=a5688dc280976979cf72cbb0c483444089c7d0d3#a5688dc280976979cf72cbb0c483444089c7d0d3"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
 dependencies = [
  "log",
  "serde",
@@ -2073,7 +2073,7 @@ checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
 [[package]]
 name = "sans-io-runtime"
 version = "0.1.0"
-source = "git+https://github.com/giangndm/sans-io-runtime.git?rev=74d2e92e834aa170b12b791442b292976eeadcf0#74d2e92e834aa170b12b791442b292976eeadcf0"
+source = "git+https://github.com/giangndm/sans-io-runtime.git?rev=e7ef60e0eef35c532c8544c472514ae831a8908f#e7ef60e0eef35c532c8544c472514ae831a8908f"
 dependencies = [
  "convert-enum",
  "derive_more",

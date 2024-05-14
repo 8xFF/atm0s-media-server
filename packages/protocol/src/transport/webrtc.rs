@@ -8,6 +8,7 @@ pub enum RpcReq<Conn> {
     /// Ip, Token, Agent, Req
     Connect(IpAddr, String, String, ConnectRequest),
     RemoteIce(Conn, RemoteIceRequest),
+    RestartIce(Conn, IpAddr, String, String, ConnectRequest),
     Delete(Conn),
 }
 
@@ -18,6 +19,10 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
             RpcReq::RemoteIce(conn, req) => {
                 let (down, layer) = conn.down();
                 (RpcReq::RemoteIce(down, req), Some(layer))
+            }
+            RpcReq::RestartIce(conn, ip_addr, token, user_agent, req) => {
+                let (down, layer) = conn.down();
+                (RpcReq::RestartIce(down, ip_addr, token, user_agent, req), Some(layer))
             }
             RpcReq::Delete(conn) => {
                 let (down, layer) = conn.down();
@@ -31,6 +36,7 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
 pub enum RpcRes<Conn> {
     Connect(RpcResult<(Conn, ConnectResponse)>),
     RemoteIce(RpcResult<RemoteIceResponse>),
+    RestartIce(RpcResult<(Conn, ConnectResponse)>),
     Delete(RpcResult<()>),
 }
 
@@ -40,6 +46,8 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
             RpcRes::Connect(Ok((conn, res))) => RpcRes::Connect(Ok((conn.up(param), res))),
             RpcRes::Connect(Err(e)) => RpcRes::Connect(Err(e)),
             RpcRes::RemoteIce(res) => RpcRes::RemoteIce(res),
+            RpcRes::RestartIce(Ok((conn, res))) => RpcRes::RestartIce(Ok((conn.up(param), res))),
+            RpcRes::RestartIce(Err(e)) => RpcRes::RestartIce(Err(e)),
             RpcRes::Delete(res) => RpcRes::Delete(res),
         }
     }

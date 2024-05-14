@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Instant};
+use std::{env::var, net::SocketAddr, time::Instant};
 
 use atm0s_sdn::{services::visualization, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot};
 use media_server_core::cluster::{self, MediaCluster};
@@ -213,12 +213,16 @@ impl MediaServerWorker {
                 self.media_cluster.input(&mut self.switcher).on_endpoint_control(now, owner.into(), room, control);
                 Output::Continue
             }
-            transport_webrtc::GroupOutput::Ext(_owner, ext) => match ext {
+            transport_webrtc::GroupOutput::Ext(owner, ext) => match ext {
                 transport_webrtc::ExtOut::RemoteIce(req_id, variant, res) => match variant {
                     transport_webrtc::Variant::Whip => Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::RemoteIce(res.map(|_| WhipRemoteIceRes {})))),
                     transport_webrtc::Variant::Whep => Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::RemoteIce(res.map(|_| WhepRemoteIceRes {})))),
                     transport_webrtc::Variant::Webrtc => Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(res.map(|_| RemoteIceResponse {})))),
                 },
+                transport_webrtc::ExtOut::RestartIce(req_id, _, res) => Output::ExtRpc(
+                    req_id,
+                    RpcRes::Webrtc(webrtc::RpcRes::RestartIce(res.map(|sdp| (owner.index(), ConnectResponse { conn_id: "".to_string(), sdp })))),
+                ),
             },
             transport_webrtc::GroupOutput::Shutdown(_owner) => Output::Continue,
             transport_webrtc::GroupOutput::Continue => Output::Continue,
@@ -286,6 +290,13 @@ impl MediaServerWorker {
                     Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::Connect(Err(e))))),
                 },
                 webrtc::RpcReq::RemoteIce(_, _) => todo!(),
+                webrtc::RpcReq::RestartIce(conn, ip, token, user_agent, req) => {
+                    log::info!("on rcp request {req_id}, webrtc::RpcReq::RestartIce");
+                    self.media_webrtc.input(&mut self.switcher).on_event(
+                        now,
+                        GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, token, user_agent, req)),
+                    );
+                }
                 webrtc::RpcReq::Delete(_) => todo!(),
             },
         }

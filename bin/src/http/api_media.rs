@@ -235,14 +235,55 @@ impl MediaApis {
         match res {
             RpcRes::Webrtc(webrtc::RpcRes::Connect(res)) => match res {
                 RpcResult::Ok((conn, res)) => {
-                    log::info!("[MediaAPIs] Whep endpoint created with conn_id {}", res.conn_id);
+                    log::info!("[MediaAPIs] Webrtc endpoint created with conn_id {}", res.conn_id);
                     Ok(HttpResponse::new(Protobuf(ConnectResponse {
                         conn_id: conn.to_string(),
                         sdp: res.sdp,
                     })))
                 }
                 RpcResult::Err(e) => {
-                    log::warn!("Whep endpoint creation failed with {e}");
+                    log::warn!("Webrtc endpoint creation failed with {e}");
+                    Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
+                }
+            },
+            _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+        }
+    }
+
+    /// webrtc restart ice
+    #[oai(path = "/webrtc/:conn_id/restart-ice", method = "post")]
+    async fn webrtc_restart_ice(
+        &self,
+        Data(data): Data<&MediaServerCtx>,
+        UserAgent(user_agent): UserAgent,
+        RemoteIpAddr(ip_addr): RemoteIpAddr,
+        TokenAuthorization(token): TokenAuthorization,
+        conn_id: Path<String>,
+        connect: Protobuf<ConnectRequest>,
+    ) -> Result<HttpResponse<Protobuf<ConnectResponse>>> {
+        let conn_id2 = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        log::info!(
+            "[MediaAPIs] restart_ice webrtc with token {}, ip {}, user_agent {}, conn {}, request {:?}",
+            token.token,
+            ip_addr,
+            user_agent,
+            conn_id.0,
+            connect
+        );
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(conn_id2, ip_addr, token.token, user_agent, connect.0)));
+        data.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        match res {
+            RpcRes::Webrtc(webrtc::RpcRes::RestartIce(res)) => match res {
+                RpcResult::Ok((conn, res)) => {
+                    log::info!("[MediaAPIs] Webrtc endpoint restart ice with conn_id {}", res.conn_id);
+                    Ok(HttpResponse::new(Protobuf(ConnectResponse {
+                        conn_id: conn.to_string(),
+                        sdp: res.sdp,
+                    })))
+                }
+                RpcResult::Err(e) => {
+                    log::warn!("Webrtc endpoint restart ice failed with {e}");
                     Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
