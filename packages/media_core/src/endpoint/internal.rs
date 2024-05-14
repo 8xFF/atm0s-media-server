@@ -300,6 +300,7 @@ impl EndpointInternal {
                 if kind.is_video() {
                     self.bitrate_allocator.input(&mut self.switcher).del_ingress_video_track(id);
                 }
+                self.remote_tracks.input(&mut self.switcher).remove_task(index);
             }
         }
     }
@@ -453,11 +454,13 @@ mod tests {
         );
         assert_eq!(internal.pop_output(now), None);
     }
+
     //TODO single local track, join leave room
     //TODO multi local tracks, join leave room
     //TODO single remote track, join leave room
     //TODO multi remote tracks, join leave room
     //TODO both local and remote tracks, join leave room
+    //TODO test local and remote stopped must clear resource
     //TODO handle close request
     //TODO handle transport connected
     //TODO handle transport disconnected
