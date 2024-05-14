@@ -165,7 +165,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
 
 impl<Owner: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Owner>> for RoomChannelSubscribe<Owner> {
     type Time = Instant;
-    fn pop_output(&mut self, now: Instant) -> Option<Output<Owner>> {
+    fn pop_output(&mut self, _now: Instant) -> Option<Output<Owner>> {
         self.queue.pop_front()
     }
 }
