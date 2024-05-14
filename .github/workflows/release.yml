@@ -28,7 +28,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       RUST_BACKTRACE: 1
- 
+
     strategy:
       matrix:
         build:
@@ -149,13 +149,12 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+
       - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools protobuf-compiler
-      
-      - name: Install mac dev-tools
-        if: matrix.os == 'macos-latest'
-        run: brew install protobuf
+        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
 
       - name: Patch some libs
         run: |
