@@ -149,11 +149,6 @@ jobs:
           override: true
           target: ${{ matrix.target }}
 
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools

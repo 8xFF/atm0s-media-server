@@ -1,7 +1,13 @@
 use std::io::Result;
 
-use prost_build::compile_protos;
+#[cfg(any(feature = "build-protobuf"))]
+use prost_build::Config;
 
 fn main() -> Result<()> {
-    compile_protos(&["./proto/shared.proto", "./proto/conn.proto", "./proto/features.proto", "./proto/gateway.proto"], &["./proto"])
+    #[cfg(feature = "build-protobuf")]
+    Config::new()
+        .out_dir("src/protobuf")
+        .include_file("mod.rs")
+        .compile_protos(&["./proto/shared.proto", "./proto/conn.proto", "./proto/features.proto", "./proto/gateway.proto"], &["./proto"])?;
+    Ok(())
 }
