@@ -24,7 +24,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt install -y libsoxr-dev libopus-dev libssl-dev libfdk-aac-dev protobuf-compiler
+          sudo apt install -y libsoxr-dev libopus-dev libssl-dev libfdk-aac-dev
       - name: Install Rust
         run: rustup update stable
       - name: Install Protoc
