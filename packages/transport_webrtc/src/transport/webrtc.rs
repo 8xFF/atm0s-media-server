@@ -548,12 +548,14 @@ impl TransportWebrtcSdk {
             protobuf::conn::request::sender::Request::Detach(_) => {
                 if track.has_source() {
                     track.del_source();
+                    let event = InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(track_id, RemoteTrackEvent::Ended)));
                     self.send_rpc_res(
                         req_id,
                         protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
                             response: Some(protobuf::conn::response::sender::Response::Detach(protobuf::conn::response::sender::Detach {})),
                         }),
                     );
+                    self.queue.push_back(event);
                 } else {
                     self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTrackNotAttached));
                 }
