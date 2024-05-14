@@ -151,6 +151,8 @@ jobs:
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
