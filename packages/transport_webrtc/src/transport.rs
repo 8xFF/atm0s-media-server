@@ -138,7 +138,7 @@ impl TransportWebrtc {
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
             VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
             VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
-            VariantParams::Webrtc(ip, token, user_agent, req) => Box::new(webrtc::TransportWebrtcSdk::new(req)),
+            VariantParams::Webrtc(_ip, _token, _user_agent, req) => Box::new(webrtc::TransportWebrtcSdk::new(req)),
         };
         internal.on_codec_config(rtc.codec_config());
         local_convert.set_config(rtc.codec_config());
