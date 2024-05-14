@@ -16,7 +16,7 @@ use std::{
 use atm0s_sdn::features::{FeaturesControl, FeaturesEvent};
 use media_server_protocol::{
     endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName},
-    media::{MediaKind, MediaPacket},
+    media::MediaPacket,
 };
 
 use crate::transport::{LocalTrackId, RemoteTrackId};

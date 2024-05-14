@@ -4,7 +4,7 @@ use poem::{http::StatusCode, FromRequest};
 pub struct UserAgent(pub String);
 
 impl<'a> FromRequest<'a> for UserAgent {
-    fn from_request(req: &'a poem::Request, body: &mut poem::RequestBody) -> impl std::future::Future<Output = poem::Result<Self>> + Send {
+    fn from_request(req: &'a poem::Request, _body: &mut poem::RequestBody) -> impl std::future::Future<Output = poem::Result<Self>> + Send {
         async move {
             let headers = req.headers();
             let user_agent = headers.get("User-Agent").ok_or(poem::Error::from_string("Bad Request", StatusCode::BAD_REQUEST))?;

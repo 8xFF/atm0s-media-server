@@ -270,7 +270,7 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
                     //TODO handle remote-ice with str0m
                     self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(()))).into());
                 }
-                ExtIn::RestartIce(req_id, variant, ip, useragent, token, req) => {
+                ExtIn::RestartIce(req_id, variant, _ip, _useragent, _token, req) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_codec_config(self.rtc.codec_config());

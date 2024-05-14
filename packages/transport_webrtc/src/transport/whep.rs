@@ -115,7 +115,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
         }
     }
 
-    fn on_rpc_res(&mut self, req_id: u32, res: media_server_protocol::transport::RpcResult<super::InternalRpcRes>) {}
+    fn on_rpc_res(&mut self, _req_id: u32, _res: media_server_protocol::transport::RpcResult<super::InternalRpcRes>) {}
 
     fn on_transport_rpc_res(&mut self, _now: Instant, _req_id: media_server_core::endpoint::EndpointReqId, _res: media_server_core::endpoint::EndpointRes) {}
 
@@ -136,7 +136,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                 }
                 self.try_subscribe(peer, track, meta);
             }
-            EndpointEvent::PeerTrackStopped(peer, track, meta) => self.try_unsubscribe(peer, track),
+            EndpointEvent::PeerTrackStopped(peer, track, _meta) => self.try_unsubscribe(peer, track),
             EndpointEvent::LocalMediaTrack(_track, event) => match event {
                 EndpointLocalTrackEvent::Media(pkt) => {
                     let mid = if pkt.meta.is_audio() {

@@ -225,7 +225,7 @@ impl VideoSelector for Selector {
         self.select_layer();
     }
 
-    fn set_limit_layer(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, max_spatial: u8, max_temporal: u8) {
+    fn set_limit_layer(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, max_spatial: u8, max_temporal: u8) {
         self.limit = (max_spatial, max_temporal);
         self.select_layer();
     }

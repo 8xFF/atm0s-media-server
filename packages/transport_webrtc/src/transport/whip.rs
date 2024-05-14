@@ -104,7 +104,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
         }
     }
 
-    fn on_rpc_res(&mut self, req_id: u32, res: media_server_protocol::transport::RpcResult<super::InternalRpcRes>) {}
+    fn on_rpc_res(&mut self, _req_id: u32, _res: media_server_protocol::transport::RpcResult<super::InternalRpcRes>) {}
 
     fn on_transport_rpc_res(&mut self, _now: Instant, _req_id: media_server_core::endpoint::EndpointReqId, _res: media_server_core::endpoint::EndpointRes) {}
 

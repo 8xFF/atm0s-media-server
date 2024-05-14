@@ -191,7 +191,7 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     })),
                 }));
             }
-            EndpointEvent::PeerLeaved(peer, meta) => {
+            EndpointEvent::PeerLeaved(peer, _meta) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} leaved");
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::PeerLeaved(PeerLeaved { peer: peer.0 })),

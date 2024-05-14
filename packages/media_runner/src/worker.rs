@@ -1,4 +1,4 @@
-use std::{env::var, net::SocketAddr, time::Instant};
+use std::{net::SocketAddr, time::Instant};
 
 use atm0s_sdn::{services::visualization, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot};
 use media_server_core::cluster::{self, MediaCluster};

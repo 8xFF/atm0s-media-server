@@ -50,7 +50,7 @@ impl Selector {
         if self.target == self.current {
             return;
         }
-        if let MediaMeta::H264 { key, profile: _, sim: Some(sim) } = &mut pkt.meta {
+        if let MediaMeta::H264 { key, profile: _, sim: Some(_sim) } = &mut pkt.meta {
             match (self.current, self.target) {
                 (Some(current), Some(target)) => {
                     if target < current {
@@ -123,7 +123,7 @@ impl VideoSelector for Selector {
         self.select_layer();
     }
 
-    fn set_limit_layer(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, max_spatial: u8, max_temporal: u8) {
+    fn set_limit_layer(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, max_spatial: u8, max_temporal: u8) {
         self.limit = (max_spatial, max_temporal);
         self.select_layer();
     }

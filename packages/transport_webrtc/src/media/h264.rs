@@ -21,4 +21,4 @@ pub fn parse_rtp(payload: &[u8], profile: H264Profile, rid: Option<u8>) -> Optio
     }
 }
 
-pub fn rewrite_rtp(payload: &mut [u8], sim: &H264Sim) {}
+pub fn rewrite_rtp(_payload: &mut [u8], _sim: &H264Sim) {}

@@ -211,7 +211,7 @@ impl VideoSelector for Selector {
         self.select_layer();
     }
 
-    fn set_limit_layer(&mut self, ctx: &mut VideoSelectorCtx, now_ms: u64, max_spatial: u8, max_temporal: u8) {
+    fn set_limit_layer(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, max_spatial: u8, max_temporal: u8) {
         self.limit = (max_spatial, max_temporal);
         self.select_layer();
     }
@@ -291,7 +291,7 @@ mod tests {
                         let ts = ctx.ts_rewrite.generate(ts, pkt.ts as u64) as u32;
                         let (pic_id, tl0idx) = match &pkt.meta {
                             MediaMeta::Vp8 {
-                                key,
+                                key: _,
                                 sim: Some(Vp8Sim { picture_id, tl0_pic_idx, .. }),
                             } => (picture_id.unwrap(), tl0_pic_idx.unwrap()),
                             _ => panic!("Should not happen"),
