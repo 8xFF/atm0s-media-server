@@ -1,7 +1,6 @@
-const DEFAULT_BWE_BPS: u64 = 800_000; // in inatve or warm-up state we will used minimum DEFAULT_BWE_BPS
-const DEFAULT_DESIRED_BPS: u64 = 1_000_000; // in inatve or warm-up state we will used minimum DEFAULT_DESIRED_BPS
-const WARM_UP_FIRST_STAGE_MS: u128 = 1000;
-const WARM_UP_MS: u128 = 2000;
+const WARM_UP_BWE_BPS: u64 = 800_000; // in inatve or warm-up state we will used minimum WARM_UP_BWE_BPS
+const WARM_UP_DESIRED_BPS: u64 = 1_000_000; // in inatve or warm-up state we will used minimum WARM_UP_DESIRED_BPS
+const WARM_UP_MS: u128 = 5000;
 const TIMEOUT_MS: u128 = 2000;
 
 use std::time::Instant;
@@ -9,9 +8,7 @@ use std::time::Instant;
 /// BweState manage stage of Bwe for avoiding video stream stuck or slow start.
 ///
 /// - It start with Inactive state, in this state all bwe = bwe.max(DEFAULT_BWE_BPS)
-/// - In WarmUp state, it have 2 phase, each phase is 1 seconds.
-/// After first phase, the Bwe will be reset with latest_bwe.max(DEFAULT_BWE_BPS).
-/// In this phase, bwe = bwe.max(DEFAULT_BWE_BPS). After WarmUp end it will be switched to Active
+/// - In WarmUp state, we reset bwe with WARM_UP_BWE_BPS, each time we receive bwe we rewrite bwe = bwe.max(DEFAULT_BWE_BPS). After WarmUp end it will be switched to Active
 /// - In Active, dont change result. If after TIMEOUT_MS, we dont have video packet, it will be reset to Inactive
 ///
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -21,8 +18,7 @@ pub enum BweState {
     WarmUp {
         started_at: Instant,
         last_video_pkt: Instant,
-        first_stage: bool,
-        last_bwe: Option<u64>,
+        reset_bwe: bool,
     },
     Active {
         last_video_pkt: Instant,
@@ -37,31 +33,32 @@ impl BweState {
             Self::WarmUp {
                 started_at,
                 last_video_pkt,
-                first_stage,
-                last_bwe,
+                reset_bwe,
             } => {
-                if now.duration_since(*last_video_pkt).as_millis() >= TIMEOUT_MS {
+                if *reset_bwe {
+                    *reset_bwe = false;
+                    log::info!("[BweState] reset to default BWE in WarmUp state");
+                    Some(WARM_UP_BWE_BPS)
+                } else if now.duration_since(*last_video_pkt).as_millis() >= TIMEOUT_MS {
                     log::info!("[BweState] switched from WarmUp to Inactive after {:?} not received video pkt", now.duration_since(*last_video_pkt));
                     *self = Self::Inactive;
-                    return None;
+                    Some(0)
                 } else if now.duration_since(*started_at).as_millis() >= WARM_UP_MS {
                     log::info!("[BweState] switched from WarmUp to Active after {:?}", now.duration_since(*started_at));
                     *self = Self::Active { last_video_pkt: *last_video_pkt };
                     None
-                } else if *first_stage && now.duration_since(*started_at).as_millis() >= WARM_UP_FIRST_STAGE_MS {
-                    let init_bitrate = last_bwe.unwrap_or(DEFAULT_BWE_BPS).max(DEFAULT_BWE_BPS);
-                    log::info!("[BweState] WarmUp first_stage end after {:?} => reset Bwe({init_bitrate})", now.duration_since(*started_at));
-                    *first_stage = false;
-                    Some(init_bitrate)
                 } else {
                     None
                 }
             }
             Self::Active { last_video_pkt } => {
                 if now.duration_since(*last_video_pkt).as_millis() >= TIMEOUT_MS {
+                    log::info!("[BweState] Switch to Inactive start after {TIMEOUT_MS} ms not send video data");
                     *self = Self::Inactive;
+                    Some(0)
+                } else {
+                    None
                 }
-                None
             }
         }
     }
@@ -73,8 +70,7 @@ impl BweState {
                 *self = Self::WarmUp {
                     started_at: now,
                     last_video_pkt: now,
-                    first_stage: true,
-                    last_bwe: None,
+                    reset_bwe: true,
                 }
             }
             Self::WarmUp { last_video_pkt, .. } | Self::Active { last_video_pkt } => {
@@ -85,14 +81,11 @@ impl BweState {
 
     pub fn filter_bwe(&mut self, bwe: u64) -> u64 {
         match self {
-            Self::Inactive => {
-                log::debug!("[BweState] rewrite bwe {bwe} to {} with Inactive or WarmUp state", bwe.max(DEFAULT_BWE_BPS));
-                bwe.max(DEFAULT_BWE_BPS)
-            }
-            Self::WarmUp { last_bwe, .. } => {
-                log::debug!("[BweState] rewrite bwe {bwe} to {} with Inactive or WarmUp state", bwe.max(DEFAULT_BWE_BPS));
-                *last_bwe = Some(bwe);
-                bwe.max(DEFAULT_BWE_BPS)
+            Self::Inactive => 0,
+            Self::WarmUp { .. } => {
+                let new_bwe = bwe.max(WARM_UP_BWE_BPS);
+                log::debug!("[BweState] rewrite bwe {bwe} to {new_bwe} with WarmUp state");
+                new_bwe
             }
             Self::Active { .. } => bwe,
         }
@@ -100,13 +93,12 @@ impl BweState {
 
     pub fn filter_bwe_config(&mut self, current: u64, desired: u64) -> (u64, u64) {
         match self {
-            Self::Inactive | Self::WarmUp { .. } => {
-                log::debug!(
-                    "[BweState] rewrite current {current}, desired {desired} to current {}, desired {} with Inactive or WarmUp state",
-                    current.max(DEFAULT_BWE_BPS),
-                    desired.max(DEFAULT_DESIRED_BPS)
-                );
-                (current.max(DEFAULT_BWE_BPS), desired.max(DEFAULT_DESIRED_BPS))
+            Self::Inactive => (0, 0),
+            Self::WarmUp { .. } => {
+                let new_c = current.max(WARM_UP_BWE_BPS);
+                let new_d = desired.max(WARM_UP_DESIRED_BPS);
+                log::debug!("[BweState] rewrite current {current}, desired {desired} to current {new_c}, desired {new_d} with WarmUp state",);
+                (new_c, new_d)
             }
             Self::Active { .. } => (current, desired),
         }
@@ -117,7 +109,7 @@ impl BweState {
 mod test {
     use std::time::{Duration, Instant};
 
-    use crate::transport::bwe_state::{DEFAULT_BWE_BPS, DEFAULT_DESIRED_BPS, TIMEOUT_MS, WARM_UP_FIRST_STAGE_MS, WARM_UP_MS};
+    use crate::transport::bwe_state::{TIMEOUT_MS, WARM_UP_BWE_BPS, WARM_UP_DESIRED_BPS, WARM_UP_MS};
 
     use super::BweState;
 
@@ -127,8 +119,8 @@ mod test {
         assert_eq!(state, BweState::Inactive);
         assert_eq!(state.on_tick(Instant::now()), None);
 
-        assert_eq!(state.filter_bwe(100), DEFAULT_BWE_BPS);
-        assert_eq!(state.filter_bwe_config(100, 200), (DEFAULT_BWE_BPS, DEFAULT_DESIRED_BPS));
+        assert_eq!(state.filter_bwe(100), 0);
+        assert_eq!(state.filter_bwe_config(100, 200), (0, 0));
     }
 
     #[test]
@@ -139,13 +131,13 @@ mod test {
         state.on_send_video(now);
         assert!(matches!(state, BweState::WarmUp { .. }));
 
-        assert_eq!(state.filter_bwe(100), DEFAULT_BWE_BPS);
-        assert_eq!(state.filter_bwe_config(100, 200), (DEFAULT_BWE_BPS, DEFAULT_DESIRED_BPS));
+        assert_eq!(state.filter_bwe(100), WARM_UP_BWE_BPS);
+        assert_eq!(state.filter_bwe_config(100, 200), (WARM_UP_BWE_BPS, WARM_UP_DESIRED_BPS));
 
-        assert_eq!(state.filter_bwe(DEFAULT_BWE_BPS + 100), DEFAULT_BWE_BPS + 100);
+        assert_eq!(state.filter_bwe(WARM_UP_BWE_BPS + 100), WARM_UP_BWE_BPS + 100);
         assert_eq!(
-            state.filter_bwe_config(DEFAULT_BWE_BPS + 100, DEFAULT_DESIRED_BPS + 200),
-            (DEFAULT_BWE_BPS + 100, DEFAULT_DESIRED_BPS + 200)
+            state.filter_bwe_config(WARM_UP_BWE_BPS + 100, WARM_UP_DESIRED_BPS + 200),
+            (WARM_UP_BWE_BPS + 100, WARM_UP_DESIRED_BPS + 200)
         );
     }
 
@@ -160,7 +152,7 @@ mod test {
         assert!(matches!(state, BweState::Active { .. }));
 
         // after timeout without video packet => reset to Inactive
-        assert_eq!(state.on_tick(now + Duration::from_millis(TIMEOUT_MS as u64)), None);
+        assert_eq!(state.on_tick(now + Duration::from_millis(TIMEOUT_MS as u64)), Some(0));
         assert!(matches!(state, BweState::Inactive));
     }
 
@@ -170,15 +162,11 @@ mod test {
         let mut state = BweState::WarmUp {
             started_at: now,
             last_video_pkt: now,
-            first_stage: true,
-            last_bwe: None,
+            reset_bwe: true,
         };
 
-        assert_eq!(state.on_tick(now), None);
-        assert_eq!(state.on_tick(now + Duration::from_millis(WARM_UP_FIRST_STAGE_MS as u64)), Some(DEFAULT_BWE_BPS));
-
-        state.on_send_video(now + Duration::from_millis(100));
-
+        assert_eq!(state.on_tick(now), Some(WARM_UP_BWE_BPS));
+        state.on_send_video(now + Duration::from_millis((WARM_UP_MS - 100) as u64));
         assert_eq!(state.on_tick(now + Duration::from_millis(WARM_UP_MS as u64)), None);
         assert!(matches!(state, BweState::Active { .. }));
     }
@@ -189,14 +177,11 @@ mod test {
         let mut state = BweState::WarmUp {
             started_at: now,
             last_video_pkt: now,
-            first_stage: true,
-            last_bwe: None,
+            reset_bwe: true,
         };
 
-        assert_eq!(state.on_tick(now), None);
-        assert_eq!(state.on_tick(now + Duration::from_millis(WARM_UP_FIRST_STAGE_MS as u64)), Some(DEFAULT_BWE_BPS));
-
-        assert_eq!(state.on_tick(now + Duration::from_millis(TIMEOUT_MS as u64)), None);
+        assert_eq!(state.on_tick(now), Some(WARM_UP_BWE_BPS));
+        assert_eq!(state.on_tick(now + Duration::from_millis(TIMEOUT_MS as u64)), Some(0));
         assert!(matches!(state, BweState::Inactive));
     }
 }
