@@ -27,6 +27,11 @@ jobs:
           sudo apt install -y libsoxr-dev libopus-dev libssl-dev libfdk-aac-dev protobuf-compiler
       - name: Install Rust
         run: rustup update stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Running cargo test
