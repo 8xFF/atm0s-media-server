@@ -142,6 +142,7 @@ version = "0.1.0"
 dependencies = [
  "atm0s-sdn",
  "clap",
+ "local-ip-address",
  "log",
  "media-server-protocol",
  "media-server-runner",

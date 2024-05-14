@@ -18,3 +18,4 @@ sans-io-runtime = { workspace = true }
 atm0s-sdn = { workspace = true }
 media-server-protocol = { path = "../packages/protocol" }
 media-server-runner = { path = "../packages/media_runner" }
+local-ip-address = "0.6"
