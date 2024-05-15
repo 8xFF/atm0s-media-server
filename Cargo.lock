@@ -158,7 +158,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn"
 version = "0.1.10"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=9200a1615def0ddffce8338b34afd24421f24269#9200a1615def0ddffce8338b34afd24421f24269"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -178,7 +178,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.2.0"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=9200a1615def0ddffce8338b34afd24421f24269#9200a1615def0ddffce8338b34afd24421f24269"
 dependencies = [
  "multiaddr",
  "rand",
@@ -188,7 +188,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-network"
 version = "0.3.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=9200a1615def0ddffce8338b34afd24421f24269#9200a1615def0ddffce8338b34afd24421f24269"
 dependencies = [
  "aes-gcm",
  "atm0s-sdn-identity",
@@ -215,7 +215,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-router"
 version = "0.1.4"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=9200a1615def0ddffce8338b34afd24421f24269#9200a1615def0ddffce8338b34afd24421f24269"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -227,7 +227,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.1.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a#fb92a4eec2a7d0d4d93c71fd8002f2e010b8ae5a"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=9200a1615def0ddffce8338b34afd24421f24269#9200a1615def0ddffce8338b34afd24421f24269"
 dependencies = [
  "log",
  "serde",
