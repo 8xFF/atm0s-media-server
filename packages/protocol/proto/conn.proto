@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "shared.proto";
+import "features.proto";
 
 package conn;
 
@@ -29,6 +30,21 @@ message Request {
             RoomLeave leave = 2;
             UpdateSdp sdp = 3;
             Disconnect disconnect = 4;
+        }
+    }
+
+    message Rooom {
+        message SubscribePeer {
+            string peer = 1;
+        }
+
+        message UnsubscribePeer {
+            string peer = 1;
+        }
+
+        oneof request {
+            SubscribePeer subscribe = 1;
+            UnsubscribePeer unsubscribe = 2;
         }
     }
 
@@ -71,8 +87,10 @@ message Request {
     uint32 req_id = 1;
     oneof request {
         Session session = 2;
-        Sender sender = 3;
-        Receiver receiver = 4;
+        Rooom room = 3;
+        Sender sender = 4;
+        Receiver receiver = 5;
+        features.Request features = 6;
     }
 }
 
@@ -99,6 +117,21 @@ message Response {
             RoomLeave leave = 2;
             UpdateSdp sdp = 3;
             Disconnect disconnect = 4;
+        }
+    }
+
+    message Room {
+        message SubscribePeer {
+
+        }
+
+        message UnsubscribePeer {
+
+        }
+
+        oneof response {
+            SubscribePeer subscribe = 1;
+            UnsubscribePeer unsubscribe = 2;
         }
     }
 
@@ -146,8 +179,10 @@ message Response {
     oneof response {
         shared.Error error = 2;
         Session session = 3;
-        Sender sender = 4;
-        Receiver receiver = 5;
+        Room room = 4;
+        Sender sender = 5;
+        Receiver receiver = 6;
+        features.Request features = 7;
     }
 }
 
@@ -160,7 +195,6 @@ message ServerEvent {
         message JoinedRoom {
             string room = 1;
             string peer = 2;
-            string token = 3;
         }
 
         message LeavedRoom {
@@ -172,11 +206,17 @@ message ServerEvent {
             string reason =  1;
         }
 
+        message GoAway {
+            string reason = 1;
+            uint32 remain_seconds = 2;
+        }
+
         oneof event {
             Connected connected = 1;
             JoinedRoom joined = 2;
             LeavedRoom leaved = 3;
             Disconnected disconnected = 4;
+            GoAway goway = 5;
         }
     }
 
@@ -249,7 +289,8 @@ message ServerEvent {
                 NO_SOURCE = 0;
                 WAITING = 1;
                 LIVE = 2;
-                INACTIVE = 3;
+                KEY_ONLY = 3;
+                INACTIVE = 4;
             }
 
             StateType state = 1;
@@ -287,6 +328,7 @@ message ServerEvent {
         Sender sender = 4;
         Receiver receiver = 5;
         Response response = 6;
+        features.ServerEvent features = 7;
     }
 }
 

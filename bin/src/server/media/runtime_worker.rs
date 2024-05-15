@@ -3,7 +3,7 @@ use std::{collections::VecDeque, sync::Arc, time::Instant};
 use atm0s_sdn::{
     secure::{HandshakeBuilderXDA, StaticKeyAuthorization},
     services::visualization,
-    ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, SdnExtOut, SdnWorkerBusEvent,
+    ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, SdnExtIn, SdnExtOut, SdnWorkerBusEvent,
 };
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, SdnConfig, UserData, SC, SE, TC, TW};
@@ -14,6 +14,7 @@ use crate::NodeConfig;
 
 #[derive(Debug, Clone)]
 pub enum ExtIn {
+    Sdn(SdnExtIn<UserData, SC>),
     Rpc(u64, RpcReq<usize>),
 }
 
@@ -76,7 +77,7 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
 
         MediaRuntimeWorker {
             index,
-            worker: MediaServerWorker::new(sdn_config, cfg.media),
+            worker: MediaServerWorker::new(cfg.node.udp_port, sdn_config, cfg.media),
             queue,
         }
     }
@@ -137,6 +138,7 @@ impl MediaRuntimeWorker {
             },
             Input::Ext(ext) => match ext {
                 ExtIn::Rpc(req_id, ext) => WorkerInput::ExtRpc(req_id, ext),
+                ExtIn::Sdn(ext) => WorkerInput::ExtSdn(ext),
             },
             Input::Net(owner, event) => WorkerInput::Net(owner, event),
         }

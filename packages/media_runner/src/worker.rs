@@ -40,6 +40,7 @@ pub type TW = ();
 
 pub enum Input {
     ExtRpc(u64, RpcReq<usize>),
+    ExtSdn(SdnExtIn<UserData, SC>),
     Net(Owner, BackendIncoming),
     Bus(SdnWorkerBusEvent<UserData, SC, SE, TC, TW>),
 }
@@ -76,14 +77,15 @@ pub struct MediaServerWorker {
 }
 
 impl MediaServerWorker {
-    pub fn new(sdn: SdnConfig, media: MediaConfig) -> Self {
+    pub fn new(udp_port: u16, sdn: SdnConfig, media: MediaConfig) -> Self {
+        let sdn_udp_addr = SocketAddr::from(([0, 0, 0, 0], udp_port));
         Self {
-            sdn_slot: 0,
+            sdn_slot: 1, //TODO dont use this hack, must to wait to bind success to network
             sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
             media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs), TaskType::MediaWebrtc),
             switcher: TaskSwitcher::new(3),
-            queue: Default::default(),
+            queue: DynamicDeque::from([Output::Net(Owner::Sdn, BackendOutgoing::UdpListen { addr: sdn_udp_addr, reuse: true })]),
             timer: TimePivot::build(),
         }
     }
@@ -103,6 +105,10 @@ impl MediaServerWorker {
     pub fn on_event(&mut self, now: Instant, input: Input) {
         match input {
             Input::ExtRpc(req_id, req) => self.process_rpc(now, req_id, req),
+            Input::ExtSdn(ext) => {
+                let now_ms = self.timer.timestamp_ms(now);
+                self.sdn_worker.input(&mut self.switcher).on_event(now_ms, SdnWorkerInput::Ext(ext));
+            }
             Input::Net(owner, event) => match owner {
                 Owner::Sdn => {
                     let now_ms = self.timer.timestamp_ms(now);
@@ -111,7 +117,8 @@ impl MediaServerWorker {
                             self.sdn_worker.input(&mut self.switcher).on_event(now_ms, SdnWorkerInput::Net(NetInput::UdpPacket(from, data)));
                         }
                         BackendIncoming::UdpListenResult { bind: _, result } => {
-                            let (_addr, slot) = result.expect("Should listen ok");
+                            let (addr, slot) = result.expect("Should listen ok");
+                            log::info!("[MediaServerWorker] sdn listen success on {addr}, slot {slot}");
                             self.sdn_slot = slot;
                         }
                     }

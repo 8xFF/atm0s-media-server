@@ -7,7 +7,7 @@ pub struct ConnectRequest {
     #[prost(message, optional, tag = "3")]
     pub join: ::core::option::Option<super::shared::RoomJoin>,
     #[prost(message, optional, tag = "4")]
-    pub features: ::core::option::Option<super::features::Features>,
+    pub features: ::core::option::Option<super::features::Config>,
     #[prost(message, optional, tag = "5")]
     pub tracks: ::core::option::Option<super::shared::Tracks>,
     #[prost(string, tag = "6")]

@@ -463,6 +463,12 @@ impl TransportWebrtcSdk {
                     Some(receiver_req) => self.on_recever_req(req.req_id, &receiver.name, receiver_req),
                     None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
                 },
+                Some(protobuf::conn::request::Request::Room(room)) => {
+                    todo!()
+                }
+                Some(protobuf::conn::request::Request::Features(features)) => {
+                    todo!()
+                }
                 None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
             },
         }

@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use atm0s_sdn::SdnExtIn;
 use clap::Parser;
 use media_server_runner::MediaConfig;
 use sans_io_runtime::{backend::PollingBackend, Controller};
@@ -60,6 +61,10 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             media: MediaConfig { webrtc_addrs: webrtc_addrs.clone() },
         };
         controller.add_worker::<_, _, MediaRuntimeWorker, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);
+    }
+
+    for seed in node.seeds {
+        controller.send_to(0, ExtIn::Sdn(SdnExtIn::ConnectTo(seed)));
     }
 
     let mut req_id_seed = 0;

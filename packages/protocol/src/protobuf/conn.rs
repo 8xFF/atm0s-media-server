@@ -4,7 +4,7 @@
 pub struct Request {
     #[prost(uint32, tag = "1")]
     pub req_id: u32,
-    #[prost(oneof = "request::Request", tags = "2, 3, 4")]
+    #[prost(oneof = "request::Request", tags = "2, 3, 4, 5, 6")]
     pub request: ::core::option::Option<request::Request>,
 }
 /// Nested message and enum types in `Request`.
@@ -50,6 +50,35 @@ pub mod request {
             Sdp(UpdateSdp),
             #[prost(message, tag = "4")]
             Disconnect(Disconnect),
+        }
+    }
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Rooom {
+        #[prost(oneof = "rooom::Request", tags = "1, 2")]
+        pub request: ::core::option::Option<rooom::Request>,
+    }
+    /// Nested message and enum types in `Rooom`.
+    pub mod rooom {
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct SubscribePeer {
+            #[prost(string, tag = "1")]
+            pub peer: ::prost::alloc::string::String,
+        }
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct UnsubscribePeer {
+            #[prost(string, tag = "1")]
+            pub peer: ::prost::alloc::string::String,
+        }
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Oneof)]
+        pub enum Request {
+            #[prost(message, tag = "1")]
+            Subscribe(SubscribePeer),
+            #[prost(message, tag = "2")]
+            Unsubscribe(UnsubscribePeer),
         }
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
@@ -130,9 +159,13 @@ pub mod request {
         #[prost(message, tag = "2")]
         Session(Session),
         #[prost(message, tag = "3")]
-        Sender(Sender),
+        Room(Rooom),
         #[prost(message, tag = "4")]
+        Sender(Sender),
+        #[prost(message, tag = "5")]
         Receiver(Receiver),
+        #[prost(message, tag = "6")]
+        Features(super::super::features::Request),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -140,7 +173,7 @@ pub mod request {
 pub struct Response {
     #[prost(uint32, tag = "1")]
     pub req_id: u32,
-    #[prost(oneof = "response::Response", tags = "2, 3, 4, 5")]
+    #[prost(oneof = "response::Response", tags = "2, 3, 4, 5, 6, 7")]
     pub response: ::core::option::Option<response::Response>,
 }
 /// Nested message and enum types in `Response`.
@@ -179,6 +212,29 @@ pub mod response {
             Sdp(UpdateSdp),
             #[prost(message, tag = "4")]
             Disconnect(Disconnect),
+        }
+    }
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Room {
+        #[prost(oneof = "room::Response", tags = "1, 2")]
+        pub response: ::core::option::Option<room::Response>,
+    }
+    /// Nested message and enum types in `Room`.
+    pub mod room {
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct SubscribePeer {}
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct UnsubscribePeer {}
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Oneof)]
+        pub enum Response {
+            #[prost(message, tag = "1")]
+            Subscribe(SubscribePeer),
+            #[prost(message, tag = "2")]
+            Unsubscribe(UnsubscribePeer),
         }
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
@@ -245,9 +301,13 @@ pub mod response {
         #[prost(message, tag = "3")]
         Session(Session),
         #[prost(message, tag = "4")]
-        Sender(Sender),
+        Room(Room),
         #[prost(message, tag = "5")]
+        Sender(Sender),
+        #[prost(message, tag = "6")]
         Receiver(Receiver),
+        #[prost(message, tag = "7")]
+        Features(super::super::features::Request),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -255,7 +315,7 @@ pub mod response {
 pub struct ServerEvent {
     #[prost(uint32, tag = "1")]
     pub seq: u32,
-    #[prost(oneof = "server_event::Event", tags = "2, 3, 4, 5, 6")]
+    #[prost(oneof = "server_event::Event", tags = "2, 3, 4, 5, 6, 7")]
     pub event: ::core::option::Option<server_event::Event>,
 }
 /// Nested message and enum types in `ServerEvent`.
@@ -263,7 +323,7 @@ pub mod server_event {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Session {
-        #[prost(oneof = "session::Event", tags = "1, 2, 3, 4")]
+        #[prost(oneof = "session::Event", tags = "1, 2, 3, 4, 5")]
         pub event: ::core::option::Option<session::Event>,
     }
     /// Nested message and enum types in `Session`.
@@ -278,8 +338,6 @@ pub mod server_event {
             pub room: ::prost::alloc::string::String,
             #[prost(string, tag = "2")]
             pub peer: ::prost::alloc::string::String,
-            #[prost(string, tag = "3")]
-            pub token: ::prost::alloc::string::String,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Message)]
@@ -296,6 +354,14 @@ pub mod server_event {
             pub reason: ::prost::alloc::string::String,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct GoAway {
+            #[prost(string, tag = "1")]
+            pub reason: ::prost::alloc::string::String,
+            #[prost(uint32, tag = "2")]
+            pub remain_seconds: u32,
+        }
+        #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Oneof)]
         pub enum Event {
             #[prost(message, tag = "1")]
@@ -306,6 +372,8 @@ pub mod server_event {
             Leaved(LeavedRoom),
             #[prost(message, tag = "4")]
             Disconnected(Disconnected),
+            #[prost(message, tag = "5")]
+            Goway(GoAway),
         }
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
@@ -491,7 +559,8 @@ pub mod server_event {
                 NoSource = 0,
                 Waiting = 1,
                 Live = 2,
-                Inactive = 3,
+                KeyOnly = 3,
+                Inactive = 4,
             }
             impl StateType {
                 /// String value of the enum field names used in the ProtoBuf definition.
@@ -503,6 +572,7 @@ pub mod server_event {
                         StateType::NoSource => "NO_SOURCE",
                         StateType::Waiting => "WAITING",
                         StateType::Live => "LIVE",
+                        StateType::KeyOnly => "KEY_ONLY",
                         StateType::Inactive => "INACTIVE",
                     }
                 }
@@ -512,6 +582,7 @@ pub mod server_event {
                         "NO_SOURCE" => Some(Self::NoSource),
                         "WAITING" => Some(Self::Waiting),
                         "LIVE" => Some(Self::Live),
+                        "KEY_ONLY" => Some(Self::KeyOnly),
                         "INACTIVE" => Some(Self::Inactive),
                         _ => None,
                     }
@@ -573,6 +644,8 @@ pub mod server_event {
         Receiver(Receiver),
         #[prost(message, tag = "6")]
         Response(super::Response),
+        #[prost(message, tag = "7")]
+        Features(super::super::features::ServerEvent),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

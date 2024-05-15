@@ -107,7 +107,7 @@ pub struct TransportWebrtc {
 
 impl TransportWebrtc {
     pub fn new(variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
-        let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::SdpError))?;
+        let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::InvalidSdp))?;
         let rtc_config = Rtc::builder()
             .set_rtp_mode(true)
             .set_ice_lite(true)
@@ -133,7 +133,7 @@ impl TransportWebrtc {
             ports.insert(local_addr, slot);
             rtc.add_local_candidate(Candidate::host(local_addr, Protocol::Udp).expect("Should add local candidate"));
         }
-        let answer = rtc.sdp_api().accept_offer(offer).map_err(|_e| RpcError::new2(WebrtcError::Str0mError))?;
+        let answer = rtc.sdp_api().accept_offer(offer).map_err(|_e| RpcError::new2(WebrtcError::InternalServerError))?;
         let mut local_convert = LocalMediaConvert::default();
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
             VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
@@ -216,10 +216,10 @@ impl TransportWebrtc {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_rpc_res(req_id, Ok(InternalRpcRes::SetRemoteSdp(answer.to_sdp_string())));
                         } else {
-                            self.internal.on_rpc_res(req_id, Err(RpcError::new2(WebrtcError::Str0mError)));
+                            self.internal.on_rpc_res(req_id, Err(RpcError::new2(WebrtcError::InternalServerError)));
                         }
                     } else {
-                        self.internal.on_rpc_res(req_id, Err(RpcError::new2(WebrtcError::SdpError)));
+                        self.internal.on_rpc_res(req_id, Err(RpcError::new2(WebrtcError::InvalidSdp)));
                     }
                 }
             },
@@ -277,11 +277,11 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
                             self.queue.push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Ok(answer.to_sdp_string()))));
                         } else {
                             self.queue
-                                .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::Str0mError)))));
+                                .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::InternalServerError)))));
                         }
                     } else {
                         self.queue
-                            .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::SdpError)))));
+                            .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::InvalidSdp)))));
                     }
                 }
             },

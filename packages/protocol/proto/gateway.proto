@@ -8,7 +8,7 @@ package gateway;
 message ConnectRequest {
     string version = 2;
     optional shared.RoomJoin join = 3;
-    features.Features features = 4;
+    features.Config features = 4;
     shared.Tracks tracks = 5;
     string sdp = 6;
 }
