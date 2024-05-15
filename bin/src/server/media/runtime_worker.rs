@@ -61,7 +61,7 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
             } else {
                 None
             },
-            tick_ms: 1,
+            tick_ms: 1000,
             data: DataPlaneCfg {
                 worker_id: 0,
                 services: vec![Arc::new(visualization::VisualizationServiceBuilder::new(false))],
