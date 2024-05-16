@@ -102,6 +102,10 @@ impl TransportWebrtcSdk {
         self.local_tracks.iter_mut().find(|t| t.id() == track_id)
     }
 
+    fn local_track_by_mid(&mut self, mid: Mid) -> Option<&mut LocalTrack> {
+        self.local_tracks.iter_mut().find(|t| t.mid() == Some(mid))
+    }
+
     fn local_track_by_name(&mut self, name: &str) -> Option<&mut LocalTrack> {
         self.local_tracks.iter_mut().find(|t| t.name() == name)
     }
@@ -332,6 +336,14 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
             }
             Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
             Str0mEvent::MediaAdded(media) => self.on_str0m_media_added(now, media),
+            Str0mEvent::KeyframeRequest(req) => {
+                log::info!("[TransportWebrtcSdk] request key-frame");
+                let track = return_if_none!(self.local_track_by_mid(req.mid)).id();
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::LocalTrack(
+                    track,
+                    LocalTrackEvent::RequestKeyFrame,
+                ))));
+            }
             Str0mEvent::RtpPacket(pkt) => {
                 let mid = return_if_none!(self.media_convert.get_mid(pkt.header.ssrc, pkt.header.ext_vals.mid));
                 let track = return_if_none!(self.remote_track_by_mid(mid)).id();
