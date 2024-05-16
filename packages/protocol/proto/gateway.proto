@@ -16,13 +16,13 @@ message ConnectRequest {
 message ConnectResponse {
     string conn_id = 1;
     string sdp = 2;
+    bool ice_lite = 3;
 }
 
 message RemoteIceRequest {
-    string conn_id = 1;
-    string candidate = 2;
+    repeated string candidates = 1;
 }
 
 message RemoteIceResponse {
-
+    uint32 added = 1;
 }

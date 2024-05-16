@@ -1,6 +1,6 @@
 use media_server_protocol::{
     endpoint::ClusterConnId,
-    protobuf::gateway::{ConnectRequest, ConnectResponse},
+    protobuf::gateway::{ConnectRequest, ConnectResponse, RemoteIceRequest, RemoteIceResponse},
     transport::{
         webrtc,
         whep::{self, WhepConnectReq, WhepDeleteReq, WhepRemoteIceReq},
@@ -64,7 +64,7 @@ impl MediaApis {
                     })
                 }
                 RpcResult::Err(e) => {
-                    log::warn!("Whip endpoint creation failed with {e}");
+                    log::warn!("[MediaAPIs] Whip endpoint creation failed with {e}");
                     Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
@@ -88,7 +88,7 @@ impl MediaApis {
                     Ok(HttpResponse::new(ApplicationSdpPatch("".to_string())).status(StatusCode::NO_CONTENT))
                 }
                 RpcResult::Err(e) => {
-                    log::warn!("Whip endpoint patch trickle-ice failed with error {e}");
+                    log::warn!("[MediaAPIs] Whip endpoint patch trickle-ice failed with error {e}");
                     Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
@@ -118,7 +118,7 @@ impl MediaApis {
                     Ok(PlainText("OK".to_string()))
                 }
                 RpcResult::Err(e) => {
-                    log::warn!("Whip endpoint close request failed with error {e}");
+                    log::warn!("[MediaAPIs] Whip endpoint close request failed with error {e}");
                     Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
@@ -156,7 +156,7 @@ impl MediaApis {
                     })
                 }
                 RpcResult::Err(e) => {
-                    log::warn!("Whep endpoint creation failed with {e}");
+                    log::warn!("[MediaAPIs] Whep endpoint creation failed with {e}");
                     Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
@@ -180,7 +180,7 @@ impl MediaApis {
                     Ok(HttpResponse::new(ApplicationSdpPatch("".to_string())).status(StatusCode::NO_CONTENT))
                 }
                 RpcResult::Err(e) => {
-                    log::warn!("Whep endpoint patch trickle-ice failed with error {e}");
+                    log::warn!("[MediaAPIs] Whep endpoint patch trickle-ice failed with error {e}");
                     Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
@@ -210,7 +210,7 @@ impl MediaApis {
                     Ok(PlainText("OK".to_string()))
                 }
                 RpcResult::Err(e) => {
-                    log::warn!("Whep endpoint close request failed with error {e}");
+                    log::warn!("[MediaAPIs] Whep endpoint close request failed with error {e}");
                     Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
@@ -239,10 +239,35 @@ impl MediaApis {
                     Ok(HttpResponse::new(Protobuf(ConnectResponse {
                         conn_id: conn.to_string(),
                         sdp: res.sdp,
+                        ice_lite: res.ice_lite,
                     })))
                 }
                 RpcResult::Err(e) => {
-                    log::warn!("Webrtc endpoint creation failed with {e}");
+                    log::warn!("[MediaAPIs] webrtc endpoint creation failed with {e}");
+                    Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
+                }
+            },
+            _ => Err(poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR)),
+        }
+    }
+
+    /// patch webrtc conn for trickle-ice
+    #[oai(path = "/webrtc/:conn_id/ice-candidate", method = "post")]
+    async fn webrtc_ice_candidate(&self, Data(data): Data<&MediaServerCtx>, conn_id: Path<String>, body: Protobuf<RemoteIceRequest>) -> Result<HttpResponse<Protobuf<RemoteIceResponse>>> {
+        let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        log::info!("[MediaAPIs] on remote ice from webrtc conn {conn_id} with ice candidate {:?}", body.0);
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RemoteIce(conn_id, body.0)));
+        data.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        //TODO process with ICE restart
+        match res {
+            RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(res)) => match res {
+                RpcResult::Ok(res) => {
+                    log::info!("[MediaAPIs] webrtc endpoint trickle-ice with conn_id {conn_id}");
+                    Ok(HttpResponse::new(Protobuf(res)))
+                }
+                RpcResult::Err(e) => {
+                    log::warn!("[MediaAPIs] webrtc endpoint patch trickle-ice failed with error {e}");
                     Err(poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))
                 }
             },
@@ -280,6 +305,7 @@ impl MediaApis {
                     Ok(HttpResponse::new(Protobuf(ConnectResponse {
                         conn_id: conn.to_string(),
                         sdp: res.sdp,
+                        ice_lite: res.ice_lite,
                     })))
                 }
                 RpcResult::Err(e) => {

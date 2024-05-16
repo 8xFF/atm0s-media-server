@@ -36,6 +36,7 @@ pub enum GroupOutput {
 }
 
 pub struct MediaWorkerWebrtc {
+    ice_lite: bool,
     shared_port: SharedUdpPort<usize>,
     dtls_cert: DtlsCert,
     endpoints: Endpoints,
@@ -44,8 +45,9 @@ pub struct MediaWorkerWebrtc {
 }
 
 impl MediaWorkerWebrtc {
-    pub fn new(addrs: Vec<SocketAddr>) -> Self {
+    pub fn new(addrs: Vec<SocketAddr>, ice_lite: bool) -> Self {
         Self {
+            ice_lite,
             shared_port: SharedUdpPort::default(),
             dtls_cert: DtlsCert::new_openssl(),
             endpoints: Endpoints::default(),
@@ -54,7 +56,7 @@ impl MediaWorkerWebrtc {
         }
     }
 
-    pub fn spawn(&mut self, variant: VariantParams, offer: &str) -> RpcResult<(String, usize)> {
+    pub fn spawn(&mut self, variant: VariantParams, offer: &str) -> RpcResult<(bool, String, usize)> {
         let cfg = match &variant {
             VariantParams::Whip(_, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
@@ -69,11 +71,11 @@ impl MediaWorkerWebrtc {
                 max_egress_bitrate: 2_500_000,
             },
         };
-        let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone())?;
+        let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone(), self.ice_lite)?;
         let endpoint = Endpoint::new(cfg, tran);
         let index = self.endpoints.add_task(endpoint);
         self.shared_port.add_ufrag(ufrag, index);
-        Ok((sdp, index))
+        Ok((self.ice_lite, sdp, index))
     }
 
     fn process_output(&mut self, index: usize, out: EndpointOutput<ExtOut>) -> GroupOutput {

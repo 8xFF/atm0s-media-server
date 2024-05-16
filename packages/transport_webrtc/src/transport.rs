@@ -53,14 +53,15 @@ pub enum Variant {
 }
 
 pub enum ExtIn {
-    RemoteIce(u64, Variant, String),
+    RemoteIce(u64, Variant, Vec<String>),
     RestartIce(u64, Variant, IpAddr, String, String, ConnectRequest),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExtOut {
-    RemoteIce(u64, Variant, RpcResult<()>),
-    RestartIce(u64, Variant, RpcResult<String>),
+    RemoteIce(u64, Variant, RpcResult<u32>),
+    /// response is (ice_lite, answer_sdp)
+    RestartIce(u64, Variant, RpcResult<(bool, String)>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -98,6 +99,7 @@ trait TransportWebrtcInternal {
 pub struct TransportWebrtc {
     next_tick: Option<Instant>,
     rtc: Rtc,
+    rtc_ice_lite: bool,
     internal: Box<dyn TransportWebrtcInternal>,
     ports: Small2dMap<SocketAddr, usize>,
     local_convert: LocalMediaConvert,
@@ -106,11 +108,11 @@ pub struct TransportWebrtc {
 }
 
 impl TransportWebrtc {
-    pub fn new(variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>) -> RpcResult<(Self, String, String)> {
+    pub fn new(variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>, rtc_ice_lite: bool) -> RpcResult<(Self, String, String)> {
         let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::InvalidSdp))?;
         let rtc_config = Rtc::builder()
             .set_rtp_mode(true)
-            .set_ice_lite(true)
+            .set_ice_lite(rtc_ice_lite)
             .set_dtls_cert(dtls_cert)
             .set_local_ice_credentials(IceCreds::new())
             .set_stats_interval(Some(Duration::from_secs(1)))
@@ -148,6 +150,7 @@ impl TransportWebrtc {
                 next_tick: None,
                 internal,
                 rtc,
+                rtc_ice_lite,
                 ports,
                 local_convert,
                 seq_extends: Default::default(),
@@ -266,15 +269,22 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
                 self.internal.on_transport_rpc_res(now, req_id, res);
             }
             TransportInput::Ext(ext) => match ext {
-                ExtIn::RemoteIce(req_id, variant, _ice) => {
-                    //TODO handle remote-ice with str0m
-                    self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(()))).into());
+                ExtIn::RemoteIce(req_id, variant, ices) => {
+                    let mut success_count = 0;
+                    for ice in ices {
+                        if let Ok(candidate) = Candidate::from_sdp_string(&ice) {
+                            success_count += 1;
+                            self.rtc.add_remote_candidate(candidate);
+                        }
+                    }
+                    self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))).into());
                 }
                 ExtIn::RestartIce(req_id, variant, _ip, _useragent, _token, req) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_codec_config(self.rtc.codec_config());
-                            self.queue.push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Ok(answer.to_sdp_string()))));
+                            self.queue
+                                .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Ok((self.rtc_ice_lite, answer.to_sdp_string())))));
                         } else {
                             self.queue
                                 .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::InternalServerError)))));

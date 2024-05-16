@@ -20,6 +20,7 @@ use sans_io_runtime::{
 use transport_webrtc::{GroupInput, MediaWorkerWebrtc, VariantParams, WebrtcOwner};
 
 pub struct MediaConfig {
+    pub ice_lite: bool,
     pub webrtc_addrs: Vec<SocketAddr>,
 }
 
@@ -83,7 +84,7 @@ impl MediaServerWorker {
             sdn_slot: 1, //TODO dont use this hack, must to wait to bind success to network
             sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
-            media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs), TaskType::MediaWebrtc),
+            media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.ice_lite), TaskType::MediaWebrtc),
             switcher: TaskSwitcher::new(3),
             queue: DynamicDeque::from([Output::Net(Owner::Sdn, BackendOutgoing::UdpListen { addr: sdn_udp_addr, reuse: true })]),
             timer: TimePivot::build(),
@@ -224,11 +225,20 @@ impl MediaServerWorker {
                 transport_webrtc::ExtOut::RemoteIce(req_id, variant, res) => match variant {
                     transport_webrtc::Variant::Whip => Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::RemoteIce(res.map(|_| WhipRemoteIceRes {})))),
                     transport_webrtc::Variant::Whep => Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::RemoteIce(res.map(|_| WhepRemoteIceRes {})))),
-                    transport_webrtc::Variant::Webrtc => Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(res.map(|_| RemoteIceResponse {})))),
+                    transport_webrtc::Variant::Webrtc => Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(res.map(|added| RemoteIceResponse { added })))),
                 },
                 transport_webrtc::ExtOut::RestartIce(req_id, _, res) => Output::ExtRpc(
                     req_id,
-                    RpcRes::Webrtc(webrtc::RpcRes::RestartIce(res.map(|sdp| (owner.index(), ConnectResponse { conn_id: "".to_string(), sdp })))),
+                    RpcRes::Webrtc(webrtc::RpcRes::RestartIce(res.map(|(ice_lite, sdp)| {
+                        (
+                            owner.index(),
+                            ConnectResponse {
+                                conn_id: "".to_string(),
+                                sdp,
+                                ice_lite,
+                            },
+                        )
+                    }))),
                 ),
             },
             transport_webrtc::GroupOutput::Shutdown(_owner) => Output::Continue,
@@ -247,14 +257,14 @@ impl MediaServerWorker {
                     .input(&mut self.switcher)
                     .spawn(transport_webrtc::VariantParams::Whip(req.token.into(), "publisher".to_string().into()), &req.sdp)
                 {
-                    Ok((sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
+                    Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
                     Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
                 },
                 whip::RpcReq::RemoteIce(req) => {
                     log::info!("on rpc request {req_id}, whip::RpcReq::RemoteIce");
                     self.media_webrtc.input(&mut self.switcher).on_event(
                         now,
-                        GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Whip, req.ice)),
+                        GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Whip, vec![req.ice])),
                     );
                 }
                 whip::RpcReq::Delete(req) => {
@@ -271,7 +281,7 @@ impl MediaServerWorker {
                         .input(&mut self.switcher)
                         .spawn(transport_webrtc::VariantParams::Whep(req.token.into(), peer_id.into()), &req.sdp)
                     {
-                        Ok((sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp }))))),
+                        Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp }))))),
                         Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Err(e))))),
                     }
                 }
@@ -279,7 +289,7 @@ impl MediaServerWorker {
                     log::info!("on rpc request {req_id}, whep::RpcReq::RemoteIce");
                     self.media_webrtc.input(&mut self.switcher).on_event(
                         now,
-                        GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Whep, req.ice)),
+                        GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Whep, vec![req.ice])),
                     );
                 }
                 whep::RpcReq::Delete(req) => {
@@ -290,13 +300,26 @@ impl MediaServerWorker {
             },
             RpcReq::Webrtc(req) => match req {
                 webrtc::RpcReq::Connect(ip, token, user_agent, req) => match self.media_webrtc.input(&mut self.switcher).spawn(VariantParams::Webrtc(ip, token, user_agent, req.clone()), &req.sdp) {
-                    Ok((sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
+                    Ok((ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
                         req_id,
-                        RpcRes::Webrtc(webrtc::RpcRes::Connect(Ok((conn_id.into(), ConnectResponse { conn_id: "".to_string(), sdp })))),
+                        RpcRes::Webrtc(webrtc::RpcRes::Connect(Ok((
+                            conn_id.into(),
+                            ConnectResponse {
+                                conn_id: "".to_string(),
+                                sdp,
+                                ice_lite,
+                            },
+                        )))),
                     )),
                     Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::Connect(Err(e))))),
                 },
-                webrtc::RpcReq::RemoteIce(_, _) => todo!(),
+                webrtc::RpcReq::RemoteIce(conn, ice) => {
+                    log::info!("on rcp request {req_id}, webrtc::RpcReq::RemoteIce");
+                    self.media_webrtc.input(&mut self.switcher).on_event(
+                        now,
+                        GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Webrtc, ice.candidates)),
+                    );
+                }
                 webrtc::RpcReq::RestartIce(conn, ip, token, user_agent, req) => {
                     log::info!("on rcp request {req_id}, webrtc::RpcReq::RestartIce");
                     self.media_webrtc.input(&mut self.switcher).on_event(
