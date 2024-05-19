@@ -1743,9 +1743,9 @@ checksum = "db23d408679286588f4d4644f965003d056e3dd5abcaaa938116871d7ce2fee7"
 
 [[package]]
 name = "poem"
-version = "3.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b735eaaaa6bc7ed2dcbcab1d5373afe1f6d03a37d8695ba3c42101f733a8455"
+checksum = "e88b6912ed1e8833d7c22c9c986c517f4518d7d37e3c04566d917c789aaea591"
 dependencies = [
  "bytes",
  "chrono",
@@ -1798,9 +1798,9 @@ dependencies = [
 
 [[package]]
 name = "poem-openapi"
-version = "5.0.0"
+version = "5.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24375f20342eeffd8e5e4f55483ebcda2f3fcc301a2926b61edc761842528d06"
+checksum = "b6445b50be2e26f142d4e554d15773fc1e7510b994083c9625a65eba0d3f4287"
 dependencies = [
  "base64 0.22.0",
  "bytes",
@@ -1817,16 +1817,15 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "serde_yaml",
- "static_assertions",
  "thiserror",
  "tokio",
 ]
 
 [[package]]
 name = "poem-openapi-derive"
-version = "5.0.0"
+version = "5.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7c57d06358cf40434bb0e2f92c1ef578288e9ab8821d1d471a967efa74017b6"
+checksum = "e890165626ff447a1ff3d6f2293e6ccacbf7fcbdd4c94086aa548de655735b03"
 dependencies = [
  "darling",
  "http",
