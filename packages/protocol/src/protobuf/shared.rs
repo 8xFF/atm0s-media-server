@@ -41,6 +41,51 @@ pub mod receiver {
         #[prost(message, optional, tag = "2")]
         pub source: ::core::option::Option<Source>,
     }
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum Status {
+        NoSource = 0,
+        Waiting = 1,
+        Live = 2,
+        KeyOnly = 3,
+        Inactive = 4,
+    }
+    impl Status {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Status::NoSource => "NO_SOURCE",
+                Status::Waiting => "WAITING",
+                Status::Live => "LIVE",
+                Status::KeyOnly => "KEY_ONLY",
+                Status::Inactive => "INACTIVE",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "NO_SOURCE" => Some(Self::NoSource),
+                "WAITING" => Some(Self::Waiting),
+                "LIVE" => Some(Self::Live),
+                "KEY_ONLY" => Some(Self::KeyOnly),
+                "INACTIVE" => Some(Self::Inactive),
+                _ => None,
+            }
+        }
+    }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -79,6 +124,42 @@ pub mod sender {
         pub config: ::core::option::Option<Config>,
         #[prost(message, optional, tag = "2")]
         pub source: ::core::option::Option<Source>,
+    }
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum Status {
+        Active = 0,
+        Inactive = 1,
+    }
+    impl Status {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Status::Active => "ACTIVE",
+                Status::Inactive => "INACTIVE",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "ACTIVE" => Some(Self::Active),
+                "INACTIVE" => Some(Self::Inactive),
+                _ => None,
+            }
+        }
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

@@ -11,12 +11,13 @@ use media_server_protocol::{
         conn::{
             server_event::{
                 room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted, TrackStopped},
-                Event as ProtoServerEvent, Room as ProtoRoomEvent,
+                sender::{Event as ProtoSenderEvent, State as ProtoSenderState},
+                Event as ProtoServerEvent, Receiver as ProtoReceiverEventContainer, Room as ProtoRoomEvent, Sender as ProtoSenderEventContainer,
             },
             ClientEvent,
         },
         gateway::ConnectRequest,
-        shared::Kind,
+        shared::{receiver::Status as ProtoReceiverStatus, sender::Status as ProtoSenderStatus, Kind},
     },
     transport::{RpcError, RpcResult},
 };
@@ -360,6 +361,20 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     track,
                     RemoteTrackEvent::Media(pkt),
                 ))));
+            }
+            Str0mEvent::StreamPaused(event) => {
+                let track = return_if_none!(self.remote_track_by_mid(event.mid)).name().to_string();
+                let status = if event.paused {
+                    ProtoSenderStatus::Inactive
+                } else {
+                    ProtoSenderStatus::Active
+                };
+
+                log::info!("[TransportWebrtcSdk] track {track} set status {:?}", status);
+                self.send_event(ProtoServerEvent::Sender(ProtoSenderEventContainer {
+                    name: track,
+                    event: Some(ProtoSenderEvent::State(ProtoSenderState { status: status as i32 })),
+                }));
             }
             Str0mEvent::EgressBitrateEstimate(BweKind::Remb(_, bitrate)) | Str0mEvent::EgressBitrateEstimate(BweKind::Twcc(bitrate)) => {
                 let bitrate2 = self.bwe_state.filter_bwe(bitrate.as_u64());

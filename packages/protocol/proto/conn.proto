@@ -267,14 +267,7 @@ message ServerEvent {
 
     message Sender {
         message State {
-            enum StateType {
-                WAITING = 0;
-                NO_SOURCE = 1;
-                ACTIVE = 2;
-                INACTIVE = 3;
-            }
-
-            StateType state = 1;
+            shared.Sender.Status status = 1;
         }
 
         string name = 1;
@@ -285,15 +278,7 @@ message ServerEvent {
 
     message Receiver {
         message State {
-            enum StateType {
-                NO_SOURCE = 0;
-                WAITING = 1;
-                LIVE = 2;
-                KEY_ONLY = 3;
-                INACTIVE = 4;
-            }
-
-            StateType state = 1;
+            shared.Receiver.Status status = 1;
         }
 
         message Stats {

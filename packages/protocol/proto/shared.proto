@@ -8,6 +8,14 @@ enum Kind {
 }
 
 message Receiver {
+    enum Status {
+        NO_SOURCE = 0;
+        WAITING = 1;
+        LIVE = 2;
+        KEY_ONLY = 3;
+        INACTIVE = 4;
+    }
+
     message Source {
         string peer = 1;
         string track = 2;
@@ -32,6 +40,11 @@ message Receiver {
 }
 
 message Sender {
+    enum Status {
+        ACTIVE = 0;
+        INACTIVE = 1;
+    }
+
     message Source {
         string id = 1;
         bool screen = 2;
