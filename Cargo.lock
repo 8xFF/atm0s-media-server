@@ -1674,9 +1674,9 @@ checksum = "db23d408679286588f4d4644f965003d056e3dd5abcaaa938116871d7ce2fee7"
 
 [[package]]
 name = "poem"
-version = "3.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b735eaaaa6bc7ed2dcbcab1d5373afe1f6d03a37d8695ba3c42101f733a8455"
+checksum = "e88b6912ed1e8833d7c22c9c986c517f4518d7d37e3c04566d917c789aaea591"
 dependencies = [
  "bytes",
  "chrono",
