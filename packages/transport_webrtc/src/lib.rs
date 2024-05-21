@@ -15,4 +15,5 @@ pub enum WebrtcError {
     RpcTrackNameNotFound = 0x2003,
     RpcTrackNotAttached = 0x2004,
     RpcTrackAlreadyAttached = 0x2005,
+    RpcEndpointNotFound = 0x2006,
 }

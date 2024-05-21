@@ -372,6 +372,10 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                 ))));
             }
             Str0mEvent::StreamPaused(event) => {
+                // We need to map media ssrc here for avoiding unknown pkt
+                // without it, sometime we will failed to restore session from restart-ice
+                self.media_convert.get_mid(event.ssrc, Some(event.mid));
+
                 let track = return_if_none!(self.remote_track_by_mid(event.mid)).name().to_string();
                 let status = if event.paused {
                     ProtoSenderStatus::Inactive
@@ -379,7 +383,7 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     ProtoSenderStatus::Active
                 };
 
-                log::info!("[TransportWebrtcSdk] track {track} set status {:?}", status);
+                log::info!("[TransportWebrtcSdk] track {track} mid {} ssrc {} set status {:?}", event.mid, event.ssrc, status);
                 self.send_event(ProtoServerEvent::Sender(ProtoSenderEventContainer {
                     name: track,
                     event: Some(ProtoSenderEvent::State(ProtoSenderState { status: status as i32 })),

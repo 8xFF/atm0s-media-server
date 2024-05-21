@@ -23,7 +23,7 @@ use sans_io_runtime::{
 use str0m::{
     bwe::Bitrate,
     change::{DtlsCert, SdpOffer},
-    channel::ChannelId,
+    channel::{ChannelConfig, ChannelId},
     format::CodecConfig,
     ice::IceCreds,
     media::{KeyframeRequestKind, Mid},
@@ -128,8 +128,23 @@ impl TransportWebrtc {
         let ice_ufrag = rtc_config.local_ice_credentials().as_ref().expect("should have ice credentials").ufrag.clone();
 
         let mut rtc = rtc_config.build();
-        rtc.direct_api().enable_twcc_feedback();
+        let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
+            VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
+            VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
+            VariantParams::Webrtc(_ip, _token, _user_agent, req) => {
+                rtc.direct_api().create_data_channel(ChannelConfig {
+                    label: "data".to_string(),
+                    negotiated: Some(1000),
+                    ..Default::default()
+                });
+                //we need to start sctp as client side for handling restart-ice in new server
+                //if not, datachannel will not connect successful after reconnect to new server
+                rtc.direct_api().start_sctp(true);
+                Box::new(webrtc::TransportWebrtcSdk::new(req))
+            }
+        };
 
+        rtc.direct_api().enable_twcc_feedback();
         let mut ports = Small2dMap::default();
         for (local_addr, slot) in local_addrs {
             ports.insert(local_addr, slot);
@@ -137,11 +152,6 @@ impl TransportWebrtc {
         }
         let answer = rtc.sdp_api().accept_offer(offer).map_err(|_e| RpcError::new2(WebrtcError::InternalServerError))?;
         let mut local_convert = LocalMediaConvert::default();
-        let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
-            VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
-            VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
-            VariantParams::Webrtc(_ip, _token, _user_agent, req) => Box::new(webrtc::TransportWebrtcSdk::new(req)),
-        };
         internal.on_codec_config(rtc.codec_config());
         local_convert.set_config(rtc.codec_config());
 
@@ -207,7 +217,7 @@ impl TransportWebrtc {
                 }
             }
             InternalOutput::Str0mResetBwe(init_bitrate) => {
-                log::info!("Reset str0m bwe to init_bitrate {init_bitrate} bps");
+                log::info!("[TransportWebrtc] Reset str0m bwe to init_bitrate {init_bitrate} bps");
                 self.rtc.bwe().reset(init_bitrate.into());
             }
             InternalOutput::TransportOutput(out) => {

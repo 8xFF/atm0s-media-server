@@ -78,7 +78,7 @@ impl EndpointLocalTrack {
     fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) {
         assert_eq!(self.room, None);
         assert_eq!(self.bind, None);
-        log::info!("[EndpointLocalTrack] join room {room}");
+        log::info!("[EndpointLocalTrack] track {} join room {room}", self.kind);
         self.room = Some(room);
     }
 
@@ -148,9 +148,12 @@ impl EndpointLocalTrack {
                     let peer = source.peer;
                     let track = source.track;
                     let now_ms = self.timer.timestamp_ms(now);
-                    log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track}");
+                    log::info!("[EndpointLocalTrack] track {} view room {room} peer {peer} track {track}", self.kind);
                     if let Some((_peer, _track, _status)) = self.bind.take() {
-                        log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track} => unsubscribe current {_peer} {_track}");
+                        log::info!(
+                            "[EndpointLocalTrack]  track {} view room {room} peer {peer} track {track} => unsubscribe current {_peer} {_track}",
+                            self.kind
+                        );
                         self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
                         self.queue.push_back(Output::Stopped(self.kind));
                     }
@@ -160,7 +163,7 @@ impl EndpointLocalTrack {
                     self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer, track)));
                     self.selector.reset();
                 } else {
-                    log::warn!("[EndpointLocalTrack] view but not in room");
+                    log::warn!("[EndpointLocalTrack] track {} view but not in room", self.kind);
                     self.queue
                         .push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))));
                 }

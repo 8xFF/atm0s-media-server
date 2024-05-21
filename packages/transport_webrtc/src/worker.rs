@@ -4,7 +4,7 @@ use media_server_core::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterRoomHash},
     endpoint::{Endpoint, EndpointCfg, EndpointInput, EndpointOutput},
 };
-use media_server_protocol::transport::RpcResult;
+use media_server_protocol::transport::{RpcError, RpcResult};
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     group_owner_type, group_task, return_if_none, return_if_some, TaskSwitcher, TaskSwitcherChild,
@@ -14,6 +14,7 @@ use str0m::change::DtlsCert;
 use crate::{
     shared_port::SharedUdpPort,
     transport::{ExtIn, ExtOut, TransportWebrtc, VariantParams},
+    WebrtcError,
 };
 
 group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, EndpointInput<ExtIn>, EndpointOutput<ExtOut>);
@@ -118,7 +119,24 @@ impl MediaWorkerWebrtc {
             }
             GroupInput::Ext(owner, ext) => {
                 log::info!("[MediaWorkerWebrtc] on ext to owner {:?}", owner);
-                self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ext));
+                if let Some(&Some(_)) = self.endpoints.tasks.get(owner.index()) {
+                    self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ext));
+                } else {
+                    match ext {
+                        ExtIn::RemoteIce(req_id, variant, ..) => {
+                            self.queue
+                                .push_back(GroupOutput::Ext(owner, ExtOut::RemoteIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
+                        }
+                        ExtIn::RestartIce(req_id, variant, remote, useragent, token, req) => {
+                            if let Ok((ice_lite, sdp, index)) = self.spawn(VariantParams::Webrtc(remote, useragent, token, req.clone()), &req.sdp) {
+                                self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));
+                            } else {
+                                self.queue
+                                    .push_back(GroupOutput::Ext(owner, ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
+                            }
+                        }
+                    }
+                }
             }
             GroupInput::Close(owner) => {
                 self.endpoints.on_event(now, owner.index(), EndpointInput::Close);
