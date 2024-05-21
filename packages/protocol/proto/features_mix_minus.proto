@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package mix_minus;
+
+enum Mode {
+    AUTO = 0;
+    MANUAL = 1;
+}
+
+message Source {
+    string peer = 1;
+    string track = 2;
+}
+
+message Config {
+    Mode mode = 1;
+    repeated Source sources = 2;
+}
+
+message Request {
+    message Attach {
+        repeated Source sources = 1;
+    }
+
+    message Detach {
+        repeated Source sources = 1;
+    }
+
+    oneof request {
+        Attach attach = 1;
+        Detach detach = 2;
+    }
+}
+
+message Response {
+    message Attach {
+
+    }
+
+    message Detach {
+
+    }
+
+    oneof response {
+        Attach attach = 1;
+        Detach detach = 2;
+    }
+}
+
+message ServerEvent {
+    message MappingSlotSet {
+        uint32 slot = 1;
+        Source source = 2;
+    }
+
+    message MappingSlotDel {
+        uint32 slot = 1;
+    }
+
+    message SlotAudioLevel {
+        uint32 slot = 1;
+        int32 audio_level = 2;
+    }
+
+    message MappingSlotsAudioLevel {
+        repeated SlotAudioLevel slots = 1;
+    }
+
+    oneof event {
+        MappingSlotSet slot_set = 1;
+        MappingSlotDel slot_del = 2;
+        MappingSlotsAudioLevel slots_audio_level = 3;
+    }
+}

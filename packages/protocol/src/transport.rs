@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::protobuf;
+
 pub mod webrtc;
 pub mod whep;
 pub mod whip;
@@ -18,6 +20,7 @@ pub trait ConnLayer {
 pub enum RpcReq<Conn> {
     Whep(whep::RpcReq<Conn>),
     Whip(whip::RpcReq<Conn>),
+    Webrtc(webrtc::RpcReq<Conn>),
 }
 
 impl<Conn: ConnLayer> RpcReq<Conn> {
@@ -31,6 +34,10 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
                 let (req, layer) = req.down();
                 (RpcReq::Whep(req), layer)
             }
+            Self::Webrtc(req) => {
+                let (req, layer) = req.down();
+                (RpcReq::Webrtc(req), layer)
+            }
         }
     }
 }
@@ -39,6 +46,7 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
 pub enum RpcRes<Conn> {
     Whep(whep::RpcRes<Conn>),
     Whip(whip::RpcRes<Conn>),
+    Webrtc(webrtc::RpcRes<Conn>),
 }
 
 impl<Conn: ConnLayer> RpcRes<Conn> {
@@ -46,13 +54,14 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
         match self {
             Self::Whip(req) => RpcRes::Whip(req.up(param)),
             Self::Whep(req) => RpcRes::Whep(req.up(param)),
+            Self::Webrtc(req) => RpcRes::Webrtc(req.up(param)),
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RpcError {
-    pub code: u16,
+    pub code: u32,
     pub message: String,
 }
 
@@ -63,17 +72,26 @@ impl Display for RpcError {
 }
 
 impl RpcError {
-    pub fn new<C: Into<u16>>(code: C, message: &str) -> Self {
+    pub fn new<C: Into<u32>>(code: C, message: &str) -> Self {
         Self {
             code: code.into(),
             message: message.to_string(),
         }
     }
 
-    pub fn new2<C: Into<u16> + ToString>(code: C) -> Self {
+    pub fn new2<C: Into<u32> + Display>(code: C) -> Self {
         Self {
             message: code.to_string(),
             code: code.into(),
+        }
+    }
+}
+
+impl Into<protobuf::shared::Error> for RpcError {
+    fn into(self) -> protobuf::shared::Error {
+        protobuf::shared::Error {
+            code: self.code,
+            message: self.message,
         }
     }
 }

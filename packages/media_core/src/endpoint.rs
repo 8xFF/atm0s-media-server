@@ -3,13 +3,14 @@
 use std::{marker::PhantomData, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
+    endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
     media::MediaPacket,
+    protobuf,
     transport::RpcResult,
 };
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
-    TaskSwitcher,
+    return_if_some, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild,
 };
 
 use crate::{
@@ -26,26 +27,86 @@ mod middleware;
 
 pub struct EndpointSession(pub u64);
 
-pub enum EndpointRemoteTrackReq {}
-
-pub enum EndpointRemoteTrackRes {}
-
-pub enum EndpointLocalTrackReq {
-    Switch(Option<(PeerId, TrackName, TrackPriority)>),
+#[derive(Debug, PartialEq, Eq)]
+pub struct EndpointRemoteTrackConfig {
+    pub priority: TrackPriority,
+    pub control: BitrateControlMode,
 }
 
-pub enum EndpointLocalTrackRes {
-    Switch(RpcResult<()>),
-}
-
-pub struct EndpointReqId(pub u64);
-impl From<u64> for EndpointReqId {
-    fn from(value: u64) -> Self {
-        Self(value)
+impl From<protobuf::shared::sender::Config> for EndpointRemoteTrackConfig {
+    fn from(value: protobuf::shared::sender::Config) -> Self {
+        Self {
+            priority: value.priority.into(),
+            control: value.bitrate().into(),
+        }
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointRemoteTrackReq {
+    Config(EndpointRemoteTrackConfig),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointRemoteTrackRes {
+    Config(RpcResult<()>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct EndpointLocalTrackSource {
+    pub peer: PeerId,
+    pub track: TrackName,
+}
+
+impl From<protobuf::shared::receiver::Source> for EndpointLocalTrackSource {
+    fn from(value: protobuf::shared::receiver::Source) -> Self {
+        Self {
+            peer: value.peer.into(),
+            track: value.track.into(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct EndpointLocalTrackConfig {
+    pub priority: TrackPriority,
+    pub max_spatial: u8,
+    pub max_temporal: u8,
+    pub min_spatial: Option<u8>,
+    pub min_temporal: Option<u8>,
+}
+
+impl From<protobuf::shared::receiver::Config> for EndpointLocalTrackConfig {
+    fn from(value: protobuf::shared::receiver::Config) -> Self {
+        Self {
+            priority: value.priority.into(),
+            max_spatial: value.max_spatial as u8,
+            max_temporal: value.max_temporal as u8,
+            min_spatial: value.min_spatial.map(|m| m as u8),
+            min_temporal: value.min_temporal.map(|m| m as u8),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointLocalTrackReq {
+    Attach(EndpointLocalTrackSource, EndpointLocalTrackConfig),
+    Detach(),
+    Config(EndpointLocalTrackConfig),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointLocalTrackRes {
+    Attach(RpcResult<()>),
+    Detach(RpcResult<()>),
+    Config(RpcResult<()>),
+}
+
+#[derive(Debug, PartialEq, Eq, derive_more::From)]
+pub struct EndpointReqId(pub u32);
+
 /// This is control APIs, which is used to control server from Endpoint SDK
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointReq {
     JoinRoom(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe),
     LeaveRoom,
@@ -56,6 +117,7 @@ pub enum EndpointReq {
 }
 
 /// This is response, which is used to send response back to Endpoint SDK
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRes {
     JoinRoom(RpcResult<()>),
     LeaveRoom(RpcResult<()>),
@@ -66,22 +128,25 @@ pub enum EndpointRes {
 }
 
 /// This is used for controlling the local track, which is sent from endpoint
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointLocalTrackEvent {
     Media(MediaPacket),
-    DesiredBitrate(u64),
+    Status(protobuf::shared::receiver::Status),
 }
 
 /// This is used for controlling the remote track, which is sent from endpoint
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointRemoteTrackEvent {
     RequestKeyFrame,
-    LimitBitrateBps(u64),
+    LimitBitrateBps { min: u64, max: u64 },
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum EndpointEvent {
     PeerJoined(PeerId, PeerMeta),
-    PeerLeaved(PeerId),
+    PeerLeaved(PeerId, PeerMeta),
     PeerTrackStarted(PeerId, TrackName, TrackMeta),
-    PeerTrackStopped(PeerId, TrackName),
+    PeerTrackStopped(PeerId, TrackName, TrackMeta),
     RemoteMediaTrack(RemoteTrackId, EndpointRemoteTrackEvent),
     LocalMediaTrack(LocalTrackId, EndpointLocalTrackEvent),
     /// Egress est params
@@ -93,15 +158,15 @@ pub enum EndpointEvent {
     GoAway(u8, Option<String>),
 }
 
-pub enum EndpointInput<'a, Ext> {
-    Net(BackendIncoming<'a>),
+pub enum EndpointInput<Ext> {
+    Net(BackendIncoming),
     Cluster(ClusterEndpointEvent),
     Ext(Ext),
     Close,
 }
 
-pub enum EndpointOutput<'a, Ext> {
-    Net(BackendOutgoing<'a>),
+pub enum EndpointOutput<Ext> {
+    Net(BackendOutgoing),
     Cluster(ClusterRoomHash, ClusterEndpointControl),
     Ext(Ext),
     Continue,
@@ -121,8 +186,8 @@ pub struct EndpointCfg {
 }
 
 pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
-    transport: T,
-    internal: EndpointInternal,
+    transport: TaskSwitcherBranch<T, TransportOutput<ExtOut>>,
+    internal: TaskSwitcherBranch<EndpointInternal, InternalOutput>,
     switcher: TaskSwitcher,
     _tmp: PhantomData<(ExtIn, ExtOut)>,
 }
@@ -130,118 +195,91 @@ pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
 impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
     pub fn new(cfg: EndpointCfg, transport: T) -> Self {
         Self {
-            transport,
-            internal: EndpointInternal::new(cfg),
+            transport: TaskSwitcherBranch::new(transport, TaskType::Transport),
+            internal: TaskSwitcherBranch::new(EndpointInternal::new(cfg), TaskType::Internal),
             switcher: TaskSwitcher::new(2),
             _tmp: PhantomData::default(),
         }
     }
 
-    pub fn on_tick<'a>(&mut self, now: Instant) -> Option<EndpointOutput<'a, ExtOut>> {
-        let s = &mut self.switcher;
-        loop {
-            match s.looper_current(now)?.try_into().ok()? {
-                TaskType::Internal => {
-                    if let Some(out) = s.looper_process(self.internal.on_tick(now)) {
-                        return Some(self.process_internal_output(now, out));
-                    }
-                }
-                TaskType::Transport => {
-                    if let Some(out) = s.looper_process(self.transport.on_tick(now)) {
-                        return Some(self.process_transport_output(now, out));
-                    }
-                }
-            }
-        }
+    pub fn on_tick(&mut self, now: Instant) {
+        self.internal.input(&mut self.switcher).on_tick(now);
+        self.transport.input(&mut self.switcher).on_tick(now);
     }
 
-    pub fn on_event<'a>(&mut self, now: Instant, input: EndpointInput<'a, ExtIn>) -> Option<EndpointOutput<'a, ExtOut>> {
+    pub fn on_event(&mut self, now: Instant, input: EndpointInput<ExtIn>) {
         match input {
             EndpointInput::Net(net) => {
-                let out = self.transport.on_input(now, TransportInput::Net(net))?;
-                Some(self.process_transport_output(now, out))
+                self.transport.input(&mut self.switcher).on_input(now, TransportInput::Net(net));
             }
             EndpointInput::Ext(ext) => {
-                let out = self.transport.on_input(now, TransportInput::Ext(ext))?;
-                Some(self.process_transport_output(now, out))
+                self.transport.input(&mut self.switcher).on_input(now, TransportInput::Ext(ext));
             }
             EndpointInput::Cluster(event) => {
-                let out = self.internal.on_cluster_event(now, event)?;
-                Some(self.process_internal_output(now, out))
+                self.internal.input(&mut self.switcher).on_cluster_event(now, event);
             }
             EndpointInput::Close => {
-                let out = self.transport.on_input(now, TransportInput::Close)?;
-                Some(self.process_transport_output(now, out))
+                self.transport.input(&mut self.switcher).on_input(now, TransportInput::Close);
             }
         }
     }
 
-    pub fn pop_output<'a>(&mut self, now: Instant) -> Option<EndpointOutput<'a, ExtOut>> {
-        let s = &mut self.switcher;
+    pub fn on_shutdown(&mut self, now: Instant) {
+        self.transport.input(&mut self.switcher).on_input(now, TransportInput::Close);
+    }
+}
+
+impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> TaskSwitcherChild<EndpointOutput<ExtOut>> for Endpoint<T, ExtIn, ExtOut>
+where
+    T::Time: From<Instant>,
+{
+    type Time = Instant;
+    fn pop_output(&mut self, now: Instant) -> Option<EndpointOutput<ExtOut>> {
         loop {
-            match s.queue_current()?.try_into().ok()? {
+            match self.switcher.current()?.try_into().ok()? {
                 TaskType::Internal => {
-                    if let Some(out) = s.queue_process(self.internal.pop_output(now)) {
-                        return Some(self.process_internal_output(now, out));
+                    if let Some(out) = self.internal.pop_output(now, &mut self.switcher) {
+                        return_if_some!(self.process_internal_output(now, out));
                     }
                 }
                 TaskType::Transport => {
-                    if let Some(out) = s.queue_process(self.transport.pop_event(now)) {
-                        return Some(self.process_transport_output(now, out));
+                    if let Some(out) = self.transport.pop_output(now.into(), &mut self.switcher) {
+                        return_if_some!(self.process_transport_output(now, out));
                     }
                 }
             }
         }
-    }
-
-    pub fn shutdown<'a>(&mut self, now: Instant) -> Option<EndpointOutput<'a, ExtOut>> {
-        let out = self.transport.on_input(now, TransportInput::Close)?;
-        Some(self.process_transport_output(now, out))
     }
 }
 
 impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
-    fn process_transport_output<'a>(&mut self, now: Instant, out: TransportOutput<'a, ExtOut>) -> EndpointOutput<'a, ExtOut> {
-        self.switcher.queue_flag_task(TaskType::Transport.into());
+    fn process_transport_output(&mut self, now: Instant, out: TransportOutput<ExtOut>) -> Option<EndpointOutput<ExtOut>> {
         match out {
             TransportOutput::Event(event) => {
-                if let Some(out) = self.internal.on_transport_event(now, event) {
-                    self.process_internal_output(now, out)
-                } else {
-                    EndpointOutput::Continue
-                }
+                self.internal.input(&mut self.switcher).on_transport_event(now, event);
+                None
             }
-            TransportOutput::Ext(ext) => EndpointOutput::Ext(ext),
-            TransportOutput::Net(net) => EndpointOutput::Net(net),
+            TransportOutput::Ext(ext) => Some(EndpointOutput::Ext(ext)),
+            TransportOutput::Net(net) => Some(EndpointOutput::Net(net)),
             TransportOutput::RpcReq(req_id, req) => {
-                if let Some(out) = self.internal.on_transport_rpc(now, req_id, req) {
-                    self.process_internal_output(now, out)
-                } else {
-                    EndpointOutput::Continue
-                }
+                self.internal.input(&mut self.switcher).on_transport_rpc(now, req_id, req);
+                None
             }
         }
     }
 
-    fn process_internal_output<'a>(&mut self, now: Instant, out: internal::InternalOutput) -> EndpointOutput<'a, ExtOut> {
-        self.switcher.queue_flag_task(TaskType::Internal.into());
+    fn process_internal_output(&mut self, now: Instant, out: internal::InternalOutput) -> Option<EndpointOutput<ExtOut>> {
         match out {
             InternalOutput::Event(event) => {
-                if let Some(out) = self.transport.on_input(now, TransportInput::Endpoint(event)) {
-                    self.process_transport_output(now, out)
-                } else {
-                    EndpointOutput::Continue
-                }
+                self.transport.input(&mut self.switcher).on_input(now, TransportInput::Endpoint(event));
+                None
             }
             InternalOutput::RpcRes(req_id, res) => {
-                if let Some(out) = self.transport.on_input(now, TransportInput::RpcRes(req_id, res)) {
-                    self.process_transport_output(now, out)
-                } else {
-                    EndpointOutput::Continue
-                }
+                self.transport.input(&mut self.switcher).on_input(now, TransportInput::RpcRes(req_id, res));
+                None
             }
-            InternalOutput::Cluster(room, control) => EndpointOutput::Cluster(room, control),
-            InternalOutput::Destroy => EndpointOutput::Destroy,
+            InternalOutput::Cluster(room, control) => Some(EndpointOutput::Cluster(room, control)),
+            InternalOutput::Destroy => Some(EndpointOutput::Destroy),
         }
     }
 }

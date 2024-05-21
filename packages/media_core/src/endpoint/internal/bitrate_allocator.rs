@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::transport::{LocalTrackId, RemoteTrackId};
 
 use self::{egress::EgressBitrateAllocator, ingress::IngressBitrateAllocator};
@@ -8,6 +10,7 @@ mod ingress;
 pub use egress::Action as EgressAction;
 pub use ingress::Action as IngressAction;
 use media_server_protocol::endpoint::TrackPriority;
+use sans_io_runtime::TaskSwitcherChild;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Output {
@@ -53,8 +56,11 @@ impl BitrateAllocator {
     pub fn del_ingress_video_track(&mut self, track: RemoteTrackId) {
         self.ingress.del_video_track(track);
     }
+}
 
-    pub fn pop_output(&mut self) -> Option<Output> {
+impl TaskSwitcherChild<Output> for BitrateAllocator {
+    type Time = Instant;
+    fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         if let Some(out) = self.egress.pop_output() {
             let out = match out {
                 egress::Output::Track(track, action) => Output::LocalTrack(track, action),

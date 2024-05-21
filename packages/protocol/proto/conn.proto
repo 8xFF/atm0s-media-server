@@ -1,0 +1,325 @@
+syntax = "proto3";
+
+import "shared.proto";
+import "features.proto";
+
+package conn;
+
+message Request {
+    message Session {
+        message RoomJoin {
+            shared.RoomJoin info = 1;
+            string token = 2;
+        }
+
+        message RoomLeave {
+
+        }
+
+        message UpdateSdp {
+            shared.Tracks tracks = 1;
+            string sdp = 2;
+        }
+
+        message Disconnect {
+
+        }
+
+        oneof request {
+            RoomJoin join = 1;
+            RoomLeave leave = 2;
+            UpdateSdp sdp = 3;
+            Disconnect disconnect = 4;
+        }
+    }
+
+    message Rooom {
+        message SubscribePeer {
+            string peer = 1;
+        }
+
+        message UnsubscribePeer {
+            string peer = 1;
+        }
+
+        oneof request {
+            SubscribePeer subscribe = 1;
+            UnsubscribePeer unsubscribe = 2;
+        }
+    }
+
+    message Sender {
+        message Attach {
+            shared.Sender.Source source = 1;
+            shared.Sender.Config config = 2;
+        }
+
+        message Detach {
+
+        }
+
+        string name = 1;
+        oneof request {
+            Attach attach = 2;
+            Detach detach = 3;
+            shared.Sender.Config config = 4;
+        }
+    }
+
+    message Receiver {
+        message Attach {
+            shared.Receiver.Source source = 1;
+            shared.Receiver.Config config = 2;
+        }
+
+        message Detach {
+
+        }
+
+        string name = 1;
+        oneof request {
+            Attach attach = 2;
+            Detach detach = 3;
+            shared.Receiver.Config config = 4;
+        }
+    }
+
+    uint32 req_id = 1;
+    oneof request {
+        Session session = 2;
+        Rooom room = 3;
+        Sender sender = 4;
+        Receiver receiver = 5;
+        features.Request features = 6;
+    }
+}
+
+message Response {
+    message Session {
+        message RoomJoin {
+
+        }
+
+        message RoomLeave {
+
+        }
+
+        message UpdateSdp {
+            string sdp = 1;
+        }
+
+        message Disconnect {
+
+        }
+
+        oneof response {
+            RoomJoin join = 1;
+            RoomLeave leave = 2;
+            UpdateSdp sdp = 3;
+            Disconnect disconnect = 4;
+        }
+    }
+
+    message Room {
+        message SubscribePeer {
+
+        }
+
+        message UnsubscribePeer {
+
+        }
+
+        oneof response {
+            SubscribePeer subscribe = 1;
+            UnsubscribePeer unsubscribe = 2;
+        }
+    }
+
+    message Sender {
+        message Attach {
+
+        }
+
+        message Detach {
+
+        }
+
+        message Config {
+
+        }
+
+        oneof response {
+            Attach attach = 1;
+            Detach detach = 2;
+            Config config = 3;
+        }
+    }
+
+    message Receiver {
+        message Attach {
+
+        }
+
+        message Detach {
+
+        }
+
+        message Config {
+
+        }
+
+        oneof response {
+            Attach attach = 1;
+            Detach detach = 2;
+            Config config = 3;
+        }
+    }
+
+    uint32 req_id = 1;
+    oneof response {
+        shared.Error error = 2;
+        Session session = 3;
+        Room room = 4;
+        Sender sender = 5;
+        Receiver receiver = 6;
+        features.Request features = 7;
+    }
+}
+
+message ServerEvent {
+    message Session {
+        message Connected {
+
+        }
+
+        message JoinedRoom {
+            string room = 1;
+            string peer = 2;
+        }
+
+        message LeavedRoom {
+            string room = 1;
+            string peer = 2;
+        }
+
+        message Disconnected {
+            string reason =  1;
+        }
+
+        message GoAway {
+            string reason = 1;
+            uint32 remain_seconds = 2;
+        }
+
+        oneof event {
+            Connected connected = 1;
+            JoinedRoom joined = 2;
+            LeavedRoom leaved = 3;
+            Disconnected disconnected = 4;
+            GoAway goway = 5;
+        }
+    }
+
+    message Room {
+        message PeerJoined {
+            string peer = 1;
+            optional string metadata = 2;
+        }
+
+        message PeerUpdated {
+            string peer = 1;
+            optional string metadata = 2;
+        }
+
+        message PeerLeaved {
+            string peer = 1;
+        }
+
+        message TrackStarted {
+            string peer = 1;
+            string track = 2;
+            shared.Kind kind = 3;
+            optional string metadata = 4;
+        }
+
+        message TrackUpdated {
+            string peer = 1;
+            string track = 2;
+            shared.Kind kind = 3;
+            optional string metadata = 4;
+        }
+
+        message TrackStopped {
+            string peer = 1;
+            string track = 2;
+            shared.Kind kind = 3;
+        }
+
+        oneof event {
+            PeerJoined peer_joined = 1;
+            PeerUpdated peer_updated = 2;
+            PeerLeaved peer_leaved = 3;
+            TrackStarted track_started = 4;
+            TrackUpdated track_updated = 5;
+            TrackStopped track_stopped = 6;
+        }
+    }
+
+    message Sender {
+        message State {
+            shared.Sender.Status status = 1;
+        }
+
+        string name = 1;
+        oneof event {
+            State state = 2;
+        }
+    }
+
+    message Receiver {
+        message State {
+            shared.Receiver.Status status = 1;
+        }
+
+        message Stats {
+            message Source {
+                uint32 bitrate_kbps = 1;
+                float rtt = 2;
+                float lost = 3;
+                float jitter = 4;
+            }
+
+            message Transmit {
+                uint32 spatial = 1;
+                uint32 temporal = 2;
+                uint32 bitrate_kbps = 3;
+            }
+
+            optional Source source = 1;
+            optional Transmit transmit = 2;
+        }
+
+        string name = 1;
+        oneof event {
+            State state = 2;
+            Stats stats = 3;
+        }
+    }
+
+    uint32 seq = 1;
+    oneof event {
+        Session session = 2;
+        Room room = 3;
+        Sender sender = 4;
+        Receiver receiver = 5;
+        Response response = 6;
+        features.ServerEvent features = 7;
+    }
+}
+
+message ClientEvent {
+    uint32 seq = 1;
+    oneof event {
+        Request request = 2;
+    }
+}

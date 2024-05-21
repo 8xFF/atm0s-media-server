@@ -1,5 +1,10 @@
-use std::{collections::HashMap, net::SocketAddr, time::Duration};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr, SocketAddrV4},
+    time::Duration,
+};
 
+use atm0s_sdn::SdnExtIn;
 use clap::Parser;
 use media_server_runner::MediaConfig;
 use sans_io_runtime::{backend::PollingBackend, Controller};
@@ -12,13 +17,24 @@ use runtime_worker::{ExtIn, ExtOut};
 
 #[derive(Debug, Parser)]
 pub struct Args {
+    /// Webrtc Ice Lite
+    #[arg(env, long)]
+    ice_lite: bool,
+
+    /// Binding port
+    #[arg(env, long, default_value_t = 0)]
+    media_port: u16,
+
+    /// Allow private ip
+    #[arg(env, long, default_value_t = false)]
+    allow_private_ip: bool,
+
     /// Custom binding address for WebRTC UDP
     #[arg(env, long)]
-    custom_addrs: Vec<SocketAddr>,
+    custom_ips: Vec<IpAddr>,
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
-    println!("Running media server");
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     if let Some(http_port) = http_port {
         tokio::spawn(async move {
@@ -28,18 +44,34 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         });
     }
 
-    //TODO get local addrs
     let node_id = node.node_id;
     let node_session = node.session;
-    let webrtc_addrs = args.custom_addrs;
+    let mut webrtc_addrs = args.custom_ips.into_iter().map(|ip| SocketAddr::new(ip, args.media_port)).collect::<Vec<_>>();
+    local_ip_address::local_ip().into_iter().for_each(|ip| {
+        if let IpAddr::V4(ip) = ip {
+            if !ip.is_private() || args.allow_private_ip {
+                println!("Detect local ip: {ip}");
+                webrtc_addrs.push(SocketAddr::V4(SocketAddrV4::new(ip, 0)));
+            }
+        }
+    });
+
+    println!("Running media server with addrs: {:?}, ice-lite: {}", webrtc_addrs, args.ice_lite);
     let mut controller = Controller::<_, _, _, _, _, 128>::default();
     for i in 0..workers {
         let cfg = runtime_worker::ICfg {
             controller: i == 0,
             node: node.clone(),
-            media: MediaConfig { webrtc_addrs: webrtc_addrs.clone() },
+            media: MediaConfig {
+                webrtc_addrs: webrtc_addrs.clone(),
+                ice_lite: args.ice_lite,
+            },
         };
         controller.add_worker::<_, _, MediaRuntimeWorker, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);
+    }
+
+    for seed in node.seeds {
+        controller.send_to(0, ExtIn::Sdn(SdnExtIn::ConnectTo(seed)));
     }
 
     let mut req_id_seed = 0;

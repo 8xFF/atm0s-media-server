@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package shared;
+
+enum Kind {
+    AUDIO = 0;
+    VIDEO = 1;
+}
+
+message Receiver {
+    enum Status {
+        WAITING = 0;
+        ACTIVE = 1;
+        INACTIVE = 2;
+    }
+
+    message Source {
+        string peer = 1;
+        string track = 2;
+    }
+
+    message Config {
+        uint32 priority = 1;
+        uint32 max_spatial = 2;
+        uint32 max_temporal = 3;
+        optional uint32 min_spatial = 4;
+        optional uint32 min_temporal = 5;
+    }
+
+    message State {
+        Config config = 1;
+        optional Source source = 2;
+    }
+
+    Kind kind = 1;
+    string name = 2;
+    State state = 3;
+}
+
+message Sender {
+    enum Status {
+        ACTIVE = 0;
+        INACTIVE = 1;
+    }
+
+    message Source {
+        string id = 1;
+        bool screen = 2;
+        optional string metadata = 3;
+    }
+
+    message Config {
+        uint32 priority = 1;
+        BitrateControlMode bitrate = 2;
+    }
+
+    message State {
+        Config config = 1;
+        optional Source source = 2;
+    }
+
+    Kind kind = 1;
+    string name = 2;
+    State state = 3;
+}
+
+
+message Tracks {
+    repeated Receiver receivers = 1;
+    repeated Sender senders = 2;
+}
+
+message RoomInfoPublish {
+    bool peer = 1;
+    bool tracks = 2;
+}
+
+message RoomInfoSubscribe {
+    bool peers = 1;
+    bool tracks = 2;
+}
+
+message RoomJoin {
+    string room = 1;
+    string peer = 2;
+    RoomInfoPublish publish = 3;
+    RoomInfoSubscribe subscribe = 4;
+    optional string metadata = 5;
+}
+
+enum BitrateControlMode {
+    DYNAMIC_CONSUMERS = 0;
+    MAX_BITRATE = 1;
+}
+
+message Error {
+    uint32 code = 1;
+    string message = 2;
+}

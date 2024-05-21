@@ -50,21 +50,21 @@ We are actively refactoring entire media server and network stack with [sans-io-
 - Easy to deploy: single binary, Docker, or Kubernetes
 - Easy to scale: global pubsub network, similar to [Cloudflare interconnected network](https://blog.cloudflare.com/announcing-cloudflare-calls/))
 
-| Feature             | Description                                                                          | Status |
-| ------------------- | ------------------------------------------------------------------------------------ | ------ |
-| Cluster Room & Peer | Multi-zones room & peer mechanism [RFC-0003](https://github.com/8xFF/rfcs/pull/3)    | 🚀     |
-| Simulcast & SVC     | Support WebRTC Simulcast (VP8, H264) and SVC (VP9)                                   | 🚀     |
-| Whip                | Whip Protocol                                                                        | 🚀     |
-| Whep                | Whep Protocol                                                                        | 🚀     |
-| WebRTC-SDK          | Webrtc-SDK Protocol [RFC-0005](https://github.com/8xFF/rfcs/pull/5)                  | ❌     |
-| RTMP                | RTMP Protocol                                                                        | ❌     |
-| RTMP-Transcode      | RTMP with Transcode                                                                  | ❌     |
-| SIP                 | SIP calls                                                                            | ❌     |
-| MoQ                 | Media-over-Quic                                                                      | ❌     |
-| Monitoring          | Dashboard for monitoring                                                             | ❌     |
-| Recording           | Record stream                                                                        | ❌     |
-| Gateway             | External gateway [RFC-0003](https://github.com/8xFF/rfcs/pull/3)                     | ❌     |
-| Connector           | External event handling                                                              | ❌     |
+| Feature             | Description                                                                       | Status |
+| ------------------- | --------------------------------------------------------------------------------- | ------ |
+| Cluster Room & Peer | Multi-zones room & peer mechanism [RFC-0003](https://github.com/8xFF/rfcs/pull/3) | 🚀     |
+| Simulcast & SVC     | Support WebRTC Simulcast (VP8, H264) and SVC (VP9)                                | 🚀     |
+| Whip                | Whip Protocol                                                                     | 🚀     |
+| Whep                | Whep Protocol                                                                     | 🚀     |
+| WebRTC-SDK          | Webrtc-SDK Protocol [RFC-0005](https://github.com/8xFF/rfcs/pull/5)               | 🚧     |
+| RTMP                | RTMP Protocol                                                                     | ❌     |
+| RTMP-Transcode      | RTMP with Transcode                                                               | ❌     |
+| SIP                 | SIP calls                                                                         | ❌     |
+| MoQ                 | Media-over-Quic                                                                   | ❌     |
+| Monitoring          | Dashboard for monitoring                                                          | ❌     |
+| Recording           | Record stream                                                                     | ❌     |
+| Gateway             | External gateway [RFC-0003](https://github.com/8xFF/rfcs/pull/3)                  | ❌     |
+| Connector           | External event handling                                                           | ❌     |
 
 Status:
 

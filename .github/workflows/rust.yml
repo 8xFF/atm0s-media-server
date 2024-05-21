@@ -24,9 +24,14 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update
-          sudo apt install -y libsoxr-dev libopus-dev libssl-dev libfdk-aac-dev protobuf-compiler
+          sudo apt install -y libsoxr-dev libopus-dev libssl-dev libfdk-aac-dev
       - name: Install Rust
         run: rustup update stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Running cargo test

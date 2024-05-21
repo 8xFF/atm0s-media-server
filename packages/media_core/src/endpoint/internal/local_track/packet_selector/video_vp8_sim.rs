@@ -30,12 +30,14 @@ pub struct Selector {
     current: Option<MediaLayerSelection>,
     target: Option<MediaLayerSelection>,
     queue: VecDeque<Action>,
+    limit: (u8, u8),
 }
 
 impl Selector {
-    pub fn new(bitrate: u64, layers: MediaLayersBitrate) -> Self {
+    pub fn new(bitrate: u64, layers: MediaLayersBitrate, limit: (u8, u8)) -> Self {
         let bitrate_kbps = (bitrate / 1000) as u16;
-        let target = layers.select_layer(bitrate_kbps);
+        let (max_spatial, max_temporal) = limit;
+        let target = layers.select_layer(bitrate_kbps, max_spatial, max_temporal);
 
         log::info!("[Vp8SimSelector] create with bitrate {bitrate_kbps} kbps, layers {:?} => init target {:?}", layers, target);
 
@@ -45,11 +47,12 @@ impl Selector {
             current: None,
             target,
             queue: VecDeque::new(),
+            limit: (max_spatial, max_temporal),
         }
     }
 
     fn select_layer(&mut self) {
-        let target = self.layers.select_layer(self.bitrate_kbps);
+        let target = self.layers.select_layer(self.bitrate_kbps, self.limit.0, self.limit.1);
         if target != self.target {
             log::info!("[Vp8SimSelector] bitrate {} kbps, layers {:?} => changed target to {:?}", self.bitrate_kbps, self.layers, target);
             self.target = target;
@@ -208,6 +211,11 @@ impl VideoSelector for Selector {
         self.select_layer();
     }
 
+    fn set_limit_layer(&mut self, _ctx: &mut VideoSelectorCtx, _now_ms: u64, max_spatial: u8, max_temporal: u8) {
+        self.limit = (max_spatial, max_temporal);
+        self.select_layer();
+    }
+
     fn select(&mut self, ctx: &mut VideoSelectorCtx, _now_ms: u64, _channel: u64, pkt: &mut MediaPacket) -> Option<()> {
         if let Some(layers) = pkt.layers.as_ref() {
             self.layers = layers.clone();
@@ -268,7 +276,7 @@ mod tests {
     fn test(bitrate: u64, layers: &[[u16; 3]], steps: Vec<Step>) {
         let mut ctx = VideoSelectorCtx::new(MediaKind::Video);
         ctx.seq_rewrite.reinit();
-        let mut selector = Selector::new(bitrate * 1000, layers_bitrate(&layers));
+        let mut selector = Selector::new(bitrate * 1000, layers_bitrate(&layers), (2, 2));
         selector.on_init(&mut ctx, 0);
 
         for step in steps {
@@ -283,7 +291,7 @@ mod tests {
                         let ts = ctx.ts_rewrite.generate(ts, pkt.ts as u64) as u32;
                         let (pic_id, tl0idx) = match &pkt.meta {
                             MediaMeta::Vp8 {
-                                key,
+                                key: _,
                                 sim: Some(Vp8Sim { picture_id, tl0_pic_idx, .. }),
                             } => (picture_id.unwrap(), tl0_pic_idx.unwrap()),
                             _ => panic!("Should not happen"),

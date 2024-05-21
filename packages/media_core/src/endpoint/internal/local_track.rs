@@ -8,9 +8,10 @@ use atm0s_sdn::TimePivot;
 use media_server_protocol::{
     endpoint::{PeerId, TrackName, TrackPriority},
     media::MediaKind,
+    protobuf::shared::receiver::Status as ProtoStatus,
     transport::RpcError,
 };
-use sans_io_runtime::Task;
+use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
 use crate::{
     cluster::{ClusterLocalTrackControl, ClusterLocalTrackEvent, ClusterRoomHash},
@@ -24,6 +25,8 @@ use self::packet_selector::PacketSelector;
 use super::bitrate_allocator::EgressAction;
 
 mod packet_selector;
+
+const MEDIA_TIMEOUT_MS: u64 = 2_000; //after 2s not receive media, the track will become inactive
 
 pub enum Input {
     JoinRoom(ClusterRoomHash),
@@ -39,13 +42,21 @@ pub enum Output {
     Cluster(ClusterRoomHash, ClusterLocalTrackControl),
     RpcRes(EndpointReqId, EndpointLocalTrackRes),
     Started(MediaKind, TrackPriority),
+    Updated(MediaKind, TrackPriority),
     Stopped(MediaKind),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Status {
+    Waiting,
+    Active { last_media_ts: u64 },
+    Inactive,
 }
 
 pub struct EndpointLocalTrack {
     kind: MediaKind,
     room: Option<ClusterRoomHash>,
-    bind: Option<(PeerId, TrackName)>,
+    bind: Option<(PeerId, TrackName, Status)>,
     queue: VecDeque<Output>,
     selector: PacketSelector,
     timer: TimePivot,
@@ -53,104 +64,139 @@ pub struct EndpointLocalTrack {
 
 impl EndpointLocalTrack {
     pub fn new(kind: MediaKind, room: Option<ClusterRoomHash>) -> Self {
+        log::info!("[EndpointLocalTrack] track {kind}, room {:?}", room);
         Self {
             kind,
             room,
             bind: None,
             queue: VecDeque::new(),
-            selector: PacketSelector::new(kind),
+            selector: PacketSelector::new(kind, 2, 2),
             timer: TimePivot::build(),
         }
     }
 
-    fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) -> Option<Output> {
+    fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) {
         assert_eq!(self.room, None);
         assert_eq!(self.bind, None);
-        log::info!("[EndpointLocalTrack] join room {room}");
+        log::info!("[EndpointLocalTrack] track {} join room {room}", self.kind);
         self.room = Some(room);
-        None
     }
 
-    fn on_leave_room(&mut self, _now: Instant) -> Option<Output> {
+    fn on_leave_room(&mut self, _now: Instant) {
         assert_ne!(self.room, None);
-        let room = self.room.take()?;
+        let room = return_if_none!(self.room.take());
         log::info!("[EndpointLocalTrack] leave room {room}");
-        let (peer, track) = self.bind.take()?;
+        let (peer, track, _) = return_if_none!(self.bind.take());
         log::info!("[EndpointLocalTrack] leave room {room} => auto Unsubscribe {peer} {track}");
-        Some(Output::Cluster(room, ClusterLocalTrackControl::Unsubscribe))
+        self.queue.push_back(Output::Cluster(room, ClusterLocalTrackControl::Unsubscribe));
     }
 
-    fn on_cluster_event(&mut self, now: Instant, event: ClusterLocalTrackEvent) -> Option<Output> {
+    fn on_cluster_event(&mut self, now: Instant, event: ClusterLocalTrackEvent) {
         match event {
             ClusterLocalTrackEvent::Started => todo!(),
             ClusterLocalTrackEvent::SourceChanged => {
-                let room = self.room.as_ref()?;
+                let room = return_if_none!(self.room.as_ref());
                 log::info!("[EndpointLocalTrack] source changed => request key-frame and reset seq, ts rewrite");
-                Some(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame))
+                self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame));
             }
             ClusterLocalTrackEvent::Media(channel, mut pkt) => {
                 log::trace!("[EndpointLocalTrack] on media payload {:?} seq {}", pkt.meta, pkt.seq);
                 let now_ms = self.timer.timestamp_ms(now);
-                self.selector.select(self.timer.timestamp_ms(now), channel, &mut pkt)?;
-                self.pop_selector(now_ms);
-                Some(Output::Event(EndpointLocalTrackEvent::Media(pkt)))
+                if self.selector.select(self.timer.timestamp_ms(now), channel, &mut pkt).is_some() {
+                    self.pop_selector(now_ms);
+
+                    if let Some((_, _, status)) = &mut self.bind {
+                        match status {
+                            Status::Waiting | Status::Inactive => {
+                                *status = Status::Active { last_media_ts: now_ms };
+                                self.queue.push_back(Output::Event(EndpointLocalTrackEvent::Status(ProtoStatus::Active)));
+                            }
+                            Status::Active { last_media_ts } => {
+                                *last_media_ts = now_ms;
+                            }
+                        }
+                    }
+
+                    self.queue.push_back(Output::Event(EndpointLocalTrackEvent::Media(pkt)));
+                }
             }
             ClusterLocalTrackEvent::Ended => todo!(),
         }
     }
 
-    fn on_transport_event(&mut self, _now: Instant, event: LocalTrackEvent) -> Option<Output> {
+    fn on_transport_event(&mut self, _now: Instant, event: LocalTrackEvent) {
         log::info!("[EndpointLocalTrack] on event {:?}", event);
         match event {
-            LocalTrackEvent::Started(_) => None,
+            LocalTrackEvent::Started { .. } => {}
             LocalTrackEvent::RequestKeyFrame => {
-                let room = self.room.as_ref()?;
-                Some(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame))
+                let room = return_if_none!(self.room.as_ref());
+                self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame));
             }
-            LocalTrackEvent::Ended => None,
+            LocalTrackEvent::Ended => {}
         }
     }
 
-    fn on_rpc_req(&mut self, _now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) -> Option<Output> {
+    fn on_rpc_req(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) {
         match req {
-            EndpointLocalTrackReq::Switch(Some((peer, track, priority))) => {
-                if let Some(room) = self.room.as_ref() {
-                    log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track}");
-                    if let Some((_peer, _track)) = self.bind.take() {
-                        log::info!("[EndpointLocalTrack] view room {room} peer {peer} track {track} => unsubscribe current {_peer} {_track}");
+            EndpointLocalTrackReq::Attach(source, config) => {
+                if config.priority.0 == 0 {
+                    log::warn!("[EndpointLocalTrack] view with invalid priority");
+                    self.queue
+                        .push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Err(RpcError::new2(EndpointErrors::LocalTrackInvalidPriority)))));
+                } else if let Some(room) = self.room.as_ref() {
+                    self.queue.push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Ok(()))));
+                    let peer = source.peer;
+                    let track = source.track;
+                    let now_ms = self.timer.timestamp_ms(now);
+                    log::info!("[EndpointLocalTrack] track {} view room {room} peer {peer} track {track}", self.kind);
+                    if let Some((_peer, _track, _status)) = self.bind.take() {
+                        log::info!(
+                            "[EndpointLocalTrack]  track {} view room {room} peer {peer} track {track} => unsubscribe current {_peer} {_track}",
+                            self.kind
+                        );
                         self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
                         self.queue.push_back(Output::Stopped(self.kind));
                     }
-                    self.bind = Some((peer.clone(), track.clone()));
-                    self.queue.push_back(Output::Started(self.kind, priority));
+                    self.bind = Some((peer.clone(), track.clone(), Status::Waiting));
+                    self.selector.set_limit_layer(now_ms, config.max_spatial, config.max_temporal);
+                    self.queue.push_back(Output::Started(self.kind, config.priority));
                     self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer, track)));
                     self.selector.reset();
-                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
                 } else {
-                    log::warn!("[EndpointLocalTrack] view but not in room");
-                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
+                    log::warn!("[EndpointLocalTrack] track {} view but not in room", self.kind);
+                    self.queue
+                        .push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))));
                 }
             }
-            EndpointLocalTrackReq::Switch(None) => {
+            EndpointLocalTrackReq::Detach() => {
+                //TODO process config here
                 if let Some(room) = self.room.as_ref() {
-                    if let Some((peer, track)) = self.bind.take() {
+                    if let Some((peer, track, _)) = self.bind.take() {
+                        self.queue.push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Detach(Ok(()))));
                         self.queue.push_back(Output::Stopped(self.kind));
                         self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
                         log::info!("[EndpointLocalTrack] unview room {room} peer {peer} track {track}");
-                        Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Ok(()))))
                     } else {
                         log::warn!("[EndpointLocalTrack] unview but not bind to any source");
-                        Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::LocalTrackNotPinSource)))))
+                        self.queue
+                            .push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Detach(Err(RpcError::new2(EndpointErrors::LocalTrackNotPinSource)))));
                     }
                 } else {
                     log::warn!("[EndpointLocalTrack] unview but not in room");
-                    Some(Output::RpcRes(req_id, EndpointLocalTrackRes::Switch(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))))
+                    self.queue
+                        .push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Detach(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))));
                 }
+            }
+            EndpointLocalTrackReq::Config(config) => {
+                let now_ms = self.timer.timestamp_ms(now);
+                self.selector.set_limit_layer(now_ms, config.max_spatial, config.max_temporal);
+                self.queue.push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Config(Ok(()))));
+                self.queue.push_back(Output::Updated(self.kind, config.priority));
             }
         }
     }
 
-    fn on_bitrate_allocation_action(&mut self, now: Instant, action: EgressAction) -> Option<Output> {
+    fn on_bitrate_allocation_action(&mut self, now: Instant, action: EgressAction) {
         match action {
             EgressAction::SetBitrate(bitrate) => {
                 let now_ms = self.timer.timestamp_ms(now);
@@ -160,7 +206,6 @@ impl EndpointLocalTrack {
                 if let Some(room) = self.room {
                     self.queue.push_back(Output::Cluster(room, ClusterLocalTrackControl::DesiredBitrate(bitrate)));
                 }
-                self.queue.pop_front()
             }
         }
     }
@@ -182,14 +227,22 @@ impl EndpointLocalTrack {
 }
 
 impl Task<Input, Output> for EndpointLocalTrack {
-    fn on_tick(&mut self, now: Instant) -> Option<Output> {
+    fn on_tick(&mut self, now: Instant) {
         let now_ms = self.timer.timestamp_ms(now);
         self.selector.on_tick(now_ms);
         self.pop_selector(now_ms);
-        self.queue.pop_front()
+
+        if let Some((_, _, status)) = &mut self.bind {
+            if let Status::Active { last_media_ts } = status {
+                if now_ms >= *last_media_ts + MEDIA_TIMEOUT_MS {
+                    *status = Status::Inactive;
+                    self.queue.push_back(Output::Event(EndpointLocalTrackEvent::Status(ProtoStatus::Inactive)));
+                }
+            }
+        }
     }
 
-    fn on_event(&mut self, now: Instant, input: Input) -> Option<Output> {
+    fn on_event(&mut self, now: Instant, input: Input) {
         match input {
             Input::JoinRoom(room) => self.on_join_room(now, room),
             Input::LeaveRoom => self.on_leave_room(now),
@@ -200,12 +253,13 @@ impl Task<Input, Output> for EndpointLocalTrack {
         }
     }
 
+    fn on_shutdown(&mut self, _now: Instant) {}
+}
+
+impl TaskSwitcherChild<Output> for EndpointLocalTrack {
+    type Time = Instant;
     fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         self.queue.pop_front()
-    }
-
-    fn shutdown(&mut self, _now: Instant) -> Option<Output> {
-        None
     }
 }
 

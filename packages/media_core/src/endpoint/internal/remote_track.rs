@@ -5,12 +5,14 @@ use std::{collections::VecDeque, time::Instant};
 use media_server_protocol::{
     endpoint::{BitrateControlMode, TrackMeta, TrackName, TrackPriority},
     media::{MediaKind, MediaLayersBitrate},
+    transport::RpcError,
 };
-use sans_io_runtime::Task;
+use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
 use crate::{
     cluster::{ClusterRemoteTrackControl, ClusterRemoteTrackEvent, ClusterRoomHash},
     endpoint::{EndpointRemoteTrackEvent, EndpointRemoteTrackReq, EndpointRemoteTrackRes, EndpointReqId},
+    errors::EndpointErrors,
     transport::RemoteTrackEvent,
 };
 
@@ -25,11 +27,13 @@ pub enum Input {
     BitrateAllocation(IngressAction),
 }
 
+#[derive(Debug)]
 pub enum Output {
     Event(EndpointRemoteTrackEvent),
     Cluster(ClusterRoomHash, ClusterRemoteTrackControl),
     RpcRes(EndpointReqId, EndpointRemoteTrackRes),
     Started(MediaKind, TrackPriority),
+    Update(MediaKind, TrackPriority),
     Stopped(MediaKind),
 }
 
@@ -41,10 +45,12 @@ pub struct EndpointRemoteTrack {
     allocate_bitrate: Option<u64>,
     /// This is for storing current stream layers, everytime key-frame arrived we will set this if it not set
     last_layers: Option<MediaLayersBitrate>,
+    cluster_bitrate_limit: Option<(u64, u64)>,
 }
 
 impl EndpointRemoteTrack {
     pub fn new(room: Option<ClusterRoomHash>, meta: TrackMeta) -> Self {
+        log::info!("[EndpointRemoteTrack] created with room {:?} meta {:?}", room, meta);
         Self {
             meta,
             room,
@@ -52,98 +58,120 @@ impl EndpointRemoteTrack {
             queue: VecDeque::new(),
             allocate_bitrate: None,
             last_layers: None,
+            cluster_bitrate_limit: None,
         }
     }
 
-    fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) -> Option<Output> {
+    fn on_join_room(&mut self, _now: Instant, room: ClusterRoomHash) {
         assert_eq!(self.room, None);
         self.room = Some(room);
         log::info!("[EndpointRemoteTrack] join room {room}");
-        let name = self.name.clone()?;
+        let name = return_if_none!(self.name.clone());
         log::info!("[EndpointRemoteTrack] started as name {name} after join room");
-        Some(Output::Cluster(room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())))
+        self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())));
     }
-    fn on_leave_room(&mut self, _now: Instant) -> Option<Output> {
+    fn on_leave_room(&mut self, _now: Instant) {
         let room = self.room.take().expect("Must have room here");
         log::info!("[EndpointRemoteTrack] leave room {room}");
-        let name = self.name.as_ref()?;
+        let name = return_if_none!(self.name.as_ref());
         log::info!("[EndpointRemoteTrack] stopped as name {name} after leave room");
-        Some(Output::Cluster(room, ClusterRemoteTrackControl::Ended))
+        self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Ended));
     }
 
-    fn on_cluster_event(&mut self, _now: Instant, event: ClusterRemoteTrackEvent) -> Option<Output> {
+    fn on_cluster_event(&mut self, _now: Instant, event: ClusterRemoteTrackEvent) {
         match event {
-            ClusterRemoteTrackEvent::RequestKeyFrame => Some(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
-            ClusterRemoteTrackEvent::LimitBitrate { min, max: _ } => {
-                match self.meta.control {
-                    BitrateControlMode::MaxBitrate | BitrateControlMode::NonControl => None,
-                    BitrateControlMode::DynamicConsumers => {
-                        //TODO dynamic with type of scaling
-                        let bitrate = min.min(self.allocate_bitrate?);
-                        Some(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps(bitrate)))
+            ClusterRemoteTrackEvent::RequestKeyFrame => self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::RequestKeyFrame)),
+            ClusterRemoteTrackEvent::LimitBitrate { min, max } => {
+                self.cluster_bitrate_limit = Some((min, max));
+                if self.meta.control.eq(&BitrateControlMode::DynamicConsumers) {
+                    if let Some((min, max)) = self.calc_limit_bitrate() {
+                        self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }));
                     }
                 }
             }
         }
     }
 
-    fn on_transport_event(&mut self, _now: Instant, event: RemoteTrackEvent) -> Option<Output> {
+    fn on_transport_event(&mut self, _now: Instant, event: RemoteTrackEvent) {
         match event {
             RemoteTrackEvent::Started { name, priority, meta: _ } => {
                 self.name = Some(name.clone());
-                let room = self.room.as_ref()?;
-                log::info!("[EndpointRemoteTrack] started as name {name}");
+                let room = return_if_none!(self.room.as_ref());
+                log::info!("[EndpointRemoteTrack] started as name {name} in room {room}");
+                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())));
                 self.queue.push_back(Output::Started(self.meta.kind, priority));
-                Some(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())))
             }
-            RemoteTrackEvent::Paused => None,
-            RemoteTrackEvent::Resumed => None,
+            RemoteTrackEvent::Paused => {}
+            RemoteTrackEvent::Resumed => {}
             RemoteTrackEvent::Media(mut media) => {
                 //TODO clear self.last_layer if switched to new track
                 if media.layers.is_some() {
-                    log::info!("[EndpointRemoteTrack] on layers info {:?}", media.layers);
+                    log::debug!("[EndpointRemoteTrack] on layers info {:?}", media.layers);
                     self.last_layers = media.layers.clone();
                 }
 
                 // We restore last_layer if key frame not contain for allow consumers fast switching
-                if media.meta.is_video_key() && media.layers.is_none() {
-                    log::info!("[EndpointRemoteTrack] set layers info to key-frame {:?}", media.layers);
+                if media.meta.is_video_key() && media.layers.is_none() && self.last_layers.is_some() {
+                    log::debug!("[EndpointRemoteTrack] set layers info to key-frame {:?}", media.layers);
                     media.layers = self.last_layers.clone();
                 }
 
-                let room = self.room.as_ref()?;
-                Some(Output::Cluster(*room, ClusterRemoteTrackControl::Media(media)))
+                let room = return_if_none!(self.room.as_ref());
+                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Media(media)));
             }
             RemoteTrackEvent::Ended => {
-                let name = self.name.take()?;
-                let room = self.room.as_ref()?;
-                log::info!("[EndpointRemoteTrack] stopped with name {name}");
+                let name = return_if_none!(self.name.take());
+                let room = return_if_none!(self.room.as_ref());
+                log::info!("[EndpointRemoteTrack] stopped with name {name} in room {room}");
+                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Ended));
                 self.queue.push_back(Output::Stopped(self.meta.kind));
-                Some(Output::Cluster(*room, ClusterRemoteTrackControl::Ended))
             }
         }
     }
 
-    fn on_rpc_req(&mut self, _now: Instant, _req_id: EndpointReqId, _req: EndpointRemoteTrackReq) -> Option<Output> {
-        None
+    fn on_rpc_req(&mut self, _now: Instant, req_id: EndpointReqId, req: EndpointRemoteTrackReq) {
+        match req {
+            EndpointRemoteTrackReq::Config(config) => {
+                if config.priority.0 == 0 {
+                    log::warn!("[EndpointRemoteTrack] view with invalid priority");
+                    self.queue
+                        .push_back(Output::RpcRes(req_id, EndpointRemoteTrackRes::Config(Err(RpcError::new2(EndpointErrors::RemoteTrackInvalidPriority)))));
+                } else {
+                    self.meta.control = config.control;
+                    self.queue.push_back(Output::RpcRes(req_id, EndpointRemoteTrackRes::Config(Ok(()))));
+                    self.queue.push_back(Output::Update(self.meta.kind, config.priority));
+                }
+            }
+        }
     }
 
-    fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) -> Option<Output> {
+    fn on_bitrate_allocation_action(&mut self, _now: Instant, action: IngressAction) {
         match action {
-            IngressAction::SetBitrate(bitrate) => match self.meta.control {
-                BitrateControlMode::MaxBitrate => Some(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps(bitrate))),
-                BitrateControlMode::DynamicConsumers | BitrateControlMode::NonControl => None,
-            },
+            IngressAction::SetBitrate(bitrate) => {
+                log::info!("[EndpointRemoteTrack] on allocation bitrate {bitrate}");
+                self.allocate_bitrate = Some(bitrate);
+                if let Some((min, max)) = self.calc_limit_bitrate() {
+                    self.queue.push_back(Output::Event(EndpointRemoteTrackEvent::LimitBitrateBps { min, max }))
+                }
+            }
+        }
+    }
+
+    fn calc_limit_bitrate(&self) -> Option<(u64, u64)> {
+        let cluster_limit = self.meta.control.eq(&BitrateControlMode::DynamicConsumers).then(|| self.cluster_bitrate_limit).flatten();
+        match (self.allocate_bitrate, cluster_limit) {
+            (Some(b1), Some((min, max))) => Some((min.min(b1), max.min(b1))),
+            (Some(b1), None) => Some((b1, b1)),
+            (None, Some((min, max))) => Some((min, max)),
+            (None, None) => None,
         }
     }
 }
 
 impl Task<Input, Output> for EndpointRemoteTrack {
-    fn on_tick(&mut self, _now: Instant) -> Option<Output> {
-        None
-    }
+    fn on_tick(&mut self, _now: Instant) {}
 
-    fn on_event(&mut self, now: Instant, input: Input) -> Option<Output> {
+    fn on_event(&mut self, now: Instant, input: Input) {
         match input {
             Input::JoinRoom(room) => self.on_join_room(now, room),
             Input::LeaveRoom => self.on_leave_room(now),
@@ -154,12 +182,13 @@ impl Task<Input, Output> for EndpointRemoteTrack {
         }
     }
 
+    fn on_shutdown(&mut self, _now: Instant) {}
+}
+
+impl TaskSwitcherChild<Output> for EndpointRemoteTrack {
+    type Time = Instant;
     fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         self.queue.pop_front()
-    }
-
-    fn shutdown(&mut self, _now: Instant) -> Option<Output> {
-        None
     }
 }
 
