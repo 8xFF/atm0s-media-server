@@ -11,7 +11,7 @@ convert-enum = { workspace = true }
 derivative = { workspace = true }
 derive_more = { workspace = true }
 prost = { workspace = true }
-serde = { version = "1.0.200", features = ["derive"] }
+serde = { version = "1.0.202", features = ["derive"] }
 
 [build-dependencies]
 prost-build = "0.12"
