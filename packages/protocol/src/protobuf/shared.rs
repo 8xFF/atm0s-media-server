@@ -54,11 +54,9 @@ pub mod receiver {
     )]
     #[repr(i32)]
     pub enum Status {
-        NoSource = 0,
-        Waiting = 1,
-        Live = 2,
-        KeyOnly = 3,
-        Inactive = 4,
+        Waiting = 0,
+        Active = 1,
+        Inactive = 2,
     }
     impl Status {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -67,20 +65,16 @@ pub mod receiver {
         /// (if the ProtoBuf definition does not change) and safe for programmatic use.
         pub fn as_str_name(&self) -> &'static str {
             match self {
-                Status::NoSource => "NO_SOURCE",
                 Status::Waiting => "WAITING",
-                Status::Live => "LIVE",
-                Status::KeyOnly => "KEY_ONLY",
+                Status::Active => "ACTIVE",
                 Status::Inactive => "INACTIVE",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
         pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
             match value {
-                "NO_SOURCE" => Some(Self::NoSource),
                 "WAITING" => Some(Self::Waiting),
-                "LIVE" => Some(Self::Live),
-                "KEY_ONLY" => Some(Self::KeyOnly),
+                "ACTIVE" => Some(Self::Active),
                 "INACTIVE" => Some(Self::Inactive),
                 _ => None,
             }

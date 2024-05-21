@@ -131,6 +131,7 @@ pub enum EndpointRes {
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointLocalTrackEvent {
     Media(MediaPacket),
+    Status(protobuf::shared::receiver::Status),
 }
 
 /// This is used for controlling the remote track, which is sent from endpoint

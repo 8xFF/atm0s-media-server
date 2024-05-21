@@ -148,6 +148,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                     };
                     self.queue.push_back(InternalOutput::Str0mSendMedia(mid, pkt));
                 }
+                EndpointLocalTrackEvent::Status(_) => {}
             },
             EndpointEvent::RemoteMediaTrack(_track, _event) => {}
             EndpointEvent::BweConfig { current, desired } => {

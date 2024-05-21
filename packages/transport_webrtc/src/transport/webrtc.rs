@@ -10,6 +10,7 @@ use media_server_protocol::{
         self,
         conn::{
             server_event::{
+                receiver::{Event as ProtoReceiverEvent, State as ProtoReceiverState},
                 room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted, TrackStopped},
                 sender::{Event as ProtoSenderEvent, State as ProtoSenderState},
                 Event as ProtoServerEvent, Receiver as ProtoReceiverEventContainer, Room as ProtoRoomEvent, Sender as ProtoSenderEventContainer,
@@ -17,7 +18,7 @@ use media_server_protocol::{
             ClientEvent,
         },
         gateway::ConnectRequest,
-        shared::{receiver::Status as ProtoReceiverStatus, sender::Status as ProtoSenderStatus, Kind},
+        shared::{sender::Status as ProtoSenderStatus, Kind},
     },
     transport::{RpcError, RpcResult},
 };
@@ -247,6 +248,14 @@ impl TransportWebrtcInternal for TransportWebrtcSdk {
                     }
                     log::trace!("[TransportWebrtcSdk] send {:?} size {}", pkt.meta, pkt.data.len());
                     self.queue.push_back(InternalOutput::Str0mSendMedia(mid, pkt))
+                }
+                EndpointLocalTrackEvent::Status(status) => {
+                    let track = return_if_none!(self.local_track(track_id)).name().to_string();
+                    log::info!("[TransportWebrtcSdk] track {track} set status {:?}", status);
+                    self.send_event(ProtoServerEvent::Receiver(ProtoReceiverEventContainer {
+                        name: track,
+                        event: Some(ProtoReceiverEvent::State(ProtoReceiverState { status: status as i32 })),
+                    }));
                 }
             },
             EndpointEvent::BweConfig { current, desired } => {

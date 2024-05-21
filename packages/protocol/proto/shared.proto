@@ -9,11 +9,9 @@ enum Kind {
 
 message Receiver {
     enum Status {
-        NO_SOURCE = 0;
-        WAITING = 1;
-        LIVE = 2;
-        KEY_ONLY = 3;
-        INACTIVE = 4;
+        WAITING = 0;
+        ACTIVE = 1;
+        INACTIVE = 2;
     }
 
     message Source {
