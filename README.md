@@ -56,7 +56,7 @@ We are actively refactoring entire media server and network stack with [sans-io-
 | Simulcast & SVC     | Support WebRTC Simulcast (VP8, H264) and SVC (VP9)                                | 🚀     |
 | Whip                | Whip Protocol                                                                     | 🚀     |
 | Whep                | Whep Protocol                                                                     | 🚀     |
-| WebRTC-SDK          | Webrtc-SDK Protocol [RFC-0005](https://github.com/8xFF/rfcs/pull/5)               | 🚧     |
+| WebRTC-SDK          | Webrtc-SDK Protocol [RFC-0005](https://github.com/8xFF/rfcs/pull/5)               | 🚀     |
 | RTMP                | RTMP Protocol                                                                     | ❌     |
 | RTMP-Transcode      | RTMP with Transcode                                                               | ❌     |
 | SIP                 | SIP calls                                                                         | ❌     |
