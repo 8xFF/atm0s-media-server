@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use media_server_protocol::{
     endpoint::ClusterConnId,
@@ -26,56 +26,41 @@ use super::{
     Rpc,
 };
 
-#[derive(Clone)]
-pub struct MediaServerCtx {
+pub struct MediaServerCtx<S: MediaEdgeSecure + Send + Sync> {
     pub(crate) sender: tokio::sync::mpsc::Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
-    pub(crate) secure: Arc<MediaEdgeSecureJwt>, //TODO make it generic
+    pub(crate) secure: Arc<S>,
 }
 
-pub struct MediaApis;
-
-/// Whip ApiKey authorization
-#[derive(SecurityScheme)]
-#[oai(rename = "Token Authorization", ty = "bearer", key_in = "header", key_name = "Authorization", checker = "whip_api_checker")]
-pub struct TokenAuthorizationWhip(WhipToken);
-
-async fn whip_api_checker(req: &Request, token: Bearer) -> Option<WhipToken> {
-    let ctx = req.data::<MediaServerCtx>()?;
-    ctx.secure.decode_obj("whip", token.token.as_str())
+impl<S: MediaEdgeSecure + Send + Sync> Clone for MediaServerCtx<S> {
+    fn clone(&self) -> Self {
+        Self {
+            sender: self.sender.clone(),
+            secure: self.secure.clone(),
+        }
+    }
 }
 
-/// Whep ApiKey authorization
-#[derive(SecurityScheme)]
-#[oai(rename = "Token Authorization", ty = "bearer", key_in = "header", key_name = "Authorization", checker = "whep_api_checker")]
-pub struct TokenAuthorizationWhep(WhepToken);
+pub struct MediaApis<S>(PhantomData<S>);
 
-async fn whep_api_checker(req: &Request, token: Bearer) -> Option<WhepToken> {
-    let ctx = req.data::<MediaServerCtx>()?;
-    ctx.secure.decode_obj("whep", token.token.as_str())
-}
-
-/// Webrtc ApiKey authorization
-#[derive(SecurityScheme)]
-#[oai(rename = "Token Authorization", ty = "bearer", key_in = "header", key_name = "Authorization", checker = "webrtc_api_checker")]
-pub struct TokenAuthorizationWebrtc(WebrtcToken);
-
-async fn webrtc_api_checker(req: &Request, token: Bearer) -> Option<WebrtcToken> {
-    let ctx = req.data::<MediaServerCtx>()?;
-    ctx.secure.decode_obj("webrtc", token.token.as_str())
+impl<S: MediaEdgeSecure + Send + Sync> MediaApis<S> {
+    pub fn new() -> Self {
+        Self(Default::default())
+    }
 }
 
 #[OpenApi]
-impl MediaApis {
+impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
     /// connect whip endpoint
     #[oai(path = "/whip/endpoint", method = "post")]
     async fn whip_create(
         &self,
-        Data(ctx): Data<&MediaServerCtx>,
+        Data(ctx): Data<&MediaServerCtx<S>>,
         UserAgent(user_agent): UserAgent,
         RemoteIpAddr(ip_addr): RemoteIpAddr,
-        TokenAuthorizationWhip(token): TokenAuthorizationWhip,
+        TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
+        let token = ctx.secure.decode_obj::<WhipToken>("whip", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create whip endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::Connect(WhipConnectReq {
             ip: ip_addr,
@@ -107,7 +92,7 @@ impl MediaApis {
 
     /// patch whip conn for trickle-ice
     #[oai(path = "/whip/conn/:conn_id", method = "patch")]
-    async fn conn_whip_patch(&self, Data(ctx): Data<&MediaServerCtx>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
+    async fn conn_whip_patch(&self, Data(ctx): Data<&MediaServerCtx<S>>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
         let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] patch whip endpoint with sdp {}", body.0);
         let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::RemoteIce(WhipRemoteIceReq { conn_id, ice: body.0 })));
@@ -131,14 +116,14 @@ impl MediaApis {
 
     /// post whip conn for action
     #[oai(path = "/api/whip/conn/:conn_id", method = "post")]
-    async fn conn_whip_post(&self, _ctx: Data<&MediaServerCtx>, _conn_id: Path<String>, _body: Json<String>) -> Result<ApplicationSdp<String>> {
+    async fn conn_whip_post(&self, _ctx: Data<&MediaServerCtx<S>>, _conn_id: Path<String>, _body: Json<String>) -> Result<ApplicationSdp<String>> {
         // let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         Err(poem::Error::from_string("Not supported", StatusCode::BAD_REQUEST))
     }
 
     /// delete whip conn
     #[oai(path = "/whip/conn/:conn_id", method = "delete")]
-    async fn conn_whip_delete(&self, Data(ctx): Data<&MediaServerCtx>, conn_id: Path<String>) -> Result<PlainText<String>> {
+    async fn conn_whip_delete(&self, Data(ctx): Data<&MediaServerCtx<S>>, conn_id: Path<String>) -> Result<PlainText<String>> {
         let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] close whip endpoint conn {}", conn_id);
         let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::Delete(WhipDeleteReq { conn_id })));
@@ -163,12 +148,13 @@ impl MediaApis {
     #[oai(path = "/whep/endpoint", method = "post")]
     async fn whep_create(
         &self,
-        Data(ctx): Data<&MediaServerCtx>,
+        Data(ctx): Data<&MediaServerCtx<S>>,
         UserAgent(user_agent): UserAgent,
         RemoteIpAddr(ip_addr): RemoteIpAddr,
-        TokenAuthorizationWhep(token): TokenAuthorizationWhep,
+        TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
+        let token = ctx.secure.decode_obj::<WhepToken>("whep", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create whep endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whep(whep::RpcReq::Connect(WhepConnectReq {
             ip: ip_addr,
@@ -200,7 +186,7 @@ impl MediaApis {
 
     /// patch whep conn for trickle-ice
     #[oai(path = "/whep/conn/:conn_id", method = "patch")]
-    async fn conn_whep_patch(&self, Data(ctx): Data<&MediaServerCtx>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
+    async fn conn_whep_patch(&self, Data(ctx): Data<&MediaServerCtx<S>>, conn_id: Path<String>, body: ApplicationSdpPatch<String>) -> Result<HttpResponse<ApplicationSdpPatch<String>>> {
         let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] patch whep endpoint with sdp {}", body.0);
         let (req, rx) = Rpc::new(RpcReq::Whep(whep::RpcReq::RemoteIce(WhepRemoteIceReq { conn_id, ice: body.0 })));
@@ -224,14 +210,14 @@ impl MediaApis {
 
     /// post whep conn for action
     #[oai(path = "/api/whep/conn/:conn_id", method = "post")]
-    async fn conn_whep_post(&self, _ctx: Data<&MediaServerCtx>, _conn_id: Path<String>, _body: Json<String>) -> Result<ApplicationSdp<String>> {
+    async fn conn_whep_post(&self, _ctx: Data<&MediaServerCtx<S>>, _conn_id: Path<String>, _body: Json<String>) -> Result<ApplicationSdp<String>> {
         // let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         Err(poem::Error::from_string("Not supported", StatusCode::BAD_REQUEST))
     }
 
     /// delete whep conn
     #[oai(path = "/whep/conn/:conn_id", method = "delete")]
-    async fn conn_whep_delete(&self, Data(ctx): Data<&MediaServerCtx>, conn_id: Path<String>) -> Result<PlainText<String>> {
+    async fn conn_whep_delete(&self, Data(ctx): Data<&MediaServerCtx<S>>, conn_id: Path<String>) -> Result<PlainText<String>> {
         let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] close whep endpoint conn {}", conn_id);
         let (req, rx) = Rpc::new(RpcReq::Whep(whep::RpcReq::Delete(WhepDeleteReq { conn_id })));
@@ -256,12 +242,13 @@ impl MediaApis {
     #[oai(path = "/webrtc/connect", method = "post")]
     async fn webrtc_connect(
         &self,
-        Data(ctx): Data<&MediaServerCtx>,
+        Data(ctx): Data<&MediaServerCtx<S>>,
         UserAgent(user_agent): UserAgent,
         RemoteIpAddr(ip_addr): RemoteIpAddr,
-        TokenAuthorizationWebrtc(token): TokenAuthorizationWebrtc,
+        TokenAuthorization(token): TokenAuthorization,
         connect: Protobuf<ConnectRequest>,
     ) -> Result<HttpResponse<Protobuf<ConnectResponse>>> {
+        let token = ctx.secure.decode_obj::<WebrtcToken>("webrtc", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create webrtc with token {:?}, ip {}, user_agent {}, request {:?}", token, ip_addr, user_agent, connect);
         if let Some(join) = &connect.join {
             if token.room != Some(join.room.clone()) {
@@ -296,7 +283,7 @@ impl MediaApis {
 
     /// patch webrtc conn for trickle-ice
     #[oai(path = "/webrtc/:conn_id/ice-candidate", method = "post")]
-    async fn webrtc_ice_candidate(&self, Data(ctx): Data<&MediaServerCtx>, conn_id: Path<String>, body: Protobuf<RemoteIceRequest>) -> Result<HttpResponse<Protobuf<RemoteIceResponse>>> {
+    async fn webrtc_ice_candidate(&self, Data(ctx): Data<&MediaServerCtx<S>>, conn_id: Path<String>, body: Protobuf<RemoteIceRequest>) -> Result<HttpResponse<Protobuf<RemoteIceResponse>>> {
         let conn_id = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] on remote ice from webrtc conn {conn_id} with ice candidate {:?}", body.0);
         let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RemoteIce(conn_id, body.0)));
@@ -322,7 +309,7 @@ impl MediaApis {
     #[oai(path = "/webrtc/:conn_id/restart-ice", method = "post")]
     async fn webrtc_restart_ice(
         &self,
-        Data(ctx): Data<&MediaServerCtx>,
+        Data(ctx): Data<&MediaServerCtx<S>>,
         UserAgent(user_agent): UserAgent,
         RemoteIpAddr(ip_addr): RemoteIpAddr,
         TokenAuthorization(token): TokenAuthorization,

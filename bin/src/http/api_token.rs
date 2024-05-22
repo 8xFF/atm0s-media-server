@@ -1,17 +1,23 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use super::{utils::TokenAuthorization, Response};
 use media_server_protocol::tokens::{WebrtcToken, WhepToken, WhipToken};
-use media_server_secure::{jwt::MediaGatewaySecureJwt, MediaGatewaySecure};
+use media_server_secure::MediaGatewaySecure;
 use poem::{web::Data, Result};
 use poem_openapi::{payload::Json, OpenApi};
 
-#[derive(Clone)]
-pub struct TokenServerCtx {
-    pub(crate) secure: Arc<MediaGatewaySecureJwt>,
+pub struct TokenServerCtx<S>
+where
+    S: MediaGatewaySecure + Send + Sync,
+{
+    pub(crate) secure: Arc<S>,
 }
 
-pub struct TokenApis;
+impl<S: MediaGatewaySecure + Send + Sync> Clone for TokenServerCtx<S> {
+    fn clone(&self) -> Self {
+        Self { secure: self.secure.clone() }
+    }
+}
 
 #[derive(poem_openapi::Object)]
 struct WhipTokenReq {
@@ -49,16 +55,19 @@ struct WebrtcTokenRes {
     token: String,
 }
 
-#[OpenApi]
-impl TokenApis {
-    #[oai(path = "/demo", method = "get")]
-    async fn demo(&self) -> Result<Json<Response<WhipTokenRes>>> {
-        todo!()
-    }
+pub struct TokenApis<S: MediaGatewaySecure + Send + Sync>(PhantomData<S>);
 
+impl<S: MediaGatewaySecure + Send + Sync> TokenApis<S> {
+    pub fn new() -> Self {
+        Self(Default::default())
+    }
+}
+
+#[OpenApi]
+impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
     /// create whip session token
     #[oai(path = "/whip", method = "post")]
-    async fn whip_token(&self, Data(ctx): Data<&TokenServerCtx>, body: Json<WhipTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Result<Json<Response<WhipTokenRes>>> {
+    async fn whip_token(&self, Data(ctx): Data<&TokenServerCtx<S>>, body: Json<WhipTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Result<Json<Response<WhipTokenRes>>> {
         if ctx.secure.validate_app(&token.token) {
             let body = body.0;
             Ok(Json(Response {
@@ -79,7 +88,7 @@ impl TokenApis {
 
     /// create whep session token
     #[oai(path = "/whep", method = "post")]
-    async fn whep_token(&self, Data(ctx): Data<&TokenServerCtx>, body: Json<WhepTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Json<Response<WhepTokenRes>> {
+    async fn whep_token(&self, Data(ctx): Data<&TokenServerCtx<S>>, body: Json<WhepTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Json<Response<WhepTokenRes>> {
         if ctx.secure.validate_app(&token.token) {
             let body = body.0;
             Json(Response {
@@ -99,7 +108,7 @@ impl TokenApis {
     }
 
     #[oai(path = "/webrtc", method = "post")]
-    async fn webrtc_token(&self, Data(ctx): Data<&TokenServerCtx>, body: Json<WebrtcTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Json<Response<WebrtcTokenRes>> {
+    async fn webrtc_token(&self, Data(ctx): Data<&TokenServerCtx<S>>, body: Json<WebrtcTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Json<Response<WebrtcTokenRes>> {
         if ctx.secure.validate_app(&token.token) {
             let body = body.0;
             Json(Response {
