@@ -6,6 +6,7 @@ members = [
     "packages/media_core",
     "packages/media_runner",
     "packages/transport_webrtc",
+    "packages/media_secure",
 ]
 
 [workspace.dependencies]

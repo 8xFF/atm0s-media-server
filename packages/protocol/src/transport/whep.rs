@@ -1,11 +1,14 @@
 use std::net::IpAddr;
 
+use crate::endpoint::{PeerId, RoomId};
+
 use super::{ConnLayer, RpcResult};
 
 #[derive(Debug, Clone)]
 pub struct WhepConnectReq {
     pub sdp: String,
-    pub token: String,
+    pub room: RoomId,
+    pub peer: PeerId,
     pub ip: IpAddr,
     pub user_agent: String,
 }

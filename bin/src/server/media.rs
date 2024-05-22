@@ -1,12 +1,14 @@
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr, SocketAddrV4},
+    sync::Arc,
     time::Duration,
 };
 
 use atm0s_sdn::SdnExtIn;
 use clap::Parser;
 use media_server_runner::MediaConfig;
+use media_server_secure::jwt::MediaEdgeSecureJwt;
 use sans_io_runtime::{backend::PollingBackend, Controller};
 
 use crate::{http::run_media_http_server, server::media::runtime_worker::MediaRuntimeWorker, NodeConfig};
@@ -35,10 +37,11 @@ pub struct Args {
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
+    let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     if let Some(http_port) = http_port {
         tokio::spawn(async move {
-            if let Err(e) = run_media_http_server(http_port, req_tx).await {
+            if let Err(e) = run_media_http_server(http_port, req_tx, secure).await {
                 log::error!("HTTP Error: {}", e);
             }
         });

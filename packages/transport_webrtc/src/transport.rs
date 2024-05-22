@@ -42,7 +42,7 @@ mod whip;
 pub enum VariantParams {
     Whip(RoomId, PeerId),
     Whep(RoomId, PeerId),
-    Webrtc(IpAddr, String, String, ConnectRequest),
+    Webrtc(IpAddr, String, ConnectRequest),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -131,7 +131,7 @@ impl TransportWebrtc {
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
             VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
             VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
-            VariantParams::Webrtc(_ip, _token, _user_agent, req) => {
+            VariantParams::Webrtc(_ip, _user_agent, req) => {
                 rtc.direct_api().create_data_channel(ChannelConfig {
                     label: "data".to_string(),
                     negotiated: Some(1000),

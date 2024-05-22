@@ -6,7 +6,7 @@ use crate::protobuf::gateway::{ConnectRequest, ConnectResponse, RemoteIceRequest
 #[derive(Debug, Clone)]
 pub enum RpcReq<Conn> {
     /// Ip, Token, Agent, Req
-    Connect(IpAddr, String, String, ConnectRequest),
+    Connect(IpAddr, String, ConnectRequest),
     RemoteIce(Conn, RemoteIceRequest),
     RestartIce(Conn, IpAddr, String, String, ConnectRequest),
     Delete(Conn),
@@ -15,7 +15,7 @@ pub enum RpcReq<Conn> {
 impl<Conn: ConnLayer> RpcReq<Conn> {
     pub fn down(self) -> (RpcReq<Conn::Down>, Option<Conn::DownRes>) {
         match self {
-            RpcReq::Connect(ip_addr, token, user_agent, req) => (RpcReq::Connect(ip_addr, token, user_agent, req), None),
+            RpcReq::Connect(ip_addr, user_agent, req) => (RpcReq::Connect(ip_addr, user_agent, req), None),
             RpcReq::RemoteIce(conn, req) => {
                 let (down, layer) = conn.down();
                 (RpcReq::RemoteIce(down, req), Some(layer))

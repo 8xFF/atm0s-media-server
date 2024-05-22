@@ -67,7 +67,7 @@ impl MediaWorkerWebrtc {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
             },
-            VariantParams::Webrtc(_, _, _, _) => EndpointCfg {
+            VariantParams::Webrtc(_, _, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
             },
@@ -128,7 +128,7 @@ impl MediaWorkerWebrtc {
                                 .push_back(GroupOutput::Ext(owner, ExtOut::RemoteIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
                         }
                         ExtIn::RestartIce(req_id, variant, remote, useragent, token, req) => {
-                            if let Ok((ice_lite, sdp, index)) = self.spawn(VariantParams::Webrtc(remote, useragent, token, req.clone()), &req.sdp) {
+                            if let Ok((ice_lite, sdp, index)) = self.spawn(VariantParams::Webrtc(remote, useragent, req.clone()), &req.sdp) {
                                 self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));
                             } else {
                                 self.queue

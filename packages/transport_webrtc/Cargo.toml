@@ -14,5 +14,6 @@ sans-io-runtime = { workspace = true, default-features = false }
 prost = { workspace = true }
 media-server-utils = { path = "../media_utils" }
 media-server-protocol = { path = "../protocol" }
+media-server-secure = { path = "../media_secure" }
 media-server-core = { path = "../media_core" }
 str0m = { git = "https://github.com/algesten/str0m.git", rev = "d826257b06ac4a5562301eaa1fbac4ab3a6c04a2" }

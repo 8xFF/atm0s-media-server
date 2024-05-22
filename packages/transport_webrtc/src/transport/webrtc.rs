@@ -523,6 +523,7 @@ impl TransportWebrtcSdk {
             protobuf::conn::request::session::Request::Join(req) => {
                 let info = req.info.unwrap_or_default();
                 let meta = PeerMeta { metadata: info.metadata };
+                //TODO check token here
                 self.queue.push_back(build_req(EndpointReq::JoinRoom(
                     info.room.into(),
                     info.peer.into(),

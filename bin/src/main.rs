@@ -78,7 +78,7 @@ async fn main() {
     };
 
     match args.server {
-        ServerType::Gateway(args) => run_media_gateway(workers, args).await,
+        ServerType::Gateway(args) => run_media_gateway(workers, http_port, node, args).await,
         ServerType::Connector(args) => run_media_connector(workers, args).await,
         ServerType::Media(args) => run_media_server(workers, http_port, node, args).await,
     }

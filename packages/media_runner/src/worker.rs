@@ -252,11 +252,7 @@ impl MediaServerWorker {
         log::info!("[MediaServerWorker] incoming rpc req {req_id}");
         match req {
             RpcReq::Whip(req) => match req {
-                whip::RpcReq::Connect(req) => match self
-                    .media_webrtc
-                    .input(&mut self.switcher)
-                    .spawn(transport_webrtc::VariantParams::Whip(req.token.into(), "publisher".to_string().into()), &req.sdp)
-                {
+                whip::RpcReq::Connect(req) => match self.media_webrtc.input(&mut self.switcher).spawn(transport_webrtc::VariantParams::Whip(req.room, req.peer), &req.sdp) {
                     Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
                     Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
                 },
@@ -279,7 +275,7 @@ impl MediaServerWorker {
                     match self
                         .media_webrtc
                         .input(&mut self.switcher)
-                        .spawn(transport_webrtc::VariantParams::Whep(req.token.into(), peer_id.into()), &req.sdp)
+                        .spawn(transport_webrtc::VariantParams::Whep(req.room, peer_id.into()), &req.sdp)
                     {
                         Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp }))))),
                         Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Err(e))))),
@@ -299,7 +295,7 @@ impl MediaServerWorker {
                 }
             },
             RpcReq::Webrtc(req) => match req {
-                webrtc::RpcReq::Connect(ip, token, user_agent, req) => match self.media_webrtc.input(&mut self.switcher).spawn(VariantParams::Webrtc(ip, token, user_agent, req.clone()), &req.sdp) {
+                webrtc::RpcReq::Connect(ip, user_agent, req) => match self.media_webrtc.input(&mut self.switcher).spawn(VariantParams::Webrtc(ip, user_agent, req.clone()), &req.sdp) {
                     Ok((ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
                         req_id,
                         RpcRes::Webrtc(webrtc::RpcRes::Connect(Ok((

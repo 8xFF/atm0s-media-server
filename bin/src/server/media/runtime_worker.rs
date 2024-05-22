@@ -75,11 +75,9 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
             queue.push_back(Output::Bus(BusControl::Channel(Owner::Sdn, BusChannelControl::Subscribe(Channel::Controller))));
         }
 
-        MediaRuntimeWorker {
-            index,
-            worker: MediaServerWorker::new(cfg.node.udp_port, sdn_config, cfg.media),
-            queue,
-        }
+        let worker = MediaServerWorker::new(cfg.node.udp_port, sdn_config, cfg.media);
+        log::info!("creted worker");
+        MediaRuntimeWorker { index, worker, queue }
     }
 
     fn worker_index(&self) -> u16 {
