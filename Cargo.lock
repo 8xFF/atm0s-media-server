@@ -1458,6 +1458,7 @@ dependencies = [
  "log",
  "media-server-core",
  "media-server-protocol",
+ "media-server-secure",
  "num_enum",
  "rand",
  "sans-io-runtime",

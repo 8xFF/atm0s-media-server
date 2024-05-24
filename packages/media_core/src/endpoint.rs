@@ -10,7 +10,7 @@ use media_server_protocol::{
 };
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
-    return_if_some, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild,
+    return_if_some, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild,
 };
 
 use crate::{
@@ -201,13 +201,18 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
             _tmp: PhantomData::default(),
         }
     }
+}
 
-    pub fn on_tick(&mut self, now: Instant) {
+impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Task<EndpointInput<ExtIn>, EndpointOutput<ExtOut>> for Endpoint<T, ExtIn, ExtOut>
+where
+    T::Time: From<Instant>,
+{
+    fn on_tick(&mut self, now: Instant) {
         self.internal.input(&mut self.switcher).on_tick(now);
         self.transport.input(&mut self.switcher).on_tick(now);
     }
 
-    pub fn on_event(&mut self, now: Instant, input: EndpointInput<ExtIn>) {
+    fn on_event(&mut self, now: Instant, input: EndpointInput<ExtIn>) {
         match input {
             EndpointInput::Net(net) => {
                 self.transport.input(&mut self.switcher).on_input(now, TransportInput::Net(net));
@@ -224,7 +229,7 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
         }
     }
 
-    pub fn on_shutdown(&mut self, now: Instant) {
+    fn on_shutdown(&mut self, now: Instant) {
         self.transport.input(&mut self.switcher).on_input(now, TransportInput::Close);
     }
 }

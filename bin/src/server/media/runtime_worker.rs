@@ -7,6 +7,7 @@ use atm0s_sdn::{
 };
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, SdnConfig, UserData, SC, SE, TC, TW};
+use media_server_secure::MediaEdgeSecure;
 use rand::rngs::OsRng;
 use sans_io_runtime::{BusChannelControl, BusControl, BusEvent, WorkerInner, WorkerInnerInput, WorkerInnerOutput};
 
@@ -30,24 +31,24 @@ pub enum Channel {
     Worker(u16),
 }
 type Event = SdnWorkerBusEvent<UserData, SC, SE, TC, TW>;
-pub struct ICfg {
+pub struct ICfg<ES> {
     pub controller: bool,
     pub node: NodeConfig,
-    pub media: MediaConfig,
+    pub media: MediaConfig<ES>,
 }
 type SCfg = ();
 
 type Input = WorkerInnerInput<Owner, ExtIn, Channel, Event>;
 type Output = WorkerInnerOutput<Owner, ExtOut, Channel, Event, SCfg>;
 
-pub struct MediaRuntimeWorker {
+pub struct MediaRuntimeWorker<ES: 'static + MediaEdgeSecure> {
     index: u16,
-    worker: MediaServerWorker,
+    worker: MediaServerWorker<ES>,
     queue: VecDeque<Output>,
 }
 
-impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRuntimeWorker {
-    fn build(index: u16, cfg: ICfg) -> Self {
+impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg<ES>, SCfg> for MediaRuntimeWorker<ES> {
+    fn build(index: u16, cfg: ICfg<ES>) -> Self {
         let sdn_config = SdnConfig {
             node_id: cfg.node.node_id,
             controller: if cfg.controller {
@@ -113,7 +114,7 @@ impl WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg, SCfg> for MediaRunt
     }
 }
 
-impl MediaRuntimeWorker {
+impl<ES: MediaEdgeSecure> MediaRuntimeWorker<ES> {
     fn process_out(&mut self, out: WorkerOutput) -> Output {
         match out {
             WorkerOutput::ExtRpc(req_id, res) => Output::Ext(true, ExtOut::Rpc(req_id, self.index, res)),

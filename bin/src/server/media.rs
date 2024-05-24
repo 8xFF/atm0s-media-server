@@ -40,6 +40,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     if let Some(http_port) = http_port {
+        let secure = secure.clone();
         tokio::spawn(async move {
             if let Err(e) = run_media_http_server(http_port, req_tx, secure).await {
                 log::error!("HTTP Error: {}", e);
@@ -68,9 +69,10 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             media: MediaConfig {
                 webrtc_addrs: webrtc_addrs.clone(),
                 ice_lite: args.ice_lite,
+                secure: secure.clone(),
             },
         };
-        controller.add_worker::<_, _, MediaRuntimeWorker, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);
+        controller.add_worker::<_, _, MediaRuntimeWorker<_>, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);
     }
 
     for seed in node.seeds {

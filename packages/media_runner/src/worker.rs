@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Instant};
+use std::{net::SocketAddr, sync::Arc, time::Instant};
 
 use atm0s_sdn::{services::visualization, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot};
 use media_server_core::cluster::{self, MediaCluster};
@@ -11,6 +11,7 @@ use media_server_protocol::{
         RpcReq, RpcRes,
     },
 };
+use media_server_secure::MediaEdgeSecure;
 use rand::random;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
@@ -19,9 +20,10 @@ use sans_io_runtime::{
 };
 use transport_webrtc::{GroupInput, MediaWorkerWebrtc, VariantParams, WebrtcOwner};
 
-pub struct MediaConfig {
+pub struct MediaConfig<ES> {
     pub ice_lite: bool,
     pub webrtc_addrs: Vec<SocketAddr>,
+    pub secure: Arc<ES>,
 }
 
 pub type SdnConfig = SdnWorkerCfg<UserData, SC, SE, TC, TW>;
@@ -67,27 +69,30 @@ enum MediaClusterOwner {
     Webrtc(WebrtcOwner),
 }
 
-pub struct MediaServerWorker {
+pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
     sdn_slot: usize,
     sdn_worker: TaskSwitcherBranch<SdnWorker<UserData, SC, SE, TC, TW>, SdnWorkerOutput<UserData, SC, SE, TC, TW>>,
     media_cluster: TaskSwitcherBranch<MediaCluster<MediaClusterOwner>, cluster::Output<MediaClusterOwner>>,
-    media_webrtc: TaskSwitcherBranch<MediaWorkerWebrtc, transport_webrtc::GroupOutput>,
+    media_webrtc: TaskSwitcherBranch<MediaWorkerWebrtc<ES>, transport_webrtc::GroupOutput>,
     switcher: TaskSwitcher,
     queue: DynamicDeque<Output, 16>,
     timer: TimePivot,
+    secure: Arc<ES>,
 }
 
-impl MediaServerWorker {
-    pub fn new(udp_port: u16, sdn: SdnConfig, media: MediaConfig) -> Self {
+impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
+    pub fn new(udp_port: u16, sdn: SdnConfig, media: MediaConfig<ES>) -> Self {
+        let secure = media.secure.clone(); //TODO why need this?
         let sdn_udp_addr = SocketAddr::from(([0, 0, 0, 0], udp_port));
         Self {
             sdn_slot: 1, //TODO dont use this hack, must to wait to bind success to network
             sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
-            media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.ice_lite), TaskType::MediaWebrtc),
+            media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.ice_lite, media.secure), TaskType::MediaWebrtc),
             switcher: TaskSwitcher::new(3),
             queue: DynamicDeque::from([Output::Net(Owner::Sdn, BackendOutgoing::UdpListen { addr: sdn_udp_addr, reuse: true })]),
             timer: TimePivot::build(),
+            secure,
         }
     }
 
@@ -170,7 +175,7 @@ impl MediaServerWorker {
     }
 }
 
-impl MediaServerWorker {
+impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     fn output_sdn(&mut self, now: Instant, out: SdnWorkerOutput<UserData, SC, SE, TC, TW>) -> Output {
         match out {
             SdnWorkerOutput::Ext(out) => Output::ExtSdn(out),
@@ -247,7 +252,7 @@ impl MediaServerWorker {
     }
 }
 
-impl MediaServerWorker {
+impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     fn process_rpc(&mut self, now: Instant, req_id: u64, req: RpcReq<usize>) {
         log::info!("[MediaServerWorker] incoming rpc req {req_id}");
         match req {
@@ -295,7 +300,11 @@ impl MediaServerWorker {
                 }
             },
             RpcReq::Webrtc(req) => match req {
-                webrtc::RpcReq::Connect(ip, user_agent, req) => match self.media_webrtc.input(&mut self.switcher).spawn(VariantParams::Webrtc(ip, user_agent, req.clone()), &req.sdp) {
+                webrtc::RpcReq::Connect(ip, user_agent, req) => match self
+                    .media_webrtc
+                    .input(&mut self.switcher)
+                    .spawn(VariantParams::Webrtc(ip, user_agent, req.clone(), self.secure.clone()), &req.sdp)
+                {
                     Ok((ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
                         req_id,
                         RpcRes::Webrtc(webrtc::RpcRes::Connect(Ok((
