@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use atm0s_sdn::{secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnOwner};
+use atm0s_sdn::{features::socket, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnOwner};
 use clap::Parser;
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
 
@@ -47,6 +47,8 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     let mut req_id_seed = 0;
     let mut reqs = HashMap::new();
+
+    controller.feature_control((), socket::Control::Bind(10000).into());
 
     loop {
         if controller.process().is_none() {

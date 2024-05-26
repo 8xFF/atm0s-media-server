@@ -11,13 +11,12 @@ use media_server_protocol::{
         RpcReq, RpcRes, RpcResult,
     },
 };
-use media_server_secure::{jwt::MediaEdgeSecureJwt, MediaEdgeSecure};
-use poem::{http::StatusCode, web::Data, Request, Result};
+use media_server_secure::MediaEdgeSecure;
+use poem::{http::StatusCode, web::Data, Result};
 use poem_openapi::{
-    auth::Bearer,
     param::Path,
     payload::{Json, PlainText, Response as HttpResponse},
-    OpenApi, SecurityScheme,
+    OpenApi,
 };
 use rand::random;
 

@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use media_server_protocol::endpoint::ClusterConnId;
 use media_server_protocol::transport::{RpcReq, RpcRes};
-use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
 use media_server_secure::{MediaEdgeSecure, MediaGatewaySecure};
 use poem::endpoint::StaticFilesEndpoint;
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
@@ -67,21 +66,32 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     Ok(())
 }
 
-pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync>(
+pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, GS: 'static + MediaGatewaySecure + Send + Sync>(
     port: u16,
     sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
     edge_secure: Arc<ES>,
+    gateway_secure: Option<Arc<GS>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let api_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis::<ES>::new(), "Media Server APIs", env!("CARGO_PKG_VERSION")).server("/");
-    let ui = api_service.swagger_ui();
-    let spec = api_service.spec();
-    let route = Route::new()
-        .nest("/", api_service)
+    let mut route = Route::new();
+
+    if let Some(gateway_secure) = gateway_secure {
+        let token_service: OpenApiService<_, ()> = OpenApiService::new(api_token::TokenApis::<GS>::new(), "App APIs", env!("CARGO_PKG_VERSION")).server("/token/");
+        let token_ui = token_service.swagger_ui();
+        let token_spec = token_service.spec();
+        route = route
+            .nest("/token/", token_service.data(api_token::TokenServerCtx { secure: gateway_secure }))
+            .nest("/token/ui", token_ui)
+            .at("/token/spec", poem::endpoint::make_sync(move |_| token_spec.clone()));
+    }
+    let media_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis::<ES>::new(), "Media Gateway APIs", env!("CARGO_PKG_VERSION")).server("/media/");
+    let media_ui = media_service.swagger_ui();
+    let media_spec = media_service.spec();
+    let route = route
+        .nest("/", media_service.data(api_media::MediaServerCtx { sender, secure: edge_secure }))
+        .nest("/ui", media_ui)
         .nest("/samples", StaticFilesEndpoint::new("./public").index_file("index.html"))
-        .nest("/ui", ui)
-        .at("/spec", poem::endpoint::make_sync(move |_| spec.clone()))
-        .with(Cors::new())
-        .data(api_media::MediaServerCtx { sender, secure: edge_secure });
+        .at("/spec", poem::endpoint::make_sync(move |_| media_spec.clone()))
+        .with(Cors::new());
 
     Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
     Ok(())

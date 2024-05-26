@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package cluster_gateway;
+
+message GatewayEvent {
+    oneof event {
+        PingEvent ping = 1;
+    }
+}
+
+message PingEvent {
+    message MediaOrigin {
+
+    }
+
+    message GatewayOrigin {
+        message Location {
+            float lat = 1;
+            float lon = 2;
+        }
+
+        uint32 zone = 1;
+        Location location= 3;
+    }
+
+    message ServiceStats {
+        uint32 live = 1;
+        uint32 max = 2;
+        bool active = 3;
+    }
+
+    oneof origin {
+        MediaOrigin media = 1;
+        GatewayOrigin gateway = 2;
+    }
+
+    uint32 cpu = 3;
+    uint32 memory = 4;
+    uint32 disk = 5;
+
+    ServiceStats webrtc = 6;
+}
+
+message Empty {}
+
+service MediaEdge {
+    rpc WebrtcConnec (WebrtcConnectRequest) returns (WebrtcConnectResponse);
+    rpc WebrtcRemoteIce (WebrtcRemoteIceRequest) returns (WebrtcRemoteIceResponse);
+    rpc WebrtcRestartIce (WebrtcRestartIceRequest) returns (WebrtcRestartIceResponse);
+}
+
+message WebrtcConnectRequest {
+
+}
+
+message WebrtcConnectResponse {
+
+}
+
+message WebrtcRemoteIceRequest {
+
+}
+
+message WebrtcRemoteIceResponse {
+
+}
+
+message WebrtcRestartIceRequest {
+
+}
+
+message WebrtcRestartIceResponse {
+
+}

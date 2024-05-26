@@ -12,9 +12,15 @@ derivative = { workspace = true }
 derive_more = { workspace = true }
 prost = { workspace = true }
 serde = { version = "1.0.200", features = ["derive"] }
+quinn = { version = "0.11", optional = true }
+tokio = { version = "1", features = ["rt"] }
 
 [build-dependencies]
 prost-build = "0.12"
+tera = "1"
+serde = { version = "1.0.200", features = ["derive"] }
 
 [features]
+default = []
 build-protobuf = []
+quinn-rpc = ["quinn"]

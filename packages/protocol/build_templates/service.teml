@@ -1,0 +1,85 @@
+#[allow(async_fn_in_trait)]
+pub trait {{ service }}ServiceHandler<CTX> {
+{% for method in methods %}
+    async fn {{ method.name }}(&self, ctx: &CTX, req: {{ method.input }}) -> Option<{{ method.output }}>;
+{% endfor %}
+}
+
+pub struct {{ service }}ServiceClient<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> {
+    client: C,
+    _tmp: std::marker::PhantomData<(D, S)>,
+}
+
+impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> {{ service }}ServiceClient<D, C, S> {
+    pub fn new(client: C) -> Self {
+        Self {
+            client,
+            _tmp: Default::default(),
+        }
+    }
+
+{% for method in methods %}
+    pub async fn {{ method.name }}(&mut self, dest: D, req: {{ method.input }}) -> Option<{{ method.output }}> {
+        use prost::Message;
+
+        let mut stream = self.client.connect(dest, "{{ method.name }}").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        {{ method.output }}::decode(in_buf.as_slice()).ok()
+    }
+{% endfor %}
+}
+
+pub struct {{ service }}ServiceServer<CTX, H: {{ service }}ServiceHandler<CTX>, Sr: crate::rpc::RpcServer<S>, S: crate::rpc::RpcStream> {
+    ctx: std::sync::Arc<CTX>,
+    handler: std::sync::Arc<H>,
+    server: Sr,
+    _tmp: std::marker::PhantomData<S>,
+}
+
+impl<CTX: 'static + Clone, H: 'static + {{ service }}ServiceHandler<CTX>, Sr: crate::rpc::RpcServer<S>, S: 'static + crate::rpc::RpcStream> {{ service }}ServiceServer<CTX, H, Sr, S> {
+    pub fn new(server: Sr, ctx: CTX, handler: H) -> Self {
+        Self {
+            ctx: std::sync::Arc::new(ctx),
+            handler: std::sync::Arc::new(handler),
+            server,
+            _tmp: Default::default(),
+        }
+    }
+
+    pub async fn run(&mut self) {
+        let local = tokio::task::LocalSet::new();
+        local
+            .run_until(async move {
+                self.run_local().await;
+            })
+            .await;
+    }
+
+    async fn run_local(&mut self) {
+        use prost::Message;
+
+        while let Some((domain, mut stream)) = self.server.accept().await {
+            let ctx = self.ctx.clone();
+            let handler = self.handler.clone();
+            match domain.as_str() {
+{% for method in methods %}
+                "{{ method.name }}" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = {{ method.input }}::decode(in_buf.as_slice()) {
+                                if let Some(res) = handler.{{ method.name }}(&ctx, req).await {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                }
+                            }
+                        }
+                    });
+                }
+{% endfor %}
+                _ => {}
+            }
+        }
+    }
+}
