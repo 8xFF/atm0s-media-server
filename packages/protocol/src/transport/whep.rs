@@ -1,6 +1,9 @@
 use std::net::IpAddr;
 
-use crate::endpoint::{PeerId, RoomId};
+use crate::{
+    endpoint::{PeerId, RoomId},
+    protobuf,
+};
 
 use super::{ConnLayer, RpcResult};
 
@@ -84,6 +87,31 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
             RpcRes::Connect(Err(e)) => RpcRes::Connect(Err(e)),
             RpcRes::RemoteIce(res) => RpcRes::RemoteIce(res),
             RpcRes::Delete(res) => RpcRes::Delete(res),
+        }
+    }
+}
+
+impl TryFrom<protobuf::cluster_gateway::WhepConnectRequest> for WhepConnectReq {
+    type Error = ();
+    fn try_from(value: protobuf::cluster_gateway::WhepConnectRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            sdp: value.sdp,
+            room: value.room.into(),
+            peer: value.peer.into(),
+            ip: value.ip.parse().map_err(|_| ())?,
+            user_agent: value.user_agent,
+        })
+    }
+}
+
+impl Into<protobuf::cluster_gateway::WhepConnectRequest> for WhepConnectReq {
+    fn into(self) -> protobuf::cluster_gateway::WhepConnectRequest {
+        protobuf::cluster_gateway::WhepConnectRequest {
+            user_agent: self.user_agent,
+            ip: self.ip.to_string(),
+            sdp: self.sdp,
+            room: self.room.0,
+            peer: self.peer.0,
         }
     }
 }

@@ -47,14 +47,20 @@ service MediaEdge {
     rpc WhipConnect (WhipConnectRequest) returns (WhipConnectResponse);
     rpc WhipRemoteIce (WhipRemoteIceRequest) returns (WhipRemoteIceResponse);
     rpc WhipClose (WhipCloseRequest) returns (WhipCloseResponse);
+
+    rpc WhepConnect (WhepConnectRequest) returns (WhepConnectResponse);
+    rpc WhepRemoteIce (WhepRemoteIceRequest) returns (WhepRemoteIceResponse);
+    rpc WhepClose (WhepCloseRequest) returns (WhepCloseResponse);
+
     rpc WebrtcConnec (WebrtcConnectRequest) returns (WebrtcConnectResponse);
     rpc WebrtcRemoteIce (WebrtcRemoteIceRequest) returns (WebrtcRemoteIceResponse);
     rpc WebrtcRestartIce (WebrtcRestartIceRequest) returns (WebrtcRestartIceResponse);
 }
 
+//For whip
 message WhipConnectRequest {
     string user_agent = 1;
-    string ip_addr = 2;
+    string ip = 2;
     string sdp = 3;
     string room = 4;
     string peer = 5;
@@ -82,6 +88,38 @@ message WhipCloseResponse {
     string conn = 1;
 }
 
+//For whep
+message WhepConnectRequest {
+    string user_agent = 1;
+    string ip = 2;
+    string sdp = 3;
+    string room = 4;
+    string peer = 5;
+}
+
+message WhepConnectResponse {
+    string conn = 1;
+    string sdp = 2;
+}
+
+message WhepRemoteIceRequest {
+    string conn = 1;
+    string ice = 2;
+}
+
+message WhepRemoteIceResponse {
+    string conn = 1;
+}
+
+message WhepCloseRequest {
+    string conn = 1;
+}
+
+message WhepCloseResponse {
+    string conn = 1;
+}
+
+//For SDK
 message WebrtcConnectRequest {
 
 }

@@ -74,13 +74,14 @@ pub mod ping_event {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Empty {}
+/// For whip
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WhipConnectRequest {
     #[prost(string, tag = "1")]
     pub user_agent: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
-    pub ip_addr: ::prost::alloc::string::String,
+    pub ip: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
     pub sdp: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
@@ -122,6 +123,56 @@ pub struct WhipCloseResponse {
     #[prost(string, tag = "1")]
     pub conn: ::prost::alloc::string::String,
 }
+/// For whep
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WhepConnectRequest {
+    #[prost(string, tag = "1")]
+    pub user_agent: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub ip: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub sdp: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub room: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub peer: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WhepConnectResponse {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub sdp: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WhepRemoteIceRequest {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub ice: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WhepRemoteIceResponse {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WhepCloseRequest {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WhepCloseResponse {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+}
+/// For SDK
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WebrtcConnectRequest {}
@@ -157,6 +208,21 @@ pub trait MediaEdgeServiceHandler<CTX> {
         ctx: &CTX,
         req: WhipCloseRequest,
     ) -> Option<WhipCloseResponse>;
+    async fn whep_connect(
+        &self,
+        ctx: &CTX,
+        req: WhepConnectRequest,
+    ) -> Option<WhepConnectResponse>;
+    async fn whep_remote_ice(
+        &self,
+        ctx: &CTX,
+        req: WhepRemoteIceRequest,
+    ) -> Option<WhepRemoteIceResponse>;
+    async fn whep_close(
+        &self,
+        ctx: &CTX,
+        req: WhepCloseRequest,
+    ) -> Option<WhepCloseResponse>;
     async fn webrtc_connec(
         &self,
         ctx: &CTX,
@@ -236,6 +302,42 @@ impl<
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
         WhipCloseResponse::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn whep_connect(
+        &self,
+        dest: D,
+        req: WhepConnectRequest,
+    ) -> Option<WhepConnectResponse> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "whep_connect.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        WhepConnectResponse::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn whep_remote_ice(
+        &self,
+        dest: D,
+        req: WhepRemoteIceRequest,
+    ) -> Option<WhepRemoteIceResponse> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "whep_remote_ice.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        WhepRemoteIceResponse::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn whep_close(
+        &self,
+        dest: D,
+        req: WhepCloseRequest,
+    ) -> Option<WhepCloseResponse> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "whep_close.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        WhepCloseResponse::decode(in_buf.as_slice()).ok()
     }
     pub async fn webrtc_connec(
         &self,
@@ -351,6 +453,52 @@ impl<
                                 in_buf.as_slice(),
                             ) {
                                 if let Some(res) = handler.whip_close(&ctx, req).await {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "whep_connect.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = WhepConnectRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler.whep_connect(&ctx, req).await {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "whep_remote_ice.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = WhepRemoteIceRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler.whep_remote_ice(&ctx, req).await
+                                {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "whep_close.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = WhepCloseRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler.whep_close(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
