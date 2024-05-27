@@ -1,8 +1,15 @@
 use std::{net::SocketAddr, sync::Arc, time::Instant};
 
-use atm0s_sdn::{services::visualization, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot};
+use atm0s_sdn::{
+    generate_node_addr,
+    secure::{HandshakeBuilderXDA, StaticKeyAuthorization},
+    services::{manual_discovery, visualization},
+    ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot,
+};
 use media_server_core::cluster::{self, MediaCluster};
+use media_server_gateway::agent_service::GatewayAgentServiceBuilder;
 use media_server_protocol::{
+    gateway::generate_gateway_zone_tag,
     protobuf::gateway::{ConnectResponse, RemoteIceResponse},
     transport::{
         webrtc,
@@ -12,7 +19,7 @@ use media_server_protocol::{
     },
 };
 use media_server_secure::MediaEdgeSecure;
-use rand::random;
+use rand::{random, rngs::OsRng};
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     collections::DynamicDeque,
@@ -36,8 +43,17 @@ pub enum Owner {
 
 //for sdn
 pub type UserData = cluster::ClusterRoomHash;
-pub type SC = visualization::Control;
-pub type SE = visualization::Event;
+#[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
+pub enum SC {
+    Visual(visualization::Control),
+    Gateway(media_server_gateway::agent_service::Control),
+}
+
+#[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
+pub enum SE {
+    Visual(visualization::Event),
+    Gateway(media_server_gateway::agent_service::Event),
+}
 pub type TC = ();
 pub type TW = ();
 
@@ -81,12 +97,40 @@ pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
 }
 
 impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
-    pub fn new(udp_port: u16, sdn: SdnConfig, media: MediaConfig<ES>) -> Self {
+    pub fn new(node_id: u32, session: u64, secret: &str, controller: bool, sdn_udp: u16, sdn_custom_addrs: Vec<SocketAddr>, sdn_zone: u32, media: MediaConfig<ES>) -> Self {
         let secure = media.secure.clone(); //TODO why need this?
-        let sdn_udp_addr = SocketAddr::from(([0, 0, 0, 0], udp_port));
+        let sdn_udp_addr = SocketAddr::from(([0, 0, 0, 0], sdn_udp));
+
+        let node_addr = generate_node_addr(node_id, sdn_udp, sdn_custom_addrs);
+
+        let visualization = Arc::new(visualization::VisualizationServiceBuilder::new(false));
+        let discovery = Arc::new(manual_discovery::ManualDiscoveryServiceBuilder::new(node_addr, vec![], vec![generate_gateway_zone_tag(sdn_zone)]));
+        let gateway = Arc::new(GatewayAgentServiceBuilder::new());
+
+        let sdn_config = SdnConfig {
+            node_id,
+            controller: if controller {
+                Some(ControllerPlaneCfg {
+                    session,
+                    authorization: Arc::new(StaticKeyAuthorization::new(&secret)),
+                    handshake_builder: Arc::new(HandshakeBuilderXDA),
+                    random: Box::new(OsRng::default()),
+                    services: vec![visualization.clone(), discovery.clone(), gateway.clone()],
+                })
+            } else {
+                None
+            },
+            tick_ms: 1000,
+            data: DataPlaneCfg {
+                worker_id: 0,
+                services: vec![visualization, discovery, gateway],
+                history: Arc::new(DataWorkerHistory::default()),
+            },
+        };
+
         Self {
             sdn_slot: 1, //TODO dont use this hack, must to wait to bind success to network
-            sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn), TaskType::Sdn),
+            sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn_config), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
             media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.ice_lite, media.secure), TaskType::MediaWebrtc),
             switcher: TaskSwitcher::new(3),
@@ -106,6 +150,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         self.sdn_worker.input(s).on_tick(now_ms);
         self.media_cluster.input(s).on_tick(now);
         self.media_webrtc.input(s).on_tick(now);
+        //TODO collect node stats then send to GatewayAgent service
     }
 
     pub fn on_event(&mut self, now: Instant, input: Input) {

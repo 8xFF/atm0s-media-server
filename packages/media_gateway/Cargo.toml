@@ -1,11 +1,12 @@
 [package]
-name = "media-gateway"
+name = "media-server-gateway"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+log = { workspace = true }
 serde = { version = "1.0.200", features = ["derive"] }
 media-server-protocol = { path = "../protocol" }
 atm0s-sdn = { workspace = true }

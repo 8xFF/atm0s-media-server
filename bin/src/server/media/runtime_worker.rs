@@ -1,14 +1,11 @@
-use std::{collections::VecDeque, sync::Arc, time::Instant};
+use std::{collections::VecDeque, time::Instant};
 
-use atm0s_sdn::{
-    secure::{HandshakeBuilderXDA, StaticKeyAuthorization},
-    services::visualization,
-    ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, SdnExtIn, SdnExtOut, SdnWorkerBusEvent,
-};
+use atm0s_sdn::{SdnExtIn, SdnExtOut, SdnWorkerBusEvent};
+
 use media_server_protocol::transport::{RpcReq, RpcRes};
-use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, SdnConfig, UserData, SC, SE, TC, TW};
+use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, UserData, SC, SE, TC, TW};
 use media_server_secure::MediaEdgeSecure;
-use rand::rngs::OsRng;
+use rand::random;
 use sans_io_runtime::{BusChannelControl, BusControl, BusEvent, WorkerInner, WorkerInnerInput, WorkerInnerOutput};
 
 use crate::NodeConfig;
@@ -34,6 +31,7 @@ type Event = SdnWorkerBusEvent<UserData, SC, SE, TC, TW>;
 pub struct ICfg<ES> {
     pub controller: bool,
     pub node: NodeConfig,
+    pub session: u64,
     pub media: MediaConfig<ES>,
 }
 type SCfg = ();
@@ -49,34 +47,22 @@ pub struct MediaRuntimeWorker<ES: 'static + MediaEdgeSecure> {
 
 impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg<ES>, SCfg> for MediaRuntimeWorker<ES> {
     fn build(index: u16, cfg: ICfg<ES>) -> Self {
-        let sdn_config = SdnConfig {
-            node_id: cfg.node.node_id,
-            controller: if cfg.controller {
-                Some(ControllerPlaneCfg {
-                    session: cfg.node.session,
-                    authorization: Arc::new(StaticKeyAuthorization::new(&cfg.node.secret)),
-                    handshake_builder: Arc::new(HandshakeBuilderXDA),
-                    random: Box::new(OsRng::default()),
-                    services: vec![Arc::new(visualization::VisualizationServiceBuilder::new(false))],
-                })
-            } else {
-                None
-            },
-            tick_ms: 1000,
-            data: DataPlaneCfg {
-                worker_id: 0,
-                services: vec![Arc::new(visualization::VisualizationServiceBuilder::new(false))],
-                history: Arc::new(DataWorkerHistory::default()),
-            },
-        };
-
         let mut queue = VecDeque::from([Output::Bus(BusControl::Channel(Owner::Sdn, BusChannelControl::Subscribe(Channel::Worker(index))))]);
 
-        if sdn_config.controller.is_some() {
+        if cfg.controller {
             queue.push_back(Output::Bus(BusControl::Channel(Owner::Sdn, BusChannelControl::Subscribe(Channel::Controller))));
         }
 
-        let worker = MediaServerWorker::new(cfg.node.udp_port, sdn_config, cfg.media);
+        let worker = MediaServerWorker::new(
+            cfg.node.node_id,
+            random(),
+            &cfg.node.secret,
+            cfg.controller,
+            cfg.node.udp_port,
+            cfg.node.custom_addrs,
+            cfg.node.zone,
+            cfg.media,
+        );
         log::info!("creted worker");
         MediaRuntimeWorker { index, worker, queue }
     }

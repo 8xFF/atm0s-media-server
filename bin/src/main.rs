@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use atm0s_media_server::{server, NodeConfig};
 use atm0s_sdn::{NodeAddr, NodeId};
 use clap::Parser;
@@ -20,9 +22,13 @@ struct Args {
     #[arg(env, long, default_value_t = 0)]
     sdn_port: u16,
 
-    /// Sdn Zone
-    #[arg(env, long, default_value = "local")]
-    sdn_zone: String,
+    /// Custom Sdn addr
+    #[arg(env, long)]
+    sdn_custom_addrs: Vec<SocketAddr>,
+
+    /// Sdn Zone, which is 32bit number with last 8bit is 0
+    #[arg(env, long, default_value_t = 0)]
+    sdn_zone: u32,
 
     /// Current Node ID
     #[arg(env, long, default_value_t = 1)]
@@ -59,15 +65,19 @@ async fn main() {
     let workers = args.workers;
     let node = NodeConfig {
         node_id: args.node_id,
-        session: random(),
         secret: args.secret,
         seeds: args.seeds,
         udp_port: args.sdn_port,
+        zone: args.sdn_zone,
+        custom_addrs: args.sdn_custom_addrs,
     };
 
     match args.server {
+        #[cfg(feature = "gateway")]
         server::ServerType::Gateway(args) => server::run_media_gateway(workers, http_port, node, args).await,
+        #[cfg(feature = "connector")]
         server::ServerType::Connector(args) => server::run_media_connector(workers, args).await,
+        #[cfg(feature = "media")]
         server::ServerType::Media(args) => server::run_media_server(workers, http_port, node, args).await,
     }
 }

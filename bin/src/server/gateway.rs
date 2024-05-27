@@ -1,22 +1,37 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use atm0s_sdn::{features::socket, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnOwner};
+use atm0s_sdn::{secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnOwner};
 use clap::Parser;
+use media_server_gateway::store_service::GatewayStoreServiceBuilder;
+use media_server_protocol::gateway::generate_gateway_zone_tag;
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
 
 use crate::{http::run_gateway_http_server, NodeConfig};
 use sans_io_runtime::backend::PollingBackend;
 
-type SC = visualization::Control;
-type SE = visualization::Event;
+#[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
+enum SC {
+    Visual(visualization::Control),
+    Gateway(media_server_gateway::store_service::Control),
+}
+
+#[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
+enum SE {
+    Visual(visualization::Event),
+    Gateway(media_server_gateway::store_service::Event),
+}
 type TC = ();
 type TW = ();
 
 #[derive(Debug, Parser)]
 pub struct Args {
-    /// Zone id for automate connecting between nodes
-    #[arg(env, long, default_value = "local")]
-    zone: String,
+    /// Location latude
+    #[arg(env, long, default_value_t = 0.0)]
+    lat: f32,
+
+    /// Location longtude
+    #[arg(env, long, default_value_t = 0.0)]
+    lon: f32,
 }
 
 pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -32,12 +47,12 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     }
 
     let node_id = node.node_id;
-    let node_session = node.session;
 
-    let mut builder = SdnBuilder::<(), SC, SE, TC, TW>::new(node_id, node.udp_port, vec![]);
+    let mut builder = SdnBuilder::<(), SC, SE, TC, TW>::new(node_id, node.udp_port, node.custom_addrs);
 
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
-    builder.set_manual_discovery(vec!["gateway".to_string(), args.zone], vec!["gateway".to_string()]);
+    builder.set_manual_discovery(vec!["gateway".to_string(), generate_gateway_zone_tag(node.zone)], vec!["gateway".to_string()]);
+    builder.add_service(Arc::new(GatewayStoreServiceBuilder::new(node.zone, args.lat, args.lon)));
 
     for seed in node.seeds {
         builder.add_seed(seed);
@@ -47,8 +62,6 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     let mut req_id_seed = 0;
     let mut reqs = HashMap::new();
-
-    controller.feature_control((), socket::Control::Bind(10000).into());
 
     loop {
         if controller.process().is_none() {

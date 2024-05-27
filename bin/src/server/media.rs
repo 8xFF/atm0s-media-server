@@ -9,6 +9,7 @@ use atm0s_sdn::SdnExtIn;
 use clap::Parser;
 use media_server_runner::MediaConfig;
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
+use rand::random;
 use sans_io_runtime::{backend::PollingBackend, Controller};
 
 use crate::{http::run_media_http_server, server::media::runtime_worker::MediaRuntimeWorker, NodeConfig};
@@ -54,7 +55,8 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     }
 
     let node_id = node.node_id;
-    let node_session = node.session;
+    let node_session = random();
+
     let mut webrtc_addrs = args.custom_ips.into_iter().map(|ip| SocketAddr::new(ip, args.media_port)).collect::<Vec<_>>();
     local_ip_address::local_ip().into_iter().for_each(|ip| {
         if let IpAddr::V4(ip) = ip {
@@ -71,6 +73,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         let cfg = runtime_worker::ICfg {
             controller: i == 0,
             node: node.clone(),
+            session: node_session,
             media: MediaConfig {
                 webrtc_addrs: webrtc_addrs.clone(),
                 ice_lite: args.ice_lite,
