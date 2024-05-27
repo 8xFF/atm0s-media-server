@@ -14,6 +14,7 @@ pub trait ConnLayer {
 
     fn down(self) -> (Self::Down, Self::DownRes);
     fn up(self, param: Self::UpParam) -> Self::Up;
+    fn get_down_part(&self) -> Self::DownRes;
 }
 
 #[derive(Debug, Clone, convert_enum::From, convert_enum::TryInto)]
@@ -38,6 +39,14 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
                 let (req, layer) = req.down();
                 (RpcReq::Webrtc(req), layer)
             }
+        }
+    }
+
+    pub fn get_conn_part(&self) -> Option<Conn::DownRes> {
+        match self {
+            Self::Whip(req) => req.get_down_part(),
+            Self::Whep(req) => req.get_down_part(),
+            Self::Webrtc(req) => req.get_down_part(),
         }
     }
 }

@@ -61,7 +61,7 @@ impl AsyncUdpSocket for VirtualUdpSocket {
     fn try_send(&self, transmit: &Transmit) -> std::io::Result<()> {
         match transmit.destination {
             SocketAddr::V4(addr) => {
-                log::info!("{} sending {} bytes to {}", self.addr, transmit.contents.len(), addr);
+                log::debug!("{} sending {} bytes to {}", self.addr, transmit.contents.len(), addr);
                 if self.tx.capacity() > 0
                     && self
                         .tx
@@ -93,7 +93,7 @@ impl AsyncUdpSocket for VirtualUdpSocket {
                 let len = pkt.data.len();
                 if len <= bufs[0].len() {
                     let addr = SocketAddr::V4(SocketAddrV4::new(pkt.remote.into(), pkt.remote_port));
-                    log::info!("{} received {} bytes from {}", self.addr, len, addr);
+                    log::debug!("{} received {} bytes from {}", self.addr, len, addr);
                     bufs[0].deref_mut()[0..len].copy_from_slice(&pkt.data);
                     meta[0] = quinn::udp::RecvMeta {
                         addr,

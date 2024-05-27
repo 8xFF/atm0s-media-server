@@ -57,6 +57,14 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
             }
         }
     }
+
+    pub fn get_down_part(&self) -> Option<Conn::DownRes> {
+        match self {
+            RpcReq::Connect(req) => None,
+            RpcReq::RemoteIce(req) => Some(req.conn_id.get_down_part()),
+            RpcReq::Delete(req) => Some(req.conn_id.get_down_part()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, convert_enum::From, convert_enum::TryInto)]

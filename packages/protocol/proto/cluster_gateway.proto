@@ -45,17 +45,41 @@ message Empty {}
 
 service MediaEdge {
     rpc WhipConnect (WhipConnectRequest) returns (WhipConnectResponse);
+    rpc WhipRemoteIce (WhipRemoteIceRequest) returns (WhipRemoteIceResponse);
+    rpc WhipClose (WhipCloseRequest) returns (WhipCloseResponse);
     rpc WebrtcConnec (WebrtcConnectRequest) returns (WebrtcConnectResponse);
     rpc WebrtcRemoteIce (WebrtcRemoteIceRequest) returns (WebrtcRemoteIceResponse);
     rpc WebrtcRestartIce (WebrtcRestartIceRequest) returns (WebrtcRestartIceResponse);
 }
 
 message WhipConnectRequest {
-    uint32 cpu = 3;
+    string user_agent = 1;
+    string ip_addr = 2;
+    string sdp = 3;
+    string room = 4;
+    string peer = 5;
 }
 
 message WhipConnectResponse {
-    uint32 cpu = 3;
+    string conn = 1;
+    string sdp = 2;
+}
+
+message WhipRemoteIceRequest {
+    string conn = 1;
+    string ice = 2;
+}
+
+message WhipRemoteIceResponse {
+    string conn = 1;
+}
+
+message WhipCloseRequest {
+    string conn = 1;
+}
+
+message WhipCloseResponse {
+    string conn = 1;
 }
 
 message WebrtcConnectRequest {

@@ -60,10 +60,11 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let secure2 = args.enable_token_api.then(|| Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes())));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
+    let req_tx2 = req_tx.clone();
     if let Some(http_port) = http_port {
         let secure = secure.clone();
         tokio::spawn(async move {
-            if let Err(e) = run_media_http_server(http_port, req_tx, secure, secure2).await {
+            if let Err(e) = run_media_http_server(http_port, req_tx2, secure, secure2).await {
                 log::error!("HTTP Error: {}", e);
             }
         });
@@ -114,7 +115,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let media_rpc_socket = vnet.udp_socket(GATEWAY_RPC_PORT).await.expect("Should open virtual port for gateway rpc");
     let mut media_rpc_server = MediaEdgeServiceServer::new(
         QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert).expect("Should create endpoint for media rpc server")),
-        rpc_handler::Ctx {},
+        rpc_handler::Ctx { req_tx },
         rpc_handler::MediaRpcHandlerImpl::default(),
     );
 

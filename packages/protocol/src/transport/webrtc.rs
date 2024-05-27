@@ -30,6 +30,15 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
             }
         }
     }
+
+    pub fn get_down_part(&self) -> Option<Conn::DownRes> {
+        match self {
+            RpcReq::Connect(..) => None,
+            RpcReq::RemoteIce(conn, ..) => Some(conn.get_down_part()),
+            RpcReq::RestartIce(conn, ..) => Some(conn.get_down_part()),
+            RpcReq::Delete(conn, ..) => Some(conn.get_down_part()),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

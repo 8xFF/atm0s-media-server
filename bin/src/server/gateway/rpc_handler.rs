@@ -1,6 +1,6 @@
 use media_server_protocol::protobuf::cluster_gateway::{
-    MediaEdgeServiceHandler, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WebrtcRestartIceRequest, WebrtcRestartIceResponse, WhipConnectRequest,
-    WhipConnectResponse,
+    MediaEdgeServiceHandler, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WebrtcRestartIceRequest, WebrtcRestartIceResponse, WhipCloseRequest,
+    WhipCloseResponse, WhipConnectRequest, WhipConnectResponse, WhipRemoteIceRequest, WhipRemoteIceResponse,
 };
 
 #[derive(Clone)]
@@ -11,6 +11,14 @@ pub struct MediaRpcHandlerImpl {}
 
 impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
     async fn whip_connect(&self, ctx: &Ctx, req: WhipConnectRequest) -> Option<WhipConnectResponse> {
+        todo!()
+    }
+
+    async fn whip_remote_ice(&self, ctx: &Ctx, req: WhipRemoteIceRequest) -> Option<WhipRemoteIceResponse> {
+        todo!()
+    }
+
+    async fn whip_close(&self, ctx: &Ctx, req: WhipCloseRequest) -> Option<WhipCloseResponse> {
         todo!()
     }
 

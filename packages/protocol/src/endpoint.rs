@@ -45,6 +45,10 @@ impl ConnLayer for ClusterConnId {
     fn up(self, _param: Self::UpParam) -> Self::Up {
         panic!("should not happen")
     }
+
+    fn get_down_part(&self) -> Self::DownRes {
+        (self.node, self.node_session)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -86,6 +90,10 @@ impl ConnLayer for ServerConnId {
             server_conn: self,
         }
     }
+
+    fn get_down_part(&self) -> Self::DownRes {
+        self.worker
+    }
 }
 
 impl ConnLayer for usize {
@@ -100,6 +108,10 @@ impl ConnLayer for usize {
 
     fn up(self, param: Self::UpParam) -> Self::Up {
         ServerConnId { index: self, worker: param }
+    }
+
+    fn get_down_part(&self) -> Self::DownRes {
+        ()
     }
 }
 
