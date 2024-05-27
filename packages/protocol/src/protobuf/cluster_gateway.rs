@@ -76,6 +76,18 @@ pub mod ping_event {
 pub struct Empty {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WhipConnectRequest {
+    #[prost(uint32, tag = "3")]
+    pub cpu: u32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WhipConnectResponse {
+    #[prost(uint32, tag = "3")]
+    pub cpu: u32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WebrtcConnectRequest {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -94,6 +106,11 @@ pub struct WebrtcRestartIceRequest {}
 pub struct WebrtcRestartIceResponse {}
 #[allow(async_fn_in_trait)]
 pub trait MediaEdgeServiceHandler<CTX> {
+    async fn whip_connect(
+        &self,
+        ctx: &CTX,
+        req: WhipConnectRequest,
+    ) -> Option<WhipConnectResponse>;
     async fn webrtc_connec(
         &self,
         ctx: &CTX,
@@ -118,6 +135,15 @@ pub struct MediaEdgeServiceClient<
     client: C,
     _tmp: std::marker::PhantomData<(D, S)>,
 }
+impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> Clone
+for MediaEdgeServiceClient<D, C, S> {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            _tmp: Default::default(),
+        }
+    }
+}
 impl<
     D,
     C: crate::rpc::RpcClient<D, S>,
@@ -129,37 +155,49 @@ impl<
             _tmp: Default::default(),
         }
     }
+    pub async fn whip_connect(
+        &self,
+        dest: D,
+        req: WhipConnectRequest,
+    ) -> Option<WhipConnectResponse> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "whip_connect.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        WhipConnectResponse::decode(in_buf.as_slice()).ok()
+    }
     pub async fn webrtc_connec(
-        &mut self,
+        &self,
         dest: D,
         req: WebrtcConnectRequest,
     ) -> Option<WebrtcConnectResponse> {
         use prost::Message;
-        let mut stream = self.client.connect(dest, "webrtc_connec").await?;
+        let mut stream = self.client.connect(dest, "webrtc_connec.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
         WebrtcConnectResponse::decode(in_buf.as_slice()).ok()
     }
     pub async fn webrtc_remote_ice(
-        &mut self,
+        &self,
         dest: D,
         req: WebrtcRemoteIceRequest,
     ) -> Option<WebrtcRemoteIceResponse> {
         use prost::Message;
-        let mut stream = self.client.connect(dest, "webrtc_remote_ice").await?;
+        let mut stream = self.client.connect(dest, "webrtc_remote_ice.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
         WebrtcRemoteIceResponse::decode(in_buf.as_slice()).ok()
     }
     pub async fn webrtc_restart_ice(
-        &mut self,
+        &self,
         dest: D,
         req: WebrtcRestartIceRequest,
     ) -> Option<WebrtcRestartIceResponse> {
         use prost::Message;
-        let mut stream = self.client.connect(dest, "webrtc_restart_ice").await?;
+        let mut stream = self.client.connect(dest, "webrtc_restart_ice.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
@@ -205,7 +243,22 @@ impl<
             let ctx = self.ctx.clone();
             let handler = self.handler.clone();
             match domain.as_str() {
-                "webrtc_connec" => {
+                "whip_connect.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = WhipConnectRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler.whip_connect(&ctx, req).await {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "webrtc_connec.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
                             if let Ok(req) = WebrtcConnectRequest::decode(
@@ -214,12 +267,13 @@ impl<
                                 if let Some(res) = handler.webrtc_connec(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
+                                    stream.close().await;
                                 }
                             }
                         }
                     });
                 }
-                "webrtc_remote_ice" => {
+                "webrtc_remote_ice.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
                             if let Ok(req) = WebrtcRemoteIceRequest::decode(
@@ -231,12 +285,13 @@ impl<
                                 {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
+                                    stream.close().await;
                                 }
                             }
                         }
                     });
                 }
-                "webrtc_restart_ice" => {
+                "webrtc_restart_ice.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
                             if let Ok(req) = WebrtcRestartIceRequest::decode(
@@ -248,6 +303,7 @@ impl<
                                 {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
+                                    stream.close().await;
                                 }
                             }
                         }

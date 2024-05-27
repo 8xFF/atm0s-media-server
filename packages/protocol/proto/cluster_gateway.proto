@@ -44,9 +44,18 @@ message PingEvent {
 message Empty {}
 
 service MediaEdge {
+    rpc WhipConnect (WhipConnectRequest) returns (WhipConnectResponse);
     rpc WebrtcConnec (WebrtcConnectRequest) returns (WebrtcConnectResponse);
     rpc WebrtcRemoteIce (WebrtcRemoteIceRequest) returns (WebrtcRemoteIceResponse);
     rpc WebrtcRestartIce (WebrtcRestartIceRequest) returns (WebrtcRestartIceResponse);
+}
+
+message WhipConnectRequest {
+    uint32 cpu = 3;
+}
+
+message WhipConnectResponse {
+    uint32 cpu = 3;
 }
 
 message WebrtcConnectRequest {

@@ -54,6 +54,7 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     let media_ui = media_service.swagger_ui();
     let media_spec = media_service.spec();
     let route = Route::new()
+        .nest("/samples", StaticFilesEndpoint::new("./public").index_file("index.html"))
         .nest("/token/", token_service.data(api_token::TokenServerCtx { secure: gateway_secure }))
         .nest("/token/ui", token_ui)
         .at("/token/spec", poem::endpoint::make_sync(move |_| token_spec.clone()))
@@ -87,9 +88,9 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
     let media_ui = media_service.swagger_ui();
     let media_spec = media_service.spec();
     let route = route
+        .nest("/samples", StaticFilesEndpoint::new("./public").index_file("index.html"))
         .nest("/", media_service.data(api_media::MediaServerCtx { sender, secure: edge_secure }))
         .nest("/ui", media_ui)
-        .nest("/samples", StaticFilesEndpoint::new("./public").index_file("index.html"))
         .at("/spec", poem::endpoint::make_sync(move |_| media_spec.clone()))
         .with(Cors::new());
 

@@ -5,15 +5,23 @@ use std::{
     time::Duration,
 };
 
-use atm0s_sdn::SdnExtIn;
+use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut};
 use clap::Parser;
+use media_server_protocol::{gateway::GATEWAY_RPC_PORT, protobuf::cluster_gateway::MediaEdgeServiceServer, rpc::quinn::QuinnServer};
 use media_server_runner::MediaConfig;
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
 use rand::random;
+use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sans_io_runtime::{backend::PollingBackend, Controller};
 
-use crate::{http::run_media_http_server, server::media::runtime_worker::MediaRuntimeWorker, NodeConfig};
+use crate::{
+    http::run_media_http_server,
+    quinn::{make_quinn_server, VirtualNetwork},
+    server::media::runtime_worker::MediaRuntimeWorker,
+    NodeConfig,
+};
 
+mod rpc_handler;
 mod runtime_worker;
 
 use runtime_worker::{ExtIn, ExtOut};
@@ -42,6 +50,13 @@ pub struct Args {
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
+    rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
+
+    let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
+    let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
+    let default_cluster_cert = CertificateDer::from(default_cluster_cert_buf.to_vec());
+    let default_cluster_key = PrivatePkcs8KeyDer::from(default_cluster_key_buf.to_vec());
+
     let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let secure2 = args.enable_token_api.then(|| Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes())));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
@@ -90,9 +105,31 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let mut req_id_seed = 0;
     let mut reqs = HashMap::new();
 
+    //
+    // Vnet is a virtual udp layer for creating RPC handlers, we separate media server to 2 layer
+    // - async for business logic like proxy, logging handling
+    // - sync with sans-io style for media data
+    //
+    let (mut vnet, vnet_tx, mut vnet_rx) = VirtualNetwork::new(node.node_id);
+    let media_rpc_socket = vnet.udp_socket(GATEWAY_RPC_PORT).await.expect("Should open virtual port for gateway rpc");
+    let mut media_rpc_server = MediaEdgeServiceServer::new(
+        QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert).expect("Should create endpoint for media rpc server")),
+        rpc_handler::Ctx {},
+        rpc_handler::MediaRpcHandlerImpl::default(),
+    );
+
+    tokio::task::spawn_local(async move {
+        media_rpc_server.run().await;
+    });
+
+    tokio::task::spawn_local(async move { while let Some(_) = vnet.recv().await {} });
+
     loop {
         if controller.process().is_none() {
             break;
+        }
+        while let Ok(control) = vnet_rx.try_recv() {
+            controller.send_to_best(ExtIn::Sdn(SdnExtIn::FeaturesControl(0.into(), control.into())));
         }
         while let Ok(req) = req_rx.try_recv() {
             let req_id = req_id_seed;
@@ -127,9 +164,14 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                         }
                     }
                 }
-                ExtOut::Sdn(_) => {}
+                ExtOut::Sdn(SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event))) => {
+                    if let Err(e) = vnet_tx.try_send(event) {
+                        log::error!("[MediaEdge] forward Sdn SocketEvent error {:?}", e);
+                    }
+                }
+                _ => {}
             }
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }

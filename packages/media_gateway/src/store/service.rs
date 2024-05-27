@@ -64,7 +64,7 @@ impl ServiceStore {
     }
 
     pub fn remove_node(&mut self, node: u32) {
-        if let Some((index, _)) = self.local_sources.iter_mut().enumerate().find(|(i, s)| s.node == node) {
+        if let Some((index, _)) = self.local_sources.iter_mut().enumerate().find(|(_i, s)| s.node == node) {
             let node = self.local_sources.remove(index);
             log::info!("[ServiceStore {:?}] remove node {} usage {}, stats {:?}", self.kind, node.node, node.usage, node.stats);
         }

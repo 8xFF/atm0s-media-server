@@ -1,3 +1,7 @@
+mod builder;
 mod vnet;
 mod vsocket;
-mod builder;
+
+pub use builder::{make_quinn_client, make_quinn_server};
+pub use vnet::VirtualNetwork;
+pub use vsocket::VirtualUdpSocket;

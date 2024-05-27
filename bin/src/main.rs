@@ -3,7 +3,6 @@ use std::net::SocketAddr;
 use atm0s_media_server::{server, NodeConfig};
 use atm0s_sdn::{NodeAddr, NodeId};
 use clap::Parser;
-use rand::random;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Scalable Media Server solution for WebRTC, RTMP, and SIP.
@@ -72,12 +71,19 @@ async fn main() {
         custom_addrs: args.sdn_custom_addrs,
     };
 
-    match args.server {
-        #[cfg(feature = "gateway")]
-        server::ServerType::Gateway(args) => server::run_media_gateway(workers, http_port, node, args).await,
-        #[cfg(feature = "connector")]
-        server::ServerType::Connector(args) => server::run_media_connector(workers, args).await,
-        #[cfg(feature = "media")]
-        server::ServerType::Media(args) => server::run_media_server(workers, http_port, node, args).await,
-    }
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async move {
+            match args.server {
+                #[cfg(feature = "gateway")]
+                server::ServerType::Gateway(args) => server::run_media_gateway(workers, http_port, node, args).await,
+                #[cfg(feature = "connector")]
+                server::ServerType::Connector(args) => server::run_media_connector(workers, args).await,
+                #[cfg(feature = "media")]
+                server::ServerType::Media(args) => server::run_media_server(workers, http_port, node, args).await,
+                #[cfg(feature = "cert_utils")]
+                server::ServerType::Cert(args) => server::run_cert_utils(args).await,
+            }
+        })
+        .await;
 }

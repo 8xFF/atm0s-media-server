@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use atm0s_sdn::{NodeAddr, NodeId};
 
 mod http;
+#[cfg(feature = "quinn_vnet")]
 mod quinn;
 pub mod server;
 

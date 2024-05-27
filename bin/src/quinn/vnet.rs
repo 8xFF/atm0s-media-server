@@ -42,7 +42,7 @@ impl VirtualNetwork {
                 close_socket_rx,
                 close_socket_tx,
                 sockets: HashMap::new(),
-                ports: (10000..60000).collect(),
+                ports: (0..60000).collect(),
             },
             in_tx,
             out_rx,
