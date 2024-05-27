@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "gateway.proto";
+
 package cluster_gateway;
 
 message GatewayEvent {
@@ -52,7 +54,7 @@ service MediaEdge {
     rpc WhepRemoteIce (WhepRemoteIceRequest) returns (WhepRemoteIceResponse);
     rpc WhepClose (WhepCloseRequest) returns (WhepCloseResponse);
 
-    rpc WebrtcConnec (WebrtcConnectRequest) returns (WebrtcConnectResponse);
+    rpc WebrtcConnect (WebrtcConnectRequest) returns (WebrtcConnectResponse);
     rpc WebrtcRemoteIce (WebrtcRemoteIceRequest) returns (WebrtcRemoteIceResponse);
     rpc WebrtcRestartIce (WebrtcRestartIceRequest) returns (WebrtcRestartIceResponse);
 }
@@ -121,25 +123,31 @@ message WhepCloseResponse {
 
 //For SDK
 message WebrtcConnectRequest {
-
+    string user_agent = 1;
+    string ip = 2;
+    gateway.ConnectRequest req = 3;
 }
 
 message WebrtcConnectResponse {
-
+    gateway.ConnectResponse res = 1;
 }
 
 message WebrtcRemoteIceRequest {
-
+    string conn = 1;
+    repeated string candidates = 2;
 }
 
 message WebrtcRemoteIceResponse {
-
+    uint32 added = 1;
 }
 
 message WebrtcRestartIceRequest {
-
+    string conn = 1;
+    string user_agent = 2;
+    string ip = 3;
+    gateway.ConnectRequest req = 4;
 }
 
 message WebrtcRestartIceResponse {
-
+    gateway.ConnectResponse res = 1;
 }

@@ -57,7 +57,7 @@ pub enum Variant {
 
 pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
-    RestartIce(u64, Variant, IpAddr, String, String, ConnectRequest),
+    RestartIce(u64, Variant, IpAddr, String, ConnectRequest),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -294,7 +294,7 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                     }
                     self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))).into());
                 }
-                ExtIn::RestartIce(req_id, variant, _ip, _useragent, _token, req) => {
+                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_codec_config(self.rtc.codec_config());

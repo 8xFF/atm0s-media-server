@@ -370,11 +370,11 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Webrtc, ice.candidates)),
                     );
                 }
-                webrtc::RpcReq::RestartIce(conn, ip, token, user_agent, req) => {
+                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req) => {
                     log::info!("on rpc request {req_id}, webrtc::RpcReq::RestartIce");
                     self.media_webrtc.input(&mut self.switcher).on_event(
                         now,
-                        GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, token, user_agent, req)),
+                        GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, user_agent, req)),
                     );
                 }
                 webrtc::RpcReq::Delete(_) => todo!(),

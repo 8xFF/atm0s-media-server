@@ -129,7 +129,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                             self.queue
                                 .push_back(GroupOutput::Ext(owner, ExtOut::RemoteIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
                         }
-                        ExtIn::RestartIce(req_id, variant, remote, useragent, token, req) => {
+                        ExtIn::RestartIce(req_id, variant, remote, useragent, req) => {
                             let sdp = req.sdp.clone();
                             if let Ok((ice_lite, sdp, index)) = self.spawn(VariantParams::Webrtc(remote, useragent, req, self.secure.clone()), &sdp) {
                                 self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));

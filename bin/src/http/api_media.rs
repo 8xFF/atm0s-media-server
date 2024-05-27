@@ -316,15 +316,18 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
         connect: Protobuf<ConnectRequest>,
     ) -> Result<HttpResponse<Protobuf<ConnectResponse>>> {
         let conn_id2 = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        log::info!(
-            "[MediaAPIs] restart_ice webrtc with token {}, ip {}, user_agent {}, conn {}, request {:?}",
-            token.token,
-            ip_addr,
-            user_agent,
-            conn_id.0,
-            connect
-        );
-        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(conn_id2, ip_addr, token.token, user_agent, connect.0)));
+        let token = ctx.secure.decode_obj::<WebrtcToken>("webrtc", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        if let Some(join) = &connect.join {
+            if token.room != Some(join.room.clone()) {
+                return Err(poem::Error::from_string("Wrong room".to_string(), StatusCode::FORBIDDEN));
+            }
+
+            if token.peer != Some(join.peer.clone()) {
+                return Err(poem::Error::from_string("Wrong peer".to_string(), StatusCode::FORBIDDEN));
+            }
+        }
+        log::info!("[MediaAPIs] restart_ice webrtc, ip {}, user_agent {}, conn {}, request {:?}", ip_addr, user_agent, conn_id.0, connect);
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(conn_id2, ip_addr, user_agent, connect.0)));
         ctx.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         match res {

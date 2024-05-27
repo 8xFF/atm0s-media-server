@@ -175,22 +175,52 @@ pub struct WhepCloseResponse {
 /// For SDK
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct WebrtcConnectRequest {}
+pub struct WebrtcConnectRequest {
+    #[prost(string, tag = "1")]
+    pub user_agent: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub ip: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "3")]
+    pub req: ::core::option::Option<super::gateway::ConnectRequest>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct WebrtcConnectResponse {}
+pub struct WebrtcConnectResponse {
+    #[prost(message, optional, tag = "1")]
+    pub res: ::core::option::Option<super::gateway::ConnectResponse>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct WebrtcRemoteIceRequest {}
+pub struct WebrtcRemoteIceRequest {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "2")]
+    pub candidates: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct WebrtcRemoteIceResponse {}
+pub struct WebrtcRemoteIceResponse {
+    #[prost(uint32, tag = "1")]
+    pub added: u32,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct WebrtcRestartIceRequest {}
+pub struct WebrtcRestartIceRequest {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub user_agent: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub ip: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "4")]
+    pub req: ::core::option::Option<super::gateway::ConnectRequest>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct WebrtcRestartIceResponse {}
+pub struct WebrtcRestartIceResponse {
+    #[prost(message, optional, tag = "1")]
+    pub res: ::core::option::Option<super::gateway::ConnectResponse>,
+}
 #[allow(async_fn_in_trait)]
 pub trait MediaEdgeServiceHandler<CTX> {
     async fn whip_connect(
@@ -223,7 +253,7 @@ pub trait MediaEdgeServiceHandler<CTX> {
         ctx: &CTX,
         req: WhepCloseRequest,
     ) -> Option<WhepCloseResponse>;
-    async fn webrtc_connec(
+    async fn webrtc_connect(
         &self,
         ctx: &CTX,
         req: WebrtcConnectRequest,
@@ -339,13 +369,13 @@ impl<
         let in_buf = stream.read().await?;
         WhepCloseResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn webrtc_connec(
+    pub async fn webrtc_connect(
         &self,
         dest: D,
         req: WebrtcConnectRequest,
     ) -> Option<WebrtcConnectResponse> {
         use prost::Message;
-        let mut stream = self.client.connect(dest, "webrtc_connec.service").await?;
+        let mut stream = self.client.connect(dest, "webrtc_connect.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
@@ -507,13 +537,13 @@ impl<
                         }
                     });
                 }
-                "webrtc_connec.service" => {
+                "webrtc_connect.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
                             if let Ok(req) = WebrtcConnectRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler.webrtc_connec(&ctx, req).await {
+                                if let Some(res) = handler.webrtc_connect(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;

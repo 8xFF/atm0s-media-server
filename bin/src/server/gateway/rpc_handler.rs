@@ -35,7 +35,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
         todo!()
     }
 
-    async fn webrtc_connec(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
+    async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
         todo!()
     }
 

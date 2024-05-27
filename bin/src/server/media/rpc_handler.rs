@@ -1,11 +1,19 @@
+//!
+//! This file implement forward logic from quic_rpc to worker logic
+//!
+
 use media_server_protocol::{
     endpoint::ClusterConnId,
-    protobuf::cluster_gateway::{
-        MediaEdgeServiceHandler, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WebrtcRestartIceRequest, WebrtcRestartIceResponse, WhepCloseRequest,
-        WhepCloseResponse, WhepConnectRequest, WhepConnectResponse, WhepRemoteIceRequest, WhepRemoteIceResponse, WhipCloseRequest, WhipCloseResponse, WhipConnectRequest, WhipConnectResponse,
-        WhipRemoteIceRequest, WhipRemoteIceResponse,
+    protobuf::{
+        cluster_gateway::{
+            MediaEdgeServiceHandler, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WebrtcRestartIceRequest, WebrtcRestartIceResponse, WhepCloseRequest,
+            WhepCloseResponse, WhepConnectRequest, WhepConnectResponse, WhepRemoteIceRequest, WhepRemoteIceResponse, WhipCloseRequest, WhipCloseResponse, WhipConnectRequest, WhipConnectResponse,
+            WhipRemoteIceRequest, WhipRemoteIceResponse,
+        },
+        gateway::RemoteIceRequest,
     },
     transport::{
+        webrtc,
         whep::{self, WhepDeleteReq, WhepRemoteIceReq},
         whip::{self, WhipDeleteReq, WhipRemoteIceReq},
         RpcReq, RpcRes,
@@ -112,15 +120,42 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
     }
 
     /* Start of sdk */
-    async fn webrtc_connec(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
-        todo!()
+    async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
+        log::info!("On webrtc_connect from gateway");
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::Connect(req.ip.parse().ok()?, req.user_agent, req.req?)));
+        ctx.req_tx.send(req).await.ok()?;
+        let res = rx.await.ok()?;
+        match res {
+            RpcRes::Webrtc(webrtc::RpcRes::Connect(res)) => res.ok().map(|(conn, mut r)| {
+                r.conn_id = conn.to_string();
+                WebrtcConnectResponse { res: Some(r) }
+            }),
+            _ => None,
+        }
     }
 
     async fn webrtc_remote_ice(&self, ctx: &Ctx, req: WebrtcRemoteIceRequest) -> Option<WebrtcRemoteIceResponse> {
-        todo!()
+        log::info!("On webrtc_remote_ice from gateway");
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RemoteIce(req.conn.parse().ok()?, RemoteIceRequest { candidates: req.candidates })));
+        ctx.req_tx.send(req).await.ok()?;
+        let res = rx.await.ok()?;
+        match res {
+            RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(res)) => res.ok().map(|r| WebrtcRemoteIceResponse { added: r.added }),
+            _ => None,
+        }
     }
 
     async fn webrtc_restart_ice(&self, ctx: &Ctx, req: WebrtcRestartIceRequest) -> Option<WebrtcRestartIceResponse> {
-        todo!()
+        log::info!("On webrtc_restart_ice from gateway");
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(req.conn.parse().ok()?, req.ip.parse().ok()?, req.user_agent, req.req?)));
+        ctx.req_tx.send(req).await.ok()?;
+        let res = rx.await.ok()?;
+        match res {
+            RpcRes::Webrtc(webrtc::RpcRes::RestartIce(res)) => res.ok().map(|(conn, mut r)| {
+                r.conn_id = conn.to_string();
+                WebrtcRestartIceResponse { res: Some(r) }
+            }),
+            _ => None,
+        }
     }
 }
