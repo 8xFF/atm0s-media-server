@@ -96,14 +96,19 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     // - sync with sans-io style for media data
     //
     let (mut vnet, vnet_tx, mut vnet_rx) = VirtualNetwork::new(node.node_id);
+
+    let media_rpc_socket = vnet.udp_socket(0).await.expect("Should open virtual port for gateway rpc");
+    let media_rpc_client = MediaEdgeServiceClient::new(QuinnClient::new(make_quinn_client(media_rpc_socket, &vec![]).expect("Should create endpoint for media rpc client")));
+
     let media_rpc_socket = vnet.udp_socket(GATEWAY_RPC_PORT).await.expect("Should open virtual port for gateway rpc");
     let mut media_rpc_server = MediaEdgeServiceServer::new(
         QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert.clone()).expect("Should create endpoint for media rpc server")),
-        rpc_handler::Ctx {},
+        rpc_handler::Ctx {
+            selector: selector.clone(),
+            client: media_rpc_client.clone(),
+        },
         rpc_handler::MediaRpcHandlerImpl::default(),
     );
-    let media_rpc_socket = vnet.udp_socket(0).await.expect("Should open virtual port for gateway rpc");
-    let media_rpc_client = MediaEdgeServiceClient::new(QuinnClient::new(make_quinn_client(media_rpc_socket, &vec![]).expect("Should create endpoint for media rpc client")));
 
     tokio::task::spawn_local(async move {
         media_rpc_server.run().await;
