@@ -1,6 +1,8 @@
 use std::{
+    marker::PhantomData,
     net::{IpAddr, SocketAddr},
     ops::Deref,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -14,6 +16,7 @@ use media_server_protocol::{
     protobuf::gateway::ConnectRequest,
     transport::{RpcError, RpcResult},
 };
+use media_server_secure::MediaEdgeSecure;
 use media_server_utils::{RtpSeqExtend, Small2dMap};
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
@@ -39,10 +42,10 @@ mod webrtc;
 mod whep;
 mod whip;
 
-pub enum VariantParams {
+pub enum VariantParams<ES> {
     Whip(RoomId, PeerId),
     Whep(RoomId, PeerId),
-    Webrtc(IpAddr, String, String, ConnectRequest),
+    Webrtc(IpAddr, String, ConnectRequest, Arc<ES>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -54,7 +57,7 @@ pub enum Variant {
 
 pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
-    RestartIce(u64, Variant, IpAddr, String, String, ConnectRequest),
+    RestartIce(u64, Variant, IpAddr, String, ConnectRequest),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -96,7 +99,7 @@ trait TransportWebrtcInternal {
     fn pop_output(&mut self, now: Instant) -> Option<InternalOutput>;
 }
 
-pub struct TransportWebrtc {
+pub struct TransportWebrtc<ES> {
     next_tick: Option<Instant>,
     rtc: Rtc,
     rtc_ice_lite: bool,
@@ -105,10 +108,11 @@ pub struct TransportWebrtc {
     local_convert: LocalMediaConvert,
     seq_extends: smallmap::Map<Mid, RtpSeqExtend>,
     queue: DynamicDeque<TransportOutput<ExtOut>, 4>,
+    _tmp: PhantomData<ES>,
 }
 
-impl TransportWebrtc {
-    pub fn new(variant: VariantParams, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>, rtc_ice_lite: bool) -> RpcResult<(Self, String, String)> {
+impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
+    pub fn new(variant: VariantParams<ES>, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>, rtc_ice_lite: bool) -> RpcResult<(Self, String, String)> {
         let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::InvalidSdp))?;
         let rtc_config = Rtc::builder()
             .set_rtp_mode(true)
@@ -131,7 +135,7 @@ impl TransportWebrtc {
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
             VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
             VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
-            VariantParams::Webrtc(_ip, _token, _user_agent, req) => {
+            VariantParams::Webrtc(_ip, _user_agent, req, secure) => {
                 rtc.direct_api().create_data_channel(ChannelConfig {
                     label: "data".to_string(),
                     negotiated: Some(1000),
@@ -140,7 +144,7 @@ impl TransportWebrtc {
                 //we need to start sctp as client side for handling restart-ice in new server
                 //if not, datachannel will not connect successful after reconnect to new server
                 rtc.direct_api().start_sctp(true);
-                Box::new(webrtc::TransportWebrtcSdk::new(req))
+                Box::new(webrtc::TransportWebrtcSdk::new(req, secure))
             }
         };
 
@@ -165,6 +169,7 @@ impl TransportWebrtc {
                 local_convert,
                 seq_extends: Default::default(),
                 queue: Default::default(),
+                _tmp: Default::default(),
             },
             ice_ufrag,
             answer.to_sdp_string(),
@@ -240,7 +245,7 @@ impl TransportWebrtc {
     }
 }
 
-impl Transport<ExtIn, ExtOut> for TransportWebrtc {
+impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc<ES> {
     fn on_tick(&mut self, now: Instant) {
         if let Some(next_tick) = self.next_tick {
             if next_tick <= now {
@@ -289,7 +294,7 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
                     }
                     self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))).into());
                 }
-                ExtIn::RestartIce(req_id, variant, _ip, _useragent, _token, req) => {
+                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_codec_config(self.rtc.codec_config());
@@ -314,7 +319,7 @@ impl Transport<ExtIn, ExtOut> for TransportWebrtc {
     }
 }
 
-impl TaskSwitcherChild<TransportOutput<ExtOut>> for TransportWebrtc {
+impl<ES: 'static + MediaEdgeSecure> TaskSwitcherChild<TransportOutput<ExtOut>> for TransportWebrtc<ES> {
     type Time = Instant;
 
     fn pop_output(&mut self, now: Instant) -> Option<TransportOutput<ExtOut>> {

@@ -11,6 +11,8 @@ log = { workspace = true }
 num_enum = { workspace = true }
 convert-enum = { workspace = true }
 media-server-protocol = { path = "../protocol" }
+media-server-secure = { path = "../media_secure" }
+media-server-gateway = { path = "../media_gateway" }
 media-server-core = { path = "../media_core" }
 
 sans-io-runtime = { workspace = true, default-features = false }

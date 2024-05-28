@@ -1,11 +1,17 @@
 use std::net::IpAddr;
 
+use crate::{
+    endpoint::{PeerId, RoomId},
+    protobuf,
+};
+
 use super::{ConnLayer, RpcResult};
 
 #[derive(Debug, Clone)]
 pub struct WhipConnectReq {
     pub sdp: String,
-    pub token: String,
+    pub room: RoomId,
+    pub peer: PeerId,
     pub ip: IpAddr,
     pub user_agent: String,
 }
@@ -54,6 +60,14 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
             }
         }
     }
+
+    pub fn get_down_part(&self) -> Option<Conn::DownRes> {
+        match self {
+            RpcReq::Connect(req) => None,
+            RpcReq::RemoteIce(req) => Some(req.conn_id.get_down_part()),
+            RpcReq::Delete(req) => Some(req.conn_id.get_down_part()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, convert_enum::From, convert_enum::TryInto)]
@@ -73,6 +87,31 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
             RpcRes::Connect(Err(e)) => RpcRes::Connect(Err(e)),
             RpcRes::RemoteIce(res) => RpcRes::RemoteIce(res),
             RpcRes::Delete(res) => RpcRes::Delete(res),
+        }
+    }
+}
+
+impl TryFrom<protobuf::cluster_gateway::WhipConnectRequest> for WhipConnectReq {
+    type Error = ();
+    fn try_from(value: protobuf::cluster_gateway::WhipConnectRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            sdp: value.sdp,
+            room: value.room.into(),
+            peer: value.peer.into(),
+            ip: value.ip.parse().map_err(|_| ())?,
+            user_agent: value.user_agent,
+        })
+    }
+}
+
+impl Into<protobuf::cluster_gateway::WhipConnectRequest> for WhipConnectReq {
+    fn into(self) -> protobuf::cluster_gateway::WhipConnectRequest {
+        protobuf::cluster_gateway::WhipConnectRequest {
+            user_agent: self.user_agent,
+            ip: self.ip.to_string(),
+            sdp: self.sdp,
+            room: self.room.0,
+            peer: self.peer.0,
         }
     }
 }

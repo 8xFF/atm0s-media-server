@@ -1,13 +1,14 @@
-use std::{collections::VecDeque, net::SocketAddr, time::Instant};
+use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::Instant};
 
 use media_server_core::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterRoomHash},
     endpoint::{Endpoint, EndpointCfg, EndpointInput, EndpointOutput},
 };
 use media_server_protocol::transport::{RpcError, RpcResult};
+use media_server_secure::MediaEdgeSecure;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
-    group_owner_type, group_task, return_if_none, return_if_some, TaskSwitcher, TaskSwitcherChild,
+    group_owner_type, return_if_none, return_if_some, TaskGroup, TaskSwitcherChild,
 };
 use str0m::change::DtlsCert;
 
@@ -17,7 +18,6 @@ use crate::{
     WebrtcError,
 };
 
-group_task!(Endpoints, Endpoint<TransportWebrtc, ExtIn, ExtOut>, EndpointInput<ExtIn>, EndpointOutput<ExtOut>);
 group_owner_type!(WebrtcOwner);
 
 pub enum GroupInput {
@@ -36,28 +36,30 @@ pub enum GroupOutput {
     Continue,
 }
 
-pub struct MediaWorkerWebrtc {
+pub struct MediaWorkerWebrtc<ES: 'static + MediaEdgeSecure> {
     ice_lite: bool,
     shared_port: SharedUdpPort<usize>,
     dtls_cert: DtlsCert,
-    endpoints: Endpoints,
+    endpoints: TaskGroup<EndpointInput<ExtIn>, EndpointOutput<ExtOut>, Endpoint<TransportWebrtc<ES>, ExtIn, ExtOut>, 16>,
     addrs: Vec<(SocketAddr, usize)>,
     queue: VecDeque<GroupOutput>,
+    secure: Arc<ES>,
 }
 
-impl MediaWorkerWebrtc {
-    pub fn new(addrs: Vec<SocketAddr>, ice_lite: bool) -> Self {
+impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
+    pub fn new(addrs: Vec<SocketAddr>, ice_lite: bool, secure: Arc<ES>) -> Self {
         Self {
             ice_lite,
             shared_port: SharedUdpPort::default(),
             dtls_cert: DtlsCert::new_openssl(),
-            endpoints: Endpoints::default(),
+            endpoints: TaskGroup::default(),
             addrs: vec![],
             queue: VecDeque::from(addrs.iter().map(|addr| GroupOutput::Net(BackendOutgoing::UdpListen { addr: *addr, reuse: false })).collect::<Vec<_>>()),
+            secure,
         }
     }
 
-    pub fn spawn(&mut self, variant: VariantParams, offer: &str) -> RpcResult<(bool, String, usize)> {
+    pub fn spawn(&mut self, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
         let cfg = match &variant {
             VariantParams::Whip(_, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
@@ -94,7 +96,7 @@ impl MediaWorkerWebrtc {
     }
 }
 
-impl MediaWorkerWebrtc {
+impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
     pub fn tasks(&self) -> usize {
         self.endpoints.tasks()
     }
@@ -119,7 +121,7 @@ impl MediaWorkerWebrtc {
             }
             GroupInput::Ext(owner, ext) => {
                 log::info!("[MediaWorkerWebrtc] on ext to owner {:?}", owner);
-                if let Some(&Some(_)) = self.endpoints.tasks.get(owner.index()) {
+                if self.endpoints.has_task(owner.index()) {
                     self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ext));
                 } else {
                     match ext {
@@ -127,8 +129,9 @@ impl MediaWorkerWebrtc {
                             self.queue
                                 .push_back(GroupOutput::Ext(owner, ExtOut::RemoteIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
                         }
-                        ExtIn::RestartIce(req_id, variant, remote, useragent, token, req) => {
-                            if let Ok((ice_lite, sdp, index)) = self.spawn(VariantParams::Webrtc(remote, useragent, token, req.clone()), &req.sdp) {
+                        ExtIn::RestartIce(req_id, variant, remote, useragent, req) => {
+                            let sdp = req.sdp.clone();
+                            if let Ok((ice_lite, sdp, index)) = self.spawn(VariantParams::Webrtc(remote, useragent, req, self.secure.clone()), &sdp) {
                                 self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));
                             } else {
                                 self.queue
@@ -149,7 +152,7 @@ impl MediaWorkerWebrtc {
     }
 }
 
-impl TaskSwitcherChild<GroupOutput> for MediaWorkerWebrtc {
+impl<ES: MediaEdgeSecure> TaskSwitcherChild<GroupOutput> for MediaWorkerWebrtc<ES> {
     type Time = Instant;
     fn pop_output(&mut self, now: Instant) -> Option<GroupOutput> {
         return_if_some!(self.queue.pop_front());

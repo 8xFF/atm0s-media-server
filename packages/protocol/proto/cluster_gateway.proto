@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+import "gateway.proto";
+
+package cluster_gateway;
+
+message GatewayEvent {
+    oneof event {
+        PingEvent ping = 1;
+    }
+}
+
+message PingEvent {
+    message MediaOrigin {
+
+    }
+
+    message GatewayOrigin {
+        message Location {
+            float lat = 1;
+            float lon = 2;
+        }
+
+        uint32 zone = 1;
+        Location location= 3;
+    }
+
+    message ServiceStats {
+        uint32 live = 1;
+        uint32 max = 2;
+        bool active = 3;
+    }
+
+    oneof origin {
+        MediaOrigin media = 1;
+        GatewayOrigin gateway = 2;
+    }
+
+    uint32 cpu = 3;
+    uint32 memory = 4;
+    uint32 disk = 5;
+
+    ServiceStats webrtc = 6;
+}
+
+message Empty {}
+
+service MediaEdge {
+    rpc WhipConnect (WhipConnectRequest) returns (WhipConnectResponse);
+    rpc WhipRemoteIce (WhipRemoteIceRequest) returns (WhipRemoteIceResponse);
+    rpc WhipClose (WhipCloseRequest) returns (WhipCloseResponse);
+
+    rpc WhepConnect (WhepConnectRequest) returns (WhepConnectResponse);
+    rpc WhepRemoteIce (WhepRemoteIceRequest) returns (WhepRemoteIceResponse);
+    rpc WhepClose (WhepCloseRequest) returns (WhepCloseResponse);
+
+    rpc WebrtcConnect (WebrtcConnectRequest) returns (WebrtcConnectResponse);
+    rpc WebrtcRemoteIce (WebrtcRemoteIceRequest) returns (WebrtcRemoteIceResponse);
+    rpc WebrtcRestartIce (WebrtcRestartIceRequest) returns (WebrtcRestartIceResponse);
+}
+
+//For whip
+message WhipConnectRequest {
+    string user_agent = 1;
+    string ip = 2;
+    string sdp = 3;
+    string room = 4;
+    string peer = 5;
+}
+
+message WhipConnectResponse {
+    string conn = 1;
+    string sdp = 2;
+}
+
+message WhipRemoteIceRequest {
+    string conn = 1;
+    string ice = 2;
+}
+
+message WhipRemoteIceResponse {
+    string conn = 1;
+}
+
+message WhipCloseRequest {
+    string conn = 1;
+}
+
+message WhipCloseResponse {
+    string conn = 1;
+}
+
+//For whep
+message WhepConnectRequest {
+    string user_agent = 1;
+    string ip = 2;
+    string sdp = 3;
+    string room = 4;
+    string peer = 5;
+}
+
+message WhepConnectResponse {
+    string conn = 1;
+    string sdp = 2;
+}
+
+message WhepRemoteIceRequest {
+    string conn = 1;
+    string ice = 2;
+}
+
+message WhepRemoteIceResponse {
+    string conn = 1;
+}
+
+message WhepCloseRequest {
+    string conn = 1;
+}
+
+message WhepCloseResponse {
+    string conn = 1;
+}
+
+//For SDK
+message WebrtcConnectRequest {
+    string user_agent = 1;
+    string ip = 2;
+    gateway.ConnectRequest req = 3;
+}
+
+message WebrtcConnectResponse {
+    gateway.ConnectResponse res = 1;
+}
+
+message WebrtcRemoteIceRequest {
+    string conn = 1;
+    repeated string candidates = 2;
+}
+
+message WebrtcRemoteIceResponse {
+    uint32 added = 1;
+}
+
+message WebrtcRestartIceRequest {
+    string conn = 1;
+    string user_agent = 2;
+    string ip = 3;
+    gateway.ConnectRequest req = 4;
+}
+
+message WebrtcRestartIceResponse {
+    gateway.ConnectResponse res = 1;
+}

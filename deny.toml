@@ -29,7 +29,9 @@ targets = [
 vulnerability = "deny"
 unmaintained = "warn"
 yanked = "deny"
-ignore = []
+ignore = [
+    "RUSTSEC-2023-0071" # a new version of rsa has not been released
+]
 
 [bans]
 multiple-versions = "allow"

@@ -16,4 +16,6 @@ pub enum WebrtcError {
     RpcTrackNotAttached = 0x2004,
     RpcTrackAlreadyAttached = 0x2005,
     RpcEndpointNotFound = 0x2006,
+    RpcTokenInvalid = 0x2007,
+    RpcTokenRoomPeerNotMatch = 0x2008,
 }

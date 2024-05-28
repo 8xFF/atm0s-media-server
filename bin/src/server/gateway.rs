@@ -1,8 +1,378 @@
+use std::{sync::Arc, time::Duration};
+
+use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
 use clap::Parser;
+use media_server_gateway::{store_service::GatewayStoreServiceBuilder, ServiceKind, STORE_SERVICE_ID};
+use media_server_protocol::{
+    gateway::{generate_gateway_zone_tag, GATEWAY_RPC_PORT},
+    protobuf::{
+        cluster_gateway::{MediaEdgeServiceClient, MediaEdgeServiceServer},
+        gateway::RemoteIceResponse,
+    },
+    rpc::{
+        node_vnet_addr,
+        quinn::{QuinnClient, QuinnServer},
+    },
+    transport::{webrtc, whep, whip, RpcError, RpcReq, RpcRes},
+};
+use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
+use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
+
+use crate::{
+    errors::MediaServerError,
+    http::run_gateway_http_server,
+    quinn::{make_quinn_client, make_quinn_server, VirtualNetwork},
+    NodeConfig,
+};
+use sans_io_runtime::{backend::PollingBackend, ErrorDebugger2};
+
+use self::{dest_selector::build_dest_selector, ip_location::Ip2Location};
+
+mod dest_selector;
+mod ip_location;
+mod rpc_handler;
+
+#[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
+enum SC {
+    Visual(visualization::Control),
+    Gateway(media_server_gateway::store_service::Control),
+}
+
+#[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
+enum SE {
+    Visual(visualization::Event),
+    Gateway(media_server_gateway::store_service::Event),
+}
+type TC = ();
+type TW = ();
 
 #[derive(Debug, Parser)]
-pub struct Args {}
+pub struct Args {
+    /// Location latude
+    #[arg(env, long, default_value_t = 0.0)]
+    lat: f32,
 
-pub async fn run_media_gateway(workers: usize, args: Args) {
-    println!("Running media gateway");
+    /// Location longtude
+    #[arg(env, long, default_value_t = 0.0)]
+    lon: f32,
+
+    /// GeoIp database
+    #[arg(env, long, default_value = "./maxminddb-data/GeoLite2-City.mmdb")]
+    geo_db: String,
+}
+
+pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
+    rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
+
+    let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
+    let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
+    let default_cluster_cert = CertificateDer::from(default_cluster_cert_buf.to_vec());
+    let default_cluster_key = PrivatePkcs8KeyDer::from(default_cluster_key_buf.to_vec());
+
+    let edge_secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
+    let gateway_secure = Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes()));
+    let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
+    if let Some(http_port) = http_port {
+        tokio::spawn(async move {
+            if let Err(e) = run_gateway_http_server(http_port, req_tx, edge_secure, gateway_secure).await {
+                log::error!("HTTP Error: {}", e);
+            }
+        });
+    }
+
+    let node_id = node.node_id;
+
+    let mut builder = SdnBuilder::<(), SC, SE, TC, TW>::new(node_id, node.udp_port, node.custom_addrs);
+
+    builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
+    builder.set_manual_discovery(vec!["gateway".to_string(), generate_gateway_zone_tag(node.zone)], vec!["gateway".to_string()]);
+    builder.add_service(Arc::new(GatewayStoreServiceBuilder::new(node.zone, args.lat, args.lon)));
+
+    for seed in node.seeds {
+        builder.add_seed(seed);
+    }
+
+    let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers);
+    let (selector, mut requester) = build_dest_selector();
+
+    // Ip location for routing client to closest gateway
+    let ip2location = Arc::new(Ip2Location::new(&args.geo_db));
+
+    //
+    // Vnet is a virtual udp layer for creating RPC handlers, we separate media server to 2 layer
+    // - async for business logic like proxy, logging handling
+    // - sync with sans-io style for media data
+    //
+    let (mut vnet, vnet_tx, mut vnet_rx) = VirtualNetwork::new(node.node_id);
+
+    let media_rpc_socket = vnet.udp_socket(0).await.expect("Should open virtual port for gateway rpc");
+    let media_rpc_client = MediaEdgeServiceClient::new(QuinnClient::new(make_quinn_client(media_rpc_socket, &vec![]).expect("Should create endpoint for media rpc client")));
+
+    let media_rpc_socket = vnet.udp_socket(GATEWAY_RPC_PORT).await.expect("Should open virtual port for gateway rpc");
+    let mut media_rpc_server = MediaEdgeServiceServer::new(
+        QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert.clone()).expect("Should create endpoint for media rpc server")),
+        rpc_handler::Ctx {
+            selector: selector.clone(),
+            client: media_rpc_client.clone(),
+            ip2location: ip2location.clone(),
+        },
+        rpc_handler::MediaRpcHandlerImpl::default(),
+    );
+
+    tokio::task::spawn_local(async move {
+        media_rpc_server.run().await;
+    });
+
+    tokio::task::spawn_local(async move { while let Some(_) = vnet.recv().await {} });
+
+    loop {
+        if controller.process().is_none() {
+            break;
+        }
+        while let Ok(control) = vnet_rx.try_recv() {
+            controller.feature_control((), control.into());
+        }
+        while let Some(out) = requester.recv() {
+            controller.service_control(STORE_SERVICE_ID.into(), (), out.into());
+        }
+        while let Ok(req) = req_rx.try_recv() {
+            let res_tx = req.answer_tx;
+            let param = req.req;
+            let conn_part = param.get_conn_part();
+            let selector = selector.clone();
+            let client = media_rpc_client.clone();
+            let ip2location = ip2location.clone();
+            tokio::spawn(async move {
+                match param {
+                    RpcReq::Whip(param) => match param {
+                        whip::RpcReq::Connect(param) => {
+                            if let Some(selected) = selector.select(ServiceKind::Webrtc, ip2location.get_location(&param.ip)).await {
+                                let sock_addr = node_vnet_addr(selected, GATEWAY_RPC_PORT);
+                                log::info!("[Gateway] selected node {selected}");
+                                let rpc_req = param.into();
+                                let res = client.whip_connect(sock_addr, rpc_req).await;
+                                log::info!("[Gateway] response from node {selected} => {:?}", res);
+                                if let Some(res) = res {
+                                    res_tx
+                                        .send(RpcRes::Whip(whip::RpcRes::Connect(Ok(whip::WhipConnectRes {
+                                            sdp: res.sdp,
+                                            conn_id: res.conn.parse().unwrap(),
+                                        }))))
+                                        .print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Whip(whip::RpcRes::Connect(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            }
+                        }
+                        whip::RpcReq::RemoteIce(req) => {
+                            if let Some((node, _session)) = conn_part {
+                                let rpc_req = media_server_protocol::protobuf::cluster_gateway::WhipRemoteIceRequest {
+                                    conn: req.conn_id.to_string(),
+                                    ice: req.ice,
+                                };
+                                log::info!("[Gateway] selected node {node}");
+                                let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
+                                let res = client.whip_remote_ice(sock_addr, rpc_req).await;
+                                if let Some(_res) = res {
+                                    res_tx
+                                        .send(RpcRes::Whip(whip::RpcRes::RemoteIce(Ok(whip::WhipRemoteIceRes {}))))
+                                        .print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Whip(whip::RpcRes::RemoteIce(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            } else {
+                                res_tx
+                                    .send(RpcRes::Whip(whip::RpcRes::RemoteIce(Err(RpcError::new2(MediaServerError::InvalidConnId)))))
+                                    .print_err2("answer http request error");
+                            }
+                        }
+                        whip::RpcReq::Delete(req) => {
+                            if let Some((node, _session)) = conn_part {
+                                let rpc_req = media_server_protocol::protobuf::cluster_gateway::WhipCloseRequest { conn: req.conn_id.to_string() };
+                                log::info!("[Gateway] selected node {node}");
+                                let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
+                                let res = client.whip_close(sock_addr, rpc_req).await;
+                                if let Some(_res) = res {
+                                    res_tx.send(RpcRes::Whip(whip::RpcRes::Delete(Ok(whip::WhipDeleteRes {})))).print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Whip(whip::RpcRes::Delete(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            } else {
+                                res_tx
+                                    .send(RpcRes::Whip(whip::RpcRes::Delete(Err(RpcError::new2(MediaServerError::InvalidConnId)))))
+                                    .print_err2("answer http request error");
+                            }
+                        }
+                    },
+                    RpcReq::Whep(param) => match param {
+                        whep::RpcReq::Connect(param) => {
+                            if let Some(selected) = selector.select(ServiceKind::Webrtc, ip2location.get_location(&param.ip)).await {
+                                let sock_addr = node_vnet_addr(selected, GATEWAY_RPC_PORT);
+                                log::info!("[Gateway] selected node {selected}");
+                                let rpc_req = param.into();
+                                let res = client.whep_connect(sock_addr, rpc_req).await;
+                                log::info!("[Gateway] response from node {selected} => {:?}", res);
+                                if let Some(res) = res {
+                                    res_tx
+                                        .send(RpcRes::Whep(whep::RpcRes::Connect(Ok(whep::WhepConnectRes {
+                                            sdp: res.sdp,
+                                            conn_id: res.conn.parse().unwrap(),
+                                        }))))
+                                        .print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Whep(whep::RpcRes::Connect(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            }
+                        }
+                        whep::RpcReq::RemoteIce(req) => {
+                            if let Some((node, _session)) = conn_part {
+                                let rpc_req = media_server_protocol::protobuf::cluster_gateway::WhepRemoteIceRequest {
+                                    conn: req.conn_id.to_string(),
+                                    ice: req.ice,
+                                };
+                                log::info!("[Gateway] selected node {node}");
+                                let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
+                                let res = client.whep_remote_ice(sock_addr, rpc_req).await;
+                                if let Some(_res) = res {
+                                    res_tx
+                                        .send(RpcRes::Whep(whep::RpcRes::RemoteIce(Ok(whep::WhepRemoteIceRes {}))))
+                                        .print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Whep(whep::RpcRes::RemoteIce(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            } else {
+                                res_tx
+                                    .send(RpcRes::Whep(whep::RpcRes::RemoteIce(Err(RpcError::new2(MediaServerError::InvalidConnId)))))
+                                    .print_err2("answer http request error");
+                            }
+                        }
+                        whep::RpcReq::Delete(req) => {
+                            if let Some((node, _session)) = conn_part {
+                                let rpc_req = media_server_protocol::protobuf::cluster_gateway::WhepCloseRequest { conn: req.conn_id.to_string() };
+                                log::info!("[Gateway] selected node {node}");
+                                let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
+                                let res = client.whep_close(sock_addr, rpc_req).await;
+                                if let Some(_res) = res {
+                                    res_tx.send(RpcRes::Whep(whep::RpcRes::Delete(Ok(whep::WhepDeleteRes {})))).print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Whep(whep::RpcRes::Delete(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            } else {
+                                res_tx
+                                    .send(RpcRes::Whep(whep::RpcRes::Delete(Err(RpcError::new2(MediaServerError::InvalidConnId)))))
+                                    .print_err2("answer http request error");
+                            }
+                        }
+                    },
+                    RpcReq::Webrtc(param) => match param {
+                        webrtc::RpcReq::Connect(ip, user_agent, req) => {
+                            if let Some(selected) = selector.select(ServiceKind::Webrtc, ip2location.get_location(&ip)).await {
+                                let sock_addr = node_vnet_addr(selected, GATEWAY_RPC_PORT);
+                                log::info!("[Gateway] selected node {selected}");
+                                let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcConnectRequest {
+                                    user_agent,
+                                    ip: ip.to_string(),
+                                    req: Some(req),
+                                };
+                                let res = client.webrtc_connect(sock_addr, rpc_req).await;
+                                log::info!("[Gateway] response from node {selected} => {:?}", res);
+                                if let Some(res) = res {
+                                    let res = res.res.unwrap();
+                                    res_tx
+                                        .send(RpcRes::Webrtc(webrtc::RpcRes::Connect(Ok((res.conn_id.parse().unwrap(), res)))))
+                                        .print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Webrtc(webrtc::RpcRes::Connect(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            }
+                        }
+                        webrtc::RpcReq::RemoteIce(conn, ice) => {
+                            if let Some((node, _session)) = conn_part {
+                                let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRemoteIceRequest {
+                                    conn: conn.to_string(),
+                                    candidates: ice.candidates,
+                                };
+                                log::info!("[Gateway] selected node {node}");
+                                let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
+                                let res = client.webrtc_remote_ice(sock_addr, rpc_req).await;
+                                if let Some(res) = res {
+                                    res_tx
+                                        .send(RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(Ok(RemoteIceResponse { added: res.added }))))
+                                        .print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            } else {
+                                res_tx
+                                    .send(RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(Err(RpcError::new2(MediaServerError::InvalidConnId)))))
+                                    .print_err2("answer http request error");
+                            }
+                        }
+                        webrtc::RpcReq::RestartIce(conn, ip, user_agent, req) => {
+                            //TODO how to handle media-node down?
+                            if let Some((node, _session)) = conn_part {
+                                let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRestartIceRequest {
+                                    conn: conn.to_string(),
+                                    ip: ip.to_string(),
+                                    user_agent,
+                                    req: Some(req),
+                                };
+                                log::info!("[Gateway] selected node {node}");
+                                let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
+                                let res = client.webrtc_restart_ice(sock_addr, rpc_req).await;
+                                if let Some(res) = res {
+                                    let res = res.res.unwrap();
+                                    res_tx
+                                        .send(RpcRes::Webrtc(webrtc::RpcRes::RestartIce(Ok((res.conn_id.parse().unwrap(), res)))))
+                                        .print_err2("answer http request error");
+                                } else {
+                                    res_tx
+                                        .send(RpcRes::Webrtc(webrtc::RpcRes::RestartIce(Err(RpcError::new2(MediaServerError::GatewayRpcError)))))
+                                        .print_err2("answer http request error");
+                                }
+                            } else {
+                                res_tx
+                                    .send(RpcRes::Webrtc(webrtc::RpcRes::RestartIce(Err(RpcError::new2(MediaServerError::InvalidConnId)))))
+                                    .print_err2("answer http request error");
+                            }
+                        }
+                        webrtc::RpcReq::Delete(_) => {
+                            //TODO implement delete webrtc conn
+                        }
+                    },
+                }
+            });
+        }
+
+        while let Some(out) = controller.pop_event() {
+            match out {
+                SdnExtOut::ServicesEvent(_, _, SE::Gateway(event)) => {
+                    requester.on_event(event);
+                }
+                SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {
+                    if let Err(e) = vnet_tx.try_send(event) {
+                        log::error!("[MediaEdge] forward Sdn SocketEvent error {:?}", e);
+                    }
+                }
+                _ => {}
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
