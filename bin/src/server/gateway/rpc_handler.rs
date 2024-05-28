@@ -31,7 +31,7 @@ pub struct MediaRpcHandlerImpl {}
 impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
     async fn whip_connect(&self, ctx: &Ctx, req: WhipConnectRequest) -> Option<WhipConnectResponse> {
         log::info!("On whip_connect from other gateway");
-        let location = req.ip.parse().ok().map(|ip| ctx.ip2location.get_location(&ip)).flatten();
+        let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         let dest = ctx.selector.select(ServiceKind::Webrtc, location).await?;
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.whip_connect(dest_addr, req).await
@@ -55,7 +55,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
 
     async fn whep_connect(&self, ctx: &Ctx, req: WhepConnectRequest) -> Option<WhepConnectResponse> {
         log::info!("On whep_connect from other gateway");
-        let location = req.ip.parse().ok().map(|ip| ctx.ip2location.get_location(&ip)).flatten();
+        let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         let dest = ctx.selector.select(ServiceKind::Webrtc, location).await?;
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.whep_connect(dest_addr, req).await
@@ -79,7 +79,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
 
     async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
         log::info!("On webrtc_connect from other gateway");
-        let location = req.ip.parse().ok().map(|ip| ctx.ip2location.get_location(&ip)).flatten();
+        let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         let dest = ctx.selector.select(ServiceKind::Webrtc, location).await?;
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.webrtc_connect(dest_addr, req).await

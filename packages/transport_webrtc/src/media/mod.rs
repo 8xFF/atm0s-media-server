@@ -59,17 +59,17 @@ impl RemoteMediaConvert {
                 },
             ),
             MediaCodec::H264(profile) => {
-                let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().map(extract_simulcast).flatten();
+                let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().and_then(extract_simulcast);
                 let meta = h264::parse_rtp(&rtp.payload, profile, spatial)?;
                 (true, layers, meta)
             }
             MediaCodec::Vp8 => {
-                let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().map(extract_simulcast).flatten();
+                let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().and_then(extract_simulcast);
                 let meta = vp8::parse_rtp(&rtp.payload, spatial)?;
                 (true, layers, meta)
             }
             MediaCodec::Vp9(profile) => {
-                let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().map(extract_svc).flatten();
+                let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().and_then(extract_svc);
                 let meta = vp9::parse_rtp(&rtp.payload, profile)?;
                 (true, layers, meta)
             }

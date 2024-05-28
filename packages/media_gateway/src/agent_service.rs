@@ -30,12 +30,8 @@ pub struct GatewayAgentService<UserData, SC, SE, TC, TW> {
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
-impl<UserData: Copy, SC, SE, TC, TW> GatewayAgentService<UserData, SC, SE, TC, TW>
-where
-    SC: From<Control> + TryInto<Control>,
-    SE: From<Event> + TryInto<Event>,
-{
-    pub fn new() -> Self {
+impl<UserData, SC, SE, TC, TW> Default for GatewayAgentService<UserData, SC, SE, TC, TW> {
+    fn default() -> Self {
         Self {
             output: None,
             seq: 0,
@@ -75,7 +71,7 @@ where
                 }
                 .encode_to_vec();
                 log::info!("[GatewayAgent] broadcast ping to zone gateways");
-                self.output = Some(ServiceOutput::FeatureControl(data::Control::DataSendRule(DATA_PORT, rule, meta, data.into()).into()));
+                self.output = Some(ServiceOutput::FeatureControl(data::Control::DataSendRule(DATA_PORT, rule, meta, data).into()));
             }
             ServiceSharedInput::Connection(_) => {}
         }
@@ -120,8 +116,8 @@ pub struct GatewayAgentServiceBuilder<UserData, SC, SE, TC, TW> {
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
-impl<UserData, SC, SE, TC, TW> GatewayAgentServiceBuilder<UserData, SC, SE, TC, TW> {
-    pub fn new() -> Self {
+impl<UserData, SC, SE, TC, TW> Default for GatewayAgentServiceBuilder<UserData, SC, SE, TC, TW> {
+    fn default() -> Self {
         Self { _tmp: std::marker::PhantomData }
     }
 }
@@ -147,7 +143,7 @@ where
     }
 
     fn create(&self) -> Box<dyn Service<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {
-        Box::new(GatewayAgentService::new())
+        Box::<GatewayAgentService<UserData, SC, SE, TC, TW>>::default()
     }
 
     fn create_worker(&self) -> Box<dyn ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {

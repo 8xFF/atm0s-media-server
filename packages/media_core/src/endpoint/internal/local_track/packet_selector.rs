@@ -88,13 +88,13 @@ impl PacketSelector {
     }
 
     pub fn on_tick(&mut self, now_ms: u64) {
-        self.selector.as_mut().map(|s| s.on_tick(&mut self.ctx, now_ms));
-        if self.need_key_frame {
-            if self.last_key_frame_ts.is_none() || self.last_key_frame_ts.expect("Should have") + REQUEST_KEY_FRAME_INTERVAL_MS <= now_ms {
-                log::info!("[LocalTrack/PacketSelector] on_tick => request key after interval");
-                self.last_key_frame_ts = Some(now_ms);
-                self.queue.push_back(Action::RequestKeyFrame);
-            }
+        if let Some(s) = self.selector.as_mut() {
+            s.on_tick(&mut self.ctx, now_ms);
+        }
+        if self.need_key_frame && (self.last_key_frame_ts.is_none() || self.last_key_frame_ts.expect("Should have") + REQUEST_KEY_FRAME_INTERVAL_MS <= now_ms) {
+            log::info!("[LocalTrack/PacketSelector] on_tick => request key after interval");
+            self.last_key_frame_ts = Some(now_ms);
+            self.queue.push_back(Action::RequestKeyFrame);
         }
     }
 
@@ -111,13 +111,17 @@ impl PacketSelector {
     pub fn set_target_bitrate(&mut self, now_ms: u64, bitrate: u64) {
         log::debug!("[LocalTrack/PacketSelector] set target bitrate to {}", bitrate);
         self.bitrate = Some(bitrate);
-        self.selector.as_mut().map(|s| s.set_target_bitrate(&mut self.ctx, now_ms, bitrate));
+        if let Some(s) = self.selector.as_mut() {
+            s.set_target_bitrate(&mut self.ctx, now_ms, bitrate);
+        }
     }
 
     /// Set limit layer, which is used for select best layer
     pub fn set_limit_layer(&mut self, now_ms: u64, max_spatial: u8, min_spatial: u8) {
         self.limit = (max_spatial, min_spatial);
-        self.selector.as_mut().map(|s| s.set_limit_layer(&mut self.ctx, now_ms, max_spatial, min_spatial));
+        if let Some(s) = self.selector.as_mut() {
+            s.set_limit_layer(&mut self.ctx, now_ms, max_spatial, min_spatial);
+        }
     }
 
     pub fn select(&mut self, now_ms: u64, channel: u64, pkt: &mut MediaPacket) -> Option<()> {
@@ -188,8 +192,8 @@ impl PacketSelector {
             self.need_key_frame = false;
         }
         if self.selector.is_none() && pkt.meta.is_video_key() {
-            self.selector = create_selector(&pkt, bitrate, self.limit);
-            self.selector.as_mut().map(|s| s.on_init(&mut self.ctx, now_ms));
+            self.selector = create_selector(pkt, bitrate, self.limit);
+            self.selector.as_mut().expect("Should have video selector").on_init(&mut self.ctx, now_ms);
         }
 
         self.selector.as_mut()?.select(&mut self.ctx, now_ms, channel, pkt)
@@ -222,23 +226,23 @@ fn create_selector(pkt: &MediaPacket, bitrate: u64, limit: (u8, u8)) -> Option<B
             None
         }
         MediaMeta::H264 { sim: Some(_), .. } => {
-            let layers = pkt.layers.clone().unwrap_or_else(|| MediaLayersBitrate::default_sim());
+            let layers = pkt.layers.clone().unwrap_or_else(MediaLayersBitrate::default_sim);
             log::info!("[LocalTrack/PacketSelector] create H264SimSelector");
             Some(Box::new(video_h264_sim::Selector::new(bitrate, layers.clone(), limit)))
         }
         MediaMeta::Vp8 { sim: Some(_), .. } => {
-            let layers = pkt.layers.clone().unwrap_or_else(|| MediaLayersBitrate::default_sim());
+            let layers = pkt.layers.clone().unwrap_or_else(MediaLayersBitrate::default_sim);
             log::info!("[LocalTrack/PacketSelector] create Vp8SimSelector");
             Some(Box::new(video_vp8_sim::Selector::new(bitrate, layers.clone(), limit)))
         }
         MediaMeta::Vp9 { svc: Some(_), .. } => {
-            let layers = pkt.layers.clone().unwrap_or_else(|| MediaLayersBitrate::default_sim());
+            let layers = pkt.layers.clone().unwrap_or_else(MediaLayersBitrate::default_sim);
             log::info!("[LocalTrack/PacketSelector] create Vp9SvcSelector");
             Some(Box::new(video_vp9_svc::Selector::new(false, bitrate, layers.clone(), limit)))
         }
         MediaMeta::H264 { sim: None, .. } | MediaMeta::Vp8 { sim: None, .. } | MediaMeta::Vp9 { svc: None, .. } => {
             log::info!("[LocalTrack/PacketSelector] create VideoSingleSelector");
-            Some(Box::new(video_single::VideoSingleSelector::default()))
+            Some(Box::<video_single::VideoSingleSelector>::default())
         }
     }
 }

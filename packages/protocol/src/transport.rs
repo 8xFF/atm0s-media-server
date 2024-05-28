@@ -96,12 +96,9 @@ impl RpcError {
     }
 }
 
-impl Into<protobuf::shared::Error> for RpcError {
-    fn into(self) -> protobuf::shared::Error {
-        protobuf::shared::Error {
-            code: self.code,
-            message: self.message,
-        }
+impl From<RpcError> for protobuf::shared::Error {
+    fn from(val: RpcError) -> Self {
+        protobuf::shared::Error { code: val.code, message: val.message }
     }
 }
 

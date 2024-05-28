@@ -82,7 +82,11 @@ async fn main() {
                 #[cfg(feature = "media")]
                 server::ServerType::Media(args) => server::run_media_server(workers, http_port, node, args).await,
                 #[cfg(feature = "cert_utils")]
-                server::ServerType::Cert(args) => server::run_cert_utils(args).await,
+                server::ServerType::Cert(args) => {
+                    if let Err(e) = server::run_cert_utils(args).await {
+                        log::error!("create cert error {:?}", e);
+                    }
+                }
             }
         })
         .await;

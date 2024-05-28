@@ -63,7 +63,7 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
             cfg.node.zone,
             cfg.media,
         );
-        log::info!("creted worker");
+        log::info!("created worker");
         MediaRuntimeWorker { index, worker, queue }
     }
 

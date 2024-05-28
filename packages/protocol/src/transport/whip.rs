@@ -63,7 +63,7 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
 
     pub fn get_down_part(&self) -> Option<Conn::DownRes> {
         match self {
-            RpcReq::Connect(req) => None,
+            RpcReq::Connect(_req) => None,
             RpcReq::RemoteIce(req) => Some(req.conn_id.get_down_part()),
             RpcReq::Delete(req) => Some(req.conn_id.get_down_part()),
         }
@@ -104,14 +104,14 @@ impl TryFrom<protobuf::cluster_gateway::WhipConnectRequest> for WhipConnectReq {
     }
 }
 
-impl Into<protobuf::cluster_gateway::WhipConnectRequest> for WhipConnectReq {
-    fn into(self) -> protobuf::cluster_gateway::WhipConnectRequest {
+impl From<WhipConnectReq> for protobuf::cluster_gateway::WhipConnectRequest {
+    fn from(val: WhipConnectReq) -> Self {
         protobuf::cluster_gateway::WhipConnectRequest {
-            user_agent: self.user_agent,
-            ip: self.ip.to_string(),
-            sdp: self.sdp,
-            room: self.room.0,
-            peer: self.peer.0,
+            user_agent: val.user_agent,
+            ip: val.ip.to_string(),
+            sdp: val.sdp,
+            room: val.room.0,
+            peer: val.peer.0,
         }
     }
 }

@@ -108,8 +108,7 @@ where
                         })),
                     }
                     .encode_to_vec();
-                    self.queue
-                        .push_back(ServiceOutput::FeatureControl(data::Control::DataSendRule(DATA_PORT, rule, meta, data.into()).into()));
+                    self.queue.push_back(ServiceOutput::FeatureControl(data::Control::DataSendRule(DATA_PORT, rule, meta, data).into()));
                 }
             }
             ServiceSharedInput::Connection(_) => {}

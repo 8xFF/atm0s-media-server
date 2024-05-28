@@ -56,7 +56,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
         let res = rx.await.ok()?;
         //TODO process with ICE restart
         match res {
-            RpcRes::Whip(whip::RpcRes::RemoteIce(res)) => res.ok().map(|r| WhipRemoteIceResponse { conn }),
+            RpcRes::Whip(whip::RpcRes::RemoteIce(res)) => res.ok().map(|_r| WhipRemoteIceResponse { conn }),
             _ => None,
         }
     }
@@ -70,7 +70,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
         let res = rx.await.ok()?;
         //TODO process with ICE restart
         match res {
-            RpcRes::Whip(whip::RpcRes::Delete(res)) => res.ok().map(|r| WhipCloseResponse { conn }),
+            RpcRes::Whip(whip::RpcRes::Delete(res)) => res.ok().map(|_r| WhipCloseResponse { conn }),
             _ => None,
         }
     }
@@ -100,7 +100,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
         let res = rx.await.ok()?;
         //TODO process with ICE restart
         match res {
-            RpcRes::Whep(whep::RpcRes::RemoteIce(res)) => res.ok().map(|r| WhepRemoteIceResponse { conn }),
+            RpcRes::Whep(whep::RpcRes::RemoteIce(res)) => res.ok().map(|_r| WhepRemoteIceResponse { conn }),
             _ => None,
         }
     }
@@ -114,7 +114,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
         let res = rx.await.ok()?;
         //TODO process with ICE restart
         match res {
-            RpcRes::Whep(whep::RpcRes::Delete(res)) => res.ok().map(|r| WhepCloseResponse { conn }),
+            RpcRes::Whep(whep::RpcRes::Delete(res)) => res.ok().map(|_r| WhepCloseResponse { conn }),
             _ => None,
         }
     }

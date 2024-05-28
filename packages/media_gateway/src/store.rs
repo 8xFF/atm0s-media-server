@@ -86,11 +86,11 @@ impl GatewayStore {
 }
 
 fn node_usage(ping: &PingEvent, max_memory: u8, max_disk: u8) -> Option<u8> {
-    if ping.memory as u8 >= max_memory {
+    if ping.memory >= max_memory {
         return None;
     }
 
-    if ping.disk as u8 >= max_disk {
+    if ping.disk >= max_disk {
         return None;
     }
 
@@ -98,14 +98,14 @@ fn node_usage(ping: &PingEvent, max_memory: u8, max_disk: u8) -> Option<u8> {
 }
 
 fn webrtc_usage(ping: &PingEvent, max_memory: u8, max_disk: u8) -> Option<u8> {
-    if ping.memory as u8 >= max_memory {
+    if ping.memory >= max_memory {
         return None;
     }
 
-    if ping.disk as u8 >= max_disk {
+    if ping.disk >= max_disk {
         return None;
     }
 
     let webrtc = ping.webrtc.as_ref()?;
-    webrtc.active.then(|| (ping.cpu as u8).max(((webrtc.live * 100) / webrtc.max) as u8))
+    webrtc.active.then(|| ping.cpu.max(((webrtc.live * 100) / webrtc.max) as u8))
 }

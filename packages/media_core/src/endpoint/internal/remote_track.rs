@@ -158,7 +158,7 @@ impl EndpointRemoteTrack {
     }
 
     fn calc_limit_bitrate(&self) -> Option<(u64, u64)> {
-        let cluster_limit = self.meta.control.eq(&BitrateControlMode::DynamicConsumers).then(|| self.cluster_bitrate_limit).flatten();
+        let cluster_limit = self.meta.control.eq(&BitrateControlMode::DynamicConsumers).then_some(self.cluster_bitrate_limit).flatten();
         match (self.allocate_bitrate, cluster_limit) {
             (Some(b1), Some((min, max))) => Some((min.min(b1), max.min(b1))),
             (Some(b1), None) => Some((b1, b1)),

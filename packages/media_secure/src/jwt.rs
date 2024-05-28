@@ -2,8 +2,6 @@ use crate::{MediaEdgeSecure, MediaGatewaySecure};
 use jwt_simple::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 
-const HEADER_CONN: &'static str = "C";
-
 pub struct MediaEdgeSecureJwt {
     key: HS256Key,
 }
@@ -16,8 +14,10 @@ impl From<&[u8]> for MediaEdgeSecureJwt {
 
 impl MediaEdgeSecure for MediaEdgeSecureJwt {
     fn decode_obj<O: Serialize + DeserializeOwned>(&self, _type: &'static str, token: &str) -> Option<O> {
-        let mut options = VerificationOptions::default();
-        options.allowed_issuers = Some(HashSet::from_strings(&[_type]));
+        let options = VerificationOptions {
+            allowed_issuers: Some(HashSet::from_strings(&[_type])),
+            ..Default::default()
+        };
         let claims = self.key.verify_token::<O>(token, Some(options)).ok()?;
         Some(claims.custom)
     }
@@ -28,8 +28,10 @@ impl MediaEdgeSecure for MediaEdgeSecureJwt {
     }
 
     fn decode_conn_id<C: Serialize + DeserializeOwned>(&self, token: &str) -> Option<C> {
-        let mut options = VerificationOptions::default();
-        options.allowed_issuers = Some(HashSet::from_strings(&["conn"]));
+        let options = VerificationOptions {
+            allowed_issuers: Some(HashSet::from_strings(&["conn"])),
+            ..Default::default()
+        };
         let claims = self.key.verify_token::<C>(token, Some(options)).ok()?;
         Some(claims.custom)
     }

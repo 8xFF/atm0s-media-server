@@ -198,7 +198,7 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
             transport: TaskSwitcherBranch::new(transport, TaskType::Transport),
             internal: TaskSwitcherBranch::new(EndpointInternal::new(cfg), TaskType::Internal),
             switcher: TaskSwitcher::new(2),
-            _tmp: PhantomData::default(),
+            _tmp: PhantomData,
         }
     }
 }

@@ -55,4 +55,8 @@ impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> Small2dMap<T1, T2> {
     pub fn len(&self) -> usize {
         self.data.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
 }

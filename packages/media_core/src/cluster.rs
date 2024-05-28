@@ -133,7 +133,7 @@ impl<Owner: Debug + Hash + Copy + Clone + Debug + Eq> MediaCluster<Owner> {
         }
     }
 
-    pub fn shutdown<'a>(&mut self, now: Instant) {
+    pub fn shutdown(&mut self, now: Instant) {
         self.rooms.on_shutdown(now);
     }
 }

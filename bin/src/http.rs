@@ -36,6 +36,7 @@ impl<Req, Res> Rpc<Req, Res> {
         (Self { req, answer_tx }, answer_rx)
     }
 
+    #[allow(unused)]
     pub fn res(self, res: Res) {
         let _ = self.answer_tx.send(res);
     }

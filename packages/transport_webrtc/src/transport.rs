@@ -292,7 +292,7 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                             self.rtc.add_remote_candidate(candidate);
                         }
                     }
-                    self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))).into());
+                    self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))));
                 }
                 ExtIn::RestartIce(req_id, variant, _ip, _useragent, req) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
