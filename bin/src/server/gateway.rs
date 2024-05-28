@@ -13,6 +13,7 @@ use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 
 use crate::{
     http::run_gateway_http_server,
+    node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, make_quinn_server, VirtualNetwork},
     NodeConfig,
 };
@@ -52,6 +53,18 @@ pub struct Args {
     /// GeoIp database
     #[arg(env, long, default_value = "./maxminddb-data/GeoLite2-City.mmdb")]
     geo_db: String,
+
+    /// Max cpu usage (in percent) of media-node or gateway-node we allow to route to
+    #[arg(env, long, default_value_t = 60)]
+    max_cpu: u8,
+
+    /// Max memory usage (in percent) of media-node or gateway-node we allow to route to
+    #[arg(env, long, default_value_t = 80)]
+    max_memory: u8,
+
+    /// Max disk usage (in percent) of media-node or gateway-node we allow to route to
+    #[arg(env, long, default_value_t = 90)]
+    max_disk: u8,
 }
 
 pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -79,7 +92,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
     builder.set_manual_discovery(vec!["gateway".to_string(), generate_gateway_zone_tag(node.zone)], vec!["gateway".to_string()]);
-    builder.add_service(Arc::new(GatewayStoreServiceBuilder::new(node.zone, args.lat, args.lon)));
+    builder.add_service(Arc::new(GatewayStoreServiceBuilder::new(node.zone, args.lat, args.lon, args.max_cpu, args.max_memory, args.max_disk)));
 
     for seed in node.seeds {
         builder.add_seed(seed);
@@ -120,9 +133,18 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     tokio::task::spawn_local(async move { while vnet.recv().await.is_some() {} });
 
+    // Collect node metrics for update to gateway agent service, this information is used inside gateway
+    // for forwarding from other gateway
+    let mut node_metrics_collector = NodeMetricsCollector::default();
+
     loop {
         if controller.process().is_none() {
             break;
+        }
+
+        // Pop from metric collector and pass to Gateway store service
+        if let Some(metrics) = node_metrics_collector.pop_measure() {
+            controller.service_control(STORE_SERVICE_ID.into(), (), media_server_gateway::store_service::Control::NodeStats(metrics).into());
         }
         while let Ok(control) = vnet_rx.try_recv() {
             controller.feature_control((), control.into());

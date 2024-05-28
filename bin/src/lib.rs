@@ -4,6 +4,8 @@ use atm0s_sdn::{NodeAddr, NodeId};
 
 mod errors;
 mod http;
+#[cfg(feature = "node_metrics")]
+mod node_metrics;
 #[cfg(feature = "quinn_vnet")]
 mod quinn;
 pub mod server;

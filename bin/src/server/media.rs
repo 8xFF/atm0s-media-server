@@ -7,6 +7,7 @@ use std::{
 
 use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut};
 use clap::Parser;
+use media_server_gateway::{ServiceKind, AGENT_SERVICE_ID};
 use media_server_protocol::{gateway::GATEWAY_RPC_PORT, protobuf::cluster_gateway::MediaEdgeServiceServer, rpc::quinn::QuinnServer};
 use media_server_runner::MediaConfig;
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
@@ -16,6 +17,7 @@ use sans_io_runtime::{backend::PollingBackend, Controller};
 
 use crate::{
     http::run_media_http_server,
+    node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_server, VirtualNetwork},
     server::media::runtime_worker::MediaRuntimeWorker,
     NodeConfig,
@@ -47,6 +49,10 @@ pub struct Args {
     /// Custom binding address for WebRTC UDP
     #[arg(env, long)]
     custom_ips: Vec<IpAddr>,
+
+    /// Max ccu per core
+    #[arg(env, long, default_value_t = 200)]
+    ccu_per_core: u32,
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -94,6 +100,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                 webrtc_addrs: webrtc_addrs.clone(),
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
+                max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core)]),
             },
         };
         controller.add_worker::<_, _, MediaRuntimeWorker<_>, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);
@@ -125,9 +132,25 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
 
     tokio::task::spawn_local(async move { while vnet.recv().await.is_some() {} });
 
+    // Collect node metrics for update to gateway agent service, this information is used inside gateway
+    // for routing to best media-node
+    let mut node_metrics_collector = NodeMetricsCollector::default();
+
     loop {
         if controller.process().is_none() {
             break;
+        }
+
+        // Pop from metric collector and pass to Gateway agent service
+        if let Some(metrics) = node_metrics_collector.pop_measure() {
+            controller.send_to(
+                0, //because sdn controller allway is run inside worker 0
+                ExtIn::Sdn(SdnExtIn::ServicesControl(
+                    AGENT_SERVICE_ID.into(),
+                    0.into(),
+                    media_server_gateway::agent_service::Control::NodeStats(metrics).into(),
+                )),
+            );
         }
         while let Ok(control) = vnet_rx.try_recv() {
             controller.send_to_best(ExtIn::Sdn(SdnExtIn::FeaturesControl(0.into(), control.into())));

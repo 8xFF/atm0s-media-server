@@ -16,11 +16,12 @@ use prost::Message as _;
 
 use crate::{
     store::{GatewayStore, PingEvent},
-    ServiceKind, DATA_PORT, STORE_SERVICE_ID, STORE_SERVICE_NAME,
+    NodeMetrics, ServiceKind, DATA_PORT, STORE_SERVICE_ID, STORE_SERVICE_NAME,
 };
 
 #[derive(Debug, Clone)]
 pub enum Control {
+    NodeStats(NodeMetrics),
     FindNodeReq(u64, ServiceKind, Option<Location>),
 }
 
@@ -41,9 +42,9 @@ where
     SC: From<Control> + TryInto<Control>,
     SE: From<Event> + TryInto<Event>,
 {
-    pub fn new(zone: u32, lat: f32, lon: f32) -> Self {
+    pub fn new(zone: u32, lat: f32, lon: f32, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
         Self {
-            store: GatewayStore::new(zone, Location { lat, lon }),
+            store: GatewayStore::new(zone, Location { lat, lon }, max_cpu, max_memory, max_disk),
             queue: VecDeque::from([ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())]),
             seq: 0,
             _tmp: std::marker::PhantomData,
@@ -127,6 +128,10 @@ where
                             let out = self.store.best_for(kind, location);
                             self.queue.push_back(ServiceOutput::Event(actor, Event::FindNodeRes(req_id, out).into()));
                         }
+                        Control::NodeStats(metrics) => {
+                            log::debug!("[GatewayStoreService] node metrics {:?}", metrics);
+                            self.store.on_node_metrics(now, metrics);
+                        }
                     }
                 }
             }
@@ -175,15 +180,21 @@ pub struct GatewayStoreServiceBuilder<UserData, SC, SE, TC, TW> {
     zone: u32,
     lat: f32,
     lon: f32,
+    max_memory: u8,
+    max_disk: u8,
+    max_cpu: u8,
 }
 
 impl<UserData, SC, SE, TC, TW> GatewayStoreServiceBuilder<UserData, SC, SE, TC, TW> {
-    pub fn new(zone: u32, lat: f32, lon: f32) -> Self {
+    pub fn new(zone: u32, lat: f32, lon: f32, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
         Self {
             zone,
             lat,
             lon,
             _tmp: std::marker::PhantomData,
+            max_cpu,
+            max_memory,
+            max_disk,
         }
     }
 }
@@ -209,7 +220,7 @@ where
     }
 
     fn create(&self) -> Box<dyn Service<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {
-        Box::new(GatewayStoreService::new(self.zone, self.lat, self.lon))
+        Box::new(GatewayStoreService::new(self.zone, self.lat, self.lon, self.max_cpu, self.max_memory, self.max_disk))
     }
 
     fn create_worker(&self) -> Box<dyn ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {
