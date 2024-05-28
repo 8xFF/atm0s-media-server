@@ -38,7 +38,7 @@ impl Selector {
             self.target = target;
 
             if let Some(target) = self.target {
-                if self.current == None || target != self.current.expect("Should have") {
+                if self.current.is_none() || target != self.current.expect("Should have") {
                     log::info!("[H264SimSelector] switch to new spatial layer => request key frame");
                     self.queue.push_back(Action::RequestKeyFrame);
                 }

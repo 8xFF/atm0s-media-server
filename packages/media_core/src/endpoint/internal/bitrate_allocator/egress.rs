@@ -71,7 +71,7 @@ impl EgressBitrateAllocator {
         let use_bitrate = self.egress_bitrate.min(self.max_egress_bitrate);
         let mut sum = TrackPriority(0);
         for (_track, priority) in self.tracks.iter() {
-            sum = sum + *priority;
+            sum += *priority;
         }
 
         if *(sum.as_ref()) != 0 {
@@ -82,7 +82,7 @@ impl EgressBitrateAllocator {
             }
         }
 
-        if self.tracks.len() > 0 {
+        if !self.tracks.is_empty() {
             //TODO fix issue when config max_egress_bitrate is lower than stream bitrate, this will make BWE pacer
             //slow down sending packet, then latency of viewer will be increase
             let current = use_bitrate;

@@ -12,7 +12,7 @@ struct NodeSource {
     last_updated: u64,
 }
 
-/// This is for other cluser
+/// This is for other cluster
 struct ZoneSource {
     zone: u32,
     usage: u8,
@@ -70,6 +70,7 @@ impl ServiceStore {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn on_gateway_ping(&mut self, now: u64, zone: u32, gateway: u32, gateway_usage: u8, location: Location, usage: u8, stats: ServiceStats) {
         if let Some(z) = self.zone_sources.iter_mut().find(|s| s.zone == zone) {
             z.usage = usage;
@@ -116,8 +117,8 @@ impl ServiceStore {
     }
 
     pub fn remove_gateway(&mut self, zone: u32, gateway: u32) {
-        if let Some((index, z)) = self.zone_sources.iter_mut().enumerate().find(|(i, z)| z.zone == zone) {
-            if let Some((g_index, g)) = z.gateways.iter_mut().enumerate().find(|(i, g)| g.node == gateway) {
+        if let Some((index, z)) = self.zone_sources.iter_mut().enumerate().find(|(_i, z)| z.zone == zone) {
+            if let Some((g_index, _g)) = z.gateways.iter_mut().enumerate().find(|(_i, g)| g.node == gateway) {
                 let g = z.gateways.remove(g_index);
                 log::info!(
                     "[ServiceStore {:?}] zone {zone} at {:?} remove gateway {} gateway usage {}, stats {:?}",
@@ -185,7 +186,7 @@ impl Ord for NodeSource {
 
 impl PartialOrd for NodeSource {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.usage.partial_cmp(&other.usage)
+        Some(self.usage.cmp(&other.usage))
     }
 }
 
@@ -204,7 +205,7 @@ impl Ord for ZoneSource {
 
 impl PartialOrd for ZoneSource {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.usage.partial_cmp(&other.usage)
+        Some(self.usage.cmp(&other.usage))
     }
 }
 

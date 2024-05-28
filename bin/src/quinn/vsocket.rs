@@ -22,7 +22,7 @@ pub struct Poller {}
 
 impl UdpPoller for Poller {
     fn poll_writable(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<std::io::Result<()>> {
-        //TODO implement this for better performace
+        //TODO implement this for better performance
         Poll::Ready(Ok(()))
     }
 }

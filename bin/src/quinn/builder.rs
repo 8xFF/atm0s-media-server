@@ -19,7 +19,7 @@ pub fn make_quinn_server(socket: VirtualUdpSocket, priv_key: PrivatePkcs8KeyDer<
 pub fn make_quinn_client(socket: VirtualUdpSocket, server_certs: &[CertificateDer]) -> Result<Endpoint, Box<dyn Error>> {
     let runtime = Arc::new(TokioRuntime);
     let mut config = EndpointConfig::default();
-    //Note that client mtu size shoud be smaller than server's
+    //Note that client mtu size should be smaller than server's
     config.max_udp_payload_size(1400).expect("Should config quinn client max_size to 1400");
     let mut endpoint = Endpoint::new_with_abstract_socket(config, None, Arc::new(socket), runtime)?;
     endpoint.set_default_client_config(configure_client(server_certs)?);
@@ -70,11 +70,11 @@ impl SkipServerVerification {
 }
 
 impl ServerCertVerifier for SkipServerVerification {
-    fn verify_tls12_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &rustls::DigitallySignedStruct) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+    fn verify_tls12_signature(&self, _message: &[u8], _cert: &CertificateDer<'_>, _dss: &rustls::DigitallySignedStruct) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
-    fn verify_tls13_signature(&self, message: &[u8], cert: &CertificateDer<'_>, dss: &rustls::DigitallySignedStruct) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+    fn verify_tls13_signature(&self, _message: &[u8], _cert: &CertificateDer<'_>, _dss: &rustls::DigitallySignedStruct) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
@@ -84,11 +84,11 @@ impl ServerCertVerifier for SkipServerVerification {
 
     fn verify_server_cert(
         &self,
-        end_entity: &CertificateDer<'_>,
-        intermediates: &[CertificateDer<'_>],
-        server_name: &rustls::pki_types::ServerName<'_>,
-        ocsp_response: &[u8],
-        now: rustls::pki_types::UnixTime,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
     ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
         Ok(rustls::client::danger::ServerCertVerified::assertion())
     }

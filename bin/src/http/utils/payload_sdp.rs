@@ -35,10 +35,7 @@ impl<T: Send> Payload for ApplicationSdp<T> {
     const CONTENT_TYPE: &'static str = "application/sdp";
 
     fn check_content_type(content_type: &str) -> bool {
-        match content_type {
-            "application/sdp" => true,
-            _ => false,
-        }
+        content_type.eq(Self::CONTENT_TYPE)
     }
 
     fn schema_ref() -> MetaSchemaRef {
@@ -49,8 +46,8 @@ impl<T: Send> Payload for ApplicationSdp<T> {
 impl ParsePayload for ApplicationSdp<String> {
     const IS_REQUIRED: bool = true;
 
-    fn from_request(request: &Request, body: &mut RequestBody) -> impl std::future::Future<Output = Result<Self>> + Send {
-        async move { Ok(Self(String::from_request(request, body).await?)) }
+    async fn from_request(request: &Request, body: &mut RequestBody) -> Result<Self> {
+        Ok(Self(String::from_request(request, body).await?))
     }
 }
 
@@ -100,10 +97,7 @@ impl<T: Send> Payload for ApplicationSdpPatch<T> {
     const CONTENT_TYPE: &'static str = "application/trickle-ice-sdpfrag";
 
     fn check_content_type(content_type: &str) -> bool {
-        match content_type {
-            "application/trickle-ice-sdpfrag" => true,
-            _ => false,
-        }
+        content_type.eq(Self::CONTENT_TYPE)
     }
 
     fn schema_ref() -> MetaSchemaRef {
@@ -114,8 +108,8 @@ impl<T: Send> Payload for ApplicationSdpPatch<T> {
 impl ParsePayload for ApplicationSdpPatch<String> {
     const IS_REQUIRED: bool = true;
 
-    fn from_request(request: &Request, body: &mut RequestBody) -> impl std::future::Future<Output = Result<Self>> + Send {
-        async move { Ok(Self(String::from_request(request, body).await?)) }
+    async fn from_request(request: &Request, body: &mut RequestBody) -> Result<Self> {
+        Ok(Self(String::from_request(request, body).await?))
     }
 }
 

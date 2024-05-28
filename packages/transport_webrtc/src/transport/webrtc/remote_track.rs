@@ -39,7 +39,7 @@ impl RemoteTrack {
     }
 
     pub fn name(&self) -> &str {
-        &self.name.as_ref()
+        self.name.as_ref()
     }
 
     pub fn priority(&self) -> TrackPriority {
@@ -80,7 +80,7 @@ impl RemoteTrack {
             kind: self.kind(),
             scaling: self.scaling,
             control: self.config.bitrate().into(),
-            metadata: self.source.as_ref().map(|s| s.metadata.clone()).flatten(),
+            metadata: self.source.as_ref().and_then(|s| s.metadata.clone()),
         }
     }
 

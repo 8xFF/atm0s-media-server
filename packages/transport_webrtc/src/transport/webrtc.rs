@@ -31,7 +31,7 @@ use prost::Message;
 use sans_io_runtime::{collections::DynamicDeque, return_if_err, return_if_none};
 use str0m::{
     bwe::BweKind,
-    channel::{ChannelData, ChannelId},
+    channel::ChannelId,
     format::CodecConfig,
     media::{Direction, KeyframeRequestKind, MediaAdded, Mid},
     Event as Str0mEvent, IceConnectionState,
@@ -435,15 +435,14 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
         match state {
             IceConnectionState::New => {}
             IceConnectionState::Checking => {}
-            IceConnectionState::Connected | IceConnectionState::Completed => match &self.state {
-                State::Reconnecting { at } => {
+            IceConnectionState::Connected | IceConnectionState::Completed => {
+                if let State::Reconnecting { at } = &self.state {
                     log::info!("[TransportWebrtcSdk] switched to reconnected after {:?}", now - *at);
                     self.state = State::Connected;
                     self.queue
                         .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
                 }
-                _ => {}
-            },
+            }
             IceConnectionState::Disconnected => {
                 if matches!(self.state, State::Connected) {
                     self.state = State::Reconnecting { at: now };
@@ -512,10 +511,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     Some(receiver_req) => self.on_recever_req(req.req_id, &receiver.name, receiver_req),
                     None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
                 },
-                Some(protobuf::conn::request::Request::Room(room)) => {
+                Some(protobuf::conn::request::Request::Room(_room)) => {
                     todo!()
                 }
-                Some(protobuf::conn::request::Request::Features(features)) => {
+                Some(protobuf::conn::request::Request::Features(_features)) => {
                     todo!()
                 }
                 None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
@@ -576,7 +575,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
     }
 
     fn on_sender_req(&mut self, req_id: u32, name: &str, req: protobuf::conn::request::sender::Request) {
-        let track = if let Some(track) = self.remote_track_by_name(&name) {
+        let track = if let Some(track) = self.remote_track_by_name(name) {
             track
         } else {
             log::warn!("[TransportWebrtcSdk] request from unknown sender {}", name);
@@ -628,7 +627,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
     }
 
     fn on_recever_req(&mut self, req_id: u32, name: &str, req: protobuf::conn::request::receiver::Request) {
-        let track = if let Some(track) = self.local_track_by_name(&name) {
+        let track = if let Some(track) = self.local_track_by_name(name) {
             track
         } else {
             log::warn!("[TransportWebrtcSdk] request from unknown receiver {}", name);

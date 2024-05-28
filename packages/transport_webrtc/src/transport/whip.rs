@@ -207,15 +207,14 @@ impl TransportWebrtcWhip {
         match state {
             IceConnectionState::New => {}
             IceConnectionState::Checking => {}
-            IceConnectionState::Connected | IceConnectionState::Completed => match &self.state {
-                State::Reconnecting { at } => {
+            IceConnectionState::Connected | IceConnectionState::Completed => {
+                if let State::Reconnecting { at } = &self.state {
                     log::info!("[TransportWebrtcWhip] switched to reconnected after {:?}", now - *at);
                     self.state = State::Connected;
                     self.queue
                         .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
                 }
-                _ => {}
-            },
+            }
             IceConnectionState::Disconnected => {
                 if matches!(self.state, State::Connected) {
                     self.state = State::Reconnecting { at: now };

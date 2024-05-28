@@ -37,7 +37,7 @@ impl<const TS_LIMIT: u64, const TS_DELTA_REINIT: u64> TsRewrite<TS_LIMIT, TS_DEL
             State::FirstInit => {
                 let now_ts = now_ms as i64 * (self.data_rate as i64 / 1000);
                 self.last_rtp_ts = rtp_ts;
-                self.delta_ts = now_ts as i64 - rtp_ts as i64;
+                self.delta_ts = now_ts - rtp_ts as i64;
                 self.state = State::Rewriting;
             }
             State::Reinit => {

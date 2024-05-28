@@ -25,7 +25,7 @@ impl LocalTrack {
     }
 
     pub fn name(&self) -> &str {
-        &self.name.as_ref()
+        self.name.as_ref()
     }
 
     pub fn kind(&self) -> MediaKind {

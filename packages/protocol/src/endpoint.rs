@@ -19,7 +19,7 @@ impl FromStr for ClusterConnId {
     type Err = &'static str;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts = s.split('-').collect::<Vec<_>>();
-        let node = parts.get(0).ok_or("MISSING NODE_ID")?.parse::<u32>().map_err(|_| "PARSE ERROR NODE_ID")?;
+        let node = parts.first().ok_or("MISSING NODE_ID")?.parse::<u32>().map_err(|_| "PARSE ERROR NODE_ID")?;
         let node_session = parts.get(1).ok_or("MISSING NODE_SESSION")?.parse::<u64>().map_err(|_| "PARSE ERROR NODE_SESSION")?;
         let server_conn = parts.get(2).ok_or("MISSING SERVER_CONN")?.parse::<ServerConnId>().map_err(|_| "PARSE ERROR SERVER_CONN")?;
         Ok(Self { node, node_session, server_conn })
@@ -61,7 +61,7 @@ impl FromStr for ServerConnId {
     type Err = &'static str;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts = s.split(',').collect::<Vec<_>>();
-        let worker = parts.get(0).ok_or("MISSING WORKER")?.parse::<u16>().map_err(|_| "PARSE ERROR WORKER")?;
+        let worker = parts.first().ok_or("MISSING WORKER")?.parse::<u16>().map_err(|_| "PARSE ERROR WORKER")?;
         let index = parts.get(1).ok_or("MISSING INDEX")?.parse::<usize>().map_err(|_| "PARSE ERROR INDEX")?;
         Ok(Self { worker, index })
     }
@@ -110,9 +110,7 @@ impl ConnLayer for usize {
         ServerConnId { index: self, worker: param }
     }
 
-    fn get_down_part(&self) -> Self::DownRes {
-        ()
-    }
+    fn get_down_part(&self) -> Self::DownRes {}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -123,7 +123,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         media_rpc_server.run().await;
     });
 
-    tokio::task::spawn_local(async move { while let Some(_) = vnet.recv().await {} });
+    tokio::task::spawn_local(async move { while vnet.recv().await.is_some() {} });
 
     loop {
         if controller.process().is_none() {
@@ -160,7 +160,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                     log::info!("on req {req_id} res from worker {worker}");
                     let res = res.up(worker).up((node_id, node_session));
                     if let Some(tx) = reqs.remove(&req_id) {
-                        if let Err(_) = tx.send(res) {
+                        if tx.send(res).is_err() {
                             log::error!("Send rpc response error for req {req_id}");
                         }
                     }

@@ -85,6 +85,7 @@ enum MediaClusterOwner {
     Webrtc(WebrtcOwner),
 }
 
+#[allow(clippy::type_complexity)]
 pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
     sdn_slot: usize,
     sdn_worker: TaskSwitcherBranch<SdnWorker<UserData, SC, SE, TC, TW>, SdnWorkerOutput<UserData, SC, SE, TC, TW>>,
@@ -97,6 +98,7 @@ pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
 }
 
 impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(node_id: u32, session: u64, secret: &str, controller: bool, sdn_udp: u16, sdn_custom_addrs: Vec<SocketAddr>, sdn_zone: u32, media: MediaConfig<ES>) -> Self {
         let secure = media.secure.clone(); //TODO why need this?
         let sdn_udp_addr = SocketAddr::from(([0, 0, 0, 0], sdn_udp));
@@ -105,16 +107,16 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
 
         let visualization = Arc::new(visualization::VisualizationServiceBuilder::new(false));
         let discovery = Arc::new(manual_discovery::ManualDiscoveryServiceBuilder::new(node_addr, vec![], vec![generate_gateway_zone_tag(sdn_zone)]));
-        let gateway = Arc::new(GatewayAgentServiceBuilder::new());
+        let gateway = Arc::new(GatewayAgentServiceBuilder::default());
 
         let sdn_config = SdnConfig {
             node_id,
             controller: if controller {
                 Some(ControllerPlaneCfg {
                     session,
-                    authorization: Arc::new(StaticKeyAuthorization::new(&secret)),
+                    authorization: Arc::new(StaticKeyAuthorization::new(secret)),
                     handshake_builder: Arc::new(HandshakeBuilderXDA),
-                    random: Box::new(OsRng::default()),
+                    random: Box::new(OsRng),
                     services: vec![visualization.clone(), discovery.clone(), gateway.clone()],
                 })
             } else {
@@ -353,7 +355,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     Ok((ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
                         req_id,
                         RpcRes::Webrtc(webrtc::RpcRes::Connect(Ok((
-                            conn_id.into(),
+                            conn_id,
                             ConnectResponse {
                                 conn_id: "".to_string(),
                                 sdp,

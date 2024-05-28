@@ -58,7 +58,7 @@ impl Selector {
             self.target = target;
 
             if let Some(target) = &self.target {
-                if self.current == None || target.spatial != self.current.as_ref().expect("Should have").spatial {
+                if self.current.is_none() || target.spatial != self.current.as_ref().expect("Should have").spatial {
                     log::info!("[Vp8SimSelector] switch to new spatial layer => request key frame");
                     self.queue.push_back(Action::RequestKeyFrame);
                 }

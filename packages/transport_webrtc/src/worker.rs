@@ -36,6 +36,7 @@ pub enum GroupOutput {
     Continue,
 }
 
+#[allow(clippy::type_complexity)]
 pub struct MediaWorkerWebrtc<ES: 'static + MediaEdgeSecure> {
     ice_lite: bool,
     shared_port: SharedUdpPort<usize>,

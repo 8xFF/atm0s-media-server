@@ -13,12 +13,13 @@ pub fn parse_rtp(packet: &[u8], rid: Option<u8>) -> Option<MediaMeta> {
     let mut b = reader.get_u8();
     payload_index += 1;
 
-    let mut vp8 = Vp8Header::default();
-
-    vp8.x = (b & 0x80) >> 7;
-    vp8.n = (b & 0x20) >> 5;
-    vp8.s = (b & 0x10) >> 4;
-    vp8.pid = b & 0x07;
+    let mut vp8 = Vp8Header {
+        x: (b & 0x80) >> 7,
+        n: (b & 0x20) >> 5,
+        s: (b & 0x10) >> 4,
+        pid: b & 0x07,
+        ..Default::default()
+    };
 
     if vp8.x == 1 {
         b = reader.get_u8();
@@ -155,6 +156,7 @@ struct Vp8Header {
     /// extended controlbits present
     pub x: u8,
     /// when set to 1 this frame can be discarded
+    #[allow(unused)]
     pub n: u8,
     /// start of VP8 partition
     pub s: u8,

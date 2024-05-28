@@ -7,9 +7,11 @@ use tokio::sync::{
     oneshot,
 };
 
+type QueryRequest = (ServiceKind, Option<(f32, f32)>, oneshot::Sender<Option<u32>>);
+
 #[derive(Clone)]
 pub struct GatewayDestSelector {
-    tx: Sender<(ServiceKind, Option<(f32, f32)>, oneshot::Sender<Option<u32>>)>,
+    tx: Sender<QueryRequest>,
 }
 
 impl GatewayDestSelector {
@@ -21,7 +23,7 @@ impl GatewayDestSelector {
 }
 
 pub struct GatewayDestRequester {
-    rx: Receiver<(ServiceKind, Option<(f32, f32)>, oneshot::Sender<Option<u32>>)>,
+    rx: Receiver<QueryRequest>,
     req_seed: u64,
     reqs: HashMap<u64, oneshot::Sender<Option<u32>>>,
 }
@@ -31,7 +33,7 @@ impl GatewayDestRequester {
         match event {
             media_server_gateway::store_service::Event::FindNodeRes(req_id, res) => {
                 if let Some(tx) = self.reqs.remove(&req_id) {
-                    if let Err(_) = tx.send(res) {
+                    if tx.send(res).is_err() {
                         log::error!("[GatewayDestRequester] answer for req_id {req_id} error");
                     }
                 }

@@ -144,18 +144,14 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomMetadata<Owner> {
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(peer_map, MapControl::Del(track_key))));
         }
 
-        if self.peers_map_subscribers.remove(&owner).is_some() {
-            if self.peers_map_subscribers.is_empty() {
-                log::info!("[ClusterRoom {}] last peer unsub peers map => unsubscribe", self.room);
-                self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.peers_map, MapControl::Unsub)));
-            }
+        if self.peers_map_subscribers.remove(&owner).is_some() && self.peers_map_subscribers.is_empty() {
+            log::info!("[ClusterRoom {}] last peer unsub peers map => unsubscribe", self.room);
+            self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.peers_map, MapControl::Unsub)));
         }
 
-        if self.tracks_map_subscribers.remove(&owner).is_some() {
-            if self.tracks_map_subscribers.is_empty() {
-                log::info!("[ClusterRoom {}] last peer unsub tracks map => unsubscribe", self.room);
-                self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Unsub)));
-            }
+        if self.tracks_map_subscribers.remove(&owner).is_some() && self.tracks_map_subscribers.is_empty() {
+            log::info!("[ClusterRoom {}] last peer unsub tracks map => unsubscribe", self.room);
+            self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Unsub)));
         }
 
         // check if this peer manual subscribe to some private peer map => need send Unsub

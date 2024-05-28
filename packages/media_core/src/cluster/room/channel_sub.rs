@@ -102,7 +102,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
             owner
         );
         self.subscribers.insert((owner, track), (channel_id, target_peer, target_track));
-        let channel_container = self.channels.entry(channel_id).or_insert(Default::default());
+        let channel_container = self.channels.entry(channel_id).or_default();
         channel_container.owners.push((owner, track));
         if channel_container.owners.len() == 1 {
             log::info!("[ClusterRoom {}/Subscribers] first subscriber => Sub channel {channel_id}", self.room);
@@ -136,7 +136,7 @@ impl<Owner: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Owner> {
             if let Some(sum_fb) = &mut sum_fb {
                 *sum_fb = *sum_fb + *fb;
             } else {
-                sum_fb = Some(fb.clone());
+                sum_fb = Some(*fb);
             }
         }
         log::debug!("[ClusterRoom {}/Subscribers] channel {channel_id} setting desired bitrate {:?}", self.room, sum_fb);

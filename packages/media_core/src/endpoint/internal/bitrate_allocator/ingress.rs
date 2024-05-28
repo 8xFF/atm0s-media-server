@@ -53,7 +53,7 @@ impl IngressBitrateAllocator {
         self.changed = false;
         let mut sum = TrackPriority(0);
         for (_track, priority) in self.tracks.iter() {
-            sum = sum + *priority;
+            sum += *priority;
         }
 
         if *(sum.as_ref()) != 0 {

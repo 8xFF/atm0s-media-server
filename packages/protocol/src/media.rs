@@ -81,7 +81,7 @@ impl MediaLayerBitrate {
             return 2;
         }
 
-        return 3;
+        3
     }
 }
 
@@ -120,7 +120,7 @@ impl MediaLayersBitrate {
             return 2;
         }
 
-        return 3;
+        3
     }
 
     pub fn number_temporals(&self) -> u8 {
