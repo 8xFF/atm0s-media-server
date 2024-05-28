@@ -214,3 +214,81 @@ fn distance(node1: &Location, node2: &Location) -> f32 {
     //TODO make it more accuracy
     ((node1.lat - node2.lat).powi(2) + (node1.lon - node2.lon).powi(2)).sqrt()
 }
+
+#[cfg(test)]
+mod tests {
+    use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, ServiceStats};
+
+    use crate::ServiceKind;
+
+    use super::ServiceStore;
+
+    #[test]
+    fn empty_store() {
+        let store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        assert_eq!(store.best_for(None), None);
+        assert_eq!(store.best_for(Some(Location { lat: 1.0, lon: 1.0 })), None);
+    }
+
+    #[test]
+    fn local_store() {
+        let mut store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+
+        store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_node_ping(0, 2, 50, ServiceStats { live: 60, max: 1000, active: true });
+
+        //should got lowest usage
+        assert_eq!(store.best_for(None), Some(2));
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(2));
+
+        //after remove should fallback to remain
+        store.remove_node(2);
+
+        assert_eq!(store.best_for(None), Some(1));
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(1));
+    }
+
+    #[test]
+    fn remote_zones_store() {
+        let mut store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+
+        store.on_gateway_ping(0, 256, 256, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, 256, 257, 50, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+
+        //should got lowest usage gateway node
+        assert_eq!(store.best_for(None), Some(257));
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
+
+        //should fallback to remain gateway
+        store.remove_gateway(256, 257);
+
+        assert_eq!(store.best_for(None), Some(256));
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(256));
+    }
+
+    #[test]
+    fn local_and_remote_zones() {
+        let mut store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+
+        store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, 256, 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+
+        //should got local zone if don't provide location
+        assert_eq!(store.best_for(None), Some(1));
+
+        //should got closest zone gaetway
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
+
+        //after remove local should fallback to other zone
+        store.remove_node(1);
+
+        assert_eq!(store.best_for(None), Some(257));
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
+
+        //fater remove other zone should return None
+        store.remove_gateway(256, 257);
+
+        assert_eq!(store.best_for(None), None);
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), None);
+    }
+}
