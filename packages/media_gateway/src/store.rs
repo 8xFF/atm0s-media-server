@@ -199,6 +199,18 @@ mod tests {
             },
         );
 
+        store.on_ping(
+            0,
+            3,
+            PingEvent {
+                cpu: 60,
+                memory: 80,
+                disk: 20,
+                origin: Origin::Media(MediaOrigin {}),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            },
+        );
+
         assert_eq!(store.best_for(ServiceKind::Webrtc, None), None);
     }
 
