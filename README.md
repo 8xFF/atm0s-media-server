@@ -63,7 +63,7 @@ We are actively refactoring entire media server and network stack with [sans-io-
 | MoQ                 | Media-over-Quic                                                                   | ❌     |
 | Monitoring          | Dashboard for monitoring                                                          | ❌     |
 | Recording           | Record stream                                                                     | ❌     |
-| Gateway             | External gateway [RFC-0003](https://github.com/8xFF/rfcs/pull/3)                  | ❌     |
+| Gateway             | External gateway [RFC-0003](https://github.com/8xFF/rfcs/pull/3)                  | 🚧     |
 | Connector           | External event handling                                                           | ❌     |
 
 Status:
