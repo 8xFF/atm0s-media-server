@@ -6,7 +6,10 @@ use self::service::ServiceStore;
 
 mod service;
 
-#[derive(Debug)]
+const MAX_MEMORY_USAGE: u8 = 80;
+const MAX_DISK_USAGE: u8 = 90;
+
+#[derive(Debug, PartialEq)]
 pub struct PingEvent {
     pub cpu: u8,
     pub memory: u8,
@@ -52,8 +55,8 @@ impl GatewayStore {
 
     pub fn on_ping(&mut self, now: u64, from: u32, ping: PingEvent) {
         log::debug!("[GatewayStore] on ping from {from} data {:?}", ping);
-        let node_usage = node_usage(&ping, 80, 90);
-        let webrtc_usage = webrtc_usage(&ping, 80, 90);
+        let node_usage = node_usage(&ping);
+        let webrtc_usage = webrtc_usage(&ping);
         match ping.origin {
             Origin::Media(_) => match (node_usage, webrtc_usage, ping.webrtc) {
                 (Some(_node), Some(webrtc), Some(stats)) => self.webrtc.on_node_ping(now, from, webrtc, stats),
@@ -85,27 +88,137 @@ impl GatewayStore {
     }
 }
 
-fn node_usage(ping: &PingEvent, max_memory: u8, max_disk: u8) -> Option<u8> {
-    if ping.memory >= max_memory {
+fn node_usage(ping: &PingEvent) -> Option<u8> {
+    if ping.memory >= MAX_MEMORY_USAGE {
         return None;
     }
 
-    if ping.disk >= max_disk {
+    if ping.disk >= MAX_DISK_USAGE {
         return None;
     }
 
     Some(ping.cpu)
 }
 
-fn webrtc_usage(ping: &PingEvent, max_memory: u8, max_disk: u8) -> Option<u8> {
-    if ping.memory >= max_memory {
+fn webrtc_usage(ping: &PingEvent) -> Option<u8> {
+    if ping.memory >= MAX_MEMORY_USAGE {
         return None;
     }
 
-    if ping.disk >= max_disk {
+    if ping.disk >= MAX_DISK_USAGE {
         return None;
     }
 
     let webrtc = ping.webrtc.as_ref()?;
     webrtc.active.then(|| ping.cpu.max(((webrtc.live * 100) / webrtc.max) as u8))
+}
+
+#[cfg(test)]
+mod tests {
+    use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, GatewayOrigin, MediaOrigin, Origin, ServiceStats};
+
+    use crate::ServiceKind;
+
+    use super::{GatewayStore, PingEvent};
+
+    #[test]
+    fn local_ping() {
+        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 });
+        store.on_ping(
+            0,
+            1,
+            PingEvent {
+                cpu: 0,
+                memory: 0,
+                disk: 0,
+                origin: Origin::Media(MediaOrigin {}),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            },
+        );
+
+        assert_eq!(store.best_for(ServiceKind::Webrtc, None), Some(1));
+
+        assert_eq!(store.pop_output(), None);
+        store.on_tick(100);
+        assert_eq!(
+            store.pop_output(),
+            Some(PingEvent {
+                cpu: 0,
+                memory: 0,
+                disk: 0,
+                origin: Origin::Gateway(GatewayOrigin {
+                    location: Some(Location { lat: 1.0, lon: 1.0 }),
+                    zone: 0,
+                }),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            })
+        );
+    }
+
+    #[test]
+    fn local_reject_max_usage() {
+        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 });
+        store.on_ping(
+            0,
+            1,
+            PingEvent {
+                cpu: 10,
+                memory: 80,
+                disk: 20,
+                origin: Origin::Media(MediaOrigin {}),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            },
+        );
+
+        store.on_ping(
+            0,
+            2,
+            PingEvent {
+                cpu: 10,
+                memory: 20,
+                disk: 90,
+                origin: Origin::Media(MediaOrigin {}),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            },
+        );
+
+        assert_eq!(store.best_for(ServiceKind::Webrtc, None), None);
+    }
+
+    #[test]
+    fn remote_ping() {
+        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 });
+        store.on_ping(
+            0,
+            257,
+            PingEvent {
+                cpu: 0,
+                memory: 0,
+                disk: 0,
+                origin: Origin::Gateway(GatewayOrigin {
+                    location: Some(Location { lat: 2.0, lon: 2.0 }),
+                    zone: 256,
+                }),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            },
+        );
+
+        assert_eq!(store.best_for(ServiceKind::Webrtc, None), Some(257));
+
+        assert_eq!(store.pop_output(), None);
+        store.on_tick(100);
+        assert_eq!(
+            store.pop_output(),
+            Some(PingEvent {
+                cpu: 0,
+                memory: 0,
+                disk: 0,
+                origin: Origin::Gateway(GatewayOrigin {
+                    location: Some(Location { lat: 1.0, lon: 1.0 }),
+                    zone: 0,
+                }),
+                webrtc: None,
+            })
+        );
+    }
 }
