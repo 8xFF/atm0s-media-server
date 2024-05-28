@@ -135,12 +135,13 @@ impl ServiceStore {
         }
     }
 
-    pub fn best_for(&self, location: &Location) -> Option<u32> {
-        let mut min_dis = distance(&self.location, location);
+    pub fn best_for(&self, location: Option<Location>) -> Option<u32> {
+        let location = location.unwrap_or_else(|| self.location.clone());
+        let mut min_dis = distance(&self.location, &location);
         let mut min_node = self.local_sources.first().map(|s| s.node);
 
         for z in self.zone_sources.iter() {
-            let dis = distance(location, &z.location);
+            let dis = distance(&location, &z.location);
             if min_node.is_none() || min_dis > dis {
                 min_dis = dis;
                 min_node = z.gateways.first().map(|s| s.node);

@@ -21,7 +21,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub enum Control {
-    FindNodeReq(u64, ServiceKind, Location),
+    FindNodeReq(u64, ServiceKind, Option<Location>),
 }
 
 #[derive(Debug, Clone)]

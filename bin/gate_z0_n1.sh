@@ -7,4 +7,5 @@ cargo run -- \
     --sdn-zone 0 \
     gateway \
         --lat 10 \
-        --lon 20
+        --lon 20 \
+        --geo-db "../maxminddb-data/GeoLite2-City.mmdb"

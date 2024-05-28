@@ -152,6 +152,7 @@ dependencies = [
  "derive_more",
  "local-ip-address",
  "log",
+ "maxminddb",
  "media-server-gateway",
  "media-server-protocol",
  "media-server-runner",
@@ -173,6 +174,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn"
 version = "0.1.10"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=e3456db45912bdd461755088a5dde5e004b0f17a#e3456db45912bdd461755088a5dde5e004b0f17a"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -192,6 +194,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.2.0"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=e3456db45912bdd461755088a5dde5e004b0f17a#e3456db45912bdd461755088a5dde5e004b0f17a"
 dependencies = [
  "multiaddr",
  "rand",
@@ -201,6 +204,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-network"
 version = "0.3.1"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=e3456db45912bdd461755088a5dde5e004b0f17a#e3456db45912bdd461755088a5dde5e004b0f17a"
 dependencies = [
  "aes-gcm",
  "atm0s-sdn-identity",
@@ -227,6 +231,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-router"
 version = "0.1.4"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=e3456db45912bdd461755088a5dde5e004b0f17a#e3456db45912bdd461755088a5dde5e004b0f17a"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -238,6 +243,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.1.1"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=e3456db45912bdd461755088a5dde5e004b0f17a#e3456db45912bdd461755088a5dde5e004b0f17a"
 dependencies = [
  "log",
  "serde",
@@ -1512,6 +1518,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipnetwork"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf466541e9d546596ee94f9f69590f89473455f88372423e0008fc1a7daf100e"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1697,6 +1712,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
 dependencies = [
  "regex-automata 0.1.10",
+]
+
+[[package]]
+name = "maxminddb"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6087e5d8ea14861bb7c7f573afbc7be3798d3ef0fae87ec4fd9a4de9a127c3c"
+dependencies = [
+ "ipnetwork",
+ "log",
+ "memchr",
+ "serde",
 ]
 
 [[package]]

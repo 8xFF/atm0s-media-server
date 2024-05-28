@@ -28,6 +28,7 @@ convert-enum = { workspace = true }
 num_enum = { workspace = true }
 derive_more = { workspace = true }
 rcgen = { version = "0.13", optional = true }
+maxminddb = "0.24.0"
 
 [features]
 default = ["gateway", "media", "connector", "cert_utils"]

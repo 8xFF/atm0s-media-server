@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use media_server_gateway::ServiceKind;
 use media_server_protocol::{
@@ -16,12 +16,13 @@ use media_server_protocol::{
     transport::ConnLayer,
 };
 
-use super::dest_selector::GatewayDestSelector;
+use super::{dest_selector::GatewayDestSelector, ip_location::Ip2Location};
 
 #[derive(Clone)]
 pub struct Ctx {
     pub(crate) selector: GatewayDestSelector,
     pub(crate) client: MediaEdgeServiceClient<SocketAddr, QuinnClient, QuinnStream>,
+    pub(crate) ip2location: Arc<Ip2Location>,
 }
 
 #[derive(Default)]
@@ -30,8 +31,8 @@ pub struct MediaRpcHandlerImpl {}
 impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
     async fn whip_connect(&self, ctx: &Ctx, req: WhipConnectRequest) -> Option<WhipConnectResponse> {
         log::info!("On whip_connect from other gateway");
-        //TODO detect location
-        let dest = ctx.selector.select(ServiceKind::Webrtc, 1.1, 1.1).await?;
+        let location = req.ip.parse().ok().map(|ip| ctx.ip2location.get_location(&ip)).flatten();
+        let dest = ctx.selector.select(ServiceKind::Webrtc, location).await?;
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.whip_connect(dest_addr, req).await
     }
@@ -54,8 +55,8 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
 
     async fn whep_connect(&self, ctx: &Ctx, req: WhepConnectRequest) -> Option<WhepConnectResponse> {
         log::info!("On whep_connect from other gateway");
-        //TODO detect location
-        let dest = ctx.selector.select(ServiceKind::Webrtc, 1.1, 1.1).await?;
+        let location = req.ip.parse().ok().map(|ip| ctx.ip2location.get_location(&ip)).flatten();
+        let dest = ctx.selector.select(ServiceKind::Webrtc, location).await?;
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.whep_connect(dest_addr, req).await
     }
@@ -78,8 +79,8 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
 
     async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
         log::info!("On webrtc_connect from other gateway");
-        //TODO detect location
-        let dest = ctx.selector.select(ServiceKind::Webrtc, 1.1, 1.1).await?;
+        let location = req.ip.parse().ok().map(|ip| ctx.ip2location.get_location(&ip)).flatten();
+        let dest = ctx.selector.select(ServiceKind::Webrtc, location).await?;
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.webrtc_connect(dest_addr, req).await
     }

@@ -9,19 +9,19 @@ use tokio::sync::{
 
 #[derive(Clone)]
 pub struct GatewayDestSelector {
-    tx: Sender<(ServiceKind, f32, f32, oneshot::Sender<Option<u32>>)>,
+    tx: Sender<(ServiceKind, Option<(f32, f32)>, oneshot::Sender<Option<u32>>)>,
 }
 
 impl GatewayDestSelector {
-    pub async fn select(&self, kind: ServiceKind, lat: f32, lon: f32) -> Option<u32> {
+    pub async fn select(&self, kind: ServiceKind, location: Option<(f32, f32)>) -> Option<u32> {
         let (tx, rx) = oneshot::channel();
-        self.tx.send((kind, lat, lon, tx)).await.ok()?;
+        self.tx.send((kind, location, tx)).await.ok()?;
         rx.await.ok()?
     }
 }
 
 pub struct GatewayDestRequester {
-    rx: Receiver<(ServiceKind, f32, f32, oneshot::Sender<Option<u32>>)>,
+    rx: Receiver<(ServiceKind, Option<(f32, f32)>, oneshot::Sender<Option<u32>>)>,
     req_seed: u64,
     reqs: HashMap<u64, oneshot::Sender<Option<u32>>>,
 }
@@ -40,11 +40,15 @@ impl GatewayDestRequester {
     }
 
     pub fn recv(&mut self) -> Option<media_server_gateway::store_service::Control> {
-        let (kind, lat, lon, tx) = self.rx.try_recv().ok()?;
+        let (kind, location, tx) = self.rx.try_recv().ok()?;
         let req_id = self.req_seed;
         self.req_seed += 1;
         self.reqs.insert(req_id, tx);
-        Some(media_server_gateway::store_service::Control::FindNodeReq(req_id, kind, Location { lat, lon }))
+        Some(media_server_gateway::store_service::Control::FindNodeReq(
+            req_id,
+            kind,
+            location.map(|(lat, lon)| Location { lat, lon }),
+        ))
     }
 }
 

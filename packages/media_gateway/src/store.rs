@@ -72,9 +72,9 @@ impl GatewayStore {
         }
     }
 
-    pub fn best_for(&self, kind: ServiceKind, location: Location) -> Option<u32> {
+    pub fn best_for(&self, kind: ServiceKind, location: Option<Location>) -> Option<u32> {
         let node = match kind {
-            ServiceKind::Webrtc => self.webrtc.best_for(&location),
+            ServiceKind::Webrtc => self.webrtc.best_for(location.clone()),
         };
         log::debug!("[GatewayStore] query best {:?} for {:?} got {:?}", kind, location, node);
         node

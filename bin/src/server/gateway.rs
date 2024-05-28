@@ -26,9 +26,10 @@ use crate::{
 };
 use sans_io_runtime::{backend::PollingBackend, ErrorDebugger2};
 
-use self::dest_selector::build_dest_selector;
+use self::{dest_selector::build_dest_selector, ip_location::Ip2Location};
 
 mod dest_selector;
+mod ip_location;
 mod rpc_handler;
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
@@ -54,6 +55,10 @@ pub struct Args {
     /// Location longtude
     #[arg(env, long, default_value_t = 0.0)]
     lon: f32,
+
+    /// GeoIp database
+    #[arg(env, long, default_value = "./maxminddb-data/GeoLite2-City.mmdb")]
+    geo_db: String,
 }
 
 pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -90,6 +95,9 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers);
     let (selector, mut requester) = build_dest_selector();
 
+    // Ip location for routing client to closest gateway
+    let ip2location = Arc::new(Ip2Location::new(&args.geo_db));
+
     //
     // Vnet is a virtual udp layer for creating RPC handlers, we separate media server to 2 layer
     // - async for business logic like proxy, logging handling
@@ -106,6 +114,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         rpc_handler::Ctx {
             selector: selector.clone(),
             client: media_rpc_client.clone(),
+            ip2location: ip2location.clone(),
         },
         rpc_handler::MediaRpcHandlerImpl::default(),
     );
@@ -132,12 +141,12 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
             let conn_part = param.get_conn_part();
             let selector = selector.clone();
             let client = media_rpc_client.clone();
+            let ip2location = ip2location.clone();
             tokio::spawn(async move {
                 match param {
                     RpcReq::Whip(param) => match param {
                         whip::RpcReq::Connect(param) => {
-                            //TODO get lat and lon
-                            if let Some(selected) = selector.select(ServiceKind::Webrtc, 1.0, 1.0).await {
+                            if let Some(selected) = selector.select(ServiceKind::Webrtc, ip2location.get_location(&param.ip)).await {
                                 let sock_addr = node_vnet_addr(selected, GATEWAY_RPC_PORT);
                                 log::info!("[Gateway] selected node {selected}");
                                 let rpc_req = param.into();
@@ -203,8 +212,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                     },
                     RpcReq::Whep(param) => match param {
                         whep::RpcReq::Connect(param) => {
-                            //TODO get lat and lon
-                            if let Some(selected) = selector.select(ServiceKind::Webrtc, 1.0, 1.0).await {
+                            if let Some(selected) = selector.select(ServiceKind::Webrtc, ip2location.get_location(&param.ip)).await {
                                 let sock_addr = node_vnet_addr(selected, GATEWAY_RPC_PORT);
                                 log::info!("[Gateway] selected node {selected}");
                                 let rpc_req = param.into();
@@ -270,8 +278,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                     },
                     RpcReq::Webrtc(param) => match param {
                         webrtc::RpcReq::Connect(ip, user_agent, req) => {
-                            //TODO get lat and lon
-                            if let Some(selected) = selector.select(ServiceKind::Webrtc, 1.0, 1.0).await {
+                            if let Some(selected) = selector.select(ServiceKind::Webrtc, ip2location.get_location(&ip)).await {
                                 let sock_addr = node_vnet_addr(selected, GATEWAY_RPC_PORT);
                                 log::info!("[Gateway] selected node {selected}");
                                 let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcConnectRequest {
