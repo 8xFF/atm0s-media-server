@@ -163,8 +163,8 @@ impl ServiceStore {
             if n.stats.active {
                 stats.active = true;
             }
-            stats.live = n.stats.live;
-            stats.max = n.stats.max;
+            stats.live += n.stats.live;
+            stats.max += n.stats.max;
         }
 
         Some(stats)
@@ -219,7 +219,7 @@ fn distance(node1: &Location, node2: &Location) -> f32 {
 mod tests {
     use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, ServiceStats};
 
-    use crate::ServiceKind;
+    use crate::{store::service::PING_TIMEOUT, ServiceKind};
 
     use super::ServiceStore;
 
@@ -228,6 +228,8 @@ mod tests {
         let store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
         assert_eq!(store.best_for(None), None);
         assert_eq!(store.best_for(Some(Location { lat: 1.0, lon: 1.0 })), None);
+
+        assert_eq!(store.local_stats(), None);
     }
 
     #[test]
@@ -240,12 +242,19 @@ mod tests {
         //should got lowest usage
         assert_eq!(store.best_for(None), Some(2));
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(2));
+        assert_eq!(store.local_stats(), Some(ServiceStats { live: 160, max: 2000, active: true }));
 
-        //after remove should fallback to remain
-        store.remove_node(2);
+        //after node2 increase usage should fallback to node1
+        store.on_node_ping(0, 2, 61, ServiceStats { live: 120, max: 1000, active: true });
 
         assert_eq!(store.best_for(None), Some(1));
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(1));
+
+        //after remove should fallback to remain
+        store.remove_node(1);
+
+        assert_eq!(store.best_for(None), Some(2));
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(2));
     }
 
     #[test]
@@ -259,11 +268,17 @@ mod tests {
         assert_eq!(store.best_for(None), Some(257));
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
 
-        //should fallback to remain gateway
-        store.remove_gateway(256, 257);
+        //after gateway 257 increase usage should switch to 256
+        store.on_gateway_ping(0, 256, 257, 65, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
 
         assert_eq!(store.best_for(None), Some(256));
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(256));
+
+        //should fallback to remain gateway
+        store.remove_gateway(256, 256);
+
+        assert_eq!(store.best_for(None), Some(257));
+        assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
     }
 
     #[test]
@@ -285,10 +300,26 @@ mod tests {
         assert_eq!(store.best_for(None), Some(257));
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
 
-        //fater remove other zone should return None
+        //after remove other zone should return None
         store.remove_gateway(256, 257);
 
         assert_eq!(store.best_for(None), None);
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), None);
+    }
+
+    #[test]
+    fn clear_timeout() {
+        let mut store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+
+        store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, 256, 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+
+        assert_eq!(store.local_sources.len(), 1);
+        assert_eq!(store.zone_sources.len(), 1);
+
+        store.on_tick(PING_TIMEOUT);
+
+        assert_eq!(store.local_sources.len(), 0);
+        assert_eq!(store.zone_sources.len(), 0);
     }
 }
