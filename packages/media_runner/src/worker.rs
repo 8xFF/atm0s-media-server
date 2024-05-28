@@ -159,7 +159,6 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         self.sdn_worker.input(s).on_tick(now_ms);
         self.media_cluster.input(s).on_tick(now);
         self.media_webrtc.input(s).on_tick(now);
-        //TODO collect node stats then send to GatewayAgent service
 
         if self.last_feedback_gateway_agent + FEEDBACK_GATEWAY_AGENT_INTERVAL <= now_ms {
             self.last_feedback_gateway_agent = now_ms;
