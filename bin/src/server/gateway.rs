@@ -325,6 +325,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                             }
                         }
                         webrtc::RpcReq::RestartIce(conn, ip, user_agent, req) => {
+                            //TODO how to handle media-node down?
                             if let Some((node, _session)) = conn_part {
                                 let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRestartIceRequest {
                                     conn: conn.to_string(),
