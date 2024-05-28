@@ -2,9 +2,16 @@ pub mod agent_service;
 mod store;
 pub mod store_service;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum ServiceKind {
     Webrtc,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct NodeMetrics {
+    pub cpu: u8,
+    pub memory: u8,
+    pub disk: u8,
 }
 
 pub const DATA_PORT: u16 = 10001;

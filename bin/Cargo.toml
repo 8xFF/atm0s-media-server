@@ -28,12 +28,14 @@ convert-enum = { workspace = true }
 num_enum = { workspace = true }
 derive_more = { workspace = true }
 rcgen = { version = "0.13", optional = true }
-maxminddb = "0.24.0"
+maxminddb = { version = "0.24.0", optional = true }
+sysinfo = { version = "0.30.12", optional = true }
 
 [features]
 default = ["gateway", "media", "connector", "cert_utils"]
-gateway = ["media-server-gateway", "quinn_vnet"]
-media = ["media-server-runner", "quinn_vnet"]
+gateway = ["media-server-gateway", "quinn_vnet", "node_metrics", "maxminddb"]
+media = ["media-server-runner", "quinn_vnet", "node_metrics"]
 connector = ["quinn_vnet"]
 cert_utils = ["rcgen", "rustls"]
 quinn_vnet = ["rustls", "quinn"]
+node_metrics = ["sysinfo"]

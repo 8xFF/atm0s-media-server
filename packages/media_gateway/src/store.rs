@@ -1,13 +1,10 @@
 use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, GatewayOrigin, Origin, ServiceStats};
 
-use crate::ServiceKind;
+use crate::{NodeMetrics, ServiceKind};
 
 use self::service::ServiceStore;
 
 mod service;
-
-const MAX_MEMORY_USAGE: u8 = 80;
-const MAX_DISK_USAGE: u8 = 90;
 
 #[derive(Debug, PartialEq)]
 pub struct PingEvent {
@@ -20,28 +17,40 @@ pub struct PingEvent {
 
 pub struct GatewayStore {
     zone: u32,
+    node: NodeMetrics,
     location: Location,
     webrtc: ServiceStore,
     output: Option<PingEvent>,
+    max_cpu: u8,
+    max_memory: u8,
+    max_disk: u8,
 }
 
 impl GatewayStore {
-    pub fn new(zone: u32, location: Location) -> Self {
+    pub fn new(zone: u32, location: Location, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
         Self {
+            node: NodeMetrics::default(),
             webrtc: ServiceStore::new(ServiceKind::Webrtc, location.clone()),
             zone,
             location,
             output: None,
+            max_cpu,
+            max_disk,
+            max_memory,
         }
+    }
+
+    pub fn on_node_metrics(&mut self, _now: u64, metrics: NodeMetrics) {
+        self.node = metrics;
     }
 
     pub fn on_tick(&mut self, now: u64) {
         self.webrtc.on_tick(now);
 
         let ping = PingEvent {
-            cpu: 0,    //TODO
-            memory: 0, //TODO
-            disk: 0,   //TODO
+            cpu: self.node.cpu,
+            memory: self.node.memory,
+            disk: self.node.disk,
             origin: Origin::Gateway(GatewayOrigin {
                 zone: self.zone,
                 location: Some(self.location.clone()),
@@ -55,8 +64,8 @@ impl GatewayStore {
 
     pub fn on_ping(&mut self, now: u64, from: u32, ping: PingEvent) {
         log::debug!("[GatewayStore] on ping from {from} data {:?}", ping);
-        let node_usage = node_usage(&ping);
-        let webrtc_usage = webrtc_usage(&ping);
+        let node_usage = node_usage(&ping, self.max_cpu, self.max_memory, self.max_disk);
+        let webrtc_usage = webrtc_usage(&ping, self.max_cpu, self.max_memory, self.max_disk);
         match ping.origin {
             Origin::Media(_) => match (node_usage, webrtc_usage, ping.webrtc) {
                 (Some(_node), Some(webrtc), Some(stats)) => self.webrtc.on_node_ping(now, from, webrtc, stats),
@@ -88,24 +97,32 @@ impl GatewayStore {
     }
 }
 
-fn node_usage(ping: &PingEvent) -> Option<u8> {
-    if ping.memory >= MAX_MEMORY_USAGE {
+fn node_usage(ping: &PingEvent, max_cpu: u8, max_memory: u8, max_disk: u8) -> Option<u8> {
+    if ping.memory >= max_cpu {
         return None;
     }
 
-    if ping.disk >= MAX_DISK_USAGE {
+    if ping.memory >= max_memory {
+        return None;
+    }
+
+    if ping.disk >= max_disk {
         return None;
     }
 
     Some(ping.cpu)
 }
 
-fn webrtc_usage(ping: &PingEvent) -> Option<u8> {
-    if ping.memory >= MAX_MEMORY_USAGE {
+fn webrtc_usage(ping: &PingEvent, max_cpu: u8, max_memory: u8, max_disk: u8) -> Option<u8> {
+    if ping.memory >= max_cpu {
         return None;
     }
 
-    if ping.disk >= MAX_DISK_USAGE {
+    if ping.memory >= max_memory {
+        return None;
+    }
+
+    if ping.disk >= max_disk {
         return None;
     }
 
@@ -123,7 +140,7 @@ mod tests {
 
     #[test]
     fn local_ping() {
-        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 });
+        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
         store.on_ping(
             0,
             1,
@@ -157,7 +174,7 @@ mod tests {
 
     #[test]
     fn local_reject_max_usage() {
-        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 });
+        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
         store.on_ping(
             0,
             1,
@@ -182,12 +199,24 @@ mod tests {
             },
         );
 
+        store.on_ping(
+            0,
+            3,
+            PingEvent {
+                cpu: 60,
+                memory: 80,
+                disk: 20,
+                origin: Origin::Media(MediaOrigin {}),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            },
+        );
+
         assert_eq!(store.best_for(ServiceKind::Webrtc, None), None);
     }
 
     #[test]
     fn remote_ping() {
-        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 });
+        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
         store.on_ping(
             0,
             257,

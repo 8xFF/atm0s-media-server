@@ -1,8 +1,12 @@
-use std::{collections::VecDeque, fmt::Debug};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Debug,
+};
 
 use atm0s_sdn::{
     base::{NetOutgoingMeta, Service, ServiceBuilder, ServiceCtx, ServiceInput, ServiceOutput, ServiceSharedInput, ServiceWorker, ServiceWorkerCtx, ServiceWorkerInput, ServiceWorkerOutput},
     features::{data, FeaturesControl, FeaturesEvent},
+    sans_io_runtime::return_if_err,
     RouteRule, ServiceBroadcastLevel,
 };
 use media_server_protocol::protobuf::{
@@ -14,11 +18,27 @@ use media_server_protocol::protobuf::{
 };
 use prost::Message as _;
 
-use crate::{ServiceKind, AGENT_SERVICE_ID, AGENT_SERVICE_NAME, DATA_PORT, STORE_SERVICE_ID};
+use crate::{NodeMetrics, ServiceKind, AGENT_SERVICE_ID, AGENT_SERVICE_NAME, DATA_PORT, STORE_SERVICE_ID};
+
+struct ServiceWorkersStats {
+    max: u32,
+    workers: HashMap<u16, u32>,
+}
+
+impl Into<ServiceStats> for &ServiceWorkersStats {
+    fn into(self) -> ServiceStats {
+        ServiceStats {
+            live: self.workers.values().sum(),
+            max: self.max,
+            active: true, //TODO how to update this? maybe with gradeful-shutdown
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum Control {
-    Stats(Vec<(ServiceKind, u32)>),
+    NodeStats(NodeMetrics),
+    WorkerUsage(ServiceKind, u16, u32),
 }
 
 #[derive(Debug, Clone)]
@@ -27,14 +47,18 @@ pub enum Event {}
 pub struct GatewayAgentService<UserData, SC, SE, TC, TW> {
     output: Option<ServiceOutput<UserData, FeaturesControl, SE, TW>>,
     seq: u16,
+    node: NodeMetrics,
+    services: HashMap<ServiceKind, ServiceWorkersStats>,
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
-impl<UserData, SC, SE, TC, TW> Default for GatewayAgentService<UserData, SC, SE, TC, TW> {
-    fn default() -> Self {
+impl<UserData, SC, SE, TC, TW> GatewayAgentService<UserData, SC, SE, TC, TW> {
+    pub fn new(max: HashMap<ServiceKind, u32>) -> Self {
         Self {
             output: None,
             seq: 0,
+            node: Default::default(),
+            services: HashMap::from_iter(max.into_iter().map(|(k, v)| (k, ServiceWorkersStats { max: v, workers: HashMap::new() }))),
             _tmp: std::marker::PhantomData,
         }
     }
@@ -42,7 +66,7 @@ impl<UserData, SC, SE, TC, TW> Default for GatewayAgentService<UserData, SC, SE,
 
 impl<UserData: Copy + Eq, SC, SE, TC, TW> Service<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW> for GatewayAgentService<UserData, SC, SE, TC, TW>
 where
-    SC: From<Control> + TryInto<Control>,
+    SC: From<Control> + TryInto<Control> + Debug,
     SE: From<Event> + TryInto<Event>,
 {
     fn service_id(&self) -> u8 {
@@ -62,22 +86,39 @@ where
                 meta.source = true;
                 let data = protobuf::cluster_gateway::GatewayEvent {
                     event: Some(gateway_event::Event::Ping(protobuf::cluster_gateway::PingEvent {
-                        cpu: 0,    //TODO
-                        memory: 0, //TODO
-                        disk: 0,   //TODO
-                        webrtc: Some(ServiceStats { active: true, live: 0, max: 100 }),
+                        cpu: self.node.cpu as u32,
+                        memory: self.node.memory as u32,
+                        disk: self.node.disk as u32,
+                        webrtc: self.services.get(&ServiceKind::Webrtc).map(|s| s.into()),
                         origin: Some(Origin::Media(MediaOrigin {})),
                     })),
                 }
                 .encode_to_vec();
-                log::info!("[GatewayAgent] broadcast ping to zone gateways");
+                log::debug!("[GatewayAgent] broadcast ping to zone gateways");
                 self.output = Some(ServiceOutput::FeatureControl(data::Control::DataSendRule(DATA_PORT, rule, meta, data).into()));
             }
             ServiceSharedInput::Connection(_) => {}
         }
     }
 
-    fn on_input(&mut self, _ctx: &ServiceCtx, _now: u64, _input: ServiceInput<UserData, FeaturesEvent, SC, TC>) {}
+    fn on_input(&mut self, _ctx: &ServiceCtx, _now: u64, input: ServiceInput<UserData, FeaturesEvent, SC, TC>) {
+        match input {
+            ServiceInput::Control(_, control) => match return_if_err!(control.try_into()) {
+                Control::NodeStats(metrics) => {
+                    log::debug!("[GatewayAgentService] node metrics {:?}", metrics);
+                    self.node = metrics;
+                }
+                Control::WorkerUsage(kind, worker, live) => {
+                    log::debug!("[GatewayAgentService] worker {worker} live {live}");
+                    if let Some(service) = self.services.get_mut(&kind) {
+                        service.workers.insert(worker, live);
+                    }
+                }
+            },
+            ServiceInput::FromWorker(_) => {}
+            ServiceInput::FeatureEvent(_) => {}
+        }
+    }
 
     fn pop_output2(&mut self, _now: u64) -> Option<ServiceOutput<UserData, FeaturesControl, SE, TW>> {
         self.output.take()
@@ -113,12 +154,13 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
 }
 
 pub struct GatewayAgentServiceBuilder<UserData, SC, SE, TC, TW> {
+    max: HashMap<ServiceKind, u32>,
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
-impl<UserData, SC, SE, TC, TW> Default for GatewayAgentServiceBuilder<UserData, SC, SE, TC, TW> {
-    fn default() -> Self {
-        Self { _tmp: std::marker::PhantomData }
+impl<UserData, SC, SE, TC, TW> GatewayAgentServiceBuilder<UserData, SC, SE, TC, TW> {
+    pub fn new(max: HashMap<ServiceKind, u32>) -> Self {
+        Self { max, _tmp: std::marker::PhantomData }
     }
 }
 
@@ -143,7 +185,7 @@ where
     }
 
     fn create(&self) -> Box<dyn Service<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {
-        Box::<GatewayAgentService<UserData, SC, SE, TC, TW>>::default()
+        Box::new(GatewayAgentService::new(self.max.clone()))
     }
 
     fn create_worker(&self) -> Box<dyn ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {

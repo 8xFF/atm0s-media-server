@@ -26,9 +26,9 @@ pub struct Ctx {
 }
 
 #[derive(Default)]
-pub struct MediaRpcHandlerImpl {}
+pub struct MediaRemoteRpcHandlerImpl {}
 
-impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
+impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
     async fn whip_connect(&self, ctx: &Ctx, req: WhipConnectRequest) -> Option<WhipConnectResponse> {
         log::info!("On whip_connect from other gateway");
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
@@ -101,3 +101,5 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
         ctx.client.webrtc_restart_ice(dest_addr, req).await
     }
 }
+
+//TODO test

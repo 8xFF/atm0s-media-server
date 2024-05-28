@@ -54,6 +54,7 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
         }
 
         let worker = MediaServerWorker::new(
+            index,
             cfg.node.node_id,
             random(),
             &cfg.node.secret,

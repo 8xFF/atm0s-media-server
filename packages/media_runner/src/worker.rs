@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Instant};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Instant};
 
 use atm0s_sdn::{
     generate_node_addr,
@@ -7,7 +7,7 @@ use atm0s_sdn::{
     ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot,
 };
 use media_server_core::cluster::{self, MediaCluster};
-use media_server_gateway::agent_service::GatewayAgentServiceBuilder;
+use media_server_gateway::{agent_service::GatewayAgentServiceBuilder, ServiceKind, AGENT_SERVICE_ID};
 use media_server_protocol::{
     gateway::generate_gateway_zone_tag,
     protobuf::gateway::{ConnectResponse, RemoteIceResponse},
@@ -27,10 +27,13 @@ use sans_io_runtime::{
 };
 use transport_webrtc::{GroupInput, MediaWorkerWebrtc, VariantParams, WebrtcOwner};
 
+const FEEDBACK_GATEWAY_AGENT_INTERVAL: u64 = 1000; //only feedback every second
+
 pub struct MediaConfig<ES> {
     pub ice_lite: bool,
     pub webrtc_addrs: Vec<SocketAddr>,
     pub secure: Arc<ES>,
+    pub max_live: HashMap<ServiceKind, u32>,
 }
 
 pub type SdnConfig = SdnWorkerCfg<UserData, SC, SE, TC, TW>;
@@ -87,6 +90,7 @@ enum MediaClusterOwner {
 
 #[allow(clippy::type_complexity)]
 pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
+    worker: u16,
     sdn_slot: usize,
     sdn_worker: TaskSwitcherBranch<SdnWorker<UserData, SC, SE, TC, TW>, SdnWorkerOutput<UserData, SC, SE, TC, TW>>,
     media_cluster: TaskSwitcherBranch<MediaCluster<MediaClusterOwner>, cluster::Output<MediaClusterOwner>>,
@@ -94,12 +98,13 @@ pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
     switcher: TaskSwitcher,
     queue: DynamicDeque<Output, 16>,
     timer: TimePivot,
+    last_feedback_gateway_agent: u64,
     secure: Arc<ES>,
 }
 
 impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(node_id: u32, session: u64, secret: &str, controller: bool, sdn_udp: u16, sdn_custom_addrs: Vec<SocketAddr>, sdn_zone: u32, media: MediaConfig<ES>) -> Self {
+    pub fn new(worker: u16, node_id: u32, session: u64, secret: &str, controller: bool, sdn_udp: u16, sdn_custom_addrs: Vec<SocketAddr>, sdn_zone: u32, media: MediaConfig<ES>) -> Self {
         let secure = media.secure.clone(); //TODO why need this?
         let sdn_udp_addr = SocketAddr::from(([0, 0, 0, 0], sdn_udp));
 
@@ -107,7 +112,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
 
         let visualization = Arc::new(visualization::VisualizationServiceBuilder::new(false));
         let discovery = Arc::new(manual_discovery::ManualDiscoveryServiceBuilder::new(node_addr, vec![], vec![generate_gateway_zone_tag(sdn_zone)]));
-        let gateway = Arc::new(GatewayAgentServiceBuilder::default());
+        let gateway = Arc::new(GatewayAgentServiceBuilder::new(media.max_live));
 
         let sdn_config = SdnConfig {
             node_id,
@@ -131,6 +136,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         };
 
         Self {
+            worker,
             sdn_slot: 1, //TODO dont use this hack, must to wait to bind success to network
             sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn_config), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
@@ -138,6 +144,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             switcher: TaskSwitcher::new(3),
             queue: DynamicDeque::from([Output::Net(Owner::Sdn, BackendOutgoing::UdpListen { addr: sdn_udp_addr, reuse: true })]),
             timer: TimePivot::build(),
+            last_feedback_gateway_agent: 0,
             secure,
         }
     }
@@ -152,7 +159,20 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         self.sdn_worker.input(s).on_tick(now_ms);
         self.media_cluster.input(s).on_tick(now);
         self.media_webrtc.input(s).on_tick(now);
-        //TODO collect node stats then send to GatewayAgent service
+
+        if self.last_feedback_gateway_agent + FEEDBACK_GATEWAY_AGENT_INTERVAL <= now_ms {
+            self.last_feedback_gateway_agent = now_ms;
+
+            let webrtc_live = self.media_webrtc.tasks() as u32;
+            self.sdn_worker.input(s).on_event(
+                now_ms,
+                SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
+                    AGENT_SERVICE_ID.into(),
+                    0.into(),
+                    media_server_gateway::agent_service::Control::WorkerUsage(ServiceKind::Webrtc, self.worker, webrtc_live).into(),
+                )),
+            );
+        }
     }
 
     pub fn on_event(&mut self, now: Instant, input: Input) {
