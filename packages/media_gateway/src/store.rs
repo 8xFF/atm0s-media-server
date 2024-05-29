@@ -98,7 +98,7 @@ impl GatewayStore {
 }
 
 fn node_usage(ping: &PingEvent, max_cpu: u8, max_memory: u8, max_disk: u8) -> Option<u8> {
-    if ping.memory >= max_cpu {
+    if ping.cpu >= max_cpu {
         return None;
     }
 
@@ -114,7 +114,7 @@ fn node_usage(ping: &PingEvent, max_cpu: u8, max_memory: u8, max_disk: u8) -> Op
 }
 
 fn webrtc_usage(ping: &PingEvent, max_cpu: u8, max_memory: u8, max_disk: u8) -> Option<u8> {
-    if ping.memory >= max_cpu {
+    if ping.cpu >= max_cpu {
         return None;
     }
 
