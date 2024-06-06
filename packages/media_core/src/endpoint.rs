@@ -117,6 +117,7 @@ pub enum EndpointRes {
 pub enum EndpointLocalTrackEvent {
     Media(MediaPacket),
     Status(protobuf::shared::receiver::Status),
+    VoiceActivity(i8),
 }
 
 /// This is used for controlling the remote track, which is sent from endpoint
@@ -126,12 +127,20 @@ pub enum EndpointRemoteTrackEvent {
     LimitBitrateBps { min: u64, max: u64 },
 }
 
+/// This is used for controlling audio mixer feature
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointAudioMixerEvent {
+    SlotSet(u8, PeerId, TrackName),
+    SlotUnset(u8),
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointEvent {
     PeerJoined(PeerId, PeerMeta),
     PeerLeaved(PeerId, PeerMeta),
     PeerTrackStarted(PeerId, TrackName, TrackMeta),
     PeerTrackStopped(PeerId, TrackName, TrackMeta),
+    AudioMixer(EndpointAudioMixerEvent),
     RemoteMediaTrack(RemoteTrackId, EndpointRemoteTrackEvent),
     LocalMediaTrack(LocalTrackId, EndpointLocalTrackEvent),
     /// Egress est params

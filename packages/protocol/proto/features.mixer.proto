@@ -46,27 +46,17 @@ message Response {
 }
 
 message ServerEvent {
-    message MappingSlotSet {
+    message SlotSet {
         uint32 slot = 1;
         shared.Receiver.Source source = 2;
     }
 
-    message MappingSlotDel {
+    message SlotUnset {
         uint32 slot = 1;
-    }
-
-    message SlotAudioLevel {
-        uint32 slot = 1;
-        int32 audio_level = 2;
-    }
-
-    message MappingSlotsAudioLevel {
-        repeated SlotAudioLevel slots = 1;
     }
 
     oneof event {
-        MappingSlotSet slot_set = 1;
-        MappingSlotDel slot_del = 2;
-        MappingSlotsAudioLevel slots_audio_level = 3;
+        SlotSet slot_set = 1;
+        SlotUnset slot_unset = 2;
     }
 }

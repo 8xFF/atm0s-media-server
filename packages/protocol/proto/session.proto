@@ -308,10 +308,15 @@ message ServerEvent {
             optional Transmit transmit = 2;
         }
 
+        message VoiceActivity {
+            int32 audio_level = 1;
+        }
+
         string name = 1;
         oneof event {
             State state = 2;
             Stats stats = 3;
+            VoiceActivity voice_activity = 4;
         }
     }
 

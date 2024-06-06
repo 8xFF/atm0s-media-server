@@ -68,14 +68,14 @@ pub mod response {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ServerEvent {
-    #[prost(oneof = "server_event::Event", tags = "1, 2, 3")]
+    #[prost(oneof = "server_event::Event", tags = "1, 2")]
     pub event: ::core::option::Option<server_event::Event>,
 }
 /// Nested message and enum types in `ServerEvent`.
 pub mod server_event {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct MappingSlotSet {
+    pub struct SlotSet {
         #[prost(uint32, tag = "1")]
         pub slot: u32,
         #[prost(message, optional, tag = "2")]
@@ -85,33 +85,17 @@ pub mod server_event {
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct MappingSlotDel {
+    pub struct SlotUnset {
         #[prost(uint32, tag = "1")]
         pub slot: u32,
-    }
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct SlotAudioLevel {
-        #[prost(uint32, tag = "1")]
-        pub slot: u32,
-        #[prost(int32, tag = "2")]
-        pub audio_level: i32,
-    }
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct MappingSlotsAudioLevel {
-        #[prost(message, repeated, tag = "1")]
-        pub slots: ::prost::alloc::vec::Vec<SlotAudioLevel>,
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Event {
         #[prost(message, tag = "1")]
-        SlotSet(MappingSlotSet),
+        SlotSet(SlotSet),
         #[prost(message, tag = "2")]
-        SlotDel(MappingSlotDel),
-        #[prost(message, tag = "3")]
-        SlotsAudioLevel(MappingSlotsAudioLevel),
+        SlotUnset(SlotUnset),
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

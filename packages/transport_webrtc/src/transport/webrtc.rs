@@ -11,17 +11,25 @@ use media_server_protocol::{
     endpoint::{AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
     protobuf::{
         self,
+        features::{
+            mixer::{
+                server_event::{Event as ProtoFeatureMixerEvent2, SlotSet, SlotUnset},
+                ServerEvent as ProtoFeatureMixerEvent,
+            },
+            server_event::Event as ProtoFeaturesEvent2,
+            ServerEvent as ProtoFeaturesEvent,
+        },
         gateway::ConnectRequest,
         session::{
             server_event::{
-                receiver::{Event as ProtoReceiverEvent, State as ProtoReceiverState},
+                receiver::{Event as ProtoReceiverEvent, State as ProtoReceiverState, VoiceActivity as ProtoReceiverVoiceActivity},
                 room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted, TrackStopped},
                 sender::{Event as ProtoSenderEvent, State as ProtoSenderState},
                 Event as ProtoServerEvent, Receiver as ProtoReceiverEventContainer, Room as ProtoRoomEvent, Sender as ProtoSenderEventContainer,
             },
             ClientEvent,
         },
-        shared::{sender::Status as ProtoSenderStatus, Kind},
+        shared::{receiver::Source as ProtoReceiverSource, sender::Status as ProtoSenderStatus, Kind},
     },
     tokens::WebrtcToken,
     transport::{RpcError, RpcResult},
@@ -262,6 +270,27 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     })),
                 }));
             }
+            EndpointEvent::AudioMixer(event) => match event {
+                media_server_core::endpoint::EndpointAudioMixerEvent::SlotSet(slot, peer, track) => {
+                    log::info!("[TransportWebrtcSdk] audio mixer slot {slot} set to {peer}/{track}");
+                    self.send_event(ProtoServerEvent::Features(ProtoFeaturesEvent {
+                        event: Some(ProtoFeaturesEvent2::Mixer(ProtoFeatureMixerEvent {
+                            event: Some(ProtoFeatureMixerEvent2::SlotSet(SlotSet {
+                                slot: slot as u32,
+                                source: Some(ProtoReceiverSource { peer: peer.0, track: track.0 }),
+                            })),
+                        })),
+                    }))
+                }
+                media_server_core::endpoint::EndpointAudioMixerEvent::SlotUnset(slot) => {
+                    log::info!("[TransportWebrtcSdk] audio mixer slot {slot} unset");
+                    self.send_event(ProtoServerEvent::Features(ProtoFeaturesEvent {
+                        event: Some(ProtoFeaturesEvent2::Mixer(ProtoFeatureMixerEvent {
+                            event: Some(ProtoFeatureMixerEvent2::SlotUnset(SlotUnset { slot: slot as u32 })),
+                        })),
+                    }))
+                }
+            },
             EndpointEvent::RemoteMediaTrack(track_id, event) => match event {
                 media_server_core::endpoint::EndpointRemoteTrackEvent::RequestKeyFrame => {
                     let track = return_if_none!(self.remote_track(track_id));
@@ -293,6 +322,14 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     self.send_event(ProtoServerEvent::Receiver(ProtoReceiverEventContainer {
                         name: track,
                         event: Some(ProtoReceiverEvent::State(ProtoReceiverState { status: status as i32 })),
+                    }));
+                }
+                EndpointLocalTrackEvent::VoiceActivity(level) => {
+                    let track = return_if_none!(self.local_track(track_id)).name().to_string();
+                    log::info!("[TransportWebrtcSdk] track {track} set audio_level {:?}", level);
+                    self.send_event(ProtoServerEvent::Receiver(ProtoReceiverEventContainer {
+                        name: track,
+                        event: Some(ProtoReceiverEvent::VoiceActivity(ProtoReceiverVoiceActivity { audio_level: level as i32 })),
                     }));
                 }
             },

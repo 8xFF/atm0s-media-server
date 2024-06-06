@@ -10,14 +10,14 @@ use media_server_utils::Small2dMap;
 use sans_io_runtime::{return_if_none, return_if_some, TaskGroup, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::{
-    cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
+    cluster::{ClusterAudioMixerEvent, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
     errors::EndpointErrors,
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportEvent, TransportState, TransportStats},
 };
 
 use self::{bitrate_allocator::BitrateAllocator, local_track::EndpointLocalTrack, remote_track::EndpointRemoteTrack};
 
-use super::{middleware::EndpointMiddleware, EndpointCfg, EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
+use super::{middleware::EndpointMiddleware, EndpointAudioMixerEvent, EndpointCfg, EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
 mod bitrate_allocator;
 mod local_track;
@@ -263,6 +263,12 @@ impl EndpointInternal {
             ClusterEndpointEvent::PeerLeaved(peer, meta) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerLeaved(peer, meta))),
             ClusterEndpointEvent::TrackStarted(peer, track, meta) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerTrackStarted(peer, track, meta))),
             ClusterEndpointEvent::TrackStopped(peer, track, meta) => self.queue.push_back(InternalOutput::Event(EndpointEvent::PeerTrackStopped(peer, track, meta))),
+            ClusterEndpointEvent::AudioMixer(event) => match event {
+                ClusterAudioMixerEvent::SlotSet(slot, peer, track) => self
+                    .queue
+                    .push_back(InternalOutput::Event(EndpointEvent::AudioMixer(EndpointAudioMixerEvent::SlotSet(slot, peer, track)))),
+                ClusterAudioMixerEvent::SlotUnset(slot) => self.queue.push_back(InternalOutput::Event(EndpointEvent::AudioMixer(EndpointAudioMixerEvent::SlotUnset(slot)))),
+            },
             ClusterEndpointEvent::RemoteTrack(track, event) => self.on_cluster_remote_track(now, track, event),
             ClusterEndpointEvent::LocalTrack(track, event) => self.on_cluster_local_track(now, track, event),
         }

@@ -504,7 +504,7 @@ pub mod server_event {
     pub struct Receiver {
         #[prost(string, tag = "1")]
         pub name: ::prost::alloc::string::String,
-        #[prost(oneof = "receiver::Event", tags = "2, 3")]
+        #[prost(oneof = "receiver::Event", tags = "2, 3, 4")]
         pub event: ::core::option::Option<receiver::Event>,
     }
     /// Nested message and enum types in `Receiver`.
@@ -552,12 +552,20 @@ pub mod server_event {
             }
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct VoiceActivity {
+            #[prost(int32, tag = "1")]
+            pub audio_level: i32,
+        }
+        #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Oneof)]
         pub enum Event {
             #[prost(message, tag = "2")]
             State(State),
             #[prost(message, tag = "3")]
             Stats(Stats),
+            #[prost(message, tag = "4")]
+            VoiceActivity(VoiceActivity),
         }
     }
     #[allow(clippy::derive_partial_eq_without_eq)]

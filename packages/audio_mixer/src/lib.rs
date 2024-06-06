@@ -74,7 +74,7 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
                 Some((slot, true))
             } else {
                 //We alway have lowest pin_slot here because above check dont have empty_slot
-                let (lowest_index, lowest_source, lowest_audio_level) = self.lowest_pinned_slot().expect("Should have lowest pined");
+                let (lowest_index, lowest_source, lowest_audio_level) = self.lowest_slot().expect("Should have lowest pined");
                 if lowest_source != source && audio_level as i16 >= lowest_audio_level as i16 + SWITCH_AUDIO_THRESHOLD {
                     log::info!(
                         "[AudioMixer] switch slot {} from source {:?} to source {:?} with higher audio_level",
@@ -122,7 +122,7 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
         self.len < self.outputs.len()
     }
 
-    fn lowest_pinned_slot(&self) -> Option<(usize, Src, i8)> {
+    fn lowest_slot(&self) -> Option<(usize, Src, i8)> {
         let mut lowest: Option<(usize, Src, i8)> = None;
         for (i, slot) in self.outputs.iter().enumerate() {
             if let Some(OutputSlotState { audio_level, source }) = slot {

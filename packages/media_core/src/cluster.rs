@@ -68,6 +68,12 @@ pub enum ClusterLocalTrackEvent {
     Ended,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClusterAudioMixerEvent {
+    SlotSet(u8, PeerId, TrackName),
+    SlotUnset(u8),
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterEndpointControl {
     Join(PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>),
@@ -84,6 +90,7 @@ pub enum ClusterEndpointEvent {
     PeerLeaved(PeerId, PeerMeta),
     TrackStarted(PeerId, TrackName, TrackMeta),
     TrackStopped(PeerId, TrackName, TrackMeta),
+    AudioMixer(ClusterAudioMixerEvent),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackEvent),
     LocalTrack(LocalTrackId, ClusterLocalTrackEvent),
 }

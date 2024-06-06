@@ -7,7 +7,7 @@ use std::{collections::VecDeque, time::Instant};
 use atm0s_sdn::TimePivot;
 use media_server_protocol::{
     endpoint::{PeerId, TrackName, TrackPriority},
-    media::MediaKind,
+    media::{MediaKind, MediaMeta},
     protobuf::shared::receiver::Status as ProtoStatus,
     transport::RpcError,
 };
@@ -20,11 +20,13 @@ use crate::{
     transport::LocalTrackEvent,
 };
 
-use self::packet_selector::PacketSelector;
+use packet_selector::PacketSelector;
+use voice_activity::VoiceActivityDetector;
 
 use super::bitrate_allocator::EgressAction;
 
 mod packet_selector;
+mod voice_activity;
 
 const MEDIA_TIMEOUT_MS: u64 = 2_000; //after 2s not receive media, the track will become inactive
 
@@ -60,6 +62,7 @@ pub struct EndpointLocalTrack {
     queue: VecDeque<Output>,
     selector: PacketSelector,
     timer: TimePivot,
+    voice_activity: VoiceActivityDetector,
 }
 
 impl EndpointLocalTrack {
@@ -72,6 +75,7 @@ impl EndpointLocalTrack {
             queue: VecDeque::new(),
             selector: PacketSelector::new(kind, 2, 2),
             timer: TimePivot::build(),
+            voice_activity: VoiceActivityDetector::default(),
         }
     }
 
@@ -121,6 +125,12 @@ impl EndpointLocalTrack {
                             Status::Active { last_media_ts } => {
                                 *last_media_ts = now_ms;
                             }
+                        }
+                    }
+
+                    if let MediaMeta::Opus { audio_level } = &pkt.meta {
+                        if let Some(level) = self.voice_activity.on_audio(now_ms, *audio_level) {
+                            self.queue.push_back(Output::Event(EndpointLocalTrackEvent::VoiceActivity(level)));
                         }
                     }
 
