@@ -139,7 +139,6 @@ mod tests {
             layers: None,
             meta: MediaMeta::Opus { audio_level: None },
             data: vec![1, 2, 3, 4],
-            audio_level: None,
         }
     }
 

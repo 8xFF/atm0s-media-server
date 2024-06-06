@@ -2,17 +2,17 @@
 pub mod cluster_gateway {
     include!("cluster_gateway.rs");
 }
-pub mod conn {
-    include!("conn.rs");
-}
 pub mod features {
     include!("features.rs");
+    pub mod mixer {
+        include!("features.mixer.rs");
+    }
 }
 pub mod gateway {
     include!("gateway.rs");
 }
-pub mod mix_minus {
-    include!("mix_minus.rs");
+pub mod session {
+    include!("session.rs");
 }
 pub mod shared {
     include!("shared.rs");

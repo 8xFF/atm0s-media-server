@@ -1,469 +1,187 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    fmt::Debug,
-    hash::Hash,
-};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 const SILENT_LEVEL: i8 = -127;
 const SWITCH_AUDIO_THRESHOLD: i16 = 30;
 /// if no audio pkt received in AUDIO_SLOT_TIMEOUT_MS, set audio level to SILENT_LEVEL
 const AUDIO_SLOT_TIMEOUT_MS: u64 = 1000;
 
-pub struct AudioMixerConfig {
-    pub outputs: usize,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum AudioMixerOutput<Pkt, Src> {
-    SlotPinned(Src, usize),
-    SlotUnpinned(Src, usize),
-    OutputSlotSrcChanged(usize, Option<Src>),
-    OutputSlotPkt(usize, Pkt),
-}
-
-#[allow(unused)]
-enum SourceState {
-    Unpinned { audio_level: i8, last_changed_at: u64 },
-    Pinned { pinned_at: u64, audio_level: i8, slot: usize, last_changed_at: u64 },
-}
-
-impl SourceState {
-    fn audio_level(&self) -> i8 {
-        match self {
-            SourceState::Unpinned { audio_level, .. } => *audio_level,
-            SourceState::Pinned { audio_level, .. } => *audio_level,
-        }
-    }
-
-    fn slot(&self) -> Option<usize> {
-        match self {
-            SourceState::Unpinned { .. } => None,
-            SourceState::Pinned { slot, .. } => Some(*slot),
-        }
-    }
-
-    fn set_audio_level(&mut self, now_ms: u64, audio_level: i8) {
-        match self {
-            SourceState::Unpinned {
-                audio_level: level, last_changed_at, ..
-            } => {
-                *level = audio_level;
-                *last_changed_at = now_ms;
-            }
-            SourceState::Pinned {
-                audio_level: level, last_changed_at, ..
-            } => {
-                *level = audio_level;
-                *last_changed_at = now_ms;
-            }
-        }
-    }
-
-    fn last_changed_at(&self) -> u64 {
-        match self {
-            SourceState::Unpinned { last_changed_at, .. } => *last_changed_at,
-            SourceState::Pinned { last_changed_at, .. } => *last_changed_at,
-        }
-    }
+struct SourceState {
+    last_changed_at: u64,
+    slot: Option<usize>,
 }
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
-enum OutputSlotState<Src: Clone> {
-    Empty,
-    Pinned { pinned_at: u64, audio_level: i8, source: Src, last_changed_at: u64 },
-}
-
-impl<Src: Clone> OutputSlotState<Src> {
-    #[allow(unused)]
-    pub fn audio_level(&self) -> Option<i8> {
-        match self {
-            OutputSlotState::Empty => None,
-            OutputSlotState::Pinned { audio_level, .. } => Some(*audio_level),
-        }
-    }
-
-    pub fn set_audio_level(&mut self, now_ms: u64, audio_level: i8) {
-        match self {
-            OutputSlotState::Empty => {}
-            OutputSlotState::Pinned {
-                audio_level: level, last_changed_at, ..
-            } => {
-                *level = audio_level;
-                *last_changed_at = now_ms;
-            }
-        }
-    }
+struct OutputSlotState<Src> {
+    audio_level: i8,
+    source: Src,
 }
 
 /// Implement lightweight audio mixer with mix-minus feature
 /// We will select n highest audio-level tracks
-pub struct AudioMixer<Pkt: Clone, Src: Debug + Clone + Eq + Hash> {
-    extractor: Box<dyn (Fn(&Pkt) -> Option<i8>) + Send + Sync>,
+pub struct AudioMixer<Src> {
+    len: usize,
     sources: HashMap<Src, SourceState>,
-    output_slots: Vec<OutputSlotState<Src>>,
-    actions: VecDeque<AudioMixerOutput<Pkt, Src>>,
+    outputs: Vec<Option<OutputSlotState<Src>>>,
 }
 
-impl<Pkt: Clone, Src: Debug + Clone + Eq + Hash> AudioMixer<Pkt, Src> {
-    pub fn new(extractor: Box<dyn (Fn(&Pkt) -> Option<i8>) + Send + Sync>, config: AudioMixerConfig) -> Self {
-        log::info!("[AudioMixer] create new with {} outputs", config.outputs);
+impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
+    pub fn new(output: usize) -> Self {
+        log::info!("[AudioMixer] create new with {output} outputs");
 
         Self {
-            extractor,
+            len: 0,
             sources: HashMap::new(),
-            output_slots: vec![OutputSlotState::Empty; config.outputs],
-            actions: VecDeque::new(),
+            outputs: vec![None; output],
         }
     }
 
-    pub fn on_tick(&mut self, now_ms: u64) {
-        for (src, state) in &mut self.sources {
-            if state.last_changed_at() + AUDIO_SLOT_TIMEOUT_MS <= now_ms && state.audio_level() != SILENT_LEVEL {
-                log::info!("[AudioMixer] set source {:?} audio level to SILENT_LEVEL after timeout", src);
-                state.set_audio_level(now_ms, SILENT_LEVEL);
-                if let Some(slot) = state.slot() {
-                    self.output_slots[slot].set_audio_level(now_ms, SILENT_LEVEL);
+    pub fn on_tick(&mut self, now_ms: u64) -> Option<Vec<usize>> {
+        let mut clear = vec![];
+        self.sources.retain(|k, v| {
+            if v.last_changed_at + AUDIO_SLOT_TIMEOUT_MS <= now_ms {
+                log::info!("[AudioMixer] del source {:?} after timeout", k);
+                if let Some(slot) = v.slot {
+                    self.outputs[slot] = None; //clear
+                    self.len -= 1;
+                    clear.push(slot);
+                }
+                false
+            } else {
+                true
+            }
+        });
+        if clear.is_empty() {
+            None
+        } else {
+            Some(clear)
+        }
+    }
+
+    pub fn on_pkt(&mut self, now_ms: u64, source: Src, audio_level: Option<i8>) -> Option<(usize, bool)> {
+        let audio_level = audio_level.unwrap_or(SILENT_LEVEL);
+        if let Some(s) = self.sources.get_mut(&source) {
+            s.last_changed_at = now_ms;
+            if let Some(slot) = s.slot {
+                Some((slot, false))
+            } else if self.has_empty_slot() {
+                let slot = self.find_empty_slot().expect("Should have empty");
+                log::info!("[AudioMixer] switch empty slot {} to source {:?}", slot, source);
+                self.sources.get_mut(&source).expect("Should have source").slot = Some(slot);
+                self.outputs[slot] = Some(OutputSlotState { audio_level, source });
+                self.len += 1;
+
+                Some((slot, true))
+            } else {
+                //We alway have lowest pin_slot here because above check dont have empty_slot
+                let (lowest_index, lowest_source, lowest_audio_level) = self.lowest_pinned_slot().expect("Should have lowest pined");
+                if lowest_source != source && audio_level as i16 >= lowest_audio_level as i16 + SWITCH_AUDIO_THRESHOLD {
+                    log::info!(
+                        "[AudioMixer] switch slot {} from source {:?} to source {:?} with higher audio_level",
+                        lowest_index,
+                        lowest_source,
+                        source
+                    );
+                    self.sources.get_mut(&source).expect("Should have source").slot = Some(lowest_index);
+                    self.sources.get_mut(&lowest_source).expect("Should have lowest_source").slot = None;
+                    self.outputs[lowest_index] = Some(OutputSlotState { audio_level, source: source.clone() });
+                    Some((lowest_index, true))
+                } else {
+                    None
                 }
             }
-        }
-    }
-
-    /// add source to mixer
-    /// if mixer slot is not full, select a empty slot and pin the source to the slot
-    /// return None if source already exists, return Some(()) if source added
-    pub fn add_source(&mut self, now_ms: u64, source: Src) -> Option<()> {
-        if self.sources.contains_key(&source) {
-            return None;
-        }
-        if let Some(slot) = self.find_empty_slot() {
-            log::info!("[AudioMixer] add source {:?} to slot {}", source, slot);
-            self.output_slots[slot] = OutputSlotState::Pinned {
-                pinned_at: now_ms,
-                audio_level: SILENT_LEVEL,
-                source: source.clone(),
-                last_changed_at: now_ms,
-            };
+        } else if let Some(slot) = self.find_empty_slot() {
+            log::info!("[AudioMixer] switch empty slot {} to source {:?}", slot, source);
             self.sources.insert(
                 source.clone(),
-                SourceState::Pinned {
-                    pinned_at: now_ms,
-                    audio_level: SILENT_LEVEL,
-                    slot,
+                SourceState {
                     last_changed_at: now_ms,
+                    slot: Some(slot),
                 },
             );
-            self.actions.push_back(AudioMixerOutput::SlotPinned(source.clone(), slot));
-            self.actions.push_back(AudioMixerOutput::OutputSlotSrcChanged(slot, Some(source)));
+            self.outputs[slot] = Some(OutputSlotState { audio_level, source });
+            self.len += 1;
+            Some((slot, true))
         } else {
-            log::info!("[AudioMixer] add source {:?} to mixer but no empty slot", source);
-            self.sources.insert(
-                source,
-                SourceState::Unpinned {
-                    audio_level: SILENT_LEVEL,
-                    last_changed_at: now_ms,
-                },
-            );
+            log::info!("[AudioMixer] new source {:?}", source);
+            self.sources.insert(source.clone(), SourceState { last_changed_at: now_ms, slot: None });
+            None
         }
-        Some(())
-    }
-
-    /// push pkt to mixer, if audio level is higher than lowest audio level + SWITCH_AUDIO_THRESHOLD, switch the slot to the source
-    pub fn push_pkt(&mut self, now_ms: u64, source: Src, pkt: Pkt) {
-        let audio_level = (self.extractor)(&pkt).unwrap_or(SILENT_LEVEL);
-        if audio_level == SILENT_LEVEL {
-            return;
-        }
-        if let Some(index) = self.set_source_level(now_ms, source, audio_level) {
-            log::trace!("[AudioMixer] push pkt to slot {}, audio level {}", index, audio_level);
-            self.actions.push_back(AudioMixerOutput::OutputSlotPkt(index, pkt));
-        }
-    }
-
-    /// remove source from mixer
-    /// if removed source id pinned, find another source to fill the slot
-    /// return None if source not found, return Some(()) if source removed
-    pub fn remove_source(&mut self, now_ms: u64, source: Src) -> Option<()> {
-        if let SourceState::Pinned { slot, .. } = self.sources.remove(&source)? {
-            //find another source to fill the slot
-            if let Some((src, state)) = self.highest_unpined_source() {
-                log::info!("[AudioMixer] remove source {:?} from slot {}, fill slot with source {:?}", source, slot, src);
-                *state = SourceState::Pinned {
-                    pinned_at: now_ms,
-                    audio_level: state.audio_level(),
-                    slot,
-                    last_changed_at: now_ms,
-                };
-                self.output_slots[slot] = OutputSlotState::Pinned {
-                    pinned_at: now_ms,
-                    audio_level: state.audio_level(),
-                    source: src.clone(),
-                    last_changed_at: now_ms,
-                };
-                self.actions.push_back(AudioMixerOutput::SlotUnpinned(source, slot));
-                self.actions.push_back(AudioMixerOutput::SlotPinned(src.clone(), slot));
-                self.actions.push_back(AudioMixerOutput::OutputSlotSrcChanged(slot, Some(src)));
-            } else {
-                log::info!("[AudioMixer] remove source {:?} from slot {}, no source to fill slot", source, slot);
-                self.output_slots[slot] = OutputSlotState::Empty;
-                self.actions.push_back(AudioMixerOutput::OutputSlotSrcChanged(slot, None));
-            }
-        }
-        Some(())
-    }
-
-    pub fn pop(&mut self) -> Option<AudioMixerOutput<Pkt, Src>> {
-        self.actions.pop_front()
     }
 
     fn find_empty_slot(&self) -> Option<usize> {
-        for (i, slot) in self.output_slots.iter().enumerate() {
-            if let OutputSlotState::Empty = slot {
+        for (i, slot) in self.outputs.iter().enumerate() {
+            if slot.is_none() {
                 return Some(i);
             }
         }
         None
     }
 
-    fn highest_unpined_source(&mut self) -> Option<(Src, &mut SourceState)> {
-        let mut highest: Option<(Src, &mut SourceState)> = None;
-        for (src, state) in self.sources.iter_mut() {
-            if let SourceState::Unpinned { audio_level, .. } = state {
-                if let Some((_, highest_state)) = &mut highest {
-                    if *audio_level > highest_state.audio_level() {
-                        highest = Some((src.clone(), state));
-                    }
-                } else {
-                    highest = Some((src.clone(), state));
-                }
-            }
-        }
-        highest
+    fn has_empty_slot(&self) -> bool {
+        self.len < self.outputs.len()
     }
 
-    fn lowest_pinned_slot(&self) -> Option<(usize, Src, i8, u64)> {
-        let mut lowest: Option<(usize, Src, i8, u64)> = None;
-        for (i, slot) in self.output_slots.iter().enumerate() {
-            if let OutputSlotState::Pinned {
-                audio_level, source, last_changed_at, ..
-            } = slot
-            {
-                if let Some((_, _, lowest_slot_audio_level, lowest_last_changed_at)) = &mut lowest {
-                    if *audio_level < *lowest_slot_audio_level || (*audio_level == *lowest_slot_audio_level && *last_changed_at < *lowest_last_changed_at) {
-                        lowest = Some((i, source.clone(), *audio_level, *last_changed_at));
+    fn lowest_pinned_slot(&self) -> Option<(usize, Src, i8)> {
+        let mut lowest: Option<(usize, Src, i8)> = None;
+        for (i, slot) in self.outputs.iter().enumerate() {
+            if let Some(OutputSlotState { audio_level, source }) = slot {
+                if let Some((_, _, lowest_slot_audio_level)) = &mut lowest {
+                    if *audio_level < *lowest_slot_audio_level || (*audio_level == *lowest_slot_audio_level) {
+                        lowest = Some((i, source.clone(), *audio_level));
                     }
                 } else {
-                    lowest = Some((i, source.clone(), *audio_level, *last_changed_at));
+                    lowest = Some((i, source.clone(), *audio_level));
                 }
             }
         }
         lowest
     }
-
-    /// set audio level for source, if source is pinned return Some(slot index), else return None
-    /// Each time we compare audio level with lowest pinned audio level,
-    /// if audio level is higher than lowest audio level + SWITCH_AUDIO_THRESHOLD,
-    /// we switch the slot to the source
-    fn set_source_level(&mut self, now_ms: u64, source: Src, level: i8) -> Option<usize> {
-        let state = self.sources.get_mut(&source)?;
-        match state {
-            SourceState::Unpinned { audio_level, last_changed_at, .. } => {
-                *audio_level = level;
-                *last_changed_at = now_ms;
-                if let Some((lowest_index, lowest_source, lowest_audio_level, _lowest_last_changed_at)) = self.lowest_pinned_slot() {
-                    if lowest_source != source && level > lowest_audio_level && level as i16 - lowest_audio_level as i16 >= SWITCH_AUDIO_THRESHOLD {
-                        log::info!(
-                            "[AudioMixer] switch slot {} from source {:?} to source {:?} with higher audio_level",
-                            lowest_index,
-                            lowest_source,
-                            source
-                        );
-                        self.sources.insert(
-                            source.clone(),
-                            SourceState::Pinned {
-                                pinned_at: now_ms,
-                                audio_level: level,
-                                slot: lowest_index,
-                                last_changed_at: now_ms,
-                            },
-                        );
-                        self.sources.insert(
-                            lowest_source.clone(),
-                            SourceState::Unpinned {
-                                audio_level: lowest_audio_level,
-                                last_changed_at: now_ms,
-                            },
-                        );
-                        self.output_slots[lowest_index] = OutputSlotState::Pinned {
-                            pinned_at: now_ms,
-                            audio_level: level,
-                            source: source.clone(),
-                            last_changed_at: now_ms,
-                        };
-
-                        self.actions.push_back(AudioMixerOutput::SlotUnpinned(lowest_source, lowest_index));
-                        self.actions.push_back(AudioMixerOutput::SlotPinned(source.clone(), lowest_index));
-                        self.actions.push_back(AudioMixerOutput::OutputSlotSrcChanged(lowest_index, Some(source)));
-
-                        Some(lowest_index)
-                    } else {
-                        log::trace!(
-                            "[AudioMixer] set source {:?} audio level to {}, but not higher than lowest audio level {} + SWITCH_AUDIO_THRESHOLD {}",
-                            source,
-                            level,
-                            lowest_audio_level,
-                            SWITCH_AUDIO_THRESHOLD
-                        );
-                        None
-                    }
-                } else {
-                    panic!("should not happen");
-                }
-            }
-            SourceState::Pinned {
-                audio_level, slot, last_changed_at, ..
-            } => {
-                *audio_level = level;
-                *last_changed_at = now_ms;
-                self.output_slots[*slot].set_audio_level(now_ms, level);
-                Some(*slot)
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{AudioMixer, AudioMixerConfig};
+    use super::{AudioMixer, AUDIO_SLOT_TIMEOUT_MS, SWITCH_AUDIO_THRESHOLD};
 
     #[test]
     fn add_remove_correct() {
-        let mut mixer = AudioMixer::<Option<i8>, u32>::new(Box::new(|v| *v), AudioMixerConfig { outputs: 2 });
-        assert_eq!(mixer.add_source(0, 100), Some(()));
-        assert_eq!(mixer.remove_source(0, 101), None);
-        assert_eq!(mixer.remove_source(0, 100), Some(()));
+        let mut mixer = AudioMixer::<u32>::new(2);
+        assert_eq!(mixer.on_pkt(0, 100, Some(10)), Some((0, true)));
+        assert_eq!(mixer.on_pkt(0, 101, Some(10)), Some((1, true)));
+        assert_eq!(mixer.on_pkt(0, 102, Some(10)), None);
+
+        assert_eq!(mixer.on_pkt(10, 100, Some(10)), Some((0, false)));
+        assert_eq!(mixer.on_pkt(10, 101, Some(10)), Some((1, false)));
+        assert_eq!(mixer.on_pkt(10, 102, Some(10)), None);
+
+        assert_eq!(mixer.on_tick(AUDIO_SLOT_TIMEOUT_MS), None);
     }
 
     #[test]
-    fn auto_pin_unpin_some_first_sources() {
-        let mut mixer = AudioMixer::<Option<i8>, u32>::new(Box::new(|v| *v), AudioMixerConfig { outputs: 2 });
+    fn auto_remove_timeout_source() {
+        let mut mixer = AudioMixer::<u32>::new(1);
+        assert_eq!(mixer.on_pkt(0, 100, Some(10)), Some((0, true)));
+        assert_eq!(mixer.on_pkt(0, 101, Some(10)), None);
 
-        mixer.add_source(0, 100);
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(100, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(100))));
-        assert_eq!(mixer.pop(), None);
+        assert_eq!(mixer.on_tick(100), None);
+        assert_eq!(mixer.on_pkt(100, 101, Some(10)), None);
 
-        mixer.add_source(0, 101);
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(101, 1)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(1, Some(101))));
-        assert_eq!(mixer.pop(), None);
-
-        mixer.add_source(0, 102);
-        assert_eq!(mixer.pop(), None);
-
-        //now remove pinned source 100 then mixer must switched free slot to source 102
-        mixer.remove_source(0, 100);
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotUnpinned(100, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(102, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(102))));
-        assert_eq!(mixer.pop(), None);
-
-        mixer.add_source(0, 100);
-        assert_eq!(mixer.pop(), None);
-
-        //remove unpined source 100 should not fire any event
-        mixer.remove_source(0, 100);
-        assert_eq!(mixer.pop(), None);
+        assert_eq!(mixer.on_tick(AUDIO_SLOT_TIMEOUT_MS), Some(vec![0])); //source 100 will be released
+        assert_eq!(mixer.on_pkt(100, 101, Some(10)), Some((0, true)));
     }
 
     #[test]
-    fn switch_highest_unpined_source_after_removed_pined_source() {
-        let mut mixer = AudioMixer::<Option<i8>, u32>::new(Box::new(|v| *v), AudioMixerConfig { outputs: 1 });
+    fn auto_switch_higher_source() {
+        let mut mixer = AudioMixer::<u32>::new(1);
+        assert_eq!(mixer.on_pkt(0, 100, Some(10)), Some((0, true)));
+        assert_eq!(mixer.on_pkt(0, 101, Some(10)), None);
 
-        mixer.add_source(0, 100);
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(100, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(100))));
-        assert_eq!(mixer.pop(), None);
+        assert_eq!(mixer.on_tick(100), None);
+        assert_eq!(mixer.on_pkt(100, 100, Some(10)), Some((0, false)));
+        assert_eq!(mixer.on_pkt(100, 101, Some(10)), None);
 
-        mixer.add_source(0, 101);
-        mixer.add_source(0, 102);
-        mixer.add_source(0, 103);
-        assert_eq!(mixer.pop(), None);
-
-        mixer.push_pkt(0, 100, Some(100));
-        mixer.push_pkt(0, 101, Some(101));
-        mixer.push_pkt(0, 102, Some(102));
-        mixer.push_pkt(0, 103, Some(103));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(100))));
-        assert_eq!(mixer.pop(), None);
-
-        mixer.remove_source(0, 100);
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotUnpinned(100, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(103, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(103))));
-        assert_eq!(mixer.pop(), None);
-    }
-
-    #[test]
-    fn auto_set_silent_after_timeout() {
-        let mut mixer = AudioMixer::<Option<i8>, u32>::new(Box::new(|v| *v), AudioMixerConfig { outputs: 1 });
-
-        mixer.add_source(0, 100);
-        mixer.add_source(0, 101);
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(100, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(100))));
-        assert_eq!(mixer.pop(), None);
-
-        mixer.push_pkt(100, 100, Some(10));
-        mixer.push_pkt(100, 101, Some(10));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(10))));
-        assert_eq!(mixer.pop(), None);
-
-        //will reset audio level to SILENT_LEVEL after AUDIO_SLOT_TIMEOUT_MS
-        mixer.on_tick(100 + super::AUDIO_SLOT_TIMEOUT_MS);
-
-        assert_eq!(mixer.sources.get(&100).expect("").audio_level(), super::SILENT_LEVEL);
-        assert_eq!(mixer.output_slots[0].audio_level(), Some(super::SILENT_LEVEL));
-
-        //now mixer will switch slot to source 101
-        mixer.push_pkt(100 + super::AUDIO_SLOT_TIMEOUT_MS, 101, Some(6));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotUnpinned(100, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(101, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(101))));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(6))));
-        assert_eq!(mixer.pop(), None);
-    }
-
-    #[test]
-    fn switch_higher_source() {
-        let mut mixer = AudioMixer::<Option<i8>, u32>::new(Box::new(|v| *v), AudioMixerConfig { outputs: 1 });
-
-        mixer.add_source(0, 100);
-        mixer.add_source(0, 101);
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(100, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(100))));
-        assert_eq!(mixer.pop(), None);
-
-        let first_level = 10;
-        mixer.push_pkt(100, 100, Some(first_level));
-        mixer.push_pkt(100, 101, Some(0));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(first_level))));
-        assert_eq!(mixer.pop(), None);
-
-        //dont switch if dont higher than SWITCH_AUDIO_THRESHOLD
-        mixer.push_pkt(100, 101, Some(first_level + super::SWITCH_AUDIO_THRESHOLD as i8 / 2));
-        assert_eq!(mixer.pop(), None);
-
-        //now mixer will switch slot to source 101
-        mixer.push_pkt(100, 101, Some(first_level + super::SWITCH_AUDIO_THRESHOLD as i8));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotUnpinned(100, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::SlotPinned(101, 0)));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotSrcChanged(0, Some(101))));
-        assert_eq!(mixer.pop(), Some(super::AudioMixerOutput::OutputSlotPkt(0, Some(first_level + super::SWITCH_AUDIO_THRESHOLD as i8))));
-        assert_eq!(mixer.pop(), None);
-
-        //after switch should not fire event from source 100
-        mixer.push_pkt(100, 100, Some(first_level));
-        assert_eq!(mixer.pop(), None);
+        assert_eq!(mixer.on_tick(200), None); //source 100 will be released
+        assert_eq!(mixer.on_pkt(200, 100, Some(10)), Some((0, false)));
+        assert_eq!(mixer.on_pkt(200, 101, Some(10 + SWITCH_AUDIO_THRESHOLD as i8)), Some((0, true)));
     }
 }

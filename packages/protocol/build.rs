@@ -15,8 +15,9 @@ fn main() -> Result<()> {
         .compile_protos(
             &[
                 "./proto/shared.proto",
-                "./proto/conn.proto",
+                "./proto/session.proto",
                 "./proto/features.proto",
+                "./proto/features.mixer.proto",
                 "./proto/gateway.proto",
                 "./proto/cluster_gateway.proto",
             ],

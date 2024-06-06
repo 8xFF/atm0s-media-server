@@ -40,7 +40,7 @@ pub enum Output {
 pub struct EndpointRemoteTrack {
     meta: TrackMeta,
     room: Option<ClusterRoomHash>,
-    name: Option<String>,
+    name: Option<TrackName>,
     queue: VecDeque<Output>,
     allocate_bitrate: Option<u64>,
     /// This is for storing current stream layers, everytime key-frame arrived we will set this if it not set
@@ -68,14 +68,15 @@ impl EndpointRemoteTrack {
         log::info!("[EndpointRemoteTrack] join room {room}");
         let name = return_if_none!(self.name.clone());
         log::info!("[EndpointRemoteTrack] started as name {name} after join room");
-        self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())));
+        self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Started(name, self.meta.clone())));
     }
+
     fn on_leave_room(&mut self, _now: Instant) {
         let room = self.room.take().expect("Must have room here");
         log::info!("[EndpointRemoteTrack] leave room {room}");
-        let name = return_if_none!(self.name.as_ref());
+        let name = return_if_none!(self.name.clone());
         log::info!("[EndpointRemoteTrack] stopped as name {name} after leave room");
-        self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Ended));
+        self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Ended(name, self.meta.clone())));
     }
 
     fn on_cluster_event(&mut self, _now: Instant, event: ClusterRemoteTrackEvent) {
@@ -95,7 +96,7 @@ impl EndpointRemoteTrack {
     fn on_transport_event(&mut self, _now: Instant, event: RemoteTrackEvent) {
         match event {
             RemoteTrackEvent::Started { name, priority, meta: _ } => {
-                self.name = Some(name.clone());
+                self.name = Some(name.clone().into());
                 let room = return_if_none!(self.room.as_ref());
                 log::info!("[EndpointRemoteTrack] started as name {name} in room {room}");
                 self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name), self.meta.clone())));
@@ -123,7 +124,7 @@ impl EndpointRemoteTrack {
                 let name = return_if_none!(self.name.take());
                 let room = return_if_none!(self.room.as_ref());
                 log::info!("[EndpointRemoteTrack] stopped with name {name} in room {room}");
-                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Ended));
+                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Ended(name, self.meta.clone())));
                 self.queue.push_back(Output::Stopped(self.meta.kind));
             }
         }
@@ -189,6 +190,12 @@ impl TaskSwitcherChild<Output> for EndpointRemoteTrack {
     type Time = Instant;
     fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         self.queue.pop_front()
+    }
+}
+
+impl Drop for EndpointRemoteTrack {
+    fn drop(&mut self) {
+        assert_eq!(self.queue.len(), 0);
     }
 }
 

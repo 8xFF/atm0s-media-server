@@ -1,4 +1,4 @@
-RUST_LOG=atm0s_sdn_network::features::socket=debug,info \
+RUST_LOG=info \
 RUST_BACKTRACE=1 \
 cargo run -- \
     --http-port 3000 \
@@ -8,4 +8,6 @@ cargo run -- \
     gateway \
         --lat 10 \
         --lon 20 \
+        --max-memory 100 \
+        --max-disk 100 \
         --geo-db "../maxminddb-data/GeoLite2-City.mmdb"

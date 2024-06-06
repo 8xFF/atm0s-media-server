@@ -69,7 +69,7 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
         );
         for (endpoint, track) in &channel_container.endpoints {
             self.queue
-                .push_back(Output::Endpoint(vec![*endpoint], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::SourceChanged)))
+                .push_back(Output::Endpoint(vec![*endpoint], ClusterEndpointEvent::LocalTrack(*track, ClusterLocalTrackEvent::RelayChanged)))
         }
     }
 
@@ -196,7 +196,6 @@ mod tests {
             layers: None,
             meta: MediaMeta::Opus { audio_level: None },
             data: vec![1, 2, 3, 4],
-            audio_level: None,
         }
     }
 
@@ -208,7 +207,7 @@ mod tests {
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);
 
         let endpoint = 2;
-        let track = LocalTrackId::Normal(3);
+        let track = LocalTrackId(3);
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
@@ -239,7 +238,7 @@ mod tests {
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);
 
         let endpoint = 2;
-        let track = LocalTrackId::Normal(3);
+        let track = LocalTrackId(3);
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
@@ -265,7 +264,7 @@ mod tests {
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);
 
         let endpoint1 = 2;
-        let track1 = LocalTrackId::Normal(3);
+        let track1 = LocalTrackId(3);
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
@@ -287,7 +286,7 @@ mod tests {
 
         // more local track sub that channel
         let endpoint2 = 3;
-        let track2 = LocalTrackId::Normal(4);
+        let track2 = LocalTrackId(4);
         subscriber.on_track_subscribe(endpoint2, track2, target_peer.clone(), target_track.clone());
         assert_eq!(subscriber.pop_output(Instant::now()), None);
 

@@ -94,10 +94,17 @@ impl EndpointLocalTrack {
     fn on_cluster_event(&mut self, now: Instant, event: ClusterLocalTrackEvent) {
         match event {
             ClusterLocalTrackEvent::Started => todo!(),
+            ClusterLocalTrackEvent::RelayChanged => {
+                if self.kind.is_video() {
+                    let room = return_if_none!(self.room.as_ref());
+                    log::info!("[EndpointLocalTrack] relay changed => request key-frame");
+                    self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame));
+                }
+            }
             ClusterLocalTrackEvent::SourceChanged => {
-                let room = return_if_none!(self.room.as_ref());
-                log::info!("[EndpointLocalTrack] source changed => request key-frame and reset seq, ts rewrite");
-                self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame));
+                //currently for audio_mixer
+                log::info!("[EndpointLocalTrack] source changed => reset seq, ts rewrite");
+                self.selector.reset();
             }
             ClusterLocalTrackEvent::Media(channel, mut pkt) => {
                 log::trace!("[EndpointLocalTrack] on media payload {:?} seq {}", pkt.meta, pkt.seq);
@@ -260,6 +267,12 @@ impl TaskSwitcherChild<Output> for EndpointLocalTrack {
     type Time = Instant;
     fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         self.queue.pop_front()
+    }
+}
+
+impl Drop for EndpointLocalTrack {
+    fn drop(&mut self) {
+        assert_eq!(self.queue.len(), 0);
     }
 }
 

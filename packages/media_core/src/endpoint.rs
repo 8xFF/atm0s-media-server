@@ -3,7 +3,7 @@
 use std::{marker::PhantomData, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
+    endpoint::{AudioMixerConfig, BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority, TrackSource},
     media::MediaPacket,
     protobuf,
     transport::RpcResult,
@@ -53,21 +53,6 @@ pub enum EndpointRemoteTrackRes {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct EndpointLocalTrackSource {
-    pub peer: PeerId,
-    pub track: TrackName,
-}
-
-impl From<protobuf::shared::receiver::Source> for EndpointLocalTrackSource {
-    fn from(value: protobuf::shared::receiver::Source) -> Self {
-        Self {
-            peer: value.peer.into(),
-            track: value.track.into(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub struct EndpointLocalTrackConfig {
     pub priority: TrackPriority,
     pub max_spatial: u8,
@@ -90,7 +75,7 @@ impl From<protobuf::shared::receiver::Config> for EndpointLocalTrackConfig {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointLocalTrackReq {
-    Attach(EndpointLocalTrackSource, EndpointLocalTrackConfig),
+    Attach(TrackSource, EndpointLocalTrackConfig),
     Detach(),
     Config(EndpointLocalTrackConfig),
 }
@@ -108,7 +93,7 @@ pub struct EndpointReqId(pub u32);
 /// This is control APIs, which is used to control server from Endpoint SDK
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointReq {
-    JoinRoom(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe),
+    JoinRoom(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>),
     LeaveRoom,
     SubscribePeer(PeerId),
     UnsubscribePeer(PeerId),

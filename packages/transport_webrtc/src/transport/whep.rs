@@ -4,11 +4,11 @@ use std::{
 };
 
 use media_server_core::{
-    endpoint::{EndpointEvent, EndpointLocalTrackConfig, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointLocalTrackSource, EndpointReq},
+    endpoint::{EndpointEvent, EndpointLocalTrackConfig, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointReq},
     transport::{LocalTrackEvent, LocalTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
 use media_server_protocol::{
-    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
+    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority, TrackSource},
     media::MediaKind,
 };
 use sans_io_runtime::{collections::DynamicDeque, return_if_none};
@@ -172,6 +172,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                         PeerMeta { metadata: None },
                         RoomInfoPublish { peer: false, tracks: false },
                         RoomInfoSubscribe { peers: false, tracks: true },
+                        None,
                     ),
                 )));
                 self.queue
@@ -289,7 +290,7 @@ impl TransportWebrtcWhep {
                     EndpointReq::LocalTrack(
                         AUDIO_TRACK,
                         EndpointLocalTrackReq::Attach(
-                            EndpointLocalTrackSource { peer, track },
+                            TrackSource { peer, track },
                             EndpointLocalTrackConfig {
                                 priority: DEFAULT_PRIORITY,
                                 max_spatial: 2,
@@ -312,7 +313,7 @@ impl TransportWebrtcWhep {
                     EndpointReq::LocalTrack(
                         VIDEO_TRACK,
                         EndpointLocalTrackReq::Attach(
-                            EndpointLocalTrackSource { peer, track },
+                            TrackSource { peer, track },
                             EndpointLocalTrackConfig {
                                 priority: DEFAULT_PRIORITY,
                                 max_spatial: 2,

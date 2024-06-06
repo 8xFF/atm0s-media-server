@@ -13,28 +13,10 @@ use sans_io_runtime::{
 
 use crate::endpoint::{EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
+pub use media_server_protocol::transport::{LocalTrackId, RemoteTrackId};
+
 #[derive(From, Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub struct TransportId(pub u64);
-
-/// RemoteTrackId is used for track which received media from client
-#[derive(From, Debug, Clone, Copy, PartialEq, Eq, Display)]
-pub struct RemoteTrackId(pub u16);
-
-impl Hash for RemoteTrackId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-/// LocalTrackId is used for track which send media to client
-#[derive(From, Debug, Clone, Copy, PartialEq, Eq, Display)]
-pub struct LocalTrackId(pub u16);
-
-impl Hash for LocalTrackId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TransportError {

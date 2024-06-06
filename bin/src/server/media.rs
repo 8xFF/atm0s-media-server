@@ -147,13 +147,13 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                 0, //because sdn controller allway is run inside worker 0
                 ExtIn::Sdn(SdnExtIn::ServicesControl(
                     AGENT_SERVICE_ID.into(),
-                    0.into(),
+                    media_server_runner::UserData::Cluster,
                     media_server_gateway::agent_service::Control::NodeStats(metrics).into(),
                 )),
             );
         }
         while let Ok(control) = vnet_rx.try_recv() {
-            controller.send_to_best(ExtIn::Sdn(SdnExtIn::FeaturesControl(0.into(), control.into())));
+            controller.send_to_best(ExtIn::Sdn(SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, control.into())));
         }
         while let Ok(req) = req_rx.try_recv() {
             let req_id = req_id_seed;

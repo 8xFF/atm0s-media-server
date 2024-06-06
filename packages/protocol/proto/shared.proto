@@ -2,6 +2,11 @@ syntax = "proto3";
 
 package shared;
 
+message Error {
+    uint32 code = 1;
+    string message = 2;
+}
+
 enum Kind {
     AUDIO = 0;
     VIDEO = 1;
@@ -64,7 +69,6 @@ message Sender {
     State state = 3;
 }
 
-
 message Tracks {
     repeated Receiver receivers = 1;
     repeated Sender senders = 2;
@@ -80,20 +84,7 @@ message RoomInfoSubscribe {
     bool tracks = 2;
 }
 
-message RoomJoin {
-    string room = 1;
-    string peer = 2;
-    RoomInfoPublish publish = 3;
-    RoomInfoSubscribe subscribe = 4;
-    optional string metadata = 5;
-}
-
 enum BitrateControlMode {
     DYNAMIC_CONSUMERS = 0;
     MAX_BITRATE = 1;
-}
-
-message Error {
-    uint32 code = 1;
-    string message = 2;
 }

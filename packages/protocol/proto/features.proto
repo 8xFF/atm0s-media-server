@@ -1,27 +1,27 @@
 syntax = "proto3";
 
-import "features_mix_minus.proto";
+import "features.mixer.proto";
 
 package features;
 
 message Config {
-    optional mix_minus.Config mix_minus = 1;
+    optional features.mixer.Config mixer = 1;
 }
 
 message Request {
     oneof request {
-        mix_minus.Request mix_minus = 1;
+        features.mixer.Request mixer = 1;
     }
 }
 
 message Response {
     oneof response {
-        mix_minus.Response mix_minus = 1;
+        features.mixer.Response mixer = 1;
     }
 }
 
 message ServerEvent {
     oneof event {
-        mix_minus.ServerEvent mix_minus = 1;
+        features.mixer.ServerEvent mixer = 1;
     }
 }
