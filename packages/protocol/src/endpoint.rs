@@ -215,7 +215,7 @@ impl PeerId {
 pub struct PeerHashCode(pub u64);
 
 ///
-/// PeerMeta will store cusntom infomation
+/// PeerMeta will store custom information
 ///
 /// TODO: implement it
 ///
@@ -250,7 +250,7 @@ impl PeerInfo {
 }
 
 ///
-/// We useBitrateControlMode for controling how server adapt with consumer bitrates
+/// We useBitrateControlMode for controlling how server adapt with consumer bitrates
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BitrateControlMode {

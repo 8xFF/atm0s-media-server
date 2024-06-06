@@ -60,9 +60,9 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
     /// We a endpoint join we need to restore current set slots
     pub fn on_endpoint_join(&mut self, endpoint: Endpoint, peer: PeerId, tracks: Vec<LocalTrackId>) {
         assert!(!self.endpoints.contains_key(&endpoint));
-        log::info!("[AudioMixerSubsciber] endpoint {:?} peer {peer} join with tracks {:?}", endpoint, tracks);
+        log::info!("[AudioMixerSubscriber] endpoint {:?} peer {peer} join with tracks {:?}", endpoint, tracks);
         if self.endpoints.is_empty() {
-            log::info!("[AudioMixerSubsciber] first endpoint join as Auto mode => subscribe channel {}", self.channel_id);
+            log::info!("[AudioMixerSubscriber] first endpoint join as Auto mode => subscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::SubAuto)));
         }
 
@@ -137,10 +137,10 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
 
     pub fn on_endpoint_leave(&mut self, endpoint: Endpoint) {
         assert!(self.endpoints.contains_key(&endpoint));
-        log::info!("[AudioMixerSubsciber] endpoint {:?} leave", endpoint);
+        log::info!("[AudioMixerSubscriber] endpoint {:?} leave", endpoint);
         self.endpoints.remove(&endpoint);
         if self.endpoints.is_empty() {
-            log::info!("[AudioMixerSubsciber] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
+            log::info!("[AudioMixerSubscriber] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::UnsubAuto)));
         }
     }
