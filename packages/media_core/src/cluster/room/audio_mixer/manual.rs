@@ -53,7 +53,7 @@ impl<Endpoint: Clone> ManualMixer<Endpoint> {
     fn attach(&mut self, _now: Instant, source: TrackSource) {
         let channel_id = id_generator::gen_channel_id(self.room, &source.peer, &source.track);
         if !self.sources.contains_key(&channel_id) {
-            log::info!("[ManualMixer] add source {:?} => sub {channel_id}", source);
+            log::info!("[ClusterManualMixer] add source {:?} => sub {channel_id}", source);
             self.sources.insert(channel_id, source);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto)));
         }
@@ -86,7 +86,7 @@ impl<Endpoint: Clone> ManualMixer<Endpoint> {
     fn detach(&mut self, _now: Instant, source: TrackSource) {
         let channel_id = id_generator::gen_channel_id(self.room, &source.peer, &source.track);
         if let Some(_) = self.sources.remove(&channel_id) {
-            log::info!("[ManualMixer] remove source {:?} => unsub {channel_id}", source);
+            log::info!("[ClusterManualMixer] remove source {:?} => unsub {channel_id}", source);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)));
         }
     }
@@ -126,7 +126,7 @@ impl<Endpoint: Clone> Task<Input, Output<Endpoint>> for ManualMixer<Endpoint> {
                 // we cannot ensure client will release it before it disconnect.
                 let sources = std::mem::replace(&mut self.sources, Default::default());
                 for (channel_id, source) in sources {
-                    log::info!("[ManualMixer] remove source {:?} on queue => unsub {channel_id}", source);
+                    log::info!("[ClusterManualMixer] remove source {:?} on queue => unsub {channel_id}", source);
                     self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)));
                 }
                 self.queue.push_back(Output::OnResourceEmpty);
@@ -147,7 +147,7 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for ManualMixer<Endpoint> {
 
 impl<Endpoint> Drop for ManualMixer<Endpoint> {
     fn drop(&mut self) {
-        log::info!("Drop ManualMixer {}", self.room);
+        log::info!("[ClusterManualMixer] Drop {}", self.room);
         assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
         assert_eq!(self.sources.len(), 0, "Sources not empty on drop");
     }

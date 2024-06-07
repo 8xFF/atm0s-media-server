@@ -64,7 +64,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         let key = (endpoint, track);
         assert!(!self.tracks.contains_key(&key));
         if self.tracks.is_empty() {
-            log::info!("[AudioMixerPublisher] first track join as Auto mode => publish channel {}", self.channel_id);
+            log::info!("[ClusterAudioMixerPublisher] first track join as Auto mode => publish channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::PubStart)));
         }
         self.tracks.insert(
@@ -109,12 +109,12 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
     }
 
     pub fn on_track_unpublish(&mut self, _now: Instant, endpoint: Endpoint, track: RemoteTrackId) {
-        log::debug!("on track unpublish {track}");
+        log::debug!("[ClusterAudioMixerPublisher] on track unpublish {track}");
         let key = (endpoint, track);
         assert!(self.tracks.contains_key(&key));
         self.tracks.remove(&key);
         if self.tracks.is_empty() {
-            log::info!("[AudioMixerPublisher] last track leave ind Auto mode => unpublish channel {}", self.channel_id);
+            log::info!("[ClusterAudioMixerPublisher] last track leave ind Auto mode => unpublish channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::PubStop)));
             self.queue.push_back(Output::OnResourceEmpty);
         }
@@ -130,7 +130,7 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpo
 
 impl<Endpoint> Drop for AudioMixerPublisher<Endpoint> {
     fn drop(&mut self) {
-        log::info!("Drop AudioMixerPublisher {}", self.channel_id);
+        log::info!("[ClusterAudioMixerPublisher] Drop {}", self.channel_id);
         assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
         assert_eq!(self.tracks.len(), 0, "Tracks not empty on drop");
     }

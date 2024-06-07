@@ -353,7 +353,7 @@ impl<Endpoint: Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for RoomMetadata<E
 
 impl<Endpoint: Hash + Eq> Drop for RoomMetadata<Endpoint> {
     fn drop(&mut self) {
-        log::info!("Drop RoomMetadata {}", self.room);
+        log::info!("[ClusterRoomMetadata] Drop {}", self.room);
         assert_eq!(self.queue.len(), 0, "Queue not empty");
         assert_eq!(self.peers.len(), 0, "Peers not empty");
         assert_eq!(self.peers_map_subscribers.len(), 0, "Peers subscriber not empty");

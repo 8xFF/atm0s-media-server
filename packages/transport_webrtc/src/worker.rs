@@ -78,6 +78,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
         let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone(), self.ice_lite)?;
         let endpoint = Endpoint::new(cfg, tran);
         let index = self.endpoints.add_task(endpoint);
+        log::info!("[TransportWebrtc] create endpoint {index}");
         self.shared_port.add_ufrag(ufrag, index);
         Ok((self.ice_lite, sdp, index))
     }
@@ -87,6 +88,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
             EndpointOutput::Net(net) => GroupOutput::Net(net),
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcSession(index), room, control),
             EndpointOutput::Destroy => {
+                log::info!("[TransportWebrtc] destroy endpoint {index}");
                 self.endpoints.remove_task(index);
                 self.shared_port.remove_task(index);
                 GroupOutput::Shutdown(WebrtcSession(index))

@@ -102,7 +102,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
                     self.subscriber.input(&mut self.switcher).on_endpoint_join(now, endpoint, peer, cfg.outputs);
                 }
                 media_server_protocol::endpoint::AudioMixerMode::Manual => {
-                    log::info!("[ClusterAudioMixer] add manual mode for {:?} {peer}", endpoint);
+                    log::info!("[ClusterRoomAudioMixer] add manual mode for {:?} {peer}", endpoint);
                     let manual_mixer = ManualMixer::new(self.room, endpoint.clone(), cfg.outputs);
                     let new_index = self.manuals.input(&mut self.switcher).add_task(manual_mixer);
                     if let Some(_old_index) = self.manual_mode.insert(endpoint, new_index) {
@@ -114,7 +114,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
     }
 
     pub fn on_control(&mut self, now: Instant, endpoint: Endpoint, control: ClusterAudioMixerControl) {
-        log::info!("[ClusterAudioMixer] on endpoint {:?} input {:?}", endpoint, control);
+        log::info!("[ClusterRoomAudioMixer] on endpoint {:?} input {:?}", endpoint, control);
         let index = *self.manual_mode.get(&endpoint).expect("Manual mixer not found for control");
         let input = match control {
             ClusterAudioMixerControl::Attach(sources) => manual::Input::Attach(sources),
@@ -127,7 +127,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
         if let Some(_peer) = self.auto_mode.remove(&endpoint) {
             self.subscriber.input(&mut self.switcher).on_endpoint_leave(now, endpoint);
         } else if let Some(index) = self.manual_mode.remove(&endpoint) {
-            log::info!("[ClusterAudioMixer] endpoint {:?} leave from manual mode", endpoint);
+            log::info!("[ClusterRoomAudioMixer] endpoint {:?} leave from manual mode", endpoint);
             self.manual_mode.remove(&endpoint);
             self.manuals.input(&mut self.switcher).on_event(now, index, manual::Input::LeaveRoom);
         }
@@ -236,7 +236,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
 
 impl<Endpoint: Clone> Drop for AudioMixer<Endpoint> {
     fn drop(&mut self) {
-        log::info!("Drop AudioMixer {}", self.room);
+        log::info!("[ClusterRoomAudioMixer] Drop {}", self.room);
         assert_eq!(self.manual_channels.len(), 0, "Manual channels not empty on drop");
         assert_eq!(self.manual_mode.len(), 0, "Manual modes not empty on drop");
         assert_eq!(self.manuals.tasks(), 0, "Manuals not empty on drop");

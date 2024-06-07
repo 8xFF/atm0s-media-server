@@ -132,6 +132,6 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
 
 impl<Endpoint> Drop for MediaTrack<Endpoint> {
     fn drop(&mut self) {
-        log::info!("Drop MediaTrack {}", self.room);
+        log::info!("[ClusterRoomMediaTrack] Drop {}", self.room);
     }
 }

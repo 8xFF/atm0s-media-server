@@ -65,9 +65,9 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
     /// We a endpoint join we need to restore current set slots
     pub fn on_endpoint_join(&mut self, _now: Instant, endpoint: Endpoint, peer: PeerId, tracks: Vec<LocalTrackId>) {
         assert!(!self.endpoints.contains_key(&endpoint));
-        log::info!("[AudioMixerSubscriber] endpoint {:?} peer {peer} join with tracks {:?}", endpoint, tracks);
+        log::info!("[ClusterAudioMixerSubscriber] endpoint {:?} peer {peer} join with tracks {:?}", endpoint, tracks);
         if self.endpoints.is_empty() {
-            log::info!("[AudioMixerSubscriber] first endpoint join as Auto mode => subscribe channel {}", self.channel_id);
+            log::info!("[ClusterAudioMixerSubscriber] first endpoint join as Auto mode => subscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::SubAuto)));
         }
 
@@ -142,10 +142,10 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
 
     pub fn on_endpoint_leave(&mut self, _now: Instant, endpoint: Endpoint) {
         assert!(self.endpoints.contains_key(&endpoint));
-        log::info!("[AudioMixerSubscriber] endpoint {:?} leave", endpoint);
+        log::info!("[ClusterAudioMixerSubscriber] endpoint {:?} leave", endpoint);
         self.endpoints.swap_remove(&endpoint);
         if self.endpoints.is_empty() {
-            log::info!("[AudioMixerSubscriber] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
+            log::info!("[ClusterAudioMixerSubscriber] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::UnsubAuto)));
             self.queue.push_back(Output::OnResourceEmpty);
         }
@@ -161,7 +161,7 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endp
 
 impl<Endpoint> Drop for AudioMixerSubscriber<Endpoint> {
     fn drop(&mut self) {
-        log::info!("Drop AudioMixerSubscriber {}", self.channel_id);
+        log::info!("[ClusterAudioMixerSubscriber] Drop {}", self.channel_id);
         assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
         assert_eq!(self.endpoints.len(), 0, "Endpoints not empty on drop");
     }
