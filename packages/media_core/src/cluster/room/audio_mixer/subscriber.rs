@@ -157,8 +157,8 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endp
 impl<Endpoint> Drop for AudioMixerSubscriber<Endpoint> {
     fn drop(&mut self) {
         log::info!("Drop AudioMixerSubscriber {}", self.channel_id);
-        assert_eq!(self.queue.len(), 0);
-        assert_eq!(self.endpoints.len(), 0);
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
+        assert_eq!(self.endpoints.len(), 0, "Endpoints not empty on drop");
     }
 }
 

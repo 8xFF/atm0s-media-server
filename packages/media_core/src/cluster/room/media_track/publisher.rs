@@ -121,9 +121,9 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
 impl<Endpoint> Drop for RoomChannelPublisher<Endpoint> {
     fn drop(&mut self) {
         log::info!("Drop RoomChannelPublisher {}", self.room);
-        assert_eq!(self.queue.len(), 0);
-        assert_eq!(self.tracks.len(), 0);
-        assert_eq!(self.tracks_source.len(), 0);
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
+        assert_eq!(self.tracks.len(), 0, "Tracks not empty on drop");
+        assert_eq!(self.tracks_source.len(), 0, "Tracks source not empty on drop");
     }
 }
 

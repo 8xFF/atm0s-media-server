@@ -145,7 +145,7 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for ManualMixer<Endpoint> {
 impl<Endpoint> Drop for ManualMixer<Endpoint> {
     fn drop(&mut self) {
         log::info!("Drop ManualMixer {}", self.room);
-        assert_eq!(self.queue.len(), 0);
-        assert_eq!(self.sources.len(), 0)
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
+        assert_eq!(self.sources.len(), 0, "Sources not empty on drop");
     }
 }

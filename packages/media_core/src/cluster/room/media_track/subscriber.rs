@@ -170,9 +170,9 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
 impl<Endpoint> Drop for RoomChannelSubscribe<Endpoint> {
     fn drop(&mut self) {
         log::info!("Drop RoomChannelSubscribe {}", self.room);
-        assert_eq!(self.queue.len(), 0, "Queue not empty");
-        assert_eq!(self.channels.len(), 0, "Channels not empty");
-        assert_eq!(self.subscribers.len(), 0, "Subscribers not empty");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
+        assert_eq!(self.channels.len(), 0, "Channels not empty on drop");
+        assert_eq!(self.subscribers.len(), 0, "Subscribers not empty on drop");
     }
 }
 

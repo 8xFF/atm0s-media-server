@@ -206,8 +206,8 @@ impl<Endpoint: Clone> TaskSwitcherChild<Output<Endpoint>> for AudioMixer<Endpoin
 
 impl<Endpoint: Clone> Drop for AudioMixer<Endpoint> {
     fn drop(&mut self) {
-        assert_eq!(self.manual_channels.len(), 0);
-        assert_eq!(self.manual_mode.len(), 0);
-        assert_eq!(self.manuals.tasks(), 0);
+        assert_eq!(self.manual_channels.len(), 0, "Manual channels not empty on drop");
+        assert_eq!(self.manual_mode.len(), 0, "Manual modes not empty on drop");
+        assert_eq!(self.manuals.tasks(), 0, "Manuals not empty on drop");
     }
 }
