@@ -215,5 +215,10 @@ mod tests {
             publisher.pop_output(Instant::now()),
             Some(Output::Endpoint(vec![endpoint], ClusterEndpointEvent::RemoteTrack(track, ClusterRemoteTrackEvent::RequestKeyFrame)))
         );
+        assert_eq!(publisher.pop_output(Instant::now()), None);
+
+        publisher.on_track_unpublish(endpoint, track);
+        assert_eq!(publisher.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
+        assert_eq!(publisher.pop_output(Instant::now()), None);
     }
 }

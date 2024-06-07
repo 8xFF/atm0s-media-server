@@ -54,7 +54,7 @@ enum TaskType {
     AudioMixer,
 }
 
-pub struct ClusterRoom<Endpoint: Clone> {
+pub struct ClusterRoom<Endpoint: Hash + Eq + Clone> {
     room: ClusterRoomHash,
     metadata: TaskSwitcherBranch<RoomMetadata<Endpoint>, metadata::Output<Endpoint>>,
     media_track: TaskSwitcherBranch<MediaTrack<Endpoint>, media_track::Output<Endpoint>>,
@@ -83,7 +83,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
         loop {
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Metadata => {
-                    if let Some(out) = self.metadata.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.metadata.pop_output((), &mut self.switcher) {
                         match out {
                             metadata::Output::Kv(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MetaData), FeaturesControl::DhtKv(control))),
                             metadata::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),

@@ -158,10 +158,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)));
         }
     }
-
-    pub fn can_destroy(&self) -> bool {
-        self.queue.is_empty() && self.channels.is_empty() && self.subscribers.is_empty()
-    }
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomChannelSubscribe<Endpoint> {
@@ -174,9 +170,9 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
 impl<Endpoint> Drop for RoomChannelSubscribe<Endpoint> {
     fn drop(&mut self) {
         log::info!("Drop RoomChannelSubscribe {}", self.room);
-        assert_eq!(self.queue.len(), 0);
-        assert_eq!(self.channels.len(), 0);
-        assert_eq!(self.subscribers.len(), 0);
+        assert_eq!(self.queue.len(), 0, "Queue not empty");
+        assert_eq!(self.channels.len(), 0, "Channels not empty");
+        assert_eq!(self.subscribers.len(), 0, "Subscribers not empty");
     }
 }
 
@@ -268,6 +264,10 @@ mod tests {
             )))
         );
         assert_eq!(subscriber.pop_output(Instant::now()), None);
+
+        subscriber.on_track_unsubscribe(endpoint, track);
+        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
+        assert_eq!(subscriber.pop_output(Instant::now()), None);
     }
 
     //TODO Sending bitrate request single sub
@@ -342,5 +342,10 @@ mod tests {
             )))
         );
         assert_eq!(subscriber.pop_output(now), None);
+
+        subscriber.on_track_unsubscribe(endpoint1, track1);
+        subscriber.on_track_unsubscribe(endpoint2, track2);
+        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
+        assert_eq!(subscriber.pop_output(Instant::now()), None);
     }
 }
