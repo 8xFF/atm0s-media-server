@@ -1,5 +1,5 @@
 use derive_more::{Display, From};
-use std::{hash::Hash, time::Instant};
+use std::time::Instant;
 
 use media_server_protocol::{
     endpoint::{TrackMeta, TrackPriority},

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash, time::Instant};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 use atm0s_sdn::features::pubsub::{self, ChannelId};
 use media_server_protocol::{
@@ -50,7 +50,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         }
     }
 
-    pub fn on_track_publish(&mut self, now: u64, endpoint: Endpoint, track: RemoteTrackId, peer: PeerId, name: TrackName) {
+    pub fn on_track_publish(&mut self, _now: u64, endpoint: Endpoint, track: RemoteTrackId, peer: PeerId, name: TrackName) {
         log::debug!("on track publish {peer}/{name}/{track}");
         let key = (endpoint, track);
         assert!(!self.tracks.contains_key(&key));
@@ -70,15 +70,15 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
 
     pub fn on_track_data(&mut self, now: u64, endpoint: Endpoint, track: RemoteTrackId, media: &MediaPacket) {
         let key = (endpoint, track);
+        let info = self.tracks.get(&key).expect("Track not found");
         if let MediaMeta::Opus { audio_level } = &media.meta {
             if let Some((slot, just_set)) = self.mixer.on_pkt(now, key.clone(), *audio_level) {
-                let info = self.tracks.get(&key).expect("Should have track info of media data");
                 let mut source = None;
                 if just_set {
                     self.slots[slot] = Some(OutputSlot { last_fired_source: 0 });
                     source = Some((info.peer.clone(), info.name.clone()));
                 } else {
-                    let slot_info = self.slots[slot].as_mut().expect("Should have slot info");
+                    let slot_info = self.slots[slot].as_mut().expect("Output slot not found");
                     if slot_info.last_fired_source + FIRE_SOURCE_INTERVAL_MS <= now {
                         slot_info.last_fired_source = now;
                         source = Some((info.peer.clone(), info.name.clone()));
@@ -99,7 +99,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         }
     }
 
-    pub fn on_track_unpublish(&mut self, now: u64, endpoint: Endpoint, track: RemoteTrackId) {
+    pub fn on_track_unpublish(&mut self, _now: u64, endpoint: Endpoint, track: RemoteTrackId) {
         log::debug!("on track unpublish {track}");
         let key = (endpoint, track);
         assert!(self.tracks.contains_key(&key));
@@ -112,8 +112,95 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
 }
 
 impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpoint> {
-    type Time = Instant;
+    type Time = ();
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use atm0s_sdn::features::pubsub;
+    use media_server_protocol::{
+        endpoint::{AudioMixerPkt, PeerId},
+        media::{MediaMeta, MediaPacket},
+    };
+    use sans_io_runtime::TaskSwitcherChild;
+
+    use super::{super::Output, AudioMixerPublisher};
+
+    #[test]
+    fn track_publish_unpublish() {
+        let channel = 0.into();
+        let peer1: PeerId = "peer1".into();
+        let peer2: PeerId = "peer2".into();
+
+        let mut publisher = AudioMixerPublisher::<u8>::new(channel);
+
+        publisher.on_track_publish(0, 1, 0.into(), peer1.clone(), "audio".into());
+        assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::PubStart))));
+        assert_eq!(publisher.pop_output(()), None);
+
+        //same endpoint publish more track should not start channel
+        publisher.on_track_publish(0, 1, 1.into(), peer1.clone(), "audio2".into());
+        assert_eq!(publisher.pop_output(()), None);
+
+        //other endpoint publish more track should not start channel
+        publisher.on_track_publish(0, 2, 0.into(), peer2, "audio".into());
+        assert_eq!(publisher.pop_output(()), None);
+
+        //when have track data, depend on audio mixer output, it will push to pubsub. in this case we have 3 output then all data is published
+        let pkt = MediaPacket {
+            ts: 0,
+            seq: 1,
+            marker: false,
+            nackable: false,
+            layers: None,
+            meta: MediaMeta::Opus { audio_level: Some(-60) },
+            data: vec![1, 2, 3, 4, 5, 6],
+        };
+        publisher.on_track_data(0, 1, 0.into(), &pkt);
+        let expected_pub = AudioMixerPkt {
+            slot: 0,
+            peer: peer1.hash_code(),
+            track: 0.into(),
+            audio_level: Some(-60),
+            source: Some((peer1.clone(), "audio".into())),
+            ts: 0,
+            seq: 1,
+            opus_payload: vec![1, 2, 3, 4, 5, 6],
+        };
+        assert_eq!(
+            publisher.pop_output(()),
+            Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::PubData(expected_pub.serialize()))))
+        );
+        assert_eq!(publisher.pop_output(()), None);
+
+        //only last track leaved will generate PubStop
+        publisher.on_track_unpublish(100, 1, 0.into());
+        assert_eq!(publisher.pop_output(()), None);
+
+        publisher.on_track_unpublish(100, 1, 1.into());
+        assert_eq!(publisher.pop_output(()), None);
+
+        publisher.on_track_unpublish(100, 2, 0.into());
+        assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::PubStop))));
+        assert_eq!(publisher.pop_output(()), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Track not found")]
+    fn invalid_track_data_should_panic() {
+        let mut publisher = AudioMixerPublisher::<u8>::new(0.into());
+        let pkt = MediaPacket {
+            ts: 0,
+            seq: 1,
+            marker: false,
+            nackable: false,
+            layers: None,
+            meta: MediaMeta::Opus { audio_level: Some(-60) },
+            data: vec![1, 2, 3, 4, 5, 6],
+        };
+        publisher.on_track_data(0, 1, 1.into(), &pkt);
     }
 }

@@ -1748,6 +1748,7 @@ dependencies = [
  "audio-mixer",
  "derivative",
  "derive_more",
+ "indexmap",
  "log",
  "media-server-protocol",
  "media-server-utils",

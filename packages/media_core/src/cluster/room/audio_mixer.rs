@@ -5,12 +5,9 @@
 //!                 calculate top-3 audio for each local endpoint
 //!
 
-use std::{collections::HashMap, fmt::Debug, hash::Hash, time::Instant};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use atm0s_sdn::{
-    features::pubsub::{self, ChannelId},
-    TimeTicker,
-};
+use atm0s_sdn::features::pubsub::{self, ChannelId};
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, PeerId, TrackName},
     media::MediaPacket,
@@ -78,7 +75,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
     }
 
     pub fn on_leave(&mut self, endpoint: Endpoint) {
-        if let Some(peer) = self.auto_mode.remove(&endpoint) {
+        if let Some(_peer) = self.auto_mode.remove(&endpoint) {
             self.subscriber.input(&mut self.switcher).on_endpoint_leave(endpoint);
         }
     }
@@ -103,28 +100,28 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
 
     pub fn on_pubsub_event(&mut self, now: u64, event: pubsub::Event) {
         match event.1 {
-            pubsub::ChannelEvent::RouteChanged(next) => {}
+            pubsub::ChannelEvent::RouteChanged(_next) => {}
             pubsub::ChannelEvent::SourceData(from, data) => {
                 self.subscriber.input(&mut self.switcher).on_channel_data(now, from, data);
             }
-            pubsub::ChannelEvent::FeedbackData(fb) => {}
+            pubsub::ChannelEvent::FeedbackData(_fb) => {}
         }
     }
 }
 
 impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixer<Endpoint> {
-    type Time = Instant;
+    type Time = ();
 
-    fn pop_output(&mut self, now: Self::Time) -> Option<Output<Endpoint>> {
+    fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Publisher => {
-                    if let Some(out) = self.publisher.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.publisher.pop_output((), &mut self.switcher) {
                         return Some(out);
                     }
                 }
                 TaskType::Subscriber => {
-                    if let Some(out) = self.subscriber.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.subscriber.pop_output((), &mut self.switcher) {
                         return Some(out);
                     }
                 }

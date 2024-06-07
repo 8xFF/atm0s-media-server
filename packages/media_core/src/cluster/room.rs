@@ -105,7 +105,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                     }
                 }
                 TaskType::AudioMixer => {
-                    if let Some(out) = self.audio_mixer.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.audio_mixer.pop_output((), &mut self.switcher) {
                         match out {
                             audio_mixer::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
                             audio_mixer::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::AudioMixer), FeaturesControl::PubSub(control))),
@@ -190,7 +190,7 @@ impl<Endpoint: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Endpoint> {
                 }
                 self.media_track.input(&mut self.switcher).on_track_data(endpoint, track, media);
             }
-            ClusterRemoteTrackControl::Ended(name, meta) => {
+            ClusterRemoteTrackControl::Ended(_name, meta) => {
                 log::info!("[ClusterRoom {}] stopped track {:?}/{track}", self.room, endpoint);
 
                 if meta.kind.is_audio() {
