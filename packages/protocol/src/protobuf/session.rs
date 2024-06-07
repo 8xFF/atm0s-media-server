@@ -323,7 +323,7 @@ pub mod response {
         #[prost(message, tag = "6")]
         Receiver(Receiver),
         #[prost(message, tag = "7")]
-        Features(super::super::features::Request),
+        Features(super::super::features::Response),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

@@ -1,3 +1,4 @@
+//!
 //! Cluster handle all of logic allow multi node can collaborate to make a giant streaming system.
 //!
 //! Cluster is collect of some rooms, each room is independent logic.
@@ -15,7 +16,7 @@ use std::{
 
 use atm0s_sdn::features::{FeaturesControl, FeaturesEvent};
 use media_server_protocol::{
-    endpoint::{AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName},
+    endpoint::{AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackSource},
     media::MediaPacket,
 };
 
@@ -69,6 +70,12 @@ pub enum ClusterLocalTrackEvent {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClusterAudioMixerControl {
+    Attach(Vec<TrackSource>),
+    Detach(Vec<TrackSource>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClusterAudioMixerEvent {
     SlotSet(u8, PeerId, TrackName),
     SlotUnset(u8),
@@ -80,6 +87,7 @@ pub enum ClusterEndpointControl {
     Leave,
     SubscribePeer(PeerId),
     UnsubscribePeer(PeerId),
+    AudioMixer(ClusterAudioMixerControl),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackControl),
     LocalTrack(LocalTrackId, ClusterLocalTrackControl),
 }

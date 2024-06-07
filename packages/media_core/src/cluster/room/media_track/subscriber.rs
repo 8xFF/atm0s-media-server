@@ -158,12 +158,25 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)));
         }
     }
+
+    pub fn can_destroy(&self) -> bool {
+        self.queue.is_empty() && self.channels.is_empty() && self.subscribers.is_empty()
+    }
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomChannelSubscribe<Endpoint> {
     type Time = Instant;
     fn pop_output(&mut self, _now: Instant) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
+    }
+}
+
+impl<Endpoint> Drop for RoomChannelSubscribe<Endpoint> {
+    fn drop(&mut self) {
+        log::info!("Drop RoomChannelSubscribe {}", self.room);
+        assert_eq!(self.queue.len(), 0);
+        assert_eq!(self.channels.len(), 0);
+        assert_eq!(self.subscribers.len(), 0);
     }
 }
 

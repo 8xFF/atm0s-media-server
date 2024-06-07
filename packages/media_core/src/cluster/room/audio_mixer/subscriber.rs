@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::{
     features::pubsub::{self, ChannelId},
@@ -44,7 +44,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
         }
     }
 
-    pub fn on_tick(&mut self, now: u64) {
+    pub fn on_tick(&mut self, now: Instant) {
         if let Some(removed_slots) = self.mixer.on_tick(now) {
             for slot in removed_slots {
                 self.outputs[slot] = None;
@@ -59,7 +59,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
     }
 
     /// We a endpoint join we need to restore current set slots
-    pub fn on_endpoint_join(&mut self, endpoint: Endpoint, peer: PeerId, tracks: Vec<LocalTrackId>) {
+    pub fn on_endpoint_join(&mut self, _now: Instant, endpoint: Endpoint, peer: PeerId, tracks: Vec<LocalTrackId>) {
         assert!(!self.endpoints.contains_key(&endpoint));
         log::info!("[AudioMixerSubscriber] endpoint {:?} peer {peer} join with tracks {:?}", endpoint, tracks);
         if self.endpoints.is_empty() {
@@ -82,7 +82,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
 
     /// We we receive audio pkt, we put it into a mixer, it the audio source is selected it will be forwarded to all endpoints except the origin peer.
     /// In case output don't have source info and audio pkt has source info, we set it and fire event in to all endpoints
-    pub fn on_channel_data(&mut self, now: u64, from: NodeId, pkt: Vec<u8>) {
+    pub fn on_channel_data(&mut self, now: Instant, from: NodeId, pkt: Vec<u8>) {
         let audio = return_if_none!(AudioMixerPkt::deserialize(&pkt));
         if let Some((slot, just_set)) = self.mixer.on_pkt(now, (from, audio.slot), audio.audio_level) {
             // When a source is selected, we just reset the selected slot,
@@ -136,7 +136,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
         }
     }
 
-    pub fn on_endpoint_leave(&mut self, endpoint: Endpoint) {
+    pub fn on_endpoint_leave(&mut self, _now: Instant, endpoint: Endpoint) {
         assert!(self.endpoints.contains_key(&endpoint));
         log::info!("[AudioMixerSubscriber] endpoint {:?} leave", endpoint);
         self.endpoints.swap_remove(&endpoint);
@@ -154,8 +154,18 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endp
     }
 }
 
+impl<Endpoint> Drop for AudioMixerSubscriber<Endpoint> {
+    fn drop(&mut self) {
+        log::info!("Drop AudioMixerSubscriber {}", self.channel_id);
+        assert_eq!(self.queue.len(), 0);
+        assert_eq!(self.endpoints.len(), 0);
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use std::time::{Duration, Instant};
+
     use atm0s_sdn::features::pubsub;
     use media_server_protocol::{
         endpoint::{AudioMixerPkt, PeerId, TrackName},
@@ -167,8 +177,13 @@ mod test {
 
     use super::{super::Output, AudioMixerSubscriber};
 
+    fn ms(m: u64) -> Duration {
+        Duration::from_millis(m)
+    }
+
     #[test]
     fn sub_unsub() {
+        let t0 = Instant::now();
         let channel = 0.into();
         let endpoint1 = 0;
         let peer1: PeerId = "peer1".into();
@@ -177,12 +192,12 @@ mod test {
         let mut subscriber = AudioMixerSubscriber::<u8>::new(channel);
 
         //first endpoint should fire Sub
-        subscriber.on_endpoint_join(endpoint1, peer1.clone(), vec![0.into(), 1.into(), 2.into()]);
+        subscriber.on_endpoint_join(t0, endpoint1, peer1.clone(), vec![0.into(), 1.into(), 2.into()]);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::SubAuto))));
         assert_eq!(subscriber.pop_output(()), None);
 
         //next endpoint should not fire Sub
-        subscriber.on_endpoint_join(endpoint2, "peer2".into(), vec![0.into(), 1.into(), 2.into()]);
+        subscriber.on_endpoint_join(t0, endpoint2, "peer2".into(), vec![0.into(), 1.into(), 2.into()]);
         assert_eq!(subscriber.pop_output(()), None);
 
         //incoming media should rely on audio mixer to forward to endpoints
@@ -207,7 +222,7 @@ mod test {
             opus_payload: vec![1, 2, 3, 4, 5, 6],
         };
         let track_uuid = (mixer_pkt.peer.0 << 16) | (mixer_pkt.track.0 as u64);
-        subscriber.on_channel_data(100, node_id, mixer_pkt.serialize());
+        subscriber.on_channel_data(t0 + ms(100), node_id, mixer_pkt.serialize());
 
         //sot 0 is set => fire AudioMixer::Set event
         assert_eq!(
@@ -239,7 +254,7 @@ mod test {
         );
 
         //after tick timeout should fire unset
-        subscriber.on_tick(100 + 2000);
+        subscriber.on_tick(t0 + ms(100 + 2000));
         //sot 0 is unset => fire AudioMixer::UnSet event
         assert_eq!(
             subscriber.pop_output(()),
@@ -251,11 +266,11 @@ mod test {
         );
 
         //only last endpoint leave should fire Unsub
-        subscriber.on_endpoint_leave(endpoint1);
+        subscriber.on_endpoint_leave(t0 + ms(100 + 2000), endpoint1);
         assert_eq!(subscriber.pop_output(()), None);
 
         //now is last endpoint => should fire Unsub
-        subscriber.on_endpoint_leave(endpoint2);
+        subscriber.on_endpoint_leave(t0 + ms(100 + 2000), endpoint2);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::UnsubAuto))));
         assert_eq!(subscriber.pop_output(()), None);
     }

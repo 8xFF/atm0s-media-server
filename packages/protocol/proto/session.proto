@@ -191,7 +191,7 @@ message Response {
         Room room = 4;
         Sender sender = 5;
         Receiver receiver = 6;
-        features.Request features = 7;
+        features.Response features = 7;
     }
 }
 

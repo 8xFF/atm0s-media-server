@@ -1,12 +1,17 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    hash::Hash,
+    time::{Duration, Instant},
+};
 
 const SILENT_LEVEL: i8 = -127;
 const SWITCH_AUDIO_THRESHOLD: i16 = 30;
-/// if no audio pkt received in AUDIO_SLOT_TIMEOUT_MS, set audio level to SILENT_LEVEL
-const AUDIO_SLOT_TIMEOUT_MS: u64 = 1000;
+/// if no audio pkt received in AUDIO_SLOT_TIMEOUT, set audio level to SILENT_LEVEL
+const AUDIO_SLOT_TIMEOUT: Duration = Duration::from_millis(1000);
 
 struct SourceState {
-    last_changed_at: u64,
+    last_changed_at: Instant,
     slot: Option<usize>,
 }
 
@@ -36,10 +41,10 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
         }
     }
 
-    pub fn on_tick(&mut self, now_ms: u64) -> Option<Vec<usize>> {
+    pub fn on_tick(&mut self, now: Instant) -> Option<Vec<usize>> {
         let mut clear = vec![];
         self.sources.retain(|k, v| {
-            if v.last_changed_at + AUDIO_SLOT_TIMEOUT_MS <= now_ms {
+            if v.last_changed_at + AUDIO_SLOT_TIMEOUT <= now {
                 log::info!("[AudioMixer] del source {:?} after timeout", k);
                 if let Some(slot) = v.slot {
                     self.outputs[slot] = None; //clear
@@ -58,10 +63,10 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
         }
     }
 
-    pub fn on_pkt(&mut self, now_ms: u64, source: Src, audio_level: Option<i8>) -> Option<(usize, bool)> {
+    pub fn on_pkt(&mut self, now: Instant, source: Src, audio_level: Option<i8>) -> Option<(usize, bool)> {
         let audio_level = audio_level.unwrap_or(SILENT_LEVEL);
         if let Some(s) = self.sources.get_mut(&source) {
-            s.last_changed_at = now_ms;
+            s.last_changed_at = now;
             if let Some(slot) = s.slot {
                 Some((slot, false))
             } else if self.has_empty_slot() {
@@ -95,7 +100,7 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
             self.sources.insert(
                 source.clone(),
                 SourceState {
-                    last_changed_at: now_ms,
+                    last_changed_at: now,
                     slot: Some(slot),
                 },
             );
@@ -104,7 +109,7 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
             Some((slot, true))
         } else {
             log::info!("[AudioMixer] new source {:?}", source);
-            self.sources.insert(source.clone(), SourceState { last_changed_at: now_ms, slot: None });
+            self.sources.insert(source.clone(), SourceState { last_changed_at: now, slot: None });
             None
         }
     }
@@ -141,47 +146,59 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
 
 #[cfg(test)]
 mod tests {
-    use super::{AudioMixer, AUDIO_SLOT_TIMEOUT_MS, SWITCH_AUDIO_THRESHOLD};
+    use std::time::{Duration, Instant};
+
+    use super::{AudioMixer, AUDIO_SLOT_TIMEOUT, SWITCH_AUDIO_THRESHOLD};
+
+    fn ms(m: u64) -> Duration {
+        Duration::from_millis(m)
+    }
 
     #[test]
     fn add_remove_correct() {
         let mut mixer = AudioMixer::<u32>::new(2);
-        assert_eq!(mixer.on_pkt(0, 100, Some(10)), Some((0, true)));
-        assert_eq!(mixer.on_pkt(0, 101, Some(10)), Some((1, true)));
-        assert_eq!(mixer.on_pkt(0, 102, Some(10)), None);
+        let time_0 = Instant::now();
 
-        assert_eq!(mixer.on_pkt(10, 100, Some(10)), Some((0, false)));
-        assert_eq!(mixer.on_pkt(10, 101, Some(10)), Some((1, false)));
-        assert_eq!(mixer.on_pkt(10, 102, Some(10)), None);
+        assert_eq!(mixer.on_pkt(time_0, 100, Some(10)), Some((0, true)));
+        assert_eq!(mixer.on_pkt(time_0, 101, Some(10)), Some((1, true)));
+        assert_eq!(mixer.on_pkt(time_0, 102, Some(10)), None);
 
-        assert_eq!(mixer.on_tick(AUDIO_SLOT_TIMEOUT_MS), None);
+        assert_eq!(mixer.on_pkt(time_0 + ms(10), 100, Some(10)), Some((0, false)));
+        assert_eq!(mixer.on_pkt(time_0 + ms(10), 101, Some(10)), Some((1, false)));
+        assert_eq!(mixer.on_pkt(time_0 + ms(10), 102, Some(10)), None);
+
+        assert_eq!(mixer.on_tick(time_0 + AUDIO_SLOT_TIMEOUT), None);
     }
 
     #[test]
     fn auto_remove_timeout_source() {
         let mut mixer = AudioMixer::<u32>::new(1);
-        assert_eq!(mixer.on_pkt(0, 100, Some(10)), Some((0, true)));
-        assert_eq!(mixer.on_pkt(0, 101, Some(10)), None);
+        let time_0 = Instant::now();
 
-        assert_eq!(mixer.on_tick(100), None);
-        assert_eq!(mixer.on_pkt(100, 101, Some(10)), None);
+        assert_eq!(mixer.on_pkt(time_0, 100, Some(10)), Some((0, true)));
+        assert_eq!(mixer.on_pkt(time_0, 101, Some(10)), None);
 
-        assert_eq!(mixer.on_tick(AUDIO_SLOT_TIMEOUT_MS), Some(vec![0])); //source 100 will be released
-        assert_eq!(mixer.on_pkt(100, 101, Some(10)), Some((0, true)));
+        assert_eq!(mixer.on_tick(time_0 + ms(100)), None);
+        assert_eq!(mixer.on_pkt(time_0 + ms(100), 101, Some(10)), None);
+
+        assert_eq!(mixer.on_tick(time_0 + AUDIO_SLOT_TIMEOUT), Some(vec![0])); //source 100 will be released
+        assert_eq!(mixer.on_pkt(time_0 + AUDIO_SLOT_TIMEOUT, 101, Some(10)), Some((0, true)));
     }
 
     #[test]
     fn auto_switch_higher_source() {
         let mut mixer = AudioMixer::<u32>::new(1);
-        assert_eq!(mixer.on_pkt(0, 100, Some(10)), Some((0, true)));
-        assert_eq!(mixer.on_pkt(0, 101, Some(10)), None);
+        let time_0 = Instant::now();
 
-        assert_eq!(mixer.on_tick(100), None);
-        assert_eq!(mixer.on_pkt(100, 100, Some(10)), Some((0, false)));
-        assert_eq!(mixer.on_pkt(100, 101, Some(10)), None);
+        assert_eq!(mixer.on_pkt(time_0, 100, Some(10)), Some((0, true)));
+        assert_eq!(mixer.on_pkt(time_0, 101, Some(10)), None);
 
-        assert_eq!(mixer.on_tick(200), None); //source 100 will be released
-        assert_eq!(mixer.on_pkt(200, 100, Some(10)), Some((0, false)));
-        assert_eq!(mixer.on_pkt(200, 101, Some(10 + SWITCH_AUDIO_THRESHOLD as i8)), Some((0, true)));
+        assert_eq!(mixer.on_tick(time_0 + ms(100)), None);
+        assert_eq!(mixer.on_pkt(time_0 + ms(100), 100, Some(10)), Some((0, false)));
+        assert_eq!(mixer.on_pkt(time_0 + ms(100), 101, Some(10)), None);
+
+        assert_eq!(mixer.on_tick(time_0 + ms(200)), None); //source 100 will be released
+        assert_eq!(mixer.on_pkt(time_0 + ms(200), 100, Some(10)), Some((0, false)));
+        assert_eq!(mixer.on_pkt(time_0 + ms(200), 101, Some(10 + SWITCH_AUDIO_THRESHOLD as i8)), Some((0, true)));
     }
 }

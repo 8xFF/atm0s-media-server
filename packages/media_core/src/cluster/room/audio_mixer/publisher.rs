@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    hash::Hash,
+    time::{Duration, Instant},
+};
 
 use atm0s_sdn::features::pubsub::{self, ChannelId};
 use media_server_protocol::{
@@ -11,7 +16,7 @@ use crate::transport::RemoteTrackId;
 
 use super::Output;
 
-const FIRE_SOURCE_INTERVAL_MS: u64 = 500;
+const FIRE_SOURCE_INTERVAL: Duration = Duration::from_millis(500);
 
 struct TrackSlot {
     peer: PeerId,
@@ -20,7 +25,7 @@ struct TrackSlot {
 }
 
 struct OutputSlot {
-    last_fired_source: u64,
+    last_fired_source: Instant,
 }
 
 pub struct AudioMixerPublisher<Endpoint> {
@@ -42,7 +47,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         }
     }
 
-    pub fn on_tick(&mut self, now: u64) {
+    pub fn on_tick(&mut self, now: Instant) {
         if let Some(removed_slots) = self.mixer.on_tick(now) {
             for slot in removed_slots {
                 self.slots[slot] = None;
@@ -50,7 +55,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         }
     }
 
-    pub fn on_track_publish(&mut self, _now: u64, endpoint: Endpoint, track: RemoteTrackId, peer: PeerId, name: TrackName) {
+    pub fn on_track_publish(&mut self, _now: Instant, endpoint: Endpoint, track: RemoteTrackId, peer: PeerId, name: TrackName) {
         log::debug!("on track publish {peer}/{name}/{track}");
         let key = (endpoint, track);
         assert!(!self.tracks.contains_key(&key));
@@ -68,18 +73,18 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         );
     }
 
-    pub fn on_track_data(&mut self, now: u64, endpoint: Endpoint, track: RemoteTrackId, media: &MediaPacket) {
+    pub fn on_track_data(&mut self, now: Instant, endpoint: Endpoint, track: RemoteTrackId, media: &MediaPacket) {
         let key = (endpoint, track);
         let info = self.tracks.get(&key).expect("Track not found");
         if let MediaMeta::Opus { audio_level } = &media.meta {
             if let Some((slot, just_set)) = self.mixer.on_pkt(now, key.clone(), *audio_level) {
                 let mut source = None;
                 if just_set {
-                    self.slots[slot] = Some(OutputSlot { last_fired_source: 0 });
+                    self.slots[slot] = Some(OutputSlot { last_fired_source: now });
                     source = Some((info.peer.clone(), info.name.clone()));
                 } else {
                     let slot_info = self.slots[slot].as_mut().expect("Output slot not found");
-                    if slot_info.last_fired_source + FIRE_SOURCE_INTERVAL_MS <= now {
+                    if slot_info.last_fired_source + FIRE_SOURCE_INTERVAL <= now {
                         slot_info.last_fired_source = now;
                         source = Some((info.peer.clone(), info.name.clone()));
                     }
@@ -99,7 +104,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         }
     }
 
-    pub fn on_track_unpublish(&mut self, _now: u64, endpoint: Endpoint, track: RemoteTrackId) {
+    pub fn on_track_unpublish(&mut self, _now: Instant, endpoint: Endpoint, track: RemoteTrackId) {
         log::debug!("on track unpublish {track}");
         let key = (endpoint, track);
         assert!(self.tracks.contains_key(&key));
@@ -118,8 +123,18 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpo
     }
 }
 
+impl<Endpoint> Drop for AudioMixerPublisher<Endpoint> {
+    fn drop(&mut self) {
+        log::info!("Drop AudioMixerPublisher {}", self.channel_id);
+        assert_eq!(self.queue.len(), 0);
+        assert_eq!(self.tracks.len(), 0);
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use std::time::{Duration, Instant};
+
     use atm0s_sdn::features::pubsub;
     use media_server_protocol::{
         endpoint::{AudioMixerPkt, PeerId},
@@ -129,6 +144,10 @@ mod test {
 
     use super::{super::Output, AudioMixerPublisher};
 
+    fn ms(m: u64) -> Duration {
+        Duration::from_millis(m)
+    }
+
     #[test]
     fn track_publish_unpublish() {
         let channel = 0.into();
@@ -137,16 +156,18 @@ mod test {
 
         let mut publisher = AudioMixerPublisher::<u8>::new(channel);
 
-        publisher.on_track_publish(0, 1, 0.into(), peer1.clone(), "audio".into());
+        let t0 = Instant::now();
+
+        publisher.on_track_publish(t0, 1, 0.into(), peer1.clone(), "audio".into());
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::PubStart))));
         assert_eq!(publisher.pop_output(()), None);
 
         //same endpoint publish more track should not start channel
-        publisher.on_track_publish(0, 1, 1.into(), peer1.clone(), "audio2".into());
+        publisher.on_track_publish(t0, 1, 1.into(), peer1.clone(), "audio2".into());
         assert_eq!(publisher.pop_output(()), None);
 
         //other endpoint publish more track should not start channel
-        publisher.on_track_publish(0, 2, 0.into(), peer2, "audio".into());
+        publisher.on_track_publish(t0, 2, 0.into(), peer2, "audio".into());
         assert_eq!(publisher.pop_output(()), None);
 
         //when have track data, depend on audio mixer output, it will push to pubsub. in this case we have 3 output then all data is published
@@ -159,7 +180,7 @@ mod test {
             meta: MediaMeta::Opus { audio_level: Some(-60) },
             data: vec![1, 2, 3, 4, 5, 6],
         };
-        publisher.on_track_data(0, 1, 0.into(), &pkt);
+        publisher.on_track_data(t0, 1, 0.into(), &pkt);
         let expected_pub = AudioMixerPkt {
             slot: 0,
             peer: peer1.hash_code(),
@@ -177,13 +198,13 @@ mod test {
         assert_eq!(publisher.pop_output(()), None);
 
         //only last track leaved will generate PubStop
-        publisher.on_track_unpublish(100, 1, 0.into());
+        publisher.on_track_unpublish(t0 + ms(100), 1, 0.into());
         assert_eq!(publisher.pop_output(()), None);
 
-        publisher.on_track_unpublish(100, 1, 1.into());
+        publisher.on_track_unpublish(t0 + ms(100), 1, 1.into());
         assert_eq!(publisher.pop_output(()), None);
 
-        publisher.on_track_unpublish(100, 2, 0.into());
+        publisher.on_track_unpublish(t0 + ms(100), 2, 0.into());
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::PubStop))));
         assert_eq!(publisher.pop_output(()), None);
     }
@@ -191,6 +212,7 @@ mod test {
     #[test]
     #[should_panic(expected = "Track not found")]
     fn invalid_track_data_should_panic() {
+        let t0 = Instant::now();
         let mut publisher = AudioMixerPublisher::<u8>::new(0.into());
         let pkt = MediaPacket {
             ts: 0,
@@ -201,6 +223,6 @@ mod test {
             meta: MediaMeta::Opus { audio_level: Some(-60) },
             data: vec![1, 2, 3, 4, 5, 6],
         };
-        publisher.on_track_data(0, 1, 1.into(), &pkt);
+        publisher.on_track_data(t0, 1, 1.into(), &pkt);
     }
 }

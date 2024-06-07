@@ -10,10 +10,7 @@
 
 use std::{fmt::Debug, hash::Hash, time::Instant};
 
-use atm0s_sdn::{
-    features::{dht_kv, FeaturesControl, FeaturesEvent},
-    TimePivot,
-};
+use atm0s_sdn::features::{dht_kv, FeaturesControl, FeaturesEvent};
 use sans_io_runtime::{return_if_none, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::transport::{LocalTrackId, RemoteTrackId};
@@ -57,19 +54,17 @@ enum TaskType {
     AudioMixer,
 }
 
-pub struct ClusterRoom<Endpoint> {
+pub struct ClusterRoom<Endpoint: Clone> {
     room: ClusterRoomHash,
     metadata: TaskSwitcherBranch<RoomMetadata<Endpoint>, metadata::Output<Endpoint>>,
     media_track: TaskSwitcherBranch<MediaTrack<Endpoint>, media_track::Output<Endpoint>>,
     audio_mixer: TaskSwitcherBranch<AudioMixer<Endpoint>, audio_mixer::Output<Endpoint>>,
     switcher: TaskSwitcher,
-    time_pivot: TimePivot,
 }
 
 impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Task<Input<Endpoint>, Output<Endpoint>> for ClusterRoom<Endpoint> {
     fn on_tick(&mut self, now: Instant) {
-        let now_ms = self.time_pivot.timestamp_ms(now);
-        self.audio_mixer.input(&mut self.switcher).on_tick(now_ms);
+        self.audio_mixer.input(&mut self.switcher).on_tick(now);
     }
 
     fn on_event(&mut self, now: Instant, input: Input<Endpoint>) {
@@ -124,9 +119,8 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             room,
             metadata: TaskSwitcherBranch::new(RoomMetadata::new(room), TaskType::Metadata),
             media_track: TaskSwitcherBranch::new(MediaTrack::new(room), TaskType::MediaTrack),
-            audio_mixer: TaskSwitcherBranch::new(AudioMixer::new(mixer_channel_id), TaskType::AudioMixer),
+            audio_mixer: TaskSwitcherBranch::new(AudioMixer::new(room, mixer_channel_id), TaskType::AudioMixer),
             switcher: TaskSwitcher::new(3),
-            time_pivot: TimePivot::build(),
         }
     }
 
@@ -140,8 +134,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
                 self.media_track.input(&mut self.switcher).on_pubsub_event(event);
             }
             (RoomFeature::AudioMixer, FeaturesEvent::PubSub(event)) => {
-                let now_ms = self.time_pivot.timestamp_ms(now);
-                self.audio_mixer.input(&mut self.switcher).on_pubsub_event(now_ms, event);
+                self.audio_mixer.input(&mut self.switcher).on_pubsub_event(now, event);
             }
             _ => {}
         }
@@ -150,11 +143,11 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
     fn on_endpoint_control(&mut self, now: Instant, endpoint: Endpoint, control: ClusterEndpointControl) {
         match control {
             ClusterEndpointControl::Join(peer, meta, publish, subscribe, mixer) => {
-                self.audio_mixer.input(&mut self.switcher).on_join(endpoint, peer.clone(), mixer);
+                self.audio_mixer.input(&mut self.switcher).on_join(now, endpoint, peer.clone(), mixer);
                 self.metadata.input(&mut self.switcher).on_join(endpoint, peer, meta, publish, subscribe);
             }
             ClusterEndpointControl::Leave => {
-                self.audio_mixer.input(&mut self.switcher).on_leave(endpoint);
+                self.audio_mixer.input(&mut self.switcher).on_leave(now, endpoint);
                 self.metadata.input(&mut self.switcher).on_leave(endpoint);
             }
             ClusterEndpointControl::SubscribePeer(target) => {
@@ -162,6 +155,9 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             }
             ClusterEndpointControl::UnsubscribePeer(target) => {
                 self.metadata.input(&mut self.switcher).on_unsubscribe_peer(endpoint, target);
+            }
+            ClusterEndpointControl::AudioMixer(control) => {
+                self.audio_mixer.input(&mut self.switcher).on_control(now, endpoint, control);
             }
             ClusterEndpointControl::RemoteTrack(track, control) => self.on_control_remote_track(now, endpoint, track, control),
             ClusterEndpointControl::LocalTrack(track, control) => self.on_control_local_track(now, endpoint, track, control),
@@ -177,16 +173,14 @@ impl<Endpoint: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Endpoint> {
                 log::info!("[ClusterRoom {}] started track {:?}/{track} => {peer}/{name}", self.room, endpoint);
 
                 if meta.kind.is_audio() {
-                    let now_ms = self.time_pivot.timestamp_ms(now);
-                    self.audio_mixer.input(&mut self.switcher).on_track_publish(now_ms, endpoint, track, peer.clone(), name.clone());
+                    self.audio_mixer.input(&mut self.switcher).on_track_publish(now, endpoint, track, peer.clone(), name.clone());
                 }
                 self.media_track.input(&mut self.switcher).on_track_publish(endpoint, track, peer, name.clone());
                 self.metadata.input(&mut self.switcher).on_track_publish(endpoint, track, name, meta.clone());
             }
             ClusterRemoteTrackControl::Media(media) => {
                 if media.meta.is_audio() {
-                    let now_ms = self.time_pivot.timestamp_ms(now);
-                    self.audio_mixer.input(&mut self.switcher).on_track_data(now_ms, endpoint, track, &media);
+                    self.audio_mixer.input(&mut self.switcher).on_track_data(now, endpoint, track, &media);
                 }
                 self.media_track.input(&mut self.switcher).on_track_data(endpoint, track, media);
             }
@@ -194,8 +188,7 @@ impl<Endpoint: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Endpoint> {
                 log::info!("[ClusterRoom {}] stopped track {:?}/{track}", self.room, endpoint);
 
                 if meta.kind.is_audio() {
-                    let now_ms = self.time_pivot.timestamp_ms(now);
-                    self.audio_mixer.input(&mut self.switcher).on_track_unpublish(now_ms, endpoint, track);
+                    self.audio_mixer.input(&mut self.switcher).on_track_unpublish(now, endpoint, track);
                 }
                 self.media_track.input(&mut self.switcher).on_track_unpublish(endpoint, track);
                 self.metadata.input(&mut self.switcher).on_track_unpublish(endpoint, track);

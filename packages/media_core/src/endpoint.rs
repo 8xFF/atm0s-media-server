@@ -87,6 +87,18 @@ pub enum EndpointLocalTrackRes {
     Config(RpcResult<()>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointAudioMixerReq {
+    Attach(Vec<TrackSource>),
+    Dettach(Vec<TrackSource>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointAudioMixerRes {
+    Attach(RpcResult<()>),
+    Detach(RpcResult<()>),
+}
+
 #[derive(Debug, PartialEq, Eq, derive_more::From)]
 pub struct EndpointReqId(pub u32);
 
@@ -97,6 +109,7 @@ pub enum EndpointReq {
     LeaveRoom,
     SubscribePeer(PeerId),
     UnsubscribePeer(PeerId),
+    AudioMixer(EndpointAudioMixerReq),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackReq),
     LocalTrack(LocalTrackId, EndpointLocalTrackReq),
 }
@@ -108,6 +121,7 @@ pub enum EndpointRes {
     LeaveRoom(RpcResult<()>),
     SubscribePeer(RpcResult<()>),
     UnsubscribePeer(RpcResult<()>),
+    AudioMixer(EndpointAudioMixerRes),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackRes),
     LocalTrack(LocalTrackId, EndpointLocalTrackRes),
 }

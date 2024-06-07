@@ -7,7 +7,7 @@ use crate::{
 
 use super::{PeerHashCode, PeerId, TrackName, TrackSource};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AudioMixerMode {
     Auto,
     Manual,

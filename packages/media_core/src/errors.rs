@@ -5,4 +5,5 @@ pub enum EndpointErrors {
     LocalTrackNotPinSource = 0x1001,
     LocalTrackInvalidPriority = 0x1002,
     RemoteTrackInvalidPriority = 0x2001,
+    AudioMixerWrongMode = 0x3001,
 }

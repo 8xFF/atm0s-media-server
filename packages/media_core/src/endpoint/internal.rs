@@ -3,21 +3,21 @@
 use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
+    endpoint::{AudioMixerConfig, AudioMixerMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
     transport::RpcError,
 };
 use media_server_utils::Small2dMap;
 use sans_io_runtime::{return_if_none, return_if_some, TaskGroup, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::{
-    cluster::{ClusterAudioMixerEvent, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
+    cluster::{ClusterAudioMixerControl, ClusterAudioMixerEvent, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
     errors::EndpointErrors,
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportEvent, TransportState, TransportStats},
 };
 
 use self::{bitrate_allocator::BitrateAllocator, local_track::EndpointLocalTrack, remote_track::EndpointRemoteTrack};
 
-use super::{middleware::EndpointMiddleware, EndpointAudioMixerEvent, EndpointCfg, EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
+use super::{middleware::EndpointMiddleware, EndpointAudioMixerEvent, EndpointAudioMixerReq, EndpointAudioMixerRes, EndpointCfg, EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
 
 mod bitrate_allocator;
 mod local_track;
@@ -43,7 +43,7 @@ pub struct EndpointInternal {
     cfg: EndpointCfg,
     state: TransportState,
     wait_join: Option<(EndpointReqId, RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>)>,
-    joined: Option<(ClusterRoomHash, RoomId, PeerId)>,
+    joined: Option<(ClusterRoomHash, RoomId, PeerId, Option<AudioMixerMode>)>,
     local_tracks_id: Small2dMap<LocalTrackId, usize>,
     remote_tracks_id: Small2dMap<RemoteTrackId, usize>,
     local_tracks: TaskSwitcherBranch<TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>, (usize, local_track::Output)>,
@@ -131,7 +131,7 @@ impl EndpointInternal {
                 }
             }
             EndpointReq::SubscribePeer(peer) => {
-                if let Some((room, _, _)) = &self.joined {
+                if let Some((room, _, _, _)) = &self.joined {
                     self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::SubscribePeer(Ok(()))));
                     self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::SubscribePeer(peer)));
                 } else {
@@ -140,7 +140,7 @@ impl EndpointInternal {
                 }
             }
             EndpointReq::UnsubscribePeer(peer) => {
-                if let Some((room, _, _)) = &self.joined {
+                if let Some((room, _, _, _)) = &self.joined {
                     self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::UnsubscribePeer(Ok(()))));
                     self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::UnsubscribePeer(peer)));
                 } else {
@@ -156,6 +156,32 @@ impl EndpointInternal {
                 let index = return_if_none!(self.local_tracks_id.get1(&track_id));
                 self.local_tracks.input(&mut self.switcher).on_event(now, *index, local_track::Input::RpcReq(req_id, req));
             }
+            EndpointReq::AudioMixer(req) => match req {
+                EndpointAudioMixerReq::Attach(sources) => {
+                    if let Some((room, _, _, Some(AudioMixerMode::Manual))) = &self.joined {
+                        self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::AudioMixer(EndpointAudioMixerRes::Attach(Ok(())))));
+                        self.queue
+                            .push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::AudioMixer(ClusterAudioMixerControl::Attach(sources))));
+                    } else {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::AudioMixer(EndpointAudioMixerRes::Attach(Err(RpcError::new2(EndpointErrors::AudioMixerWrongMode)))),
+                        ));
+                    }
+                }
+                EndpointAudioMixerReq::Dettach(sources) => {
+                    if let Some((room, _, _, Some(AudioMixerMode::Manual))) = &self.joined {
+                        self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::AudioMixer(EndpointAudioMixerRes::Detach(Ok(())))));
+                        self.queue
+                            .push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::AudioMixer(ClusterAudioMixerControl::Detach(sources))));
+                    } else {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::AudioMixer(EndpointAudioMixerRes::Detach(Err(RpcError::new2(EndpointErrors::AudioMixerWrongMode)))),
+                        ));
+                    }
+                }
+            },
         }
     }
 
@@ -218,7 +244,7 @@ impl EndpointInternal {
 
         self.leave_room(now);
 
-        self.joined = Some(((&room).into(), room.clone(), peer.clone()));
+        self.joined = Some(((&room).into(), room.clone(), peer.clone(), mixer.as_ref().map(|m| m.mode)));
         self.queue
             .push_back(InternalOutput::Cluster((&room).into(), ClusterEndpointControl::Join(peer, meta, publish, subscribe, mixer)));
 
@@ -232,7 +258,7 @@ impl EndpointInternal {
     }
 
     fn leave_room(&mut self, now: Instant) {
-        let (hash, room, peer) = return_if_none!(self.joined.take());
+        let (hash, room, peer, _) = return_if_none!(self.joined.take());
         log::info!("[EndpointInternal] leave_room({room}, {peer})");
 
         for (_track_id, index) in self.local_tracks_id.pairs() {

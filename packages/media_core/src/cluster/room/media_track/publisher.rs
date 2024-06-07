@@ -105,12 +105,25 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
         log::info!("[ClusterRoom {}/Publishers] peer ({peer} stopped track {name})", self.room);
         self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)))
     }
+
+    pub fn can_destroy(&self) -> bool {
+        self.queue.is_empty() && self.tracks.is_empty() && self.tracks_source.is_empty()
+    }
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomChannelPublisher<Endpoint> {
     type Time = Instant;
     fn pop_output(&mut self, _now: Instant) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
+    }
+}
+
+impl<Endpoint> Drop for RoomChannelPublisher<Endpoint> {
+    fn drop(&mut self) {
+        log::info!("Drop RoomChannelPublisher {}", self.room);
+        assert_eq!(self.queue.len(), 0);
+        assert_eq!(self.tracks.len(), 0);
+        assert_eq!(self.tracks_source.len(), 0);
     }
 }
 

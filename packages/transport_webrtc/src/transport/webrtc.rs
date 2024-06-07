@@ -4,7 +4,7 @@ use std::{
 };
 
 use media_server_core::{
-    endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointRemoteTrackReq, EndpointReq, EndpointReqId, EndpointRes},
+    endpoint::{EndpointAudioMixerReq, EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointRemoteTrackReq, EndpointReq, EndpointReqId, EndpointRes},
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
 use media_server_protocol::{
@@ -392,6 +392,26 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 media_server_core::endpoint::EndpointLocalTrackRes::Detach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
                 media_server_core::endpoint::EndpointLocalTrackRes::Config(Err(err)) => self.send_rpc_res_err(req_id.0, err),
             },
+            EndpointRes::AudioMixer(res) => match res {
+                media_server_core::endpoint::EndpointAudioMixerRes::Attach(Ok(_)) => self.send_rpc_res(
+                    req_id.0,
+                    protobuf::session::response::Response::Features(protobuf::features::Response {
+                        response: Some(protobuf::features::response::Response::Mixer(protobuf::features::mixer::Response {
+                            response: Some(protobuf::features::mixer::response::Response::Attach(protobuf::features::mixer::response::Attach {})),
+                        })),
+                    }),
+                ),
+                media_server_core::endpoint::EndpointAudioMixerRes::Detach(Ok(_)) => self.send_rpc_res(
+                    req_id.0,
+                    protobuf::session::response::Response::Features(protobuf::features::Response {
+                        response: Some(protobuf::features::response::Response::Mixer(protobuf::features::mixer::Response {
+                            response: Some(protobuf::features::mixer::response::Response::Detach(protobuf::features::mixer::response::Detach {})),
+                        })),
+                    }),
+                ),
+                media_server_core::endpoint::EndpointAudioMixerRes::Attach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+                media_server_core::endpoint::EndpointAudioMixerRes::Detach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+            },
         }
     }
 
@@ -589,9 +609,14 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                 Some(protobuf::session::request::Request::Room(_room)) => {
                     todo!()
                 }
-                Some(protobuf::session::request::Request::Features(_features)) => {
-                    todo!()
-                }
+                Some(protobuf::session::request::Request::Features(features_req)) => match features_req.request {
+                    Some(protobuf::features::request::Request::Mixer(mixer_req)) => {
+                        if let Some(mixer_req) = mixer_req.request {
+                            self.on_mixer_req(req.req_id, mixer_req);
+                        }
+                    }
+                    None => {}
+                },
                 None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
             },
         }
@@ -733,6 +758,25 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
             }
             protobuf::session::request::receiver::Request::Config(config) => {
                 self.queue.push_back(build_req(EndpointLocalTrackReq::Config(config.into())));
+            }
+        }
+    }
+
+    fn on_mixer_req(&mut self, req_id: u32, req: protobuf::features::mixer::request::Request) {
+        match req {
+            protobuf::features::mixer::request::Request::Attach(req) => {
+                let sources = req.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>();
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    req_id.into(),
+                    EndpointReq::AudioMixer(EndpointAudioMixerReq::Attach(sources)),
+                )));
+            }
+            protobuf::features::mixer::request::Request::Detach(req) => {
+                let sources = req.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>();
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    req_id.into(),
+                    EndpointReq::AudioMixer(EndpointAudioMixerReq::Dettach(sources)),
+                )));
             }
         }
     }
