@@ -44,6 +44,10 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.endpoints.is_empty()
+    }
+
     pub fn on_tick(&mut self, now: Instant) {
         if let Some(removed_slots) = self.mixer.on_tick(now) {
             for slot in removed_slots {
@@ -143,6 +147,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
         if self.endpoints.is_empty() {
             log::info!("[AudioMixerSubscriber] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::UnsubAuto)));
+            self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 }

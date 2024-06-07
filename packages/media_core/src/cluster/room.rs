@@ -19,7 +19,7 @@ use audio_mixer::AudioMixer;
 use media_track::MediaTrack;
 use metadata::RoomMetadata;
 
-use super::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackControl, ClusterRemoteTrackControl, ClusterRoomHash};
+use super::{id_generator, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackControl, ClusterRemoteTrackControl, ClusterRoomHash};
 
 mod audio_mixer;
 mod media_track;
@@ -54,7 +54,7 @@ enum TaskType {
     AudioMixer,
 }
 
-pub struct ClusterRoom<Endpoint: Hash + Eq + Clone> {
+pub struct ClusterRoom<Endpoint: Debug + Copy + Clone + Hash + Eq> {
     room: ClusterRoomHash,
     metadata: TaskSwitcherBranch<RoomMetadata<Endpoint>, metadata::Output<Endpoint>>,
     media_track: TaskSwitcherBranch<MediaTrack<Endpoint>, media_track::Output<Endpoint>>,
@@ -87,7 +87,11 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                         match out {
                             metadata::Output::Kv(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MetaData), FeaturesControl::DhtKv(control))),
                             metadata::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
-                            metadata::Output::LastPeerLeaved => break Some(Output::Destroy(self.room)),
+                            metadata::Output::OnResourceEmpty => {
+                                if self.is_empty() {
+                                    break Some(Output::Destroy(self.room));
+                                }
+                            }
                         }
                     }
                 }
@@ -96,6 +100,11 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                         match out {
                             media_track::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
                             media_track::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MediaTrack), FeaturesControl::PubSub(control))),
+                            media_track::Output::OnResourceEmpty => {
+                                if self.is_empty() {
+                                    break Some(Output::Destroy(self.room));
+                                }
+                            }
                         }
                     }
                 }
@@ -104,6 +113,11 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                         match out {
                             audio_mixer::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
                             audio_mixer::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::AudioMixer), FeaturesControl::PubSub(control))),
+                            audio_mixer::Output::OnResourceEmpty => {
+                                if self.is_empty() {
+                                    break Some(Output::Destroy(self.room));
+                                }
+                            }
                         }
                     }
                 }
@@ -114,7 +128,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
 
 impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
-        let mixer_channel_id = (room.0 + 1).into(); //TODO generate this
+        let mixer_channel_id = id_generator::gen_mixer_auto_channel_id(room);
         Self {
             room,
             metadata: TaskSwitcherBranch::new(RoomMetadata::new(room), TaskType::Metadata),
@@ -122,6 +136,10 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             audio_mixer: TaskSwitcherBranch::new(AudioMixer::new(room, mixer_channel_id), TaskType::AudioMixer),
             switcher: TaskSwitcher::new(3),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.metadata.is_empty() && self.media_track.is_empty() && self.audio_mixer.is_empty()
     }
 
     fn on_sdn_event(&mut self, now: Instant, userdata: RoomUserData, event: FeaturesEvent) {
@@ -203,6 +221,15 @@ impl<Endpoint: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Endpoint> {
             ClusterLocalTrackControl::DesiredBitrate(bitrate) => self.media_track.input(&mut self.switcher).on_track_desired_bitrate(now, endpoint, track_id, bitrate),
             ClusterLocalTrackControl::Unsubscribe => self.media_track.input(&mut self.switcher).on_track_unsubscribe(endpoint, track_id),
         }
+    }
+}
+
+impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Drop for ClusterRoom<Endpoint> {
+    fn drop(&mut self) {
+        log::info!("Drop ClusterRoom {}", self.room);
+        assert!(self.audio_mixer.is_empty(), "Audio mixer not empty");
+        assert!(self.media_track.is_empty(), "Media track not empty");
+        assert!(self.metadata.is_empty(), "Metadata not empty");
     }
 }
 

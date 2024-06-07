@@ -30,7 +30,7 @@ struct PeerContainer {
 pub enum Output<Endpoint> {
     Kv(dht_kv::Control),
     Endpoint(Vec<Endpoint>, ClusterEndpointEvent),
-    LastPeerLeaved,
+    OnResourceEmpty,
 }
 
 pub struct RoomMetadata<Endpoint: Hash + Eq> {
@@ -61,6 +61,10 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMetadata<Endpoint> {
             cluster_tracks: SmallMap::new(),
             queue: VecDeque::new(),
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.peers.is_empty()
     }
 
     pub fn get_peer_from_endpoint(&self, endpoint: Endpoint) -> Option<PeerId> {
@@ -167,7 +171,7 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMetadata<Endpoint> {
 
         if self.peers.is_empty() {
             log::info!("[ClusterRoom {}] last peer leaed => destroy metadata", self.room);
-            self.queue.push_back(Output::LastPeerLeaved);
+            self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 
@@ -349,15 +353,17 @@ impl<Endpoint: Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for RoomMetadata<E
 
 impl<Endpoint: Hash + Eq> Drop for RoomMetadata<Endpoint> {
     fn drop(&mut self) {
+        log::info!("Drop RoomMetadata {}", self.room);
         assert_eq!(self.queue.len(), 0, "Queue not empty");
         assert_eq!(self.peers.len(), 0, "Peers not empty");
+        assert_eq!(self.peers_map_subscribers.len(), 0, "Peers subscriber not empty");
+        assert_eq!(self.tracks_map_subscribers.len(), 0, "Tracks subscriber not empty");
+        assert_eq!(self.peers_tracks_subs.len(), 0, "Peers tracks subs not empty");
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
-
     use atm0s_sdn::features::dht_kv::{Control, MapControl, MapEvent};
     use media_server_protocol::endpoint::{PeerId, PeerInfo, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, TrackInfo, TrackName};
     use sans_io_runtime::TaskSwitcherChild;
@@ -389,7 +395,7 @@ mod tests {
         assert_eq!(room_meta.get_peer_from_endpoint(2), None);
 
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -446,7 +452,7 @@ mod tests {
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Del(peer_key)))));
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -482,7 +488,7 @@ mod tests {
 
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -542,7 +548,7 @@ mod tests {
         // peer leave should send unsub
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -583,7 +589,7 @@ mod tests {
 
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -599,7 +605,6 @@ mod tests {
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
         let peer_key = id_generator::peers_key(&peer_id);
         let endpoint = 1;
-        let now = Instant::now();
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -628,7 +633,7 @@ mod tests {
 
         // peer leave should send unsub
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -640,7 +645,6 @@ mod tests {
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
         let endpoint = 1;
-        let now = Instant::now();
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -685,7 +689,7 @@ mod tests {
 
         // peer leave should not send unsub
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -699,7 +703,6 @@ mod tests {
         let endpoint = 1;
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
-        let now = Instant::now();
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -733,7 +736,7 @@ mod tests {
 
         //should not pop anything after leave
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -743,7 +746,6 @@ mod tests {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
 
-        let now = Instant::now();
         let endpoint = 1;
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
@@ -768,7 +770,7 @@ mod tests {
 
         //should not pop anything after leave
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -779,7 +781,6 @@ mod tests {
         let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
 
-        let now = Instant::now();
         let endpoint = 1;
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
@@ -812,7 +813,7 @@ mod tests {
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Del(track_key)))));
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Del(track_key)))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 
@@ -824,7 +825,6 @@ mod tests {
         let peer_id: PeerId = "peer1".to_string().into();
         let peer_meta = PeerMeta { metadata: None };
         let endpoint = 1;
-        let now = Instant::now();
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -843,7 +843,7 @@ mod tests {
         // peer leave should send unsub of peer2_map
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::LastPeerLeaved));
+        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
     }
 }

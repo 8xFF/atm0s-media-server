@@ -46,6 +46,7 @@ pub enum TaskType {
 pub enum Output<Endpoint> {
     Endpoint(Vec<Endpoint>, ClusterEndpointEvent),
     Pubsub(pubsub::Control),
+    OnResourceEmpty,
 }
 
 pub struct AudioMixer<Endpoint: Clone> {
@@ -75,6 +76,13 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
             switcher: TaskSwitcher::new(3),
             last_tick: Instant::now(),
         }
+    }
+
+    ///
+    /// We need to wait all publisher, subscriber, and manuals ready to remove
+    ///
+    pub fn is_empty(&self) -> bool {
+        self.publisher.is_empty() && self.subscriber.is_empty() && self.manuals.tasks() == 0
     }
 
     pub fn on_tick(&mut self, now: Instant) {
@@ -119,8 +127,9 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
         if let Some(_peer) = self.auto_mode.remove(&endpoint) {
             self.subscriber.input(&mut self.switcher).on_endpoint_leave(now, endpoint);
         } else if let Some(index) = self.manual_mode.remove(&endpoint) {
-            log::info!("[ClusterAudioMixer] remove manual mode for {:?}", endpoint);
-            self.manuals.input(&mut self.switcher).remove_task(index);
+            log::info!("[ClusterAudioMixer] endpoint {:?} leave from manual mode", endpoint);
+            self.manual_mode.remove(&endpoint);
+            self.manuals.input(&mut self.switcher).on_event(now, index, manual::Input::LeaveRoom);
         }
     }
 
@@ -159,20 +168,35 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
     }
 }
 
-impl<Endpoint: Clone> TaskSwitcherChild<Output<Endpoint>> for AudioMixer<Endpoint> {
+impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for AudioMixer<Endpoint> {
     type Time = ();
 
+    ///
+    /// We need to wait all publisher, subscriber, and manuals ready to remove
+    ///
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Publisher => {
                     if let Some(out) = self.publisher.pop_output((), &mut self.switcher) {
-                        return Some(out);
+                        if let Output::OnResourceEmpty = out {
+                            if self.is_empty() {
+                                return Some(Output::OnResourceEmpty);
+                            }
+                        } else {
+                            return Some(out);
+                        }
                     }
                 }
                 TaskType::Subscriber => {
                     if let Some(out) = self.subscriber.pop_output((), &mut self.switcher) {
-                        return Some(out);
+                        if let Output::OnResourceEmpty = out {
+                            if self.is_empty() {
+                                return Some(Output::OnResourceEmpty);
+                            }
+                        } else {
+                            return Some(out);
+                        }
                     }
                 }
                 TaskType::Manuals => {
@@ -195,6 +219,12 @@ impl<Endpoint: Clone> TaskSwitcherChild<Output<Endpoint>> for AudioMixer<Endpoin
                                     return Some(out);
                                 }
                             }
+                            Output::OnResourceEmpty => {
+                                self.manuals.input(&mut self.switcher).remove_task(index);
+                                if self.is_empty() {
+                                    return Some(Output::OnResourceEmpty);
+                                }
+                            }
                             _ => return Some(out),
                         }
                     }
@@ -206,6 +236,7 @@ impl<Endpoint: Clone> TaskSwitcherChild<Output<Endpoint>> for AudioMixer<Endpoin
 
 impl<Endpoint: Clone> Drop for AudioMixer<Endpoint> {
     fn drop(&mut self) {
+        log::info!("Drop AudioMixer {}", self.room);
         assert_eq!(self.manual_channels.len(), 0, "Manual channels not empty on drop");
         assert_eq!(self.manual_mode.len(), 0, "Manual modes not empty on drop");
         assert_eq!(self.manuals.tasks(), 0, "Manuals not empty on drop");

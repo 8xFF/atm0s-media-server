@@ -29,9 +29,11 @@ pub enum TaskType {
 pub enum Output<Endpoint> {
     Endpoint(Vec<Endpoint>, ClusterEndpointEvent),
     Pubsub(pubsub::Control),
+    OnResourceEmpty,
 }
 
 pub struct MediaTrack<Endpoint> {
+    room: ClusterRoomHash,
     publisher: TaskSwitcherBranch<RoomChannelPublisher<Endpoint>, Output<Endpoint>>,
     subscriber: TaskSwitcherBranch<RoomChannelSubscribe<Endpoint>, Output<Endpoint>>,
     switcher: TaskSwitcher,
@@ -40,23 +42,28 @@ pub struct MediaTrack<Endpoint> {
 impl<Endpoint: Debug + Hash + Eq + Copy> MediaTrack<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
+            room,
             publisher: TaskSwitcherBranch::new(RoomChannelPublisher::new(room), TaskType::Publisher),
             subscriber: TaskSwitcherBranch::new(RoomChannelSubscribe::new(room), TaskType::Subscriber),
             switcher: TaskSwitcher::new(2),
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.publisher.is_empty() && self.subscriber.is_empty()
+    }
+
     pub fn on_pubsub_event(&mut self, event: pubsub::Event) {
         let channel = event.0;
         match event.1 {
             pubsub::ChannelEvent::RouteChanged(next) => {
-                self.subscriber.input(&mut self.switcher).on_channel_relay_changed(channel, next);
+                self.subscriber.input(&mut self.switcher).on_track_relay_changed(channel, next);
             }
             pubsub::ChannelEvent::SourceData(_, data) => {
-                self.subscriber.input(&mut self.switcher).on_channel_data(channel, data);
+                self.subscriber.input(&mut self.switcher).on_track_data(channel, data);
             }
             pubsub::ChannelEvent::FeedbackData(fb) => {
-                self.publisher.input(&mut self.switcher).on_channel_feedback(channel, fb);
+                self.publisher.input(&mut self.switcher).on_track_feedback(channel, fb);
             }
         }
     }
@@ -98,15 +105,33 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Publisher => {
                     if let Some(out) = self.publisher.pop_output(now, &mut self.switcher) {
-                        return Some(out);
+                        if let Output::OnResourceEmpty = out {
+                            if self.is_empty() {
+                                return Some(Output::OnResourceEmpty);
+                            }
+                        } else {
+                            return Some(out);
+                        }
                     }
                 }
                 TaskType::Subscriber => {
                     if let Some(out) = self.subscriber.pop_output(now, &mut self.switcher) {
-                        return Some(out);
+                        if let Output::OnResourceEmpty = out {
+                            if self.is_empty() {
+                                return Some(Output::OnResourceEmpty);
+                            }
+                        } else {
+                            return Some(out);
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+impl<Endpoint> Drop for MediaTrack<Endpoint> {
+    fn drop(&mut self) {
+        log::info!("Drop MediaTrack {}", self.room);
     }
 }

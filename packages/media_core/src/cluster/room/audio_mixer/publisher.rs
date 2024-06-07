@@ -47,6 +47,10 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.tracks.is_empty()
+    }
+
     pub fn on_tick(&mut self, now: Instant) {
         if let Some(removed_slots) = self.mixer.on_tick(now) {
             for slot in removed_slots {
@@ -112,6 +116,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         if self.tracks.is_empty() {
             log::info!("[AudioMixerPublisher] last track leave ind Auto mode => unpublish channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::PubStop)));
+            self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 }

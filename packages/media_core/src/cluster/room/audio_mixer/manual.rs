@@ -26,7 +26,7 @@ pub enum Input {
     Attach(Vec<TrackSource>),
     Detach(Vec<TrackSource>),
     Pubsub(ChannelId, NodeId, Vec<u8>),
-    Kill,
+    LeaveRoom,
 }
 
 pub struct ManualMixer<Endpoint> {
@@ -121,12 +121,15 @@ impl<Endpoint: Clone> Task<Input, Output<Endpoint>> for ManualMixer<Endpoint> {
                     self.on_source_pkt(now, channel, from, pkt);
                 }
             }
-            Input::Kill => {
+            Input::LeaveRoom => {
+                // We need manual release sources because it is from client request,
+                // we cannot ensure client will release it before it disconnect.
                 let sources = std::mem::replace(&mut self.sources, Default::default());
                 for (channel_id, source) in sources {
                     log::info!("[ManualMixer] remove source {:?} on queue => unsub {channel_id}", source);
                     self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)));
                 }
+                self.queue.push_back(Output::OnResourceEmpty);
             }
         }
     }

@@ -56,7 +56,11 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
         }
     }
 
-    pub fn on_channel_feedback(&mut self, channel: ChannelId, fb: Feedback) {
+    pub fn is_empty(&self) -> bool {
+        self.tracks.is_empty()
+    }
+
+    pub fn on_track_feedback(&mut self, channel: ChannelId, fb: Feedback) {
         let fb = return_if_err!(FeedbackKind::try_from(fb));
         let (endpoint, track_id) = return_if_none!(self.tracks_source.get(&channel));
         match fb {
@@ -103,11 +107,10 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
         let (peer, name, channel_id) = return_if_none!(self.tracks.remove(&(endpoint, track)));
         self.tracks_source.remove(&channel_id).expect("Should have track_source");
         log::info!("[ClusterRoom {}/Publishers] peer ({peer} stopped track {name})", self.room);
-        self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)))
-    }
-
-    pub fn can_destroy(&self) -> bool {
-        self.queue.is_empty() && self.tracks.is_empty() && self.tracks_source.is_empty()
+        self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)));
+        if self.tracks.is_empty() {
+            self.queue.push_back(Output::OnResourceEmpty);
+        }
     }
 }
 
@@ -201,7 +204,7 @@ mod tests {
         assert_eq!(publisher.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
         assert_eq!(publisher.pop_output(Instant::now()), None);
 
-        publisher.on_channel_feedback(channel_id, Feedback::simple(0, 1000, 100, 200));
+        publisher.on_track_feedback(channel_id, Feedback::simple(0, 1000, 100, 200));
         assert_eq!(
             publisher.pop_output(Instant::now()),
             Some(Output::Endpoint(
@@ -210,7 +213,7 @@ mod tests {
             ))
         );
 
-        publisher.on_channel_feedback(channel_id, Feedback::simple(1, 1, 100, 200));
+        publisher.on_track_feedback(channel_id, Feedback::simple(1, 1, 100, 200));
         assert_eq!(
             publisher.pop_output(Instant::now()),
             Some(Output::Endpoint(vec![endpoint], ClusterEndpointEvent::RemoteTrack(track, ClusterRemoteTrackEvent::RequestKeyFrame)))

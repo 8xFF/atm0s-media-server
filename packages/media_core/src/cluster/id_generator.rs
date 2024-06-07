@@ -40,3 +40,10 @@ pub fn gen_channel_id<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track:
     track.as_ref().hash(&mut h);
     h.finish().into()
 }
+
+pub fn gen_mixer_auto_channel_id<T: From<u64>>(room: ClusterRoomHash) -> T {
+    let mut h = std::hash::DefaultHasher::new();
+    room.as_ref().hash(&mut h);
+    "mixer_auto".hash(&mut h);
+    h.finish().into()
+}

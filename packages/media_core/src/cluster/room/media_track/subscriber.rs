@@ -60,7 +60,11 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
         }
     }
 
-    pub fn on_channel_relay_changed(&mut self, channel: ChannelId, _relay: NodeId) {
+    pub fn is_empty(&self) -> bool {
+        self.subscribers.is_empty()
+    }
+
+    pub fn on_track_relay_changed(&mut self, channel: ChannelId, _relay: NodeId) {
         let channel_container = return_if_none!(self.channels.get(&channel));
         log::info!(
             "[ClusterRoom {}/Subscribers] cluster: channel {channel} source changed => fire event to {:?}",
@@ -73,7 +77,7 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
         }
     }
 
-    pub fn on_channel_data(&mut self, channel: ChannelId, data: Vec<u8>) {
+    pub fn on_track_data(&mut self, channel: ChannelId, data: Vec<u8>) {
         let pkt = return_if_none!(MediaPacket::deserialize(&data));
         let channel_container = return_if_none!(self.channels.get(&channel));
         log::trace!(
@@ -157,6 +161,10 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
             log::info!("[ClusterRoom {}/Subscribers] last unsubscriber => Unsub channel {channel_id}", self.room);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)));
         }
+
+        if self.subscribers.is_empty() {
+            self.queue.push_back(Output::OnResourceEmpty);
+        }
     }
 }
 
@@ -225,7 +233,7 @@ mod tests {
         assert_eq!(subscriber.pop_output(Instant::now()), None);
 
         let pkt = fake_audio();
-        subscriber.on_channel_data(channel_id, pkt.serialize());
+        subscriber.on_track_data(channel_id, pkt.serialize());
         assert_eq!(
             subscriber.pop_output(Instant::now()),
             Some(Output::Endpoint(
