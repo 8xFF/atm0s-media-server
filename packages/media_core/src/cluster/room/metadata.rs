@@ -64,7 +64,7 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMetadata<Endpoint> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.peers.is_empty()
+        self.peers.is_empty() && self.queue.is_empty()
     }
 
     pub fn get_peer_from_endpoint(&self, endpoint: Endpoint) -> Option<PeerId> {

@@ -40,6 +40,7 @@ pub enum Input<Endpoint> {
     Endpoint(Endpoint, ClusterEndpointControl),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum Output<Endpoint> {
     Sdn(RoomUserData, FeaturesControl),
     Endpoint(Vec<Endpoint>, ClusterEndpointEvent),
@@ -235,6 +236,16 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Drop for ClusterRoom<Endpoint> 
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
+    use atm0s_sdn::features::{dht_kv, pubsub, FeaturesControl};
+    use media_server_protocol::endpoint::{AudioMixerConfig, AudioMixerMode, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe};
+    use sans_io_runtime::{Task, TaskSwitcherChild};
+
+    use crate::cluster::{id_generator, room::RoomFeature, ClusterEndpointControl, RoomUserData};
+
+    use super::{ClusterRoom, Input, Output};
+
     //TODO join room should set key-value and SUB to maps
     //TODO maps event should fire event to endpoint
     //TODO leave room should del key-value
@@ -245,4 +256,83 @@ mod tests {
     //TODO feddback track should FEEDBACK channel
     //TODO channel data should fire event to endpoint
     //TODO unsubscribe track should UNSUB channel
+
+    #[test]
+    fn cleanup_resource_sub_and_mixer() {
+        let room_id = 0.into();
+        let endpoint = 1;
+        let peer: PeerId = "peer1".into();
+        let t0 = Instant::now();
+        let mut room = ClusterRoom::<u8>::new(room_id);
+        room.on_event(
+            t0,
+            Input::Endpoint(
+                endpoint,
+                ClusterEndpointControl::Join(
+                    peer.clone(),
+                    PeerMeta { metadata: None },
+                    RoomInfoPublish { peer: false, tracks: false },
+                    RoomInfoSubscribe { peers: true, tracks: true },
+                    Some(AudioMixerConfig {
+                        mode: AudioMixerMode::Auto,
+                        outputs: vec![0.into(), 1.into(), 2.into()],
+                        sources: vec![],
+                    }),
+                ),
+            ),
+        );
+
+        let room_peers_map = id_generator::peers_map(room_id);
+        let room_tracks_map = id_generator::tracks_map(room_id);
+        let room_mixer_auto_channel = id_generator::gen_mixer_auto_channel_id(room_id);
+
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::MetaData),
+                FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_peers_map, dht_kv::MapControl::Sub))
+            ))
+        );
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::MetaData),
+                FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_tracks_map, dht_kv::MapControl::Sub))
+            ))
+        );
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::AudioMixer),
+                FeaturesControl::PubSub(pubsub::Control(room_mixer_auto_channel, pubsub::ChannelControl::SubAuto))
+            ))
+        );
+        assert_eq!(room.pop_output(()), None);
+
+        //after leave we should auto cleanup all resources like kv, pubsub
+        room.on_event(t0, Input::Endpoint(endpoint, ClusterEndpointControl::Leave));
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::MetaData),
+                FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_peers_map, dht_kv::MapControl::Unsub))
+            ))
+        );
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::MetaData),
+                FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_tracks_map, dht_kv::MapControl::Unsub))
+            ))
+        );
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::AudioMixer),
+                FeaturesControl::PubSub(pubsub::Control(room_mixer_auto_channel, pubsub::ChannelControl::UnsubAuto))
+            ))
+        );
+        assert_eq!(room.pop_output(()), Some(Output::Destroy(room_id)));
+        assert_eq!(room.pop_output(()), None);
+    }
 }

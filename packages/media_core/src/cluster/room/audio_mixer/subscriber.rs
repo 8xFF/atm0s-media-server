@@ -45,7 +45,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.endpoints.is_empty()
+        self.endpoints.is_empty() && self.queue.is_empty()
     }
 
     pub fn on_tick(&mut self, now: Instant) {

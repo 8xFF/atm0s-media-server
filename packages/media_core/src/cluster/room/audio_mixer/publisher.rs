@@ -48,7 +48,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.tracks.is_empty()
+        self.tracks.is_empty() && self.queue.is_empty()
     }
 
     pub fn on_tick(&mut self, now: Instant) {

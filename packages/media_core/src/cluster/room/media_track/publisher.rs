@@ -56,7 +56,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.tracks.is_empty()
+        self.tracks.is_empty() && self.queue.is_empty()
     }
 
     pub fn on_track_feedback(&mut self, channel: ChannelId, fb: Feedback) {

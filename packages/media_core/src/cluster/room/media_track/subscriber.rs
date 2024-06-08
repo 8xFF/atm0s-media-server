@@ -61,7 +61,7 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.subscribers.is_empty()
+        self.subscribers.is_empty() && self.queue.is_empty()
     }
 
     pub fn on_track_relay_changed(&mut self, channel: ChannelId, _relay: NodeId) {
