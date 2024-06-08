@@ -3,7 +3,7 @@
 use std::{marker::PhantomData, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority},
+    endpoint::{AudioMixerConfig, BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority, TrackSource},
     media::MediaPacket,
     protobuf,
     transport::RpcResult,
@@ -53,21 +53,6 @@ pub enum EndpointRemoteTrackRes {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct EndpointLocalTrackSource {
-    pub peer: PeerId,
-    pub track: TrackName,
-}
-
-impl From<protobuf::shared::receiver::Source> for EndpointLocalTrackSource {
-    fn from(value: protobuf::shared::receiver::Source) -> Self {
-        Self {
-            peer: value.peer.into(),
-            track: value.track.into(),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
 pub struct EndpointLocalTrackConfig {
     pub priority: TrackPriority,
     pub max_spatial: u8,
@@ -90,7 +75,7 @@ impl From<protobuf::shared::receiver::Config> for EndpointLocalTrackConfig {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointLocalTrackReq {
-    Attach(EndpointLocalTrackSource, EndpointLocalTrackConfig),
+    Attach(TrackSource, EndpointLocalTrackConfig),
     Detach(),
     Config(EndpointLocalTrackConfig),
 }
@@ -102,16 +87,29 @@ pub enum EndpointLocalTrackRes {
     Config(RpcResult<()>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointAudioMixerReq {
+    Attach(Vec<TrackSource>),
+    Detach(Vec<TrackSource>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointAudioMixerRes {
+    Attach(RpcResult<()>),
+    Detach(RpcResult<()>),
+}
+
 #[derive(Debug, PartialEq, Eq, derive_more::From)]
 pub struct EndpointReqId(pub u32);
 
 /// This is control APIs, which is used to control server from Endpoint SDK
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointReq {
-    JoinRoom(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe),
+    JoinRoom(RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>),
     LeaveRoom,
     SubscribePeer(PeerId),
     UnsubscribePeer(PeerId),
+    AudioMixer(EndpointAudioMixerReq),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackReq),
     LocalTrack(LocalTrackId, EndpointLocalTrackReq),
 }
@@ -123,6 +121,7 @@ pub enum EndpointRes {
     LeaveRoom(RpcResult<()>),
     SubscribePeer(RpcResult<()>),
     UnsubscribePeer(RpcResult<()>),
+    AudioMixer(EndpointAudioMixerRes),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackRes),
     LocalTrack(LocalTrackId, EndpointLocalTrackRes),
 }
@@ -132,6 +131,7 @@ pub enum EndpointRes {
 pub enum EndpointLocalTrackEvent {
     Media(MediaPacket),
     Status(protobuf::shared::receiver::Status),
+    VoiceActivity(i8),
 }
 
 /// This is used for controlling the remote track, which is sent from endpoint
@@ -141,12 +141,20 @@ pub enum EndpointRemoteTrackEvent {
     LimitBitrateBps { min: u64, max: u64 },
 }
 
+/// This is used for controlling audio mixer feature
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointAudioMixerEvent {
+    SlotSet(u8, PeerId, TrackName),
+    SlotUnset(u8),
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointEvent {
     PeerJoined(PeerId, PeerMeta),
     PeerLeaved(PeerId, PeerMeta),
     PeerTrackStarted(PeerId, TrackName, TrackMeta),
     PeerTrackStopped(PeerId, TrackName, TrackMeta),
+    AudioMixer(EndpointAudioMixerEvent),
     RemoteMediaTrack(RemoteTrackId, EndpointRemoteTrackEvent),
     LocalMediaTrack(LocalTrackId, EndpointLocalTrackEvent),
     /// Egress est params

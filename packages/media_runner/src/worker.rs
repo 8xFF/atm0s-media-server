@@ -25,7 +25,7 @@ use sans_io_runtime::{
     collections::DynamicDeque,
     TaskSwitcher, TaskSwitcherBranch,
 };
-use transport_webrtc::{GroupInput, MediaWorkerWebrtc, VariantParams, WebrtcOwner};
+use transport_webrtc::{GroupInput, MediaWorkerWebrtc, VariantParams, WebrtcSession};
 
 const FEEDBACK_GATEWAY_AGENT_INTERVAL: u64 = 1000; //only feedback every second
 
@@ -45,7 +45,11 @@ pub enum Owner {
 }
 
 //for sdn
-pub type UserData = cluster::ClusterRoomHash;
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum UserData {
+    Cluster,
+    Room(cluster::RoomUserData),
+}
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 pub enum SC {
     Visual(visualization::Control),
@@ -84,8 +88,8 @@ enum TaskType {
 }
 
 #[derive(convert_enum::From, Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum MediaClusterOwner {
-    Webrtc(WebrtcOwner),
+enum MediaClusterEndpoint {
+    Webrtc(WebrtcSession),
 }
 
 #[allow(clippy::type_complexity)]
@@ -93,7 +97,7 @@ pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
     worker: u16,
     sdn_slot: usize,
     sdn_worker: TaskSwitcherBranch<SdnWorker<UserData, SC, SE, TC, TW>, SdnWorkerOutput<UserData, SC, SE, TC, TW>>,
-    media_cluster: TaskSwitcherBranch<MediaCluster<MediaClusterOwner>, cluster::Output<MediaClusterOwner>>,
+    media_cluster: TaskSwitcherBranch<MediaCluster<MediaClusterEndpoint>, cluster::Output<MediaClusterEndpoint>>,
     media_webrtc: TaskSwitcherBranch<MediaWorkerWebrtc<ES>, transport_webrtc::GroupOutput>,
     switcher: TaskSwitcher,
     queue: DynamicDeque<Output, 16>,
@@ -168,7 +172,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 now_ms,
                 SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
                     AGENT_SERVICE_ID.into(),
-                    0.into(),
+                    UserData::Cluster,
                     media_server_gateway::agent_service::Control::WorkerUsage(ServiceKind::Webrtc, self.worker, webrtc_live).into(),
                 )),
             );
@@ -220,7 +224,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     }
                 }
                 TaskType::MediaCluster => {
-                    if let Some(out) = self.media_cluster.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.media_cluster.pop_output((), &mut self.switcher) {
                         return Some(self.output_cluster(now, out));
                     }
                 }
@@ -247,7 +251,8 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         match out {
             SdnWorkerOutput::Ext(out) => Output::ExtSdn(out),
             SdnWorkerOutput::ExtWorker(out) => match out {
-                SdnExtOut::FeaturesEvent(room, event) => {
+                SdnExtOut::FeaturesEvent(UserData::Cluster, _event) => Output::Continue,
+                SdnExtOut::FeaturesEvent(UserData::Room(room), event) => {
                     self.media_cluster.input(&mut self.switcher).on_sdn_event(now, room, event);
                     Output::Continue
                 }
@@ -263,20 +268,20 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         }
     }
 
-    fn output_cluster(&mut self, now: Instant, out: cluster::Output<MediaClusterOwner>) -> Output {
+    fn output_cluster(&mut self, now: Instant, out: cluster::Output<MediaClusterEndpoint>) -> Output {
         match out {
-            cluster::Output::Sdn(userdata, control) => {
+            cluster::Output::Sdn(room, control) => {
                 let now_ms = self.timer.timestamp_ms(now);
                 self.sdn_worker
                     .input(&mut self.switcher)
-                    .on_event(now_ms, SdnWorkerInput::ExtWorker(SdnExtIn::FeaturesControl(userdata, control)));
+                    .on_event(now_ms, SdnWorkerInput::ExtWorker(SdnExtIn::FeaturesControl(UserData::Room(room), control)));
                 Output::Continue
             }
-            cluster::Output::Endpoint(owners, event) => {
-                for owner in owners {
-                    match owner {
-                        MediaClusterOwner::Webrtc(owner) => {
-                            self.media_webrtc.input(&mut self.switcher).on_event(now, transport_webrtc::GroupInput::Cluster(owner, event.clone()));
+            cluster::Output::Endpoint(endpoints, event) => {
+                for endpoint in endpoints {
+                    match endpoint {
+                        MediaClusterEndpoint::Webrtc(session) => {
+                            self.media_webrtc.input(&mut self.switcher).on_event(now, transport_webrtc::GroupInput::Cluster(session, event.clone()));
                         }
                     }
                 }
@@ -289,11 +294,11 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     fn output_webrtc(&mut self, now: Instant, out: transport_webrtc::GroupOutput) -> Output {
         match out {
             transport_webrtc::GroupOutput::Net(out) => Output::Net(Owner::MediaWebrtc, out),
-            transport_webrtc::GroupOutput::Cluster(owner, room, control) => {
-                self.media_cluster.input(&mut self.switcher).on_endpoint_control(now, owner.into(), room, control);
+            transport_webrtc::GroupOutput::Cluster(session, room, control) => {
+                self.media_cluster.input(&mut self.switcher).on_endpoint_control(now, session.into(), room, control);
                 Output::Continue
             }
-            transport_webrtc::GroupOutput::Ext(owner, ext) => match ext {
+            transport_webrtc::GroupOutput::Ext(session, ext) => match ext {
                 transport_webrtc::ExtOut::RemoteIce(req_id, variant, res) => match variant {
                     transport_webrtc::Variant::Whip => Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::RemoteIce(res.map(|_| WhipRemoteIceRes {})))),
                     transport_webrtc::Variant::Whep => Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::RemoteIce(res.map(|_| WhepRemoteIceRes {})))),
@@ -303,7 +308,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     req_id,
                     RpcRes::Webrtc(webrtc::RpcRes::RestartIce(res.map(|(ice_lite, sdp)| {
                         (
-                            owner.index(),
+                            session.index(),
                             ConnectResponse {
                                 conn_id: "".to_string(),
                                 sdp,
@@ -313,7 +318,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     }))),
                 ),
             },
-            transport_webrtc::GroupOutput::Shutdown(_owner) => Output::Continue,
+            transport_webrtc::GroupOutput::Shutdown(_session) => Output::Continue,
             transport_webrtc::GroupOutput::Continue => Output::Continue,
         }
     }

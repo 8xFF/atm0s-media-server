@@ -7,7 +7,7 @@ use std::{collections::VecDeque, time::Instant};
 use atm0s_sdn::TimePivot;
 use media_server_protocol::{
     endpoint::{PeerId, TrackName, TrackPriority},
-    media::MediaKind,
+    media::{MediaKind, MediaMeta},
     protobuf::shared::receiver::Status as ProtoStatus,
     transport::RpcError,
 };
@@ -20,11 +20,13 @@ use crate::{
     transport::LocalTrackEvent,
 };
 
-use self::packet_selector::PacketSelector;
+use packet_selector::PacketSelector;
+use voice_activity::VoiceActivityDetector;
 
 use super::bitrate_allocator::EgressAction;
 
 mod packet_selector;
+mod voice_activity;
 
 const MEDIA_TIMEOUT_MS: u64 = 2_000; //after 2s not receive media, the track will become inactive
 
@@ -60,6 +62,7 @@ pub struct EndpointLocalTrack {
     queue: VecDeque<Output>,
     selector: PacketSelector,
     timer: TimePivot,
+    voice_activity: VoiceActivityDetector,
 }
 
 impl EndpointLocalTrack {
@@ -72,6 +75,7 @@ impl EndpointLocalTrack {
             queue: VecDeque::new(),
             selector: PacketSelector::new(kind, 2, 2),
             timer: TimePivot::build(),
+            voice_activity: VoiceActivityDetector::default(),
         }
     }
 
@@ -94,10 +98,17 @@ impl EndpointLocalTrack {
     fn on_cluster_event(&mut self, now: Instant, event: ClusterLocalTrackEvent) {
         match event {
             ClusterLocalTrackEvent::Started => todo!(),
+            ClusterLocalTrackEvent::RelayChanged => {
+                if self.kind.is_video() {
+                    let room = return_if_none!(self.room.as_ref());
+                    log::info!("[EndpointLocalTrack] relay changed => request key-frame");
+                    self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame));
+                }
+            }
             ClusterLocalTrackEvent::SourceChanged => {
-                let room = return_if_none!(self.room.as_ref());
-                log::info!("[EndpointLocalTrack] source changed => request key-frame and reset seq, ts rewrite");
-                self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::RequestKeyFrame));
+                //currently for audio_mixer
+                log::info!("[EndpointLocalTrack] source changed => reset seq, ts rewrite");
+                self.selector.reset();
             }
             ClusterLocalTrackEvent::Media(channel, mut pkt) => {
                 log::trace!("[EndpointLocalTrack] on media payload {:?} seq {}", pkt.meta, pkt.seq);
@@ -114,6 +125,12 @@ impl EndpointLocalTrack {
                             Status::Active { last_media_ts } => {
                                 *last_media_ts = now_ms;
                             }
+                        }
+                    }
+
+                    if let MediaMeta::Opus { audio_level } = &pkt.meta {
+                        if let Some(level) = self.voice_activity.on_audio(now_ms, *audio_level) {
+                            self.queue.push_back(Output::Event(EndpointLocalTrackEvent::VoiceActivity(level)));
                         }
                     }
 
@@ -260,6 +277,12 @@ impl TaskSwitcherChild<Output> for EndpointLocalTrack {
     type Time = Instant;
     fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         self.queue.pop_front()
+    }
+}
+
+impl Drop for EndpointLocalTrack {
+    fn drop(&mut self) {
+        assert_eq!(self.queue.len(), 0);
     }
 }
 

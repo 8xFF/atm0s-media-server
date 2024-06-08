@@ -4,196 +4,248 @@
 //! Main functions:
 //!
 //! - Send/Recv metadata related key-value
-//! - Send/Receive pubsub channel
+//! - Send/Recv media channel
+//! - AudioMixer feature
 //!
 
 use std::{fmt::Debug, hash::Hash, time::Instant};
 
-use atm0s_sdn::features::{dht_kv, pubsub, FeaturesControl, FeaturesEvent};
-use sans_io_runtime::{collections::DynamicDeque, return_if_none, return_if_some, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
+use atm0s_sdn::features::{dht_kv, FeaturesControl, FeaturesEvent};
+use sans_io_runtime::{return_if_none, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::transport::{LocalTrackId, RemoteTrackId};
 
-use self::{channel_pub::RoomChannelPublisher, channel_sub::RoomChannelSubscribe, metadata::RoomMetadata};
+use audio_mixer::AudioMixer;
+use media_track::MediaTrack;
+use metadata::RoomMetadata;
 
-use super::{ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackControl, ClusterRemoteTrackControl, ClusterRoomHash};
+use super::{id_generator, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackControl, ClusterRemoteTrackControl, ClusterRoomHash};
 
-mod channel_pub;
-mod channel_sub;
+mod audio_mixer;
+mod media_track;
 mod metadata;
 
-pub enum Input<Owner> {
-    Sdn(FeaturesEvent),
-    Endpoint(Owner, ClusterEndpointControl),
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum RoomFeature {
+    MetaData,
+    MediaTrack,
+    AudioMixer,
 }
 
-pub enum Output<Owner> {
-    Sdn(ClusterRoomHash, FeaturesControl),
-    Endpoint(Vec<Owner>, ClusterEndpointEvent),
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct RoomUserData(pub(crate) ClusterRoomHash, pub(crate) RoomFeature);
+
+pub enum Input<Endpoint> {
+    Sdn(RoomUserData, FeaturesEvent),
+    Endpoint(Endpoint, ClusterEndpointControl),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Output<Endpoint> {
+    Sdn(RoomUserData, FeaturesControl),
+    Endpoint(Vec<Endpoint>, ClusterEndpointEvent),
     Destroy(ClusterRoomHash),
 }
 
 #[derive(num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
 #[repr(usize)]
 enum TaskType {
-    Publisher,
-    Subscriber,
     Metadata,
+    MediaTrack,
+    AudioMixer,
 }
 
-pub struct ClusterRoom<Owner> {
+pub struct ClusterRoom<Endpoint: Debug + Copy + Clone + Hash + Eq> {
     room: ClusterRoomHash,
-    metadata: TaskSwitcherBranch<RoomMetadata<Owner>, metadata::Output<Owner>>,
-    publisher: TaskSwitcherBranch<RoomChannelPublisher<Owner>, channel_pub::Output<Owner>>,
-    subscriber: TaskSwitcherBranch<RoomChannelSubscribe<Owner>, channel_sub::Output<Owner>>,
+    metadata: TaskSwitcherBranch<RoomMetadata<Endpoint>, metadata::Output<Endpoint>>,
+    media_track: TaskSwitcherBranch<MediaTrack<Endpoint>, media_track::Output<Endpoint>>,
+    audio_mixer: TaskSwitcherBranch<AudioMixer<Endpoint>, audio_mixer::Output<Endpoint>>,
     switcher: TaskSwitcher,
-    queue: DynamicDeque<Output<Owner>, 64>,
 }
 
-impl<Owner: Debug + Copy + Clone + Hash + Eq> Task<Input<Owner>, Output<Owner>> for ClusterRoom<Owner> {
-    fn on_tick(&mut self, _now: Instant) {}
+impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Task<Input<Endpoint>, Output<Endpoint>> for ClusterRoom<Endpoint> {
+    fn on_tick(&mut self, now: Instant) {
+        self.audio_mixer.input(&mut self.switcher).on_tick(now);
+    }
 
-    fn on_event(&mut self, now: Instant, input: Input<Owner>) {
+    fn on_event(&mut self, now: Instant, input: Input<Endpoint>) {
         match input {
-            Input::Endpoint(owner, control) => self.on_endpoint_control(now, owner, control),
-            Input::Sdn(event) => self.on_sdn_event(now, event),
+            Input::Endpoint(endpoint, control) => self.on_endpoint_control(now, endpoint, control),
+            Input::Sdn(userdata, event) => self.on_sdn_event(now, userdata, event),
         }
     }
 
     fn on_shutdown(&mut self, _now: Instant) {}
 }
 
-impl<Owner: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Owner>> for ClusterRoom<Owner> {
-    type Time = Instant;
-    fn pop_output(&mut self, now: Instant) -> Option<Output<Owner>> {
-        return_if_some!(self.queue.pop_front());
-
+impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for ClusterRoom<Endpoint> {
+    type Time = ();
+    fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
-                TaskType::Metadata => self.pop_meta_output(now),
-                TaskType::Publisher => self.pop_publisher_output(now),
-                TaskType::Subscriber => self.pop_subscriber_output(now),
+                TaskType::Metadata => {
+                    if let Some(out) = self.metadata.pop_output((), &mut self.switcher) {
+                        match out {
+                            metadata::Output::Kv(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MetaData), FeaturesControl::DhtKv(control))),
+                            metadata::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
+                            metadata::Output::OnResourceEmpty => {
+                                if self.is_empty() {
+                                    break Some(Output::Destroy(self.room));
+                                }
+                            }
+                        }
+                    }
+                }
+                TaskType::MediaTrack => {
+                    if let Some(out) = self.media_track.pop_output((), &mut self.switcher) {
+                        match out {
+                            media_track::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
+                            media_track::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MediaTrack), FeaturesControl::PubSub(control))),
+                            media_track::Output::OnResourceEmpty => {
+                                if self.is_empty() {
+                                    break Some(Output::Destroy(self.room));
+                                }
+                            }
+                        }
+                    }
+                }
+                TaskType::AudioMixer => {
+                    if let Some(out) = self.audio_mixer.pop_output((), &mut self.switcher) {
+                        match out {
+                            audio_mixer::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
+                            audio_mixer::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::AudioMixer), FeaturesControl::PubSub(control))),
+                            audio_mixer::Output::OnResourceEmpty => {
+                                if self.is_empty() {
+                                    break Some(Output::Destroy(self.room));
+                                }
+                            }
+                        }
+                    }
+                }
             }
-
-            return_if_some!(self.queue.pop_front());
         }
     }
 }
 
-impl<Owner: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Owner> {
+impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
+        let mixer_channel_id = id_generator::gen_mixer_auto_channel_id(room);
         Self {
             room,
             metadata: TaskSwitcherBranch::new(RoomMetadata::new(room), TaskType::Metadata),
-            publisher: TaskSwitcherBranch::new(RoomChannelPublisher::new(room), TaskType::Publisher),
-            subscriber: TaskSwitcherBranch::new(RoomChannelSubscribe::new(room), TaskType::Subscriber),
+            media_track: TaskSwitcherBranch::new(MediaTrack::new(room), TaskType::MediaTrack),
+            audio_mixer: TaskSwitcherBranch::new(AudioMixer::new(room, mixer_channel_id), TaskType::AudioMixer),
             switcher: TaskSwitcher::new(3),
-            queue: DynamicDeque::default(),
         }
     }
 
-    fn on_sdn_event(&mut self, _now: Instant, event: FeaturesEvent) {
-        match event {
-            FeaturesEvent::DhtKv(event) => match event {
+    pub fn is_empty(&self) -> bool {
+        self.metadata.is_empty() && self.media_track.is_empty() && self.audio_mixer.is_empty()
+    }
+
+    fn on_sdn_event(&mut self, now: Instant, userdata: RoomUserData, event: FeaturesEvent) {
+        match (userdata.1, event) {
+            (RoomFeature::MetaData, FeaturesEvent::DhtKv(event)) => match event {
                 dht_kv::Event::MapEvent(map, event) => self.metadata.input(&mut self.switcher).on_kv_event(map, event),
                 dht_kv::Event::MapGetRes(_, _) => {}
             },
-            FeaturesEvent::PubSub(pubsub::Event(channel, event)) => match event {
-                pubsub::ChannelEvent::RouteChanged(next) => {
-                    self.subscriber.input(&mut self.switcher).on_channel_relay_changed(channel, next);
-                }
-                pubsub::ChannelEvent::SourceData(_, data) => {
-                    self.subscriber.input(&mut self.switcher).on_channel_data(channel, data);
-                }
-                pubsub::ChannelEvent::FeedbackData(fb) => {
-                    self.publisher.input(&mut self.switcher).on_channel_feedback(channel, fb);
-                }
-            },
+            (RoomFeature::MediaTrack, FeaturesEvent::PubSub(event)) => {
+                self.media_track.input(&mut self.switcher).on_pubsub_event(event);
+            }
+            (RoomFeature::AudioMixer, FeaturesEvent::PubSub(event)) => {
+                self.audio_mixer.input(&mut self.switcher).on_pubsub_event(now, event);
+            }
             _ => {}
         }
     }
 
-    fn on_endpoint_control(&mut self, now: Instant, owner: Owner, control: ClusterEndpointControl) {
+    fn on_endpoint_control(&mut self, now: Instant, endpoint: Endpoint, control: ClusterEndpointControl) {
         match control {
-            ClusterEndpointControl::Join(peer, meta, publish, subscribe) => {
-                self.metadata.input(&mut self.switcher).on_join(owner, peer, meta, publish, subscribe);
+            ClusterEndpointControl::Join(peer, meta, publish, subscribe, mixer) => {
+                self.audio_mixer.input(&mut self.switcher).on_join(now, endpoint, peer.clone(), mixer);
+                self.metadata.input(&mut self.switcher).on_join(endpoint, peer, meta, publish, subscribe);
             }
             ClusterEndpointControl::Leave => {
-                self.metadata.input(&mut self.switcher).on_leave(owner);
+                self.audio_mixer.input(&mut self.switcher).on_leave(now, endpoint);
+                self.metadata.input(&mut self.switcher).on_leave(endpoint);
             }
             ClusterEndpointControl::SubscribePeer(target) => {
-                self.metadata.input(&mut self.switcher).on_subscribe_peer(owner, target);
+                self.metadata.input(&mut self.switcher).on_subscribe_peer(endpoint, target);
             }
             ClusterEndpointControl::UnsubscribePeer(target) => {
-                self.metadata.input(&mut self.switcher).on_unsubscribe_peer(owner, target);
+                self.metadata.input(&mut self.switcher).on_unsubscribe_peer(endpoint, target);
             }
-            ClusterEndpointControl::RemoteTrack(track, control) => self.on_control_remote_track(now, owner, track, control),
-            ClusterEndpointControl::LocalTrack(track, control) => self.on_control_local_track(now, owner, track, control),
+            ClusterEndpointControl::AudioMixer(control) => {
+                self.audio_mixer.input(&mut self.switcher).on_control(now, endpoint, control);
+            }
+            ClusterEndpointControl::RemoteTrack(track, control) => self.on_control_remote_track(now, endpoint, track, control),
+            ClusterEndpointControl::LocalTrack(track, control) => self.on_control_local_track(now, endpoint, track, control),
         }
     }
 }
 
-impl<Owner: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Owner> {
-    fn on_control_remote_track(&mut self, _now: Instant, owner: Owner, track: RemoteTrackId, control: ClusterRemoteTrackControl) {
+impl<Endpoint: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Endpoint> {
+    fn on_control_remote_track(&mut self, now: Instant, endpoint: Endpoint, track: RemoteTrackId, control: ClusterRemoteTrackControl) {
         match control {
             ClusterRemoteTrackControl::Started(name, meta) => {
-                let peer = return_if_none!(self.metadata.get_peer_from_owner(owner));
-                log::info!("[ClusterRoom {}] started track {:?}/{track} => {peer}/{name}", self.room, owner);
+                let peer = return_if_none!(self.metadata.get_peer_from_endpoint(endpoint));
+                log::info!("[ClusterRoom {}] started track {:?}/{track} => {peer}/{name}", self.room, endpoint);
 
-                self.publisher.input(&mut self.switcher).on_track_publish(owner, track, peer, name.clone());
-                self.metadata.input(&mut self.switcher).on_track_publish(owner, track, name.clone(), meta.clone());
+                if meta.kind.is_audio() {
+                    self.audio_mixer.input(&mut self.switcher).on_track_publish(now, endpoint, track, peer.clone(), name.clone());
+                }
+                self.media_track.input(&mut self.switcher).on_track_publish(endpoint, track, peer, name.clone());
+                self.metadata.input(&mut self.switcher).on_track_publish(endpoint, track, name, meta.clone());
             }
             ClusterRemoteTrackControl::Media(media) => {
-                self.publisher.input(&mut self.switcher).on_track_data(owner, track, media);
+                if media.meta.is_audio() {
+                    self.audio_mixer.input(&mut self.switcher).on_track_data(now, endpoint, track, &media);
+                }
+                self.media_track.input(&mut self.switcher).on_track_data(endpoint, track, media);
             }
-            ClusterRemoteTrackControl::Ended => {
-                log::info!("[ClusterRoom {}] stopped track {:?}/{track}", self.room, owner);
-                self.publisher.input(&mut self.switcher).on_track_unpublish(owner, track);
-                self.metadata.input(&mut self.switcher).on_track_unpublish(owner, track);
+            ClusterRemoteTrackControl::Ended(_name, meta) => {
+                log::info!("[ClusterRoom {}] stopped track {:?}/{track}", self.room, endpoint);
+
+                if meta.kind.is_audio() {
+                    self.audio_mixer.input(&mut self.switcher).on_track_unpublish(now, endpoint, track);
+                }
+                self.media_track.input(&mut self.switcher).on_track_unpublish(endpoint, track);
+                self.metadata.input(&mut self.switcher).on_track_unpublish(endpoint, track);
             }
         }
     }
 
-    fn on_control_local_track(&mut self, now: Instant, owner: Owner, track_id: LocalTrackId, control: ClusterLocalTrackControl) {
+    fn on_control_local_track(&mut self, now: Instant, endpoint: Endpoint, track_id: LocalTrackId, control: ClusterLocalTrackControl) {
         match control {
-            ClusterLocalTrackControl::Subscribe(target_peer, target_track) => self.subscriber.input(&mut self.switcher).on_track_subscribe(owner, track_id, target_peer, target_track),
-            ClusterLocalTrackControl::RequestKeyFrame => self.subscriber.input(&mut self.switcher).on_track_request_key(owner, track_id),
-            ClusterLocalTrackControl::DesiredBitrate(bitrate) => self.subscriber.input(&mut self.switcher).on_track_desired_bitrate(now, owner, track_id, bitrate),
-            ClusterLocalTrackControl::Unsubscribe => self.subscriber.input(&mut self.switcher).on_track_unsubscribe(owner, track_id),
+            ClusterLocalTrackControl::Subscribe(target_peer, target_track) => self.media_track.input(&mut self.switcher).on_track_subscribe(endpoint, track_id, target_peer, target_track),
+            ClusterLocalTrackControl::RequestKeyFrame => self.media_track.input(&mut self.switcher).on_track_request_key(endpoint, track_id),
+            ClusterLocalTrackControl::DesiredBitrate(bitrate) => self.media_track.input(&mut self.switcher).on_track_desired_bitrate(now, endpoint, track_id, bitrate),
+            ClusterLocalTrackControl::Unsubscribe => self.media_track.input(&mut self.switcher).on_track_unsubscribe(endpoint, track_id),
         }
     }
+}
 
-    fn pop_meta_output(&mut self, now: Instant) {
-        let out = return_if_none!(self.metadata.pop_output(now, &mut self.switcher));
-        let out = match out {
-            metadata::Output::Kv(control) => Output::Sdn(self.room, FeaturesControl::DhtKv(control)),
-            metadata::Output::Endpoint(owners, event) => Output::Endpoint(owners, event),
-            metadata::Output::LastPeerLeaved => Output::Destroy(self.room),
-        };
-        self.queue.push_back(out);
-    }
-
-    fn pop_publisher_output(&mut self, now: Instant) {
-        let out = return_if_none!(self.publisher.pop_output(now, &mut self.switcher));
-        let out = match out {
-            channel_pub::Output::Pubsub(control) => Output::Sdn(self.room, FeaturesControl::PubSub(control)),
-            channel_pub::Output::Endpoint(owners, event) => Output::Endpoint(owners, event),
-        };
-        self.queue.push_back(out);
-    }
-
-    fn pop_subscriber_output(&mut self, now: Instant) {
-        let out = return_if_none!(self.subscriber.pop_output(now, &mut self.switcher));
-        let out = match out {
-            channel_sub::Output::Pubsub(control) => Output::Sdn(self.room, FeaturesControl::PubSub(control)),
-            channel_sub::Output::Endpoint(owners, event) => Output::Endpoint(owners, event),
-        };
-        self.queue.push_back(out);
+impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Drop for ClusterRoom<Endpoint> {
+    fn drop(&mut self) {
+        log::info!("Drop ClusterRoom {}", self.room);
+        assert!(self.audio_mixer.is_empty(), "Audio mixer not empty");
+        assert!(self.media_track.is_empty(), "Media track not empty");
+        assert!(self.metadata.is_empty(), "Metadata not empty");
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
+    use atm0s_sdn::features::{dht_kv, pubsub, FeaturesControl};
+    use media_server_protocol::endpoint::{AudioMixerConfig, AudioMixerMode, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe};
+    use sans_io_runtime::{Task, TaskSwitcherChild};
+
+    use crate::cluster::{id_generator, room::RoomFeature, ClusterEndpointControl, RoomUserData};
+
+    use super::{ClusterRoom, Input, Output};
+
     //TODO join room should set key-value and SUB to maps
     //TODO maps event should fire event to endpoint
     //TODO leave room should del key-value
@@ -204,4 +256,83 @@ mod tests {
     //TODO feddback track should FEEDBACK channel
     //TODO channel data should fire event to endpoint
     //TODO unsubscribe track should UNSUB channel
+
+    #[test]
+    fn cleanup_resource_sub_and_mixer() {
+        let room_id = 0.into();
+        let endpoint = 1;
+        let peer: PeerId = "peer1".into();
+        let t0 = Instant::now();
+        let mut room = ClusterRoom::<u8>::new(room_id);
+        room.on_event(
+            t0,
+            Input::Endpoint(
+                endpoint,
+                ClusterEndpointControl::Join(
+                    peer.clone(),
+                    PeerMeta { metadata: None },
+                    RoomInfoPublish { peer: false, tracks: false },
+                    RoomInfoSubscribe { peers: true, tracks: true },
+                    Some(AudioMixerConfig {
+                        mode: AudioMixerMode::Auto,
+                        outputs: vec![0.into(), 1.into(), 2.into()],
+                        sources: vec![],
+                    }),
+                ),
+            ),
+        );
+
+        let room_peers_map = id_generator::peers_map(room_id);
+        let room_tracks_map = id_generator::tracks_map(room_id);
+        let room_mixer_auto_channel = id_generator::gen_mixer_auto_channel_id(room_id);
+
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::MetaData),
+                FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_peers_map, dht_kv::MapControl::Sub))
+            ))
+        );
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::MetaData),
+                FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_tracks_map, dht_kv::MapControl::Sub))
+            ))
+        );
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::AudioMixer),
+                FeaturesControl::PubSub(pubsub::Control(room_mixer_auto_channel, pubsub::ChannelControl::SubAuto))
+            ))
+        );
+        assert_eq!(room.pop_output(()), None);
+
+        //after leave we should auto cleanup all resources like kv, pubsub
+        room.on_event(t0, Input::Endpoint(endpoint, ClusterEndpointControl::Leave));
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::MetaData),
+                FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_peers_map, dht_kv::MapControl::Unsub))
+            ))
+        );
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::MetaData),
+                FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_tracks_map, dht_kv::MapControl::Unsub))
+            ))
+        );
+        assert_eq!(
+            room.pop_output(()),
+            Some(Output::Sdn(
+                RoomUserData(room_id, RoomFeature::AudioMixer),
+                FeaturesControl::PubSub(pubsub::Control(room_mixer_auto_channel, pubsub::ChannelControl::UnsubAuto))
+            ))
+        );
+        assert_eq!(room.pop_output(()), Some(Output::Destroy(room_id)));
+        assert_eq!(room.pop_output(()), None);
+    }
 }

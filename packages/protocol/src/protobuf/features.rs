@@ -3,7 +3,7 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Config {
     #[prost(message, optional, tag = "1")]
-    pub mix_minus: ::core::option::Option<super::mix_minus::Config>,
+    pub mixer: ::core::option::Option<mixer::Config>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -17,7 +17,7 @@ pub mod request {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Request {
         #[prost(message, tag = "1")]
-        MixMinus(super::super::mix_minus::Request),
+        Mixer(super::mixer::Request),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -32,7 +32,7 @@ pub mod response {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Response {
         #[prost(message, tag = "1")]
-        MixMinus(super::super::mix_minus::Response),
+        Mixer(super::mixer::Response),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -47,6 +47,6 @@ pub mod server_event {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Event {
         #[prost(message, tag = "1")]
-        MixMinus(super::super::mix_minus::ServerEvent),
+        Mixer(super::mixer::ServerEvent),
     }
 }

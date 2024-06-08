@@ -3,16 +3,25 @@ syntax = "proto3";
 import "shared.proto";
 import "features.proto";
 
-package conn;
+package session;
+
+message RoomJoin {
+    string room = 1;
+    string peer = 2;
+    shared.RoomInfoPublish publish = 3;
+    shared.RoomInfoSubscribe subscribe = 4;
+    features.Config features = 5;
+    optional string metadata = 6;
+}
 
 message Request {
     message Session {
-        message RoomJoin {
-            shared.RoomJoin info = 1;
+        message Join {
+            RoomJoin info = 1;
             string token = 2;
         }
 
-        message RoomLeave {
+        message Leave {
 
         }
 
@@ -26,8 +35,8 @@ message Request {
         }
 
         oneof request {
-            RoomJoin join = 1;
-            RoomLeave leave = 2;
+            Join join = 1;
+            Leave leave = 2;
             UpdateSdp sdp = 3;
             Disconnect disconnect = 4;
         }
@@ -96,11 +105,11 @@ message Request {
 
 message Response {
     message Session {
-        message RoomJoin {
+        message Join {
 
         }
 
-        message RoomLeave {
+        message Leave {
 
         }
 
@@ -113,8 +122,8 @@ message Response {
         }
 
         oneof response {
-            RoomJoin join = 1;
-            RoomLeave leave = 2;
+            Join join = 1;
+            Leave leave = 2;
             UpdateSdp sdp = 3;
             Disconnect disconnect = 4;
         }
@@ -182,7 +191,7 @@ message Response {
         Room room = 4;
         Sender sender = 5;
         Receiver receiver = 6;
-        features.Request features = 7;
+        features.Response features = 7;
     }
 }
 
@@ -299,10 +308,15 @@ message ServerEvent {
             optional Transmit transmit = 2;
         }
 
+        message VoiceActivity {
+            int32 audio_level = 1;
+        }
+
         string name = 1;
         oneof event {
             State state = 2;
             Stats stats = 3;
+            VoiceActivity voice_activity = 4;
         }
     }
 

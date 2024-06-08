@@ -4,7 +4,7 @@ mod transport;
 mod worker;
 
 pub use transport::{ExtIn, ExtOut, Variant, VariantParams};
-pub use worker::{GroupInput, GroupOutput, MediaWorkerWebrtc, WebrtcOwner};
+pub use worker::{GroupInput, GroupOutput, MediaWorkerWebrtc, WebrtcSession};
 
 #[derive(num_enum::TryFromPrimitive, num_enum::IntoPrimitive, derive_more::Display)]
 #[repr(u32)]

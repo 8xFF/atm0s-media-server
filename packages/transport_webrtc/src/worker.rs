@@ -18,21 +18,21 @@ use crate::{
     WebrtcError,
 };
 
-group_owner_type!(WebrtcOwner);
+group_owner_type!(WebrtcSession);
 
 pub enum GroupInput {
     Net(BackendIncoming),
-    Cluster(WebrtcOwner, ClusterEndpointEvent),
-    Ext(WebrtcOwner, ExtIn),
-    Close(WebrtcOwner),
+    Cluster(WebrtcSession, ClusterEndpointEvent),
+    Ext(WebrtcSession, ExtIn),
+    Close(WebrtcSession),
 }
 
 #[derive(Debug)]
 pub enum GroupOutput {
     Net(BackendOutgoing),
-    Cluster(WebrtcOwner, ClusterRoomHash, ClusterEndpointControl),
-    Ext(WebrtcOwner, ExtOut),
-    Shutdown(WebrtcOwner),
+    Cluster(WebrtcSession, ClusterRoomHash, ClusterEndpointControl),
+    Ext(WebrtcSession, ExtOut),
+    Shutdown(WebrtcSession),
     Continue,
 }
 
@@ -78,6 +78,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
         let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone(), self.ice_lite)?;
         let endpoint = Endpoint::new(cfg, tran);
         let index = self.endpoints.add_task(endpoint);
+        log::info!("[TransportWebrtc] create endpoint {index}");
         self.shared_port.add_ufrag(ufrag, index);
         Ok((self.ice_lite, sdp, index))
     }
@@ -85,13 +86,14 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
     fn process_output(&mut self, index: usize, out: EndpointOutput<ExtOut>) -> GroupOutput {
         match out {
             EndpointOutput::Net(net) => GroupOutput::Net(net),
-            EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcOwner(index), room, control),
+            EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcSession(index), room, control),
             EndpointOutput::Destroy => {
+                log::info!("[TransportWebrtc] destroy endpoint {index}");
                 self.endpoints.remove_task(index);
                 self.shared_port.remove_task(index);
-                GroupOutput::Shutdown(WebrtcOwner(index))
+                GroupOutput::Shutdown(WebrtcSession(index))
             }
-            EndpointOutput::Ext(ext) => GroupOutput::Ext(WebrtcOwner(index), ext),
+            EndpointOutput::Ext(ext) => GroupOutput::Ext(WebrtcSession(index), ext),
             EndpointOutput::Continue => GroupOutput::Continue,
         }
     }

@@ -8,6 +8,7 @@ members = [
     "packages/transport_webrtc",
     "packages/media_secure",
     "packages/media_gateway",
+    "packages/audio_mixer",
 ]
 
 [workspace.dependencies]
@@ -23,3 +24,4 @@ derive_more = "0.99"
 rand = "0.8"
 mockall = "0.12"
 prost = "0.12"
+indexmap = "2.2"

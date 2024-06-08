@@ -4,24 +4,32 @@ use std::{
 };
 
 use media_server_core::{
-    endpoint::{EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointRemoteTrackReq, EndpointReq, EndpointReqId, EndpointRes},
+    endpoint::{EndpointAudioMixerReq, EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointRemoteTrackReq, EndpointReq, EndpointReqId, EndpointRes},
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
 use media_server_protocol::{
-    endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
+    endpoint::{AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
     protobuf::{
         self,
-        conn::{
+        features::{
+            mixer::{
+                server_event::{Event as ProtoFeatureMixerEvent2, SlotSet, SlotUnset},
+                ServerEvent as ProtoFeatureMixerEvent,
+            },
+            server_event::Event as ProtoFeaturesEvent2,
+            ServerEvent as ProtoFeaturesEvent,
+        },
+        gateway::ConnectRequest,
+        session::{
             server_event::{
-                receiver::{Event as ProtoReceiverEvent, State as ProtoReceiverState},
+                receiver::{Event as ProtoReceiverEvent, State as ProtoReceiverState, VoiceActivity as ProtoReceiverVoiceActivity},
                 room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted, TrackStopped},
                 sender::{Event as ProtoSenderEvent, State as ProtoSenderState},
                 Event as ProtoServerEvent, Receiver as ProtoReceiverEventContainer, Room as ProtoRoomEvent, Sender as ProtoSenderEventContainer,
             },
             ClientEvent,
         },
-        gateway::ConnectRequest,
-        shared::{sender::Status as ProtoSenderStatus, Kind},
+        shared::{receiver::Source as ProtoReceiverSource, sender::Status as ProtoSenderStatus, Kind},
     },
     tokens::WebrtcToken,
     transport::{RpcError, RpcResult},
@@ -71,6 +79,7 @@ pub struct TransportWebrtcSdk<ES> {
     event_seq: u32,
     local_tracks: Vec<LocalTrack>,
     remote_tracks: Vec<RemoteTrack>,
+    audio_mixer: Option<AudioMixerConfig>,
     media_convert: RemoteMediaConvert,
     bwe_state: BweState,
     secure: Arc<ES>,
@@ -79,19 +88,49 @@ pub struct TransportWebrtcSdk<ES> {
 impl<ES> TransportWebrtcSdk<ES> {
     pub fn new(req: ConnectRequest, secure: Arc<ES>) -> Self {
         let tracks = req.tracks.unwrap_or_default();
-        Self {
-            join: req
-                .join
-                .map(|j| (j.room.into(), j.peer.into(), j.metadata, j.publish.unwrap_or_default().into(), j.subscribe.unwrap_or_default().into())),
-            state: State::New,
-            local_tracks: tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect(),
-            remote_tracks: tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect(),
-            queue: Default::default(),
-            channel: None,
-            event_seq: 0,
-            media_convert: RemoteMediaConvert::default(),
-            bwe_state: BweState::default(),
-            secure,
+        let local_tracks: Vec<LocalTrack> = tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect();
+        let remote_tracks: Vec<RemoteTrack> = tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect();
+        if let Some(j) = req.join {
+            Self {
+                join: Some((j.room.into(), j.peer.into(), j.metadata, j.publish.unwrap_or_default().into(), j.subscribe.unwrap_or_default().into())),
+                state: State::New,
+                audio_mixer: j.features.and_then(|f| {
+                    f.mixer.and_then(|m| {
+                        Some(AudioMixerConfig {
+                            mode: m.mode().into(),
+                            outputs: m
+                                .outputs
+                                .iter()
+                                .map(|r| local_tracks.iter().find(|l| l.name() == r.as_str()).map(|l| l.id()))
+                                .flatten()
+                                .collect::<Vec<_>>(),
+                            sources: m.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                        })
+                    })
+                }),
+                local_tracks,
+                remote_tracks,
+                queue: Default::default(),
+                channel: None,
+                event_seq: 0,
+                media_convert: RemoteMediaConvert::default(),
+                bwe_state: BweState::default(),
+                secure,
+            }
+        } else {
+            Self {
+                join: None,
+                state: State::New,
+                local_tracks,
+                remote_tracks,
+                audio_mixer: None,
+                queue: Default::default(),
+                channel: None,
+                event_seq: 0,
+                media_convert: RemoteMediaConvert::default(),
+                bwe_state: BweState::default(),
+                secure,
+            }
         }
     }
 
@@ -119,21 +158,21 @@ impl<ES> TransportWebrtcSdk<ES> {
         self.local_tracks.iter_mut().find(|t| t.name() == name)
     }
 
-    fn send_event(&mut self, event: protobuf::conn::server_event::Event) {
+    fn send_event(&mut self, event: protobuf::session::server_event::Event) {
         let channel = return_if_none!(self.channel);
         let seq = self.event_seq;
         self.event_seq += 1;
-        let event = protobuf::conn::ServerEvent { seq, event: Some(event) };
+        let event = protobuf::session::ServerEvent { seq, event: Some(event) };
         self.queue.push_back(InternalOutput::Str0mSendData(channel, event.encode_to_vec()));
     }
 
-    fn send_rpc_res(&mut self, req_id: u32, res: protobuf::conn::response::Response) {
-        self.send_event(protobuf::conn::server_event::Event::Response(protobuf::conn::Response { req_id, response: Some(res) }));
+    fn send_rpc_res(&mut self, req_id: u32, res: protobuf::session::response::Response) {
+        self.send_event(protobuf::session::server_event::Event::Response(protobuf::session::Response { req_id, response: Some(res) }));
     }
 
     fn send_rpc_res_err(&mut self, req_id: u32, err: RpcError) {
-        let response = protobuf::conn::response::Response::Error(err.into());
-        self.send_event(protobuf::conn::server_event::Event::Response(protobuf::conn::Response { req_id, response: Some(response) }))
+        let response = protobuf::session::response::Response::Error(err.into());
+        self.send_event(protobuf::session::server_event::Event::Response(protobuf::session::Response { req_id, response: Some(response) }))
     }
 }
 
@@ -182,8 +221,8 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             Ok(res) => match res {
                 InternalRpcRes::SetRemoteSdp(answer) => self.send_rpc_res(
                     req_id,
-                    protobuf::conn::response::Response::Session(protobuf::conn::response::Session {
-                        response: Some(protobuf::conn::response::session::Response::Sdp(protobuf::conn::response::session::UpdateSdp { sdp: answer })),
+                    protobuf::session::response::Response::Session(protobuf::session::response::Session {
+                        response: Some(protobuf::session::response::session::Response::Sdp(protobuf::session::response::session::UpdateSdp { sdp: answer })),
                     }),
                 ),
             },
@@ -231,6 +270,27 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     })),
                 }));
             }
+            EndpointEvent::AudioMixer(event) => match event {
+                media_server_core::endpoint::EndpointAudioMixerEvent::SlotSet(slot, peer, track) => {
+                    log::info!("[TransportWebrtcSdk] audio mixer slot {slot} set to {peer}/{track}");
+                    self.send_event(ProtoServerEvent::Features(ProtoFeaturesEvent {
+                        event: Some(ProtoFeaturesEvent2::Mixer(ProtoFeatureMixerEvent {
+                            event: Some(ProtoFeatureMixerEvent2::SlotSet(SlotSet {
+                                slot: slot as u32,
+                                source: Some(ProtoReceiverSource { peer: peer.0, track: track.0 }),
+                            })),
+                        })),
+                    }))
+                }
+                media_server_core::endpoint::EndpointAudioMixerEvent::SlotUnset(slot) => {
+                    log::info!("[TransportWebrtcSdk] audio mixer slot {slot} unset");
+                    self.send_event(ProtoServerEvent::Features(ProtoFeaturesEvent {
+                        event: Some(ProtoFeaturesEvent2::Mixer(ProtoFeatureMixerEvent {
+                            event: Some(ProtoFeatureMixerEvent2::SlotUnset(SlotUnset { slot: slot as u32 })),
+                        })),
+                    }))
+                }
+            },
             EndpointEvent::RemoteMediaTrack(track_id, event) => match event {
                 media_server_core::endpoint::EndpointRemoteTrackEvent::RequestKeyFrame => {
                     let track = return_if_none!(self.remote_track(track_id));
@@ -264,6 +324,14 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                         event: Some(ProtoReceiverEvent::State(ProtoReceiverState { status: status as i32 })),
                     }));
                 }
+                EndpointLocalTrackEvent::VoiceActivity(level) => {
+                    let track = return_if_none!(self.local_track(track_id)).name().to_string();
+                    log::info!("[TransportWebrtcSdk] track {track} set audio_level {:?}", level);
+                    self.send_event(ProtoServerEvent::Receiver(ProtoReceiverEventContainer {
+                        name: track,
+                        event: Some(ProtoReceiverEvent::VoiceActivity(ProtoReceiverVoiceActivity { audio_level: level as i32 })),
+                    }));
+                }
             },
             EndpointEvent::BweConfig { current, desired } => {
                 let (current, desired) = self.bwe_state.filter_bwe_config(current, desired);
@@ -278,15 +346,15 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
         match res {
             EndpointRes::JoinRoom(Ok(_)) => self.send_rpc_res(
                 req_id.0,
-                protobuf::conn::response::Response::Session(protobuf::conn::response::Session {
-                    response: Some(protobuf::conn::response::session::Response::Join(protobuf::conn::response::session::RoomJoin {})),
+                protobuf::session::response::Response::Session(protobuf::session::response::Session {
+                    response: Some(protobuf::session::response::session::Response::Join(protobuf::session::response::session::Join {})),
                 }),
             ),
             EndpointRes::JoinRoom(Err(err)) => self.send_rpc_res_err(req_id.0, err),
             EndpointRes::LeaveRoom(Ok(_)) => self.send_rpc_res(
                 req_id.0,
-                protobuf::conn::response::Response::Session(protobuf::conn::response::Session {
-                    response: Some(protobuf::conn::response::session::Response::Leave(protobuf::conn::response::session::RoomLeave {})),
+                protobuf::session::response::Response::Session(protobuf::session::response::Session {
+                    response: Some(protobuf::session::response::session::Response::Leave(protobuf::session::response::session::Leave {})),
                 }),
             ),
             EndpointRes::LeaveRoom(Err(err)) => self.send_rpc_res_err(req_id.0, err),
@@ -295,8 +363,8 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             EndpointRes::RemoteTrack(_track_id, res) => match res {
                 media_server_core::endpoint::EndpointRemoteTrackRes::Config(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
-                        response: Some(protobuf::conn::response::sender::Response::Config(protobuf::conn::response::sender::Config {})),
+                    protobuf::session::response::Response::Sender(protobuf::session::response::Sender {
+                        response: Some(protobuf::session::response::sender::Response::Config(protobuf::session::response::sender::Config {})),
                     }),
                 ),
                 media_server_core::endpoint::EndpointRemoteTrackRes::Config(Err(err)) => self.send_rpc_res_err(req_id.0, err),
@@ -304,25 +372,45 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             EndpointRes::LocalTrack(_track_id, res) => match res {
                 media_server_core::endpoint::EndpointLocalTrackRes::Attach(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    protobuf::conn::response::Response::Receiver(protobuf::conn::response::Receiver {
-                        response: Some(protobuf::conn::response::receiver::Response::Attach(protobuf::conn::response::receiver::Attach {})),
+                    protobuf::session::response::Response::Receiver(protobuf::session::response::Receiver {
+                        response: Some(protobuf::session::response::receiver::Response::Attach(protobuf::session::response::receiver::Attach {})),
                     }),
                 ),
                 media_server_core::endpoint::EndpointLocalTrackRes::Detach(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    protobuf::conn::response::Response::Receiver(protobuf::conn::response::Receiver {
-                        response: Some(protobuf::conn::response::receiver::Response::Detach(protobuf::conn::response::receiver::Detach {})),
+                    protobuf::session::response::Response::Receiver(protobuf::session::response::Receiver {
+                        response: Some(protobuf::session::response::receiver::Response::Detach(protobuf::session::response::receiver::Detach {})),
                     }),
                 ),
                 media_server_core::endpoint::EndpointLocalTrackRes::Config(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    protobuf::conn::response::Response::Receiver(protobuf::conn::response::Receiver {
-                        response: Some(protobuf::conn::response::receiver::Response::Config(protobuf::conn::response::receiver::Config {})),
+                    protobuf::session::response::Response::Receiver(protobuf::session::response::Receiver {
+                        response: Some(protobuf::session::response::receiver::Response::Config(protobuf::session::response::receiver::Config {})),
                     }),
                 ),
                 media_server_core::endpoint::EndpointLocalTrackRes::Attach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
                 media_server_core::endpoint::EndpointLocalTrackRes::Detach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
                 media_server_core::endpoint::EndpointLocalTrackRes::Config(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+            },
+            EndpointRes::AudioMixer(res) => match res {
+                media_server_core::endpoint::EndpointAudioMixerRes::Attach(Ok(_)) => self.send_rpc_res(
+                    req_id.0,
+                    protobuf::session::response::Response::Features(protobuf::features::Response {
+                        response: Some(protobuf::features::response::Response::Mixer(protobuf::features::mixer::Response {
+                            response: Some(protobuf::features::mixer::response::Response::Attach(protobuf::features::mixer::response::Attach {})),
+                        })),
+                    }),
+                ),
+                media_server_core::endpoint::EndpointAudioMixerRes::Detach(Ok(_)) => self.send_rpc_res(
+                    req_id.0,
+                    protobuf::session::response::Response::Features(protobuf::features::Response {
+                        response: Some(protobuf::features::response::Response::Mixer(protobuf::features::mixer::Response {
+                            response: Some(protobuf::features::mixer::response::Response::Detach(protobuf::features::mixer::response::Detach {})),
+                        })),
+                    }),
+                ),
+                media_server_core::endpoint::EndpointAudioMixerRes::Attach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+                media_server_core::endpoint::EndpointAudioMixerRes::Detach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
             },
         }
     }
@@ -338,7 +426,14 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 if let Some((room, peer, metadata, publish, subscribe)) = &self.join {
                     self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                         0.into(),
-                        EndpointReq::JoinRoom(room.clone(), peer.clone(), PeerMeta { metadata: metadata.clone() }, publish.clone(), subscribe.clone()),
+                        EndpointReq::JoinRoom(
+                            room.clone(),
+                            peer.clone(),
+                            PeerMeta { metadata: metadata.clone() },
+                            publish.clone(),
+                            subscribe.clone(),
+                            self.audio_mixer.take(),
+                        ),
                     )));
                 }
             }
@@ -498,25 +593,30 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
     fn on_str0m_channel_event(&mut self, event: ClientEvent) {
         log::info!("[TransportWebrtcSdk] on client event {:?}", event);
         match return_if_none!(event.event) {
-            protobuf::conn::client_event::Event::Request(req) => match req.request {
-                Some(protobuf::conn::request::Request::Session(session)) => match session.request {
+            protobuf::session::client_event::Event::Request(req) => match req.request {
+                Some(protobuf::session::request::Request::Session(session)) => match session.request {
                     Some(session_req) => self.on_session_req(req.req_id, session_req),
                     None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
                 },
-                Some(protobuf::conn::request::Request::Sender(sender)) => match sender.request {
+                Some(protobuf::session::request::Request::Sender(sender)) => match sender.request {
                     Some(sender_req) => self.on_sender_req(req.req_id, &sender.name, sender_req),
                     None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
                 },
-                Some(protobuf::conn::request::Request::Receiver(receiver)) => match receiver.request {
+                Some(protobuf::session::request::Request::Receiver(receiver)) => match receiver.request {
                     Some(receiver_req) => self.on_recever_req(req.req_id, &receiver.name, receiver_req),
                     None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
                 },
-                Some(protobuf::conn::request::Request::Room(_room)) => {
+                Some(protobuf::session::request::Request::Room(_room)) => {
                     todo!()
                 }
-                Some(protobuf::conn::request::Request::Features(_features)) => {
-                    todo!()
-                }
+                Some(protobuf::session::request::Request::Features(features_req)) => match features_req.request {
+                    Some(protobuf::features::request::Request::Mixer(mixer_req)) => {
+                        if let Some(mixer_req) = mixer_req.request {
+                            self.on_mixer_req(req.req_id, mixer_req);
+                        }
+                    }
+                    None => {}
+                },
                 None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
             },
         }
@@ -525,20 +625,30 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
 
 ///This is for handling rpc from client
 impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
-    fn on_session_req(&mut self, req_id: u32, req: protobuf::conn::request::session::Request) {
+    fn on_session_req(&mut self, req_id: u32, req: protobuf::session::request::session::Request) {
         let build_req = |req: EndpointReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), req));
         match req {
-            protobuf::conn::request::session::Request::Join(req) => {
+            protobuf::session::request::session::Request::Join(req) => {
                 let info = req.info.unwrap_or_default();
                 let meta = PeerMeta { metadata: info.metadata };
                 if let Some(token) = self.secure.decode_obj::<WebrtcToken>("webrtc", &req.token) {
                     if token.room == Some(info.room.clone()) && token.peer == Some(info.peer.clone()) {
+                        let mixer_cfg = info.features.and_then(|f| {
+                            f.mixer.and_then(|m| {
+                                Some(AudioMixerConfig {
+                                    mode: m.mode().into(),
+                                    outputs: m.outputs.iter().map(|r| self.local_track_by_name(r.as_str()).map(|l| l.id())).flatten().collect::<Vec<_>>(),
+                                    sources: m.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
+                                })
+                            })
+                        });
                         self.queue.push_back(build_req(EndpointReq::JoinRoom(
                             info.room.into(),
                             info.peer.into(),
                             meta,
                             info.publish.unwrap_or_default().into(),
                             info.subscribe.unwrap_or_default().into(),
+                            mixer_cfg,
                         )));
                     } else {
                         self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTokenRoomPeerNotMatch));
@@ -547,8 +657,8 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTokenInvalid));
                 }
             }
-            protobuf::conn::request::session::Request::Leave(_req) => self.queue.push_back(build_req(EndpointReq::LeaveRoom)),
-            protobuf::conn::request::session::Request::Sdp(req) => {
+            protobuf::session::request::session::Request::Leave(_req) => self.queue.push_back(build_req(EndpointReq::LeaveRoom)),
+            protobuf::session::request::session::Request::Sdp(req) => {
                 let tracks = req.tracks.unwrap_or_default();
                 for (index, s) in tracks.senders.into_iter().enumerate() {
                     if self.remote_track_by_name(&s.name).is_none() {
@@ -565,7 +675,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                 }
                 self.queue.push_back(InternalOutput::RpcReq(req_id, InternalRpcReq::SetRemoteSdp(req.sdp)));
             }
-            protobuf::conn::request::session::Request::Disconnect(_) => {
+            protobuf::session::request::session::Request::Disconnect(_) => {
                 log::info!("[TransportWebrtcSdk] switched to disconnected with close action from client");
                 self.state = State::Disconnected;
                 self.queue
@@ -574,7 +684,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
         }
     }
 
-    fn on_sender_req(&mut self, req_id: u32, name: &str, req: protobuf::conn::request::sender::Request) {
+    fn on_sender_req(&mut self, req_id: u32, name: &str, req: protobuf::session::request::sender::Request) {
         let track = if let Some(track) = self.remote_track_by_name(name) {
             track
         } else {
@@ -585,7 +695,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
         let build_req = |req: EndpointReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), req));
 
         match req {
-            protobuf::conn::request::sender::Request::Attach(attach) => {
+            protobuf::session::request::sender::Request::Attach(attach) => {
                 if !track.has_source() {
                     track.set_source(attach.source.unwrap_or_default());
                     let event = InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
@@ -598,8 +708,8 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     )));
                     self.send_rpc_res(
                         req_id,
-                        protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
-                            response: Some(protobuf::conn::response::sender::Response::Attach(protobuf::conn::response::sender::Attach {})),
+                        protobuf::session::response::Response::Sender(protobuf::session::response::Sender {
+                            response: Some(protobuf::session::response::sender::Response::Attach(protobuf::session::response::sender::Attach {})),
                         }),
                     );
                     self.queue.push_back(event);
@@ -607,14 +717,14 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTrackAlreadyAttached));
                 }
             }
-            protobuf::conn::request::sender::Request::Detach(_) => {
+            protobuf::session::request::sender::Request::Detach(_) => {
                 if track.has_source() {
                     track.del_source();
                     let event = InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(track_id, RemoteTrackEvent::Ended)));
                     self.send_rpc_res(
                         req_id,
-                        protobuf::conn::response::Response::Sender(protobuf::conn::response::Sender {
-                            response: Some(protobuf::conn::response::sender::Response::Detach(protobuf::conn::response::sender::Detach {})),
+                        protobuf::session::response::Response::Sender(protobuf::session::response::Sender {
+                            response: Some(protobuf::session::response::sender::Response::Detach(protobuf::session::response::sender::Detach {})),
                         }),
                     );
                     self.queue.push_back(event);
@@ -622,11 +732,11 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTrackNotAttached));
                 }
             }
-            protobuf::conn::request::sender::Request::Config(config) => self.queue.push_back(build_req(EndpointReq::RemoteTrack(track_id, EndpointRemoteTrackReq::Config(config.into())))),
+            protobuf::session::request::sender::Request::Config(config) => self.queue.push_back(build_req(EndpointReq::RemoteTrack(track_id, EndpointRemoteTrackReq::Config(config.into())))),
         }
     }
 
-    fn on_recever_req(&mut self, req_id: u32, name: &str, req: protobuf::conn::request::receiver::Request) {
+    fn on_recever_req(&mut self, req_id: u32, name: &str, req: protobuf::session::request::receiver::Request) {
         let track = if let Some(track) = self.local_track_by_name(name) {
             track
         } else {
@@ -637,17 +747,36 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
         let build_req = |req: EndpointLocalTrackReq| InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), EndpointReq::LocalTrack(track_id, req)));
 
         match req {
-            protobuf::conn::request::receiver::Request::Attach(attach) => {
+            protobuf::session::request::receiver::Request::Attach(attach) => {
                 self.queue.push_back(build_req(EndpointLocalTrackReq::Attach(
                     attach.source.unwrap_or_default().into(),
                     attach.config.unwrap_or_default().into(),
                 )));
             }
-            protobuf::conn::request::receiver::Request::Detach(_) => {
+            protobuf::session::request::receiver::Request::Detach(_) => {
                 self.queue.push_back(build_req(EndpointLocalTrackReq::Detach()));
             }
-            protobuf::conn::request::receiver::Request::Config(config) => {
+            protobuf::session::request::receiver::Request::Config(config) => {
                 self.queue.push_back(build_req(EndpointLocalTrackReq::Config(config.into())));
+            }
+        }
+    }
+
+    fn on_mixer_req(&mut self, req_id: u32, req: protobuf::features::mixer::request::Request) {
+        match req {
+            protobuf::features::mixer::request::Request::Attach(req) => {
+                let sources = req.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>();
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    req_id.into(),
+                    EndpointReq::AudioMixer(EndpointAudioMixerReq::Attach(sources)),
+                )));
+            }
+            protobuf::features::mixer::request::Request::Detach(req) => {
+                let sources = req.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>();
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    req_id.into(),
+                    EndpointReq::AudioMixer(EndpointAudioMixerReq::Detach(sources)),
+                )));
             }
         }
     }
@@ -664,8 +793,9 @@ mod tests {
     use media_server_protocol::{
         endpoint::{PeerMeta, RoomInfoPublish, RoomInfoSubscribe},
         protobuf::{
-            conn::{self, client_event, ClientEvent},
-            gateway, shared,
+            gateway,
+            session::{self, client_event, ClientEvent},
+            shared,
         },
         tokens::WebrtcToken,
     };
@@ -687,12 +817,13 @@ mod tests {
     #[test]
     fn join_room_first() {
         let req = gateway::ConnectRequest {
-            join: Some(shared::RoomJoin {
+            join: Some(session::RoomJoin {
                 room: "room".to_string(),
                 peer: "peer".to_string(),
                 publish: Some(shared::RoomInfoPublish { peer: true, tracks: true }),
                 subscribe: Some(shared::RoomInfoSubscribe { peers: true, tracks: true }),
                 metadata: Some("metadata".to_string()),
+                features: None,
             }),
             ..Default::default()
         };
@@ -720,7 +851,8 @@ mod tests {
                         metadata: Some("metadata".to_string())
                     },
                     RoomInfoPublish { peer: true, tracks: true },
-                    RoomInfoSubscribe { peers: true, tracks: true }
+                    RoomInfoSubscribe { peers: true, tracks: true },
+                    None,
                 )
             )))
         );
@@ -756,16 +888,17 @@ mod tests {
         );
         transport.on_str0m_channel_event(ClientEvent {
             seq: 0,
-            event: Some(client_event::Event::Request(conn::Request {
+            event: Some(client_event::Event::Request(session::Request {
                 req_id: 1,
-                request: Some(conn::request::Request::Session(conn::request::Session {
-                    request: Some(conn::request::session::Request::Join(conn::request::session::RoomJoin {
-                        info: Some(shared::RoomJoin {
+                request: Some(session::request::Request::Session(session::request::Session {
+                    request: Some(session::request::session::Request::Join(session::request::session::Join {
+                        info: Some(session::RoomJoin {
                             room: "demo".to_string(),
                             peer: "peer1".to_string(),
                             metadata: None,
                             publish: None,
                             subscribe: None,
+                            features: None,
                         }),
                         token: token.clone(),
                     })),
@@ -782,7 +915,8 @@ mod tests {
                     "peer1".to_string().into(),
                     PeerMeta { metadata: None },
                     RoomInfoPublish { peer: false, tracks: false },
-                    RoomInfoSubscribe { peers: false, tracks: false }
+                    RoomInfoSubscribe { peers: false, tracks: false },
+                    None,
                 )
             )))
         );
@@ -796,4 +930,5 @@ mod tests {
     //TODO test local track
     //TODO test local track lazy
     //TODO test local track attach, detach
+    //TODO test audio mixer event
 }

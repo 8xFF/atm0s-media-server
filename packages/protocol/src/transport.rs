@@ -1,10 +1,33 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
+
+use derive_more::{Display, From};
+use serde::{Deserialize, Serialize};
 
 use crate::protobuf;
 
 pub mod webrtc;
 pub mod whep;
 pub mod whip;
+
+/// RemoteTrackId is used for track which received media from client
+#[derive(From, Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
+pub struct RemoteTrackId(pub u16);
+
+impl Hash for RemoteTrackId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+/// LocalTrackId is used for track which send media to client
+#[derive(From, Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
+pub struct LocalTrackId(pub u16);
+
+impl Hash for LocalTrackId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
 
 pub trait ConnLayer {
     type Up;

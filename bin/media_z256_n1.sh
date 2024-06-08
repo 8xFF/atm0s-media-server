@@ -1,4 +1,4 @@
-RUST_LOG=atm0s_sdn_network::features::socket=debug,info \
+RUST_LOG=info \
 RUST_BACKTRACE=1 \
 cargo run -- \
     --http-port 4001 \

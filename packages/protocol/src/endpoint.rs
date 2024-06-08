@@ -1,13 +1,23 @@
 use derive_more::{AsRef, From};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, str::FromStr};
-
-use crate::{
-    media::{MediaKind, MediaScaling},
-    protobuf,
-    transport::ConnLayer,
+use std::{
+    fmt::Display,
+    hash::{DefaultHasher, Hash, Hasher},
+    str::FromStr,
 };
 
+use crate::{protobuf, transport::ConnLayer};
+
+mod audio_mixer;
+mod track;
+
+pub use audio_mixer::*;
+pub use track::*;
+
+///
+/// ClusterConnId is used for re-router request from gateway to correct node
+/// This is a pair of node info and node inner worker and index
+///
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ClusterConnId {
     pub node: u32,
@@ -51,6 +61,10 @@ impl ConnLayer for ClusterConnId {
     }
 }
 
+///
+/// ServerConnId is for routing inside a node, which is a pair of worker index and task index
+/// Note that task index maybe a pair of task type and index
+///
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ServerConnId {
     pub worker: u16,
@@ -113,6 +127,14 @@ impl ConnLayer for usize {
     fn get_down_part(&self) -> Self::DownRes {}
 }
 
+///
+/// This is config for endpoint publish level
+///
+/// - peer: it will publish peer info to cluster
+/// - tracks: it will publish all tracks info to cluster
+///
+/// We can combine with RoomInfoSubscribe for adapting with difference kind of applications
+///
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoomInfoPublish {
     pub peer: bool,
@@ -128,6 +150,14 @@ impl From<protobuf::shared::RoomInfoPublish> for RoomInfoPublish {
     }
 }
 
+///
+/// This is config for endpoint subscribe level, this defined which kind of data the endpoint interted to
+///
+/// - peers: interested in all published peer info
+/// - tracks: interested in all published track info
+///
+/// We can combine with RoomInfoPublish  for adapting with difference kind of applications
+///
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoomInfoSubscribe {
     pub peers: bool,
@@ -143,6 +173,12 @@ impl From<protobuf::shared::RoomInfoSubscribe> for RoomInfoSubscribe {
     }
 }
 
+///
+/// RoomId type, we should use this type instead of direct String
+/// This is useful when we can validate
+///
+/// TODO: validate with uuid type (maybe max 32 bytes + [a-z]_- )
+///
 #[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RoomId(pub String);
 
@@ -152,6 +188,12 @@ impl From<&str> for RoomId {
     }
 }
 
+///
+/// PeerId type, we should use this type instead of direct String
+/// This is useful when we can validate
+///
+/// TODO: validate with uuid type (maybe max 32 bytes + [a-z]_- )
+///
 #[derive(From, AsRef, Debug, derive_more::Display, derive_more::FromStr, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PeerId(pub String);
 
@@ -161,11 +203,30 @@ impl From<&str> for PeerId {
     }
 }
 
+impl PeerId {
+    pub fn hash_code(&self) -> PeerHashCode {
+        let mut hash = DefaultHasher::new();
+        self.0.hash(&mut hash);
+        PeerHashCode(hash.finish())
+    }
+}
+
+#[derive(From, AsRef, Debug, derive_more::Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PeerHashCode(pub u64);
+
+///
+/// PeerMeta will store custom information
+///
+/// TODO: implement it
+///
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerMeta {
     pub metadata: Option<String>,
 }
 
+///
+/// PeerInfo will be used for broadcast to cluster
+///
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerInfo {
     pub peer: PeerId,
@@ -188,62 +249,9 @@ impl PeerInfo {
     }
 }
 
-#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct TrackName(pub String);
-
-impl From<&str> for TrackName {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
-    }
-}
-
-#[derive(From, AsRef, Debug, derive_more::Display, derive_more::Add, derive_more::AddAssign, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct TrackPriority(pub u32);
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TrackMeta {
-    pub kind: MediaKind,
-    pub scaling: MediaScaling,
-    pub control: BitrateControlMode,
-    pub metadata: Option<String>,
-}
-
-impl TrackMeta {
-    pub fn default_audio() -> Self {
-        Self {
-            kind: MediaKind::Audio,
-            scaling: MediaScaling::None,
-            control: BitrateControlMode::MaxBitrate,
-            metadata: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TrackInfo {
-    pub peer: PeerId,
-    pub track: TrackName,
-    pub meta: TrackMeta,
-}
-
-impl TrackInfo {
-    pub fn simple_audio(peer: PeerId) -> Self {
-        Self {
-            peer,
-            track: "audio_main".to_string().into(),
-            meta: TrackMeta::default_audio(),
-        }
-    }
-
-    pub fn serialize(&self) -> Vec<u8> {
-        bincode::serialize(self).expect("should ok")
-    }
-
-    pub fn deserialize(data: &[u8]) -> Option<TrackInfo> {
-        bincode::deserialize::<Self>(data).ok()
-    }
-}
-
+///
+/// We useBitrateControlMode for controlling how server adapt with consumer bitrates
+///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BitrateControlMode {
     /// Only limit with sender network and CAP with fixed MAX_BITRATE

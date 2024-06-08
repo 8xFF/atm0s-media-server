@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+import "shared.proto";
+
+package features.mixer;
+
+enum Mode {
+    AUTO = 0;
+    MANUAL = 1;
+}
+
+message Config {
+    Mode mode = 1;
+    repeated string outputs = 2;
+    repeated shared.Receiver.Source sources = 3;
+}
+
+message Request {
+    message Attach {
+        repeated shared.Receiver.Source sources = 1;
+    }
+
+    message Detach {
+        repeated shared.Receiver.Source sources = 1;
+    }
+
+    oneof request {
+        Attach attach = 1;
+        Detach detach = 2;
+    }
+}
+
+message Response {
+    message Attach {
+
+    }
+
+    message Detach {
+
+    }
+
+    oneof response {
+        Attach attach = 1;
+        Detach detach = 2;
+    }
+}
+
+message ServerEvent {
+    message SlotSet {
+        uint32 slot = 1;
+        shared.Receiver.Source source = 2;
+    }
+
+    message SlotUnset {
+        uint32 slot = 1;
+    }
+
+    oneof event {
+        SlotSet slot_set = 1;
+        SlotUnset slot_unset = 2;
+    }
+}

@@ -134,6 +134,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             EndpointEvent::LocalMediaTrack(_, _) => {}
             EndpointEvent::BweConfig { .. } => {}
             EndpointEvent::GoAway(_, _) => {}
+            EndpointEvent::AudioMixer(_) => {}
         }
     }
 
@@ -152,6 +153,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                         PeerMeta { metadata: None },
                         RoomInfoPublish { peer: true, tracks: true },
                         RoomInfoSubscribe { peers: false, tracks: false },
+                        None,
                     ),
                 )));
             }
