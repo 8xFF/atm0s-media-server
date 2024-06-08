@@ -169,7 +169,7 @@ impl EndpointInternal {
                         ));
                     }
                 }
-                EndpointAudioMixerReq::Dettach(sources) => {
+                EndpointAudioMixerReq::Detach(sources) => {
                     if let Some((room, _, _, Some(AudioMixerMode::Manual))) = &self.joined {
                         self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::AudioMixer(EndpointAudioMixerRes::Detach(Ok(())))));
                         self.queue

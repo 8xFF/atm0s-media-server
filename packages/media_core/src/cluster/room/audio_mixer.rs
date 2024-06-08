@@ -5,6 +5,8 @@
 //!                 calculate top-3 audio for each local endpoint
 //!
 
+//TODO refactor multiple subscriber mode to array instead of manual implement with subscriber1, subscriber2, subscriber3
+
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -38,7 +40,9 @@ const TICK_INTERVAL: Duration = Duration::from_millis(1000);
 #[repr(usize)]
 pub enum TaskType {
     Publisher,
-    Subscriber,
+    Subscriber1,
+    Subscriber2,
+    Subscriber3,
     Manuals,
 }
 
@@ -52,11 +56,14 @@ pub enum Output<Endpoint> {
 pub struct AudioMixer<Endpoint: Clone> {
     room: ClusterRoomHash,
     mix_channel_id: ChannelId,
-    auto_mode: HashMap<Endpoint, PeerId>,
+    //store number of outputs
+    auto_mode: HashMap<Endpoint, usize>,
     manual_mode: HashMap<Endpoint, usize>,
     manual_channels: HashMap<ChannelId, Vec<usize>>,
     publisher: TaskSwitcherBranch<AudioMixerPublisher<Endpoint>, Output<Endpoint>>,
-    subscriber: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint>, Output<Endpoint>>,
+    subscriber1: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint, 1>, Output<Endpoint>>,
+    subscriber2: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint, 2>, Output<Endpoint>>,
+    subscriber3: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint, 3>, Output<Endpoint>>,
     manuals: TaskSwitcherBranch<TaskGroup<manual::Input, Output<Endpoint>, ManualMixer<Endpoint>, 4>, (usize, Output<Endpoint>)>,
     switcher: TaskSwitcher,
     last_tick: Instant,
@@ -71,9 +78,11 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
             manual_mode: HashMap::new(),
             manual_channels: HashMap::new(),
             publisher: TaskSwitcherBranch::new(AudioMixerPublisher::new(mix_channel_id), TaskType::Publisher),
-            subscriber: TaskSwitcherBranch::new(AudioMixerSubscriber::new(mix_channel_id), TaskType::Subscriber),
+            subscriber1: TaskSwitcherBranch::new(AudioMixerSubscriber::new(mix_channel_id), TaskType::Subscriber1),
+            subscriber2: TaskSwitcherBranch::new(AudioMixerSubscriber::new(mix_channel_id), TaskType::Subscriber2),
+            subscriber3: TaskSwitcherBranch::new(AudioMixerSubscriber::new(mix_channel_id), TaskType::Subscriber3),
             manuals: TaskSwitcherBranch::new(Default::default(), TaskType::Manuals),
-            switcher: TaskSwitcher::new(3),
+            switcher: TaskSwitcher::new(5),
             last_tick: Instant::now(),
         }
     }
@@ -82,14 +91,16 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
     /// We need to wait all publisher, subscriber, and manuals ready to remove
     ///
     pub fn is_empty(&self) -> bool {
-        self.publisher.is_empty() && self.subscriber.is_empty() && self.manuals.tasks() == 0
+        self.publisher.is_empty() && self.subscriber1.is_empty() && self.subscriber2.is_empty() && self.subscriber3.is_empty() && self.manuals.tasks() == 0
     }
 
     pub fn on_tick(&mut self, now: Instant) {
         if now >= self.last_tick + TICK_INTERVAL {
             self.last_tick = now;
             self.publisher.input(&mut self.switcher).on_tick(now);
-            self.subscriber.input(&mut self.switcher).on_tick(now);
+            self.subscriber1.input(&mut self.switcher).on_tick(now);
+            self.subscriber2.input(&mut self.switcher).on_tick(now);
+            self.subscriber3.input(&mut self.switcher).on_tick(now);
             self.manuals.input(&mut self.switcher).on_tick(now);
         }
     }
@@ -98,8 +109,15 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
         if let Some(cfg) = cfg {
             match cfg.mode {
                 media_server_protocol::endpoint::AudioMixerMode::Auto => {
-                    self.auto_mode.insert(endpoint.clone(), peer.clone());
-                    self.subscriber.input(&mut self.switcher).on_endpoint_join(now, endpoint, peer, cfg.outputs);
+                    self.auto_mode.insert(endpoint.clone(), cfg.outputs.len());
+                    match cfg.outputs.len() {
+                        1 => self.subscriber1.input(&mut self.switcher).on_endpoint_join(now, endpoint, peer, cfg.outputs),
+                        2 => self.subscriber2.input(&mut self.switcher).on_endpoint_join(now, endpoint, peer, cfg.outputs),
+                        3 => self.subscriber3.input(&mut self.switcher).on_endpoint_join(now, endpoint, peer, cfg.outputs),
+                        _ => {
+                            log::warn!("[ClusterRoomAudioMixer] unsupported mixer with {} outputs", cfg.outputs.len());
+                        }
+                    }
                 }
                 media_server_protocol::endpoint::AudioMixerMode::Manual => {
                     log::info!("[ClusterRoomAudioMixer] add manual mode for {:?} {peer}", endpoint);
@@ -124,8 +142,15 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
     }
 
     pub fn on_leave(&mut self, now: Instant, endpoint: Endpoint) {
-        if let Some(_peer) = self.auto_mode.remove(&endpoint) {
-            self.subscriber.input(&mut self.switcher).on_endpoint_leave(now, endpoint);
+        if let Some(outputs) = self.auto_mode.remove(&endpoint) {
+            match outputs {
+                1 => self.subscriber1.input(&mut self.switcher).on_endpoint_leave(now, endpoint),
+                2 => self.subscriber2.input(&mut self.switcher).on_endpoint_leave(now, endpoint),
+                3 => self.subscriber3.input(&mut self.switcher).on_endpoint_leave(now, endpoint),
+                _ => {
+                    log::warn!("[ClusterRoomAudioMixer] unsupported mixer with {} outputs", outputs);
+                }
+            }
         } else if let Some(index) = self.manual_mode.remove(&endpoint) {
             log::info!("[ClusterRoomAudioMixer] endpoint {:?} leave from manual mode", endpoint);
             self.manual_mode.remove(&endpoint);
@@ -156,7 +181,9 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
             pubsub::ChannelEvent::RouteChanged(_next) => {}
             pubsub::ChannelEvent::SourceData(from, data) => {
                 if event.0 == self.mix_channel_id {
-                    self.subscriber.input(&mut self.switcher).on_channel_data(now, from, data);
+                    self.subscriber1.input(&mut self.switcher).on_channel_data(now, from, &data);
+                    self.subscriber2.input(&mut self.switcher).on_channel_data(now, from, &data);
+                    self.subscriber3.input(&mut self.switcher).on_channel_data(now, from, &data);
                 } else if let Some(tasks) = self.manual_channels.get(&event.0) {
                     for task_index in tasks {
                         self.manuals.input(&mut self.switcher).on_event(now, *task_index, manual::Input::Pubsub(event.0, from, data.clone()));
@@ -188,8 +215,30 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
                         }
                     }
                 }
-                TaskType::Subscriber => {
-                    if let Some(out) = self.subscriber.pop_output((), &mut self.switcher) {
+                TaskType::Subscriber1 => {
+                    if let Some(out) = self.subscriber1.pop_output((), &mut self.switcher) {
+                        if let Output::OnResourceEmpty = out {
+                            if self.is_empty() {
+                                return Some(Output::OnResourceEmpty);
+                            }
+                        } else {
+                            return Some(out);
+                        }
+                    }
+                }
+                TaskType::Subscriber2 => {
+                    if let Some(out) = self.subscriber2.pop_output((), &mut self.switcher) {
+                        if let Output::OnResourceEmpty = out {
+                            if self.is_empty() {
+                                return Some(Output::OnResourceEmpty);
+                            }
+                        } else {
+                            return Some(out);
+                        }
+                    }
+                }
+                TaskType::Subscriber3 => {
+                    if let Some(out) = self.subscriber3.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
                             if self.is_empty() {
                                 return Some(Output::OnResourceEmpty);

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, time::Instant};
+use std::{array, fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::{
     features::pubsub::{self, ChannelId},
@@ -21,25 +21,26 @@ struct EndpointSlot {
     tracks: Vec<LocalTrackId>,
 }
 
+#[derive(Clone)]
 struct OutputSlot {
     source: Option<(PeerId, TrackName)>,
 }
 
-pub struct AudioMixerSubscriber<Endpoint> {
+pub struct AudioMixerSubscriber<Endpoint, const OUTPUTS: usize> {
     channel_id: ChannelId,
     queue: DynamicDeque<Output<Endpoint>, 16>,
     endpoints: IndexMap<Endpoint, EndpointSlot>,
-    outputs: [Option<OutputSlot>; 3],
+    outputs: [Option<OutputSlot>; OUTPUTS],
     mixer: audio_mixer::AudioMixer<(NodeId, u8)>,
 }
 
-impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscriber<Endpoint, OUTPUTS> {
     pub fn new(channel_id: ChannelId) -> Self {
         Self {
             channel_id,
             queue: Default::default(),
             endpoints: IndexMap::new(),
-            outputs: [None, None, None],
+            outputs: array::from_fn(|_| None),
             mixer: audio_mixer::AudioMixer::new(3), //TODO dynamic this
         }
     }
@@ -65,9 +66,9 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
     /// We a endpoint join we need to restore current set slots
     pub fn on_endpoint_join(&mut self, _now: Instant, endpoint: Endpoint, peer: PeerId, tracks: Vec<LocalTrackId>) {
         assert!(!self.endpoints.contains_key(&endpoint));
-        log::info!("[ClusterAudioMixerSubscriber] endpoint {:?} peer {peer} join with tracks {:?}", endpoint, tracks);
+        log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] endpoint {:?} peer {peer} join with tracks {:?}", endpoint, tracks);
         if self.endpoints.is_empty() {
-            log::info!("[ClusterAudioMixerSubscriber] first endpoint join as Auto mode => subscribe channel {}", self.channel_id);
+            log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] first endpoint join as Auto mode => subscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::SubAuto)));
         }
 
@@ -86,8 +87,11 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
 
     /// We we receive audio pkt, we put it into a mixer, it the audio source is selected it will be forwarded to all endpoints except the origin peer.
     /// In case output don't have source info and audio pkt has source info, we set it and fire event in to all endpoints
-    pub fn on_channel_data(&mut self, now: Instant, from: NodeId, pkt: Vec<u8>) {
-        let audio = return_if_none!(AudioMixerPkt::deserialize(&pkt));
+    pub fn on_channel_data(&mut self, now: Instant, from: NodeId, pkt: &[u8]) {
+        if self.endpoints.is_empty() {
+            return;
+        }
+        let audio = return_if_none!(AudioMixerPkt::deserialize(pkt));
         if let Some((slot, just_set)) = self.mixer.on_pkt(now, (from, audio.slot), audio.audio_level) {
             // When a source is selected, we just reset the selected slot,
             // then wait for next audio pkt which carry source info
@@ -142,26 +146,26 @@ impl<Endpoint: Debug + Hash + Eq + Clone> AudioMixerSubscriber<Endpoint> {
 
     pub fn on_endpoint_leave(&mut self, _now: Instant, endpoint: Endpoint) {
         assert!(self.endpoints.contains_key(&endpoint));
-        log::info!("[ClusterAudioMixerSubscriber] endpoint {:?} leave", endpoint);
+        log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] endpoint {:?} leave", endpoint);
         self.endpoints.swap_remove(&endpoint);
         if self.endpoints.is_empty() {
-            log::info!("[ClusterAudioMixerSubscriber] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
+            log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::UnsubAuto)));
             self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 }
 
-impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endpoint> {
+impl<Endpoint, const OUTPUTS: usize> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endpoint, OUTPUTS> {
     type Time = ();
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
 }
 
-impl<Endpoint> Drop for AudioMixerSubscriber<Endpoint> {
+impl<Endpoint, const OUTPUTS: usize> Drop for AudioMixerSubscriber<Endpoint, OUTPUTS> {
     fn drop(&mut self) {
-        log::info!("[ClusterAudioMixerSubscriber] Drop {}", self.channel_id);
+        log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] Drop {}", self.channel_id);
         assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
         assert_eq!(self.endpoints.len(), 0, "Endpoints not empty on drop");
     }
@@ -194,7 +198,7 @@ mod test {
         let peer1: PeerId = "peer1".into();
         let track1: TrackName = "audio".into();
         let endpoint2 = 1;
-        let mut subscriber = AudioMixerSubscriber::<u8>::new(channel);
+        let mut subscriber = AudioMixerSubscriber::<u8, 3>::new(channel);
 
         //first endpoint should fire Sub
         subscriber.on_endpoint_join(t0, endpoint1, peer1.clone(), vec![0.into(), 1.into(), 2.into()]);
@@ -227,7 +231,7 @@ mod test {
             opus_payload: vec![1, 2, 3, 4, 5, 6],
         };
         let track_uuid = (mixer_pkt.peer.0 << 16) | (mixer_pkt.track.0 as u64);
-        subscriber.on_channel_data(t0 + ms(100), node_id, mixer_pkt.serialize());
+        subscriber.on_channel_data(t0 + ms(100), node_id, &mixer_pkt.serialize());
 
         //sot 0 is set => fire AudioMixer::Set event
         assert_eq!(

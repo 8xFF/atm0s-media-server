@@ -90,7 +90,7 @@ pub enum EndpointLocalTrackRes {
 #[derive(Debug, PartialEq, Eq)]
 pub enum EndpointAudioMixerReq {
     Attach(Vec<TrackSource>),
-    Dettach(Vec<TrackSource>),
+    Detach(Vec<TrackSource>),
 }
 
 #[derive(Debug, PartialEq, Eq)]

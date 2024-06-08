@@ -775,7 +775,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                 let sources = req.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>();
                 self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     req_id.into(),
-                    EndpointReq::AudioMixer(EndpointAudioMixerReq::Dettach(sources)),
+                    EndpointReq::AudioMixer(EndpointAudioMixerReq::Detach(sources)),
                 )));
             }
         }
