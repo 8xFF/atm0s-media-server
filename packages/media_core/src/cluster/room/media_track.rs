@@ -98,13 +98,13 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MediaTrack<Endpoint> {
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for MediaTrack<Endpoint> {
-    type Time = Instant;
+    type Time = ();
 
-    fn pop_output(&mut self, now: Self::Time) -> Option<Output<Endpoint>> {
+    fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Publisher => {
-                    if let Some(out) = self.publisher.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.publisher.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
                             if self.is_empty() {
                                 return Some(Output::OnResourceEmpty);
@@ -115,7 +115,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
                     }
                 }
                 TaskType::Subscriber => {
-                    if let Some(out) = self.subscriber.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.subscriber.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
                             if self.is_empty() {
                                 return Some(Output::OnResourceEmpty);

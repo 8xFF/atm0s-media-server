@@ -78,8 +78,8 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Task<Input<Endpoint>, Output<En
 }
 
 impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for ClusterRoom<Endpoint> {
-    type Time = Instant;
-    fn pop_output(&mut self, now: Instant) -> Option<Output<Endpoint>> {
+    type Time = ();
+    fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Metadata => {
@@ -96,7 +96,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                     }
                 }
                 TaskType::MediaTrack => {
-                    if let Some(out) = self.media_track.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.media_track.pop_output((), &mut self.switcher) {
                         match out {
                             media_track::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
                             media_track::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MediaTrack), FeaturesControl::PubSub(control))),

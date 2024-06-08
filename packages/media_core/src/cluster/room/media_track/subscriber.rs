@@ -169,8 +169,8 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomChannelSubscribe<Endpoint> {
-    type Time = Instant;
-    fn pop_output(&mut self, _now: Instant) -> Option<Output<Endpoint>> {
+    type Time = ();
+    fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
 }
@@ -229,23 +229,24 @@ mod tests {
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
         subscriber.on_track_subscribe(endpoint, track, target_peer.clone(), target_track.clone());
-        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
+        assert_eq!(subscriber.pop_output(()), None);
 
         let pkt = fake_audio();
         subscriber.on_track_data(channel_id, pkt.serialize());
         assert_eq!(
-            subscriber.pop_output(Instant::now()),
+            subscriber.pop_output(()),
             Some(Output::Endpoint(
                 vec![endpoint],
                 ClusterEndpointEvent::LocalTrack(track, ClusterLocalTrackEvent::Media(*channel_id, pkt))
             ))
         );
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), None);
 
         subscriber.on_track_unsubscribe(endpoint, track);
-        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
+        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
+        assert_eq!(subscriber.pop_output(()), None);
     }
 
     //TODO Sending key-frame request
@@ -260,22 +261,23 @@ mod tests {
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
         subscriber.on_track_subscribe(endpoint, track, target_peer.clone(), target_track.clone());
-        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
+        assert_eq!(subscriber.pop_output(()), None);
 
         subscriber.on_track_request_key(endpoint, track);
         assert_eq!(
-            subscriber.pop_output(Instant::now()),
+            subscriber.pop_output(()),
             Some(Output::Pubsub(Control(
                 channel_id,
                 ChannelControl::FeedbackAuto(Feedback::simple(KEYFRAME_FEEDBACK_KIND, 1, KEYFRAME_FEEDBACK_INTERVAL, KEYFRAME_FEEDBACK_TIMEOUT))
             )))
         );
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), None);
 
         subscriber.on_track_unsubscribe(endpoint, track);
-        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
+        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
+        assert_eq!(subscriber.pop_output(()), None);
     }
 
     //TODO Sending bitrate request single sub
@@ -290,32 +292,32 @@ mod tests {
         let target_track: TrackName = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &target_peer, &target_track);
         subscriber.on_track_subscribe(endpoint1, track1, target_peer.clone(), target_track.clone());
-        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
+        assert_eq!(subscriber.pop_output(()), None);
 
         let mut now = Instant::now();
 
         subscriber.on_track_desired_bitrate(now, endpoint1, track1, 1000);
         assert_eq!(
-            subscriber.pop_output(Instant::now()),
+            subscriber.pop_output(()),
             Some(Output::Pubsub(Control(
                 channel_id,
                 ChannelControl::FeedbackAuto(Feedback::simple(BITRATE_FEEDBACK_KIND, 1000, BITRATE_FEEDBACK_INTERVAL, BITRATE_FEEDBACK_TIMEOUT))
             )))
         );
-        assert_eq!(subscriber.pop_output(now), None);
+        assert_eq!(subscriber.pop_output(()), None);
 
         // more local track sub that channel
         let endpoint2 = 3;
         let track2 = LocalTrackId(4);
         subscriber.on_track_subscribe(endpoint2, track2, target_peer.clone(), target_track.clone());
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), None);
 
         // more feedback from local track2
         now += Duration::from_millis(100);
         subscriber.on_track_desired_bitrate(now, endpoint2, track2, 2000);
         assert_eq!(
-            subscriber.pop_output(Instant::now()),
+            subscriber.pop_output(()),
             Some(Output::Pubsub(Control(
                 channel_id,
                 ChannelControl::FeedbackAuto(Feedback {
@@ -329,13 +331,13 @@ mod tests {
                 })
             )))
         );
-        assert_eq!(subscriber.pop_output(now), None);
+        assert_eq!(subscriber.pop_output(()), None);
 
         //now last update from track2 after long time cause track1 feedback will be timeout
         now += Duration::from_millis(BITRATE_FEEDBACK_TIMEOUT as u64 - 100);
         subscriber.on_track_desired_bitrate(now, endpoint2, track2, 3000);
         assert_eq!(
-            subscriber.pop_output(Instant::now()),
+            subscriber.pop_output(()),
             Some(Output::Pubsub(Control(
                 channel_id,
                 ChannelControl::FeedbackAuto(Feedback {
@@ -349,11 +351,12 @@ mod tests {
                 })
             )))
         );
-        assert_eq!(subscriber.pop_output(now), None);
+        assert_eq!(subscriber.pop_output(()), None);
 
         subscriber.on_track_unsubscribe(endpoint1, track1);
         subscriber.on_track_unsubscribe(endpoint2, track2);
-        assert_eq!(subscriber.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(Instant::now()), None);
+        assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
+        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
+        assert_eq!(subscriber.pop_output(()), None);
     }
 }

@@ -156,9 +156,9 @@ impl<Endpoint: Debug + Hash + Copy + Clone + Debug + Eq> MediaCluster<Endpoint> 
 }
 
 impl<Endpoint: Debug + Hash + Copy + Clone + Debug + Eq> TaskSwitcherChild<Output<Endpoint>> for MediaCluster<Endpoint> {
-    type Time = Instant;
-    fn pop_output(&mut self, now: Instant) -> Option<Output<Endpoint>> {
-        let (index, out) = self.rooms.pop_output(now)?;
+    type Time = ();
+    fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
+        let (index, out) = self.rooms.pop_output(())?;
         match out {
             room::Output::Sdn(userdata, control) => Some(Output::Sdn(userdata, control)),
             room::Output::Endpoint(endpoints, event) => Some(Output::Endpoint(endpoints, event)),
@@ -220,17 +220,17 @@ mod tests {
             ),
         );
         assert_eq!(
-            cluster.pop_output(now),
+            cluster.pop_output(()),
             Some(Output::Sdn(
                 userdata,
                 FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_peers_map, MapControl::Set(peer_key, peer_info.serialize())))
             ))
         );
         assert_eq!(
-            cluster.pop_output(now),
+            cluster.pop_output(()),
             Some(Output::Sdn(userdata, FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_peers_map, MapControl::Sub))))
         );
-        assert_eq!(cluster.pop_output(now), None);
+        assert_eq!(cluster.pop_output(()), None);
         assert_eq!(cluster.rooms.tasks(), 1);
         assert_eq!(cluster.rooms_map.len(), 1);
 
@@ -241,23 +241,23 @@ mod tests {
             FeaturesEvent::DhtKv(dht_kv::Event::MapEvent(room_peers_map, MapEvent::OnSet(peer_key, 1, peer_info.serialize()))),
         );
         assert_eq!(
-            cluster.pop_output(now),
+            cluster.pop_output(()),
             Some(Output::Endpoint(vec![endpoint], ClusterEndpointEvent::PeerJoined(peer.clone(), peer_info.meta.clone())))
         );
-        assert_eq!(cluster.pop_output(now), None);
+        assert_eq!(cluster.pop_output(()), None);
 
         // Now leave room should Del and Unsub
         cluster.on_endpoint_control(now, endpoint, userdata.0, ClusterEndpointControl::Leave);
         assert_eq!(
-            cluster.pop_output(now),
+            cluster.pop_output(()),
             Some(Output::Sdn(userdata, FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_peers_map, MapControl::Del(peer_key)))))
         );
         assert_eq!(
-            cluster.pop_output(now),
+            cluster.pop_output(()),
             Some(Output::Sdn(userdata, FeaturesControl::DhtKv(dht_kv::Control::MapCmd(room_peers_map, MapControl::Unsub))))
         );
-        assert_eq!(cluster.pop_output(now), Some(Output::Continue)); //this is for destroy event
-        assert_eq!(cluster.pop_output(now), None);
+        assert_eq!(cluster.pop_output(()), Some(Output::Continue)); //this is for destroy event
+        assert_eq!(cluster.pop_output(()), None);
         assert_eq!(cluster.rooms.tasks(), 0);
         assert_eq!(cluster.rooms_map.len(), 0);
     }

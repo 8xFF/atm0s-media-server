@@ -277,6 +277,7 @@ mod test {
         //now is last endpoint => should fire Unsub
         subscriber.on_endpoint_leave(t0 + ms(100 + 2000), endpoint2);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::UnsubAuto))));
+        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
     }
 }

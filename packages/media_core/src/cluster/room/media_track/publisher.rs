@@ -6,7 +6,6 @@ use std::{
     collections::{HashMap, VecDeque},
     fmt::Debug,
     hash::Hash,
-    time::Instant,
 };
 
 use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId, Feedback};
@@ -115,8 +114,8 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomChannelPublisher<Endpoint> {
-    type Time = Instant;
-    fn pop_output(&mut self, _now: Instant) -> Option<Output<Endpoint>> {
+    type Time = ();
+    fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
 }
@@ -132,8 +131,6 @@ impl<Endpoint> Drop for RoomChannelPublisher<Endpoint> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
-
     use atm0s_sdn::features::pubsub::{ChannelControl, Control, Feedback};
     use media_server_protocol::media::{MediaMeta, MediaPacket};
     use sans_io_runtime::TaskSwitcherChild;
@@ -172,20 +169,18 @@ mod tests {
         let name = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &peer, &name);
         publisher.on_track_publish(endpoint, track, peer, name);
-        assert_eq!(publisher.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
-        assert_eq!(publisher.pop_output(Instant::now()), None);
+        assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
+        assert_eq!(publisher.pop_output(()), None);
 
         let media = fake_audio();
         publisher.on_track_data(endpoint, track, media.clone());
-        assert_eq!(
-            publisher.pop_output(Instant::now()),
-            Some(Output::Pubsub(Control(channel_id, ChannelControl::PubData(media.serialize()))))
-        );
-        assert_eq!(publisher.pop_output(Instant::now()), None);
+        assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubData(media.serialize())))));
+        assert_eq!(publisher.pop_output(()), None);
 
         publisher.on_track_unpublish(endpoint, track);
-        assert_eq!(publisher.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
-        assert_eq!(publisher.pop_output(Instant::now()), None);
+        assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
+        assert_eq!(publisher.pop_output(()), Some(Output::OnResourceEmpty));
+        assert_eq!(publisher.pop_output(()), None);
     }
 
     //TODO Handle feedback: should handle KeyFrame feedback
@@ -201,12 +196,12 @@ mod tests {
         let name = "audio_main".to_string().into();
         let channel_id = gen_channel_id(room, &peer, &name);
         publisher.on_track_publish(endpoint, track, peer, name);
-        assert_eq!(publisher.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
-        assert_eq!(publisher.pop_output(Instant::now()), None);
+        assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
+        assert_eq!(publisher.pop_output(()), None);
 
         publisher.on_track_feedback(channel_id, Feedback::simple(0, 1000, 100, 200));
         assert_eq!(
-            publisher.pop_output(Instant::now()),
+            publisher.pop_output(()),
             Some(Output::Endpoint(
                 vec![endpoint],
                 ClusterEndpointEvent::RemoteTrack(track, ClusterRemoteTrackEvent::LimitBitrate { min: 1000, max: 1000 })
@@ -215,13 +210,14 @@ mod tests {
 
         publisher.on_track_feedback(channel_id, Feedback::simple(1, 1, 100, 200));
         assert_eq!(
-            publisher.pop_output(Instant::now()),
+            publisher.pop_output(()),
             Some(Output::Endpoint(vec![endpoint], ClusterEndpointEvent::RemoteTrack(track, ClusterRemoteTrackEvent::RequestKeyFrame)))
         );
-        assert_eq!(publisher.pop_output(Instant::now()), None);
+        assert_eq!(publisher.pop_output(()), None);
 
         publisher.on_track_unpublish(endpoint, track);
-        assert_eq!(publisher.pop_output(Instant::now()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
-        assert_eq!(publisher.pop_output(Instant::now()), None);
+        assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
+        assert_eq!(publisher.pop_output(()), Some(Output::OnResourceEmpty));
+        assert_eq!(publisher.pop_output(()), None);
     }
 }

@@ -224,7 +224,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     }
                 }
                 TaskType::MediaCluster => {
-                    if let Some(out) = self.media_cluster.pop_output(now, &mut self.switcher) {
+                    if let Some(out) = self.media_cluster.pop_output((), &mut self.switcher) {
                         return Some(self.output_cluster(now, out));
                     }
                 }

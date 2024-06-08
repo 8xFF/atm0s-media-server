@@ -152,3 +152,97 @@ impl<Endpoint> Drop for ManualMixer<Endpoint> {
         assert_eq!(self.sources.len(), 0, "Sources not empty on drop");
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::time::{Duration, Instant};
+
+    use atm0s_sdn::features::pubsub;
+    use media_server_protocol::{
+        endpoint::TrackSource,
+        media::{MediaMeta, MediaPacket},
+    };
+    use sans_io_runtime::{Task, TaskSwitcherChild};
+
+    use crate::cluster::{id_generator, ClusterAudioMixerEvent, ClusterEndpointEvent, ClusterLocalTrackEvent};
+
+    use super::{super::Output, Input, ManualMixer};
+
+    fn ms(ms: u64) -> Duration {
+        Duration::from_millis(ms)
+    }
+
+    #[test]
+    fn attach_detach() {
+        let t0 = Instant::now();
+        let room = 0.into();
+        let endpoint = 1;
+        let track = 0.into();
+        let mut manual = ManualMixer::<u8>::new(room, endpoint, vec![track]);
+        let source = TrackSource {
+            peer: "peer1".into(),
+            track: "audio".into(),
+        };
+        let channel_id = id_generator::gen_channel_id(room, &source.peer, &source.track);
+
+        manual.attach(t0, source.clone());
+        assert_eq!(manual.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto))));
+        assert_eq!(manual.pop_output(()), None);
+
+        let pkt = MediaPacket {
+            ts: 0,
+            seq: 0,
+            marker: false,
+            nackable: false,
+            layers: None,
+            meta: MediaMeta::Opus { audio_level: Some(-60) },
+            data: vec![1, 2, 3, 4, 5, 6],
+        };
+        manual.on_event(t0, Input::Pubsub(channel_id, 0, pkt.serialize()));
+        assert_eq!(
+            manual.pop_output(()),
+            Some(Output::Endpoint(vec![endpoint], ClusterEndpointEvent::LocalTrack(track, ClusterLocalTrackEvent::SourceChanged)))
+        );
+        assert_eq!(
+            manual.pop_output(()),
+            Some(Output::Endpoint(
+                vec![1],
+                ClusterEndpointEvent::AudioMixer(ClusterAudioMixerEvent::SlotSet(0, source.peer.clone(), source.track.clone()))
+            )),
+        );
+        assert_eq!(
+            manual.pop_output(()),
+            Some(Output::Endpoint(
+                vec![endpoint],
+                ClusterEndpointEvent::LocalTrack(track, ClusterLocalTrackEvent::Media(channel_id.0, pkt))
+            )),
+        );
+
+        manual.detach(t0 + ms(100), source.clone());
+        assert_eq!(manual.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto))));
+        assert_eq!(manual.pop_output(()), None);
+    }
+
+    #[test]
+    fn leave_room() {
+        let t0 = Instant::now();
+        let room = 0.into();
+        let endpoint = 1;
+        let track = 0.into();
+        let mut manual = ManualMixer::<u8>::new(room, endpoint, vec![track]);
+        let source = TrackSource {
+            peer: "peer1".into(),
+            track: "audio".into(),
+        };
+        let channel_id = id_generator::gen_channel_id(room, &source.peer, &source.track);
+
+        manual.attach(t0, source.clone());
+        assert_eq!(manual.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto))));
+        assert_eq!(manual.pop_output(()), None);
+
+        manual.on_event(t0, Input::LeaveRoom);
+        assert_eq!(manual.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto))));
+        assert_eq!(manual.pop_output(()), Some(Output::OnResourceEmpty));
+        assert_eq!(manual.pop_output(()), None);
+    }
+}
