@@ -4,6 +4,8 @@ use clap::Subcommand;
 mod cert;
 #[cfg(feature = "connector")]
 mod connector;
+#[cfg(feature = "console")]
+mod console;
 #[cfg(feature = "gateway")]
 mod gateway;
 #[cfg(feature = "media")]
@@ -11,6 +13,8 @@ mod media;
 
 #[cfg(feature = "cert_utils")]
 pub use cert::run_cert_utils;
+#[cfg(feature = "console")]
+pub use console::run_console_server;
 #[cfg(feature = "connector")]
 pub use connector::run_media_connector;
 #[cfg(feature = "gateway")]
@@ -20,6 +24,8 @@ pub use media::run_media_server;
 
 #[derive(Debug, Subcommand)]
 pub enum ServerType {
+    #[cfg(feature = "console")]
+    Console(console::Args),
     #[cfg(feature = "gateway")]
     Gateway(gateway::Args),
     #[cfg(feature = "connector")]

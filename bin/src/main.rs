@@ -75,6 +75,8 @@ async fn main() {
     local
         .run_until(async move {
             match args.server {
+                #[cfg(feature = "console")]
+                server::ServerType::Console(args) => server::run_console_server(workers, http_port, node, args).await,
                 #[cfg(feature = "gateway")]
                 server::ServerType::Gateway(args) => server::run_media_gateway(workers, http_port, node, args).await,
                 #[cfg(feature = "connector")]

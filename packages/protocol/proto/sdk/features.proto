@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "features.mixer.proto";
+import "sdk/features.mixer.proto";
 
 package features;
 

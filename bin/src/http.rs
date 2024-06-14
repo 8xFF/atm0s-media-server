@@ -12,6 +12,7 @@ use poem_openapi::{types::ParseFromJSON, Object};
 use tokio::sync::mpsc::Sender;
 
 mod api_connector;
+mod api_console;
 mod api_media;
 mod api_token;
 mod utils;
@@ -42,6 +43,44 @@ impl<Req, Res> Rpc<Req, Res> {
     }
 }
 
+#[cfg(feature = "console")]
+pub async fn run_console_http_server(port: u16, sender: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
+    let user_service: OpenApiService<_, ()> = OpenApiService::new(api_console::user::Apis, "Console User APIs", env!("CARGO_PKG_VERSION")).server("/api/user/");
+    let user_ui = user_service.swagger_ui();
+    let user_spec = user_service.spec();
+
+    let app_service: OpenApiService<_, ()> = OpenApiService::new(api_console::app::Apis, "Console App APIs", env!("CARGO_PKG_VERSION")).server("/api/app/");
+    let app_ui = app_service.swagger_ui();
+    let app_spec = app_service.spec();
+
+    let cluster_service: OpenApiService<_, ()> = OpenApiService::new(api_console::cluster::Apis, "Console Cluster APIs", env!("CARGO_PKG_VERSION")).server("/api/app/");
+    let cluster_ui = cluster_service.swagger_ui();
+    let cluster_spec = cluster_service.spec();
+
+    let ctx = api_console::ConsoleApisCtx { sender };
+
+    let route = Route::new()
+        //TODO build UI and embed to here
+        .nest("/", StaticFilesEndpoint::new("./public").index_file("index.html"))
+        //user
+        .nest("/api/user/", user_service.data(ctx.clone()))
+        .nest("/api/user/ui", user_ui)
+        .at("/api/user/spec", poem::endpoint::make_sync(move |_| user_spec.clone()))
+        //app
+        .nest("/api/app/", app_service.data(ctx.clone()))
+        .nest("/api/app/ui", app_ui)
+        .at("/api/app/spec", poem::endpoint::make_sync(move |_| app_spec.clone()))
+        //cluster
+        .nest("/api/cluster/", cluster_service.data(ctx.clone()))
+        .nest("/api/cluster/ui", cluster_ui)
+        .at("/api/cluster/spec", poem::endpoint::make_sync(move |_| cluster_spec.clone()))
+        .with(Cors::new());
+
+    Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
+    Ok(())
+}
+
+#[cfg(feature = "gateway")]
 pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, GS: 'static + MediaGatewaySecure + Send + Sync>(
     port: u16,
     sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
@@ -68,6 +107,7 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     Ok(())
 }
 
+#[cfg(feature = "media")]
 pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, GS: 'static + MediaGatewaySecure + Send + Sync>(
     port: u16,
     sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,

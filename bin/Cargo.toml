@@ -32,9 +32,10 @@ maxminddb = { version = "0.24", optional = true }
 sysinfo = { version = "0.30", optional = true }
 
 [features]
-default = ["gateway", "media", "connector", "cert_utils"]
+default = ["console", "gateway", "media", "connector", "cert_utils"]
 gateway = ["media-server-gateway", "quinn_vnet", "node_metrics", "maxminddb"]
 media = ["media-server-runner", "quinn_vnet", "node_metrics"]
+console = []
 connector = ["quinn_vnet"]
 cert_utils = ["rcgen", "rustls"]
 quinn_vnet = ["rustls", "quinn"]

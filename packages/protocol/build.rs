@@ -15,11 +15,11 @@ fn main() -> Result<()> {
         .compile_protos(
             &[
                 "./proto/shared.proto",
-                "./proto/session.proto",
-                "./proto/features.proto",
-                "./proto/features.mixer.proto",
-                "./proto/gateway.proto",
-                "./proto/cluster_gateway.proto",
+                "./proto/sdk/session.proto",
+                "./proto/sdk/features.proto",
+                "./proto/sdk/features.mixer.proto",
+                "./proto/sdk/gateway.proto",
+                "./proto/cluster/gateway.proto",
             ],
             &["./proto"],
         )?;

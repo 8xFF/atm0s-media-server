@@ -2,7 +2,7 @@ RUST_LOG=info \
 RUST_BACKTRACE=1 \
 cargo run -- \
     --http-port 3000 \
-    --node-id 0 \
+    --node-id 1 \
     --sdn-port 10000 \
     --sdn-zone 0 \
     gateway \
