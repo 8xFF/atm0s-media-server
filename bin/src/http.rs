@@ -44,20 +44,20 @@ impl<Req, Res> Rpc<Req, Res> {
 }
 
 #[cfg(feature = "console")]
-pub async fn run_console_http_server(port: u16, sender: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_console_http_server(
+    port: u16,
+    secure: media_server_secure::jwt::MediaConsoleSecureJwt,
+    storage: crate::server::console_storage::StorageShared,
+) -> Result<(), Box<dyn std::error::Error>> {
     let user_service: OpenApiService<_, ()> = OpenApiService::new(api_console::user::Apis, "Console User APIs", env!("CARGO_PKG_VERSION")).server("/api/user/");
     let user_ui = user_service.swagger_ui();
     let user_spec = user_service.spec();
 
-    let app_service: OpenApiService<_, ()> = OpenApiService::new(api_console::app::Apis, "Console App APIs", env!("CARGO_PKG_VERSION")).server("/api/app/");
-    let app_ui = app_service.swagger_ui();
-    let app_spec = app_service.spec();
-
-    let cluster_service: OpenApiService<_, ()> = OpenApiService::new(api_console::cluster::Apis, "Console Cluster APIs", env!("CARGO_PKG_VERSION")).server("/api/app/");
+    let cluster_service: OpenApiService<_, ()> = OpenApiService::new(api_console::cluster::Apis, "Console Cluster APIs", env!("CARGO_PKG_VERSION")).server("/api/cluster/");
     let cluster_ui = cluster_service.swagger_ui();
     let cluster_spec = cluster_service.spec();
 
-    let ctx = api_console::ConsoleApisCtx { sender };
+    let ctx = api_console::ConsoleApisCtx { secure, storage };
 
     let route = Route::new()
         //TODO build UI and embed to here
@@ -66,10 +66,6 @@ pub async fn run_console_http_server(port: u16, sender: Sender<()>) -> Result<()
         .nest("/api/user/", user_service.data(ctx.clone()))
         .nest("/api/user/ui", user_ui)
         .at("/api/user/spec", poem::endpoint::make_sync(move |_| user_spec.clone()))
-        //app
-        .nest("/api/app/", app_service.data(ctx.clone()))
-        .nest("/api/app/ui", app_ui)
-        .at("/api/app/spec", poem::endpoint::make_sync(move |_| app_spec.clone()))
         //cluster
         .nest("/api/cluster/", cluster_service.data(ctx.clone()))
         .nest("/api/cluster/ui", cluster_ui)

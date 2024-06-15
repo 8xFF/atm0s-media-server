@@ -1,8 +1,9 @@
-use crate::{MediaEdgeSecure, MediaGatewaySecure};
+use crate::{MediaConsoleSecure, MediaEdgeSecure, MediaGatewaySecure};
 use jwt_simple::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 
 const CONN_ID_TYPE: &'static str = "conn";
+const CONSOLE_SESSION_TYPE: &'static str = "console_session";
 
 pub struct MediaEdgeSecureJwt {
     key: HS256Key,
@@ -88,6 +89,40 @@ impl MediaGatewaySecure for MediaGatewaySecureJwt {
             }
         }
         Some(claims.custom)
+    }
+}
+
+#[derive(Clone)]
+pub struct MediaConsoleSecureJwt {
+    key_str: String,
+    key: HS256Key,
+}
+
+impl From<&[u8]> for MediaConsoleSecureJwt {
+    fn from(key: &[u8]) -> Self {
+        Self {
+            key: HS256Key::from_bytes(key),
+            key_str: String::from_utf8_lossy(key).to_string(),
+        }
+    }
+}
+
+impl MediaConsoleSecure for MediaConsoleSecureJwt {
+    fn validate_secert(&self, secret: &str) -> bool {
+        self.key_str.eq(secret)
+    }
+
+    fn validate_token(&self, token: &str) -> bool {
+        let options = VerificationOptions {
+            allowed_issuers: Some(HashSet::from_strings(&[CONSOLE_SESSION_TYPE])),
+            ..Default::default()
+        };
+        self.key.verify_token::<()>(token, Some(options)).is_ok()
+    }
+
+    fn generate_token(&self) -> String {
+        let claims = Claims::with_custom_claims((), Duration::from_secs(10000)).with_issuer(CONSOLE_SESSION_TYPE);
+        self.key.authenticate(claims).expect("Should create jwt")
     }
 }
 

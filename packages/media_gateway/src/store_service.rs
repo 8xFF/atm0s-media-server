@@ -23,10 +23,12 @@ use crate::{
 pub enum Control {
     NodeStats(NodeMetrics),
     FindNodeReq(u64, ServiceKind, Option<Location>),
+    GetMediaStats,
 }
 
 #[derive(Debug, Clone)]
 pub enum Event {
+    MediaStats(u32, u32),
     FindNodeRes(u64, Option<u32>),
 }
 
@@ -131,6 +133,11 @@ where
                         Control::NodeStats(metrics) => {
                             log::debug!("[GatewayStoreService] node metrics {:?}", metrics);
                             self.store.on_node_metrics(now, metrics);
+                        }
+                        Control::GetMediaStats => {
+                            if let Some(stats) = self.store.local_stats() {
+                                self.queue.push_back(ServiceOutput::Event(actor, Event::MediaStats(stats.live, stats.max).into()));
+                            }
                         }
                     }
                 }

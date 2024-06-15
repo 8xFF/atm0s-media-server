@@ -176,7 +176,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn"
 version = "0.1.10"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=38517f26bbf843f2734f476fd0ac3d2e2053efbc#38517f26bbf843f2734f476fd0ac3d2e2053efbc"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -196,7 +195,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.2.0"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=38517f26bbf843f2734f476fd0ac3d2e2053efbc#38517f26bbf843f2734f476fd0ac3d2e2053efbc"
 dependencies = [
  "multiaddr",
  "rand",
@@ -206,7 +204,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-network"
 version = "0.3.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=38517f26bbf843f2734f476fd0ac3d2e2053efbc#38517f26bbf843f2734f476fd0ac3d2e2053efbc"
 dependencies = [
  "aes-gcm",
  "atm0s-sdn-identity",
@@ -233,7 +230,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-router"
 version = "0.1.4"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=38517f26bbf843f2734f476fd0ac3d2e2053efbc#38517f26bbf843f2734f476fd0ac3d2e2053efbc"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -245,7 +241,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.1.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=38517f26bbf843f2734f476fd0ac3d2e2053efbc#38517f26bbf843f2734f476fd0ac3d2e2053efbc"
 dependencies = [
  "log",
  "serde",

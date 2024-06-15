@@ -13,10 +13,10 @@ mod media;
 
 #[cfg(feature = "cert_utils")]
 pub use cert::run_cert_utils;
-#[cfg(feature = "console")]
-pub use console::run_console_server;
 #[cfg(feature = "connector")]
 pub use connector::run_media_connector;
+#[cfg(feature = "console")]
+pub use console::{run_console_server, storage as console_storage};
 #[cfg(feature = "gateway")]
 pub use gateway::run_media_gateway;
 #[cfg(feature = "media")]

@@ -1,3 +1,4 @@
+pub mod cluster;
 pub mod endpoint;
 pub mod gateway;
 pub mod media;

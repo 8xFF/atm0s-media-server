@@ -4,11 +4,12 @@ use atm0s_sdn::{
     generate_node_addr,
     secure::{HandshakeBuilderXDA, StaticKeyAuthorization},
     services::{manual_discovery, visualization},
-    ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, NetInput, NetOutput, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot,
+    ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, NetInput, NetOutput, NodeAddr, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot,
 };
 use media_server_core::cluster::{self, MediaCluster};
-use media_server_gateway::{agent_service::GatewayAgentServiceBuilder, ServiceKind, AGENT_SERVICE_ID};
+use media_server_gateway::{agent_service::GatewayAgentServiceBuilder, NodeMetrics, ServiceKind, AGENT_SERVICE_ID};
 use media_server_protocol::{
+    cluster::{ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo},
     gateway::generate_gateway_zone_tag,
     protobuf::gateway::{ConnectResponse, RemoteIceResponse},
     transport::{
@@ -52,19 +53,20 @@ pub enum UserData {
 }
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 pub enum SC {
-    Visual(visualization::Control),
+    Visual(visualization::Control<ClusterNodeInfo>),
     Gateway(media_server_gateway::agent_service::Control),
 }
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 pub enum SE {
-    Visual(visualization::Event),
+    Visual(visualization::Event<ClusterNodeInfo>),
     Gateway(media_server_gateway::agent_service::Event),
 }
 pub type TC = ();
 pub type TW = ();
 
 pub enum Input {
+    NodeStats(NodeMetrics),
     ExtRpc(u64, RpcReq<usize>),
     ExtSdn(SdnExtIn<UserData, SC>),
     Net(Owner, BackendIncoming),
@@ -95,10 +97,12 @@ enum MediaClusterEndpoint {
 #[allow(clippy::type_complexity)]
 pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
     worker: u16,
+    sdn_addr: NodeAddr,
     sdn_slot: usize,
     sdn_worker: TaskSwitcherBranch<SdnWorker<UserData, SC, SE, TC, TW>, SdnWorkerOutput<UserData, SC, SE, TC, TW>>,
     media_cluster: TaskSwitcherBranch<MediaCluster<MediaClusterEndpoint>, cluster::Output<MediaClusterEndpoint>>,
     media_webrtc: TaskSwitcherBranch<MediaWorkerWebrtc<ES>, transport_webrtc::GroupOutput>,
+    media_max_live: u32,
     switcher: TaskSwitcher,
     queue: DynamicDeque<Output, 16>,
     timer: TimePivot,
@@ -112,10 +116,27 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         let secure = media.secure.clone(); //TODO why need this?
         let sdn_udp_addr = SocketAddr::from(([0, 0, 0, 0], sdn_udp));
 
+        let mut media_max_live = 0;
+        for (_, max) in media.max_live.iter() {
+            media_max_live += *max;
+        }
         let node_addr = generate_node_addr(node_id, sdn_udp, sdn_custom_addrs);
+        let node_info = ClusterNodeInfo::Media(
+            ClusterNodeGenericInfo {
+                addr: node_addr.to_string(),
+                cpu: 0,
+                memory: 0,
+                disk: 0,
+            },
+            ClusterMediaInfo { live: 0, max: media_max_live },
+        );
 
-        let visualization = Arc::new(visualization::VisualizationServiceBuilder::new(false));
-        let discovery = Arc::new(manual_discovery::ManualDiscoveryServiceBuilder::new(node_addr, vec![], vec![generate_gateway_zone_tag(sdn_zone)]));
+        let visualization = Arc::new(visualization::VisualizationServiceBuilder::new(node_info, false));
+        let discovery = Arc::new(manual_discovery::ManualDiscoveryServiceBuilder::new(
+            node_addr.clone(),
+            vec![],
+            vec![generate_gateway_zone_tag(sdn_zone)],
+        ));
         let gateway = Arc::new(GatewayAgentServiceBuilder::new(media.max_live));
 
         let sdn_config = SdnConfig {
@@ -141,10 +162,12 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
 
         Self {
             worker,
+            sdn_addr: node_addr,
             sdn_slot: 1, //TODO dont use this hack, must to wait to bind success to network
             sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn_config), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
             media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.ice_lite, media.secure), TaskType::MediaWebrtc),
+            media_max_live,
             switcher: TaskSwitcher::new(3),
             queue: DynamicDeque::from([Output::Net(Owner::Sdn, BackendOutgoing::UdpListen { addr: sdn_udp_addr, reuse: true })]),
             timer: TimePivot::build(),
@@ -181,6 +204,38 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
 
     pub fn on_event(&mut self, now: Instant, input: Input) {
         match input {
+            Input::NodeStats(metrics) => {
+                let now_ms = self.timer.timestamp_ms(now);
+                // we send info to visualization for console UI
+                self.sdn_worker.input(&mut self.switcher).on_event(
+                    now_ms,
+                    SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
+                        visualization::SERVICE_ID.into(),
+                        UserData::Cluster,
+                        visualization::Control::UpdateInfo(ClusterNodeInfo::Media(
+                            ClusterNodeGenericInfo {
+                                addr: self.sdn_addr.to_string(),
+                                cpu: metrics.cpu,
+                                memory: metrics.memory,
+                                disk: metrics.disk,
+                            },
+                            ClusterMediaInfo {
+                                live: self.media_webrtc.tasks() as u32,
+                                max: self.media_max_live,
+                            },
+                        ))
+                        .into(),
+                    )),
+                );
+                self.sdn_worker.input(&mut self.switcher).on_event(
+                    now_ms,
+                    SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
+                        AGENT_SERVICE_ID.into(),
+                        UserData::Cluster,
+                        media_server_gateway::agent_service::Control::NodeStats(metrics).into(),
+                    )),
+                );
+            }
             Input::ExtRpc(req_id, req) => self.process_rpc(now, req_id, req),
             Input::ExtSdn(ext) => {
                 let now_ms = self.timer.timestamp_ms(now);

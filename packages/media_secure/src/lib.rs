@@ -16,3 +16,10 @@ pub trait MediaGatewaySecure {
     fn encode_obj<O: Serialize + DeserializeOwned>(&self, _type: &'static str, ob: O, ttl_seconds: u64) -> String;
     fn decode_conn_id<C: Serialize + DeserializeOwned>(&self, data: &str) -> Option<C>;
 }
+
+/// This interface for console validate session
+pub trait MediaConsoleSecure {
+    fn validate_secert(&self, secret: &str) -> bool;
+    fn validate_token(&self, token: &str) -> bool;
+    fn generate_token(&self) -> String;
+}
