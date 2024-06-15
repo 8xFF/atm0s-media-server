@@ -84,9 +84,9 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
                     visualization::Event::GotAll(all) => {
                         log::info!("Got all: {:?}", all);
                     }
-                    visualization::Event::NodeChanged(node, info, changed) => {
-                        log::info!("Node set: {:?} {:?} {:?}", node, info, changed);
-                        storage.on_ping(started_at.elapsed().as_millis() as u64, node, info);
+                    visualization::Event::NodeChanged(node, info, conns) => {
+                        log::info!("Node set: {:?} {:?} {:?}", node, info, conns);
+                        storage.on_ping(started_at.elapsed().as_millis() as u64, node, info, conns);
                     }
                     visualization::Event::NodeRemoved(node) => {
                         log::info!("Node del: {:?}", node);

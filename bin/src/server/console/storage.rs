@@ -3,10 +3,27 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use atm0s_sdn::NodeId;
+use atm0s_sdn::{services::visualization::ConnectionInfo, NodeId};
 use media_server_protocol::cluster::{ClusterGatewayInfo, ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo};
 
 const NODE_TIMEOUT: u64 = 30_000;
+
+#[derive(poem_openapi::Object, Debug, Clone)]
+pub struct Connection {
+    pub node: NodeId,
+    pub addr: String,
+    pub rtt_ms: u32,
+}
+
+impl From<ConnectionInfo> for Connection {
+    fn from(value: ConnectionInfo) -> Self {
+        Self {
+            node: value.dest,
+            addr: value.remote.to_string(),
+            rtt_ms: value.rtt_ms,
+        }
+    }
+}
 
 #[derive(poem_openapi::Object)]
 pub struct ConsoleNode {
@@ -15,6 +32,7 @@ pub struct ConsoleNode {
     pub cpu: u8,
     pub memory: u8,
     pub disk: u8,
+    pub conns: Vec<Connection>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -23,6 +41,7 @@ pub struct GatewayNode {
     pub node_id: NodeId,
     pub cpu: u8,
     pub memory: u8,
+    pub conns: Vec<Connection>,
     pub disk: u8,
     pub live: u32,
     pub max: u32,
@@ -35,6 +54,7 @@ pub struct MediaNode {
     pub cpu: u8,
     pub memory: u8,
     pub disk: u8,
+    pub conns: Vec<Connection>,
     pub live: u32,
     pub max: u32,
 }
@@ -46,6 +66,7 @@ pub struct ConnectorNode {
     pub cpu: u8,
     pub memory: u8,
     pub disk: u8,
+    pub conns: Vec<Connection>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -73,6 +94,7 @@ pub struct ZoneDetails {
 struct ConsoleContainer {
     last_updated: u64,
     generic: ClusterNodeGenericInfo,
+    conns: Vec<Connection>,
 }
 
 #[derive(Debug)]
@@ -80,6 +102,7 @@ struct GatewayContainer {
     last_updated: u64,
     generic: ClusterNodeGenericInfo,
     info: ClusterGatewayInfo,
+    conns: Vec<Connection>,
 }
 
 #[derive(Debug)]
@@ -87,6 +110,7 @@ struct MediaContainer {
     last_updated: u64,
     generic: ClusterNodeGenericInfo,
     info: ClusterMediaInfo,
+    conns: Vec<Connection>,
 }
 
 #[derive(Debug, Default)]
@@ -113,13 +137,20 @@ impl Storage {
         self.zones.retain(|_, z| z.consoles.len() + z.gateways.len() + z.medias.len() > 0);
     }
 
-    pub fn on_ping(&mut self, now: u64, node: NodeId, info: ClusterNodeInfo) {
+    pub fn on_ping(&mut self, now: u64, node: NodeId, info: ClusterNodeInfo, conns: Vec<ConnectionInfo>) {
         match info {
             ClusterNodeInfo::Console(generic) => {
                 let zone_id = node & 0xFF_FF_FF_00;
                 log::info!("Zone {zone_id} on console ping, zones {}", self.zones.len());
                 let zone = self.zones.entry(zone_id).or_insert_with(Default::default);
-                zone.consoles.insert(node, ConsoleContainer { last_updated: now, generic });
+                zone.consoles.insert(
+                    node,
+                    ConsoleContainer {
+                        last_updated: now,
+                        generic,
+                        conns: conns.into_iter().map(|c| c.into()).collect::<Vec<_>>(),
+                    },
+                );
                 log::info!("Zone {zone_id} on console ping, after zones {}", self.zones.len());
             }
             ClusterNodeInfo::Gateway(generic, info) => {
@@ -128,13 +159,29 @@ impl Storage {
                 let zone = self.zones.entry(zone_id).or_insert_with(Default::default);
                 zone.lat = info.lat;
                 zone.lon = info.lon;
-                zone.gateways.insert(node, GatewayContainer { last_updated: now, generic, info });
+                zone.gateways.insert(
+                    node,
+                    GatewayContainer {
+                        last_updated: now,
+                        generic,
+                        info,
+                        conns: conns.into_iter().map(|c| c.into()).collect::<Vec<_>>(),
+                    },
+                );
             }
             ClusterNodeInfo::Media(generic, info) => {
                 let zone_id = node & 0xFF_FF_FF_00;
                 log::info!("Zone {zone_id} on media ping");
                 let zone = self.zones.entry(zone_id).or_insert_with(Default::default);
-                zone.medias.insert(node, MediaContainer { last_updated: now, generic, info });
+                zone.medias.insert(
+                    node,
+                    MediaContainer {
+                        last_updated: now,
+                        generic,
+                        info,
+                        conns: conns.into_iter().map(|c| c.into()).collect::<Vec<_>>(),
+                    },
+                );
             }
         }
     }
@@ -168,6 +215,7 @@ impl Storage {
                     cpu: g.generic.cpu,
                     memory: g.generic.memory,
                     disk: g.generic.disk,
+                    conns: g.conns.clone(),
                 })
                 .collect::<Vec<_>>(),
             gateways: z
@@ -181,6 +229,7 @@ impl Storage {
                     disk: g.generic.disk,
                     live: g.info.live,
                     max: g.info.max,
+                    conns: g.conns.clone(),
                 })
                 .collect::<Vec<_>>(),
             medias: z
@@ -194,6 +243,7 @@ impl Storage {
                     disk: g.generic.disk,
                     live: g.info.live,
                     max: g.info.max,
+                    conns: g.conns.clone(),
                 })
                 .collect::<Vec<_>>(),
             connectors: vec![],
@@ -211,8 +261,8 @@ impl StorageShared {
         self.storage.write().expect("should lock storage").on_tick(now);
     }
 
-    pub fn on_ping(&self, now: u64, node: NodeId, info: ClusterNodeInfo) {
-        self.storage.write().expect("should lock storage").on_ping(now, node, info);
+    pub fn on_ping(&self, now: u64, node: NodeId, info: ClusterNodeInfo, conns: Vec<ConnectionInfo>) {
+        self.storage.write().expect("should lock storage").on_ping(now, node, info, conns);
     }
 
     pub fn zones(&self) -> Vec<Zone> {
