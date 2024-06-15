@@ -7,7 +7,7 @@ use std::{
 
 use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut};
 use clap::Parser;
-use media_server_gateway::{ServiceKind, AGENT_SERVICE_ID};
+use media_server_gateway::ServiceKind;
 use media_server_protocol::{gateway::GATEWAY_RPC_PORT, protobuf::cluster_gateway::MediaEdgeServiceServer, rpc::quinn::QuinnServer};
 use media_server_runner::MediaConfig;
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
