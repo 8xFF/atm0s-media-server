@@ -92,6 +92,10 @@ impl GatewayStore {
         node
     }
 
+    pub fn local_stats(&self) -> Option<ServiceStats> {
+        self.webrtc.local_stats()
+    }
+
     pub fn pop_output(&mut self) -> Option<PingEvent> {
         self.output.take()
     }

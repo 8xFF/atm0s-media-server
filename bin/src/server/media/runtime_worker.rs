@@ -2,6 +2,7 @@ use std::{collections::VecDeque, time::Instant};
 
 use atm0s_sdn::{SdnExtIn, SdnExtOut, SdnWorkerBusEvent};
 
+use media_server_gateway::NodeMetrics;
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, UserData, SC, SE, TC, TW};
 use media_server_secure::MediaEdgeSecure;
@@ -14,6 +15,7 @@ use crate::NodeConfig;
 pub enum ExtIn {
     Sdn(SdnExtIn<UserData, SC>),
     Rpc(u64, RpcReq<usize>),
+    NodeStats(NodeMetrics),
 }
 
 #[derive(Debug, Clone)]
@@ -125,6 +127,7 @@ impl<ES: MediaEdgeSecure> MediaRuntimeWorker<ES> {
             Input::Ext(ext) => match ext {
                 ExtIn::Rpc(req_id, ext) => WorkerInput::ExtRpc(req_id, ext),
                 ExtIn::Sdn(ext) => WorkerInput::ExtSdn(ext),
+                ExtIn::NodeStats(metrics) => WorkerInput::NodeStats(metrics),
             },
             Input::Net(owner, event) => WorkerInput::Net(owner, event),
         }

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "gateway.proto";
+import "sdk/gateway.proto";
 
 package cluster_gateway;
 

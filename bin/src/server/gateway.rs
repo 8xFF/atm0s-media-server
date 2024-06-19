@@ -4,6 +4,7 @@ use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, service
 use clap::Parser;
 use media_server_gateway::{store_service::GatewayStoreServiceBuilder, STORE_SERVICE_ID};
 use media_server_protocol::{
+    cluster::{ClusterGatewayInfo, ClusterNodeGenericInfo, ClusterNodeInfo},
     gateway::{generate_gateway_zone_tag, GATEWAY_RPC_PORT},
     protobuf::cluster_gateway::{MediaEdgeServiceClient, MediaEdgeServiceServer},
     rpc::quinn::{QuinnClient, QuinnServer},
@@ -28,13 +29,13 @@ mod remote_rpc_handler;
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 enum SC {
-    Visual(visualization::Control),
+    Visual(visualization::Control<ClusterNodeInfo>),
     Gateway(media_server_gateway::store_service::Control),
 }
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 enum SE {
-    Visual(visualization::Event),
+    Visual(visualization::Event<ClusterNodeInfo>),
     Gateway(media_server_gateway::store_service::Event),
 }
 type TC = ();
@@ -88,7 +89,22 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     let node_id = node.node_id;
 
-    let mut builder = SdnBuilder::<(), SC, SE, TC, TW>::new(node_id, node.udp_port, node.custom_addrs);
+    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, node.udp_port, node.custom_addrs);
+    let node_addr = builder.node_addr();
+    let node_info = ClusterNodeInfo::Gateway(
+        ClusterNodeGenericInfo {
+            addr: node_addr.to_string(),
+            cpu: 0,
+            memory: 0,
+            disk: 0,
+        },
+        ClusterGatewayInfo {
+            lat: args.lat,
+            lon: args.lon,
+            live: 0,
+            max: 0,
+        },
+    );
 
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
     builder.set_manual_discovery(vec!["gateway".to_string(), generate_gateway_zone_tag(node.zone)], vec!["gateway".to_string()]);
@@ -98,7 +114,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         builder.add_seed(seed);
     }
 
-    let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers);
+    let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers, node_info);
     let (selector, mut requester) = build_dest_selector();
 
     // Ip location for routing client to closest gateway
@@ -136,6 +152,8 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     // Collect node metrics for update to gateway agent service, this information is used inside gateway
     // for forwarding from other gateway
     let mut node_metrics_collector = NodeMetricsCollector::default();
+    let mut live_sessions = 0;
+    let mut max_sessions = 0;
 
     loop {
         if controller.process().is_none() {
@@ -144,7 +162,22 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
         // Pop from metric collector and pass to Gateway store service
         if let Some(metrics) = node_metrics_collector.pop_measure() {
+            let node_info = ClusterNodeInfo::Gateway(
+                ClusterNodeGenericInfo {
+                    addr: node_addr.to_string(),
+                    cpu: metrics.cpu,
+                    memory: metrics.memory,
+                    disk: metrics.disk,
+                },
+                ClusterGatewayInfo {
+                    lat: args.lat,
+                    lon: args.lon,
+                    live: live_sessions,
+                    max: max_sessions,
+                },
+            );
             controller.service_control(STORE_SERVICE_ID.into(), (), media_server_gateway::store_service::Control::NodeStats(metrics).into());
+            controller.service_control(visualization::SERVICE_ID.into(), (), visualization::Control::UpdateInfo(node_info).into());
         }
         while let Ok(control) = vnet_rx.try_recv() {
             controller.feature_control((), control.into());
@@ -166,9 +199,13 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
         while let Some(out) = controller.pop_event() {
             match out {
-                SdnExtOut::ServicesEvent(_, _, SE::Gateway(event)) => {
-                    requester.on_event(event);
-                }
+                SdnExtOut::ServicesEvent(_, _, SE::Gateway(event)) => match event {
+                    media_server_gateway::store_service::Event::MediaStats(live, max) => {
+                        live_sessions = live;
+                        max_sessions = max;
+                    }
+                    media_server_gateway::store_service::Event::FindNodeRes(req_id, res) => requester.on_find_node_res(req_id, res),
+                },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {
                     if let Err(e) = vnet_tx.try_send(event) {
                         log::error!("[MediaEdge] forward Sdn SocketEvent error {:?}", e);

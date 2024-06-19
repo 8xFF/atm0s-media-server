@@ -7,7 +7,7 @@ use std::{
 
 use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut};
 use clap::Parser;
-use media_server_gateway::{ServiceKind, AGENT_SERVICE_ID};
+use media_server_gateway::ServiceKind;
 use media_server_protocol::{gateway::GATEWAY_RPC_PORT, protobuf::cluster_gateway::MediaEdgeServiceServer, rpc::quinn::QuinnServer};
 use media_server_runner::MediaConfig;
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
@@ -145,11 +145,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         if let Some(metrics) = node_metrics_collector.pop_measure() {
             controller.send_to(
                 0, //because sdn controller allway is run inside worker 0
-                ExtIn::Sdn(SdnExtIn::ServicesControl(
-                    AGENT_SERVICE_ID.into(),
-                    media_server_runner::UserData::Cluster,
-                    media_server_gateway::agent_service::Control::NodeStats(metrics).into(),
-                )),
+                ExtIn::NodeStats(metrics).into(),
             );
         }
         while let Ok(control) = vnet_rx.try_recv() {

@@ -29,14 +29,10 @@ pub struct GatewayDestRequester {
 }
 
 impl GatewayDestRequester {
-    pub fn on_event(&mut self, event: media_server_gateway::store_service::Event) {
-        match event {
-            media_server_gateway::store_service::Event::FindNodeRes(req_id, res) => {
-                if let Some(tx) = self.reqs.remove(&req_id) {
-                    if tx.send(res).is_err() {
-                        log::error!("[GatewayDestRequester] answer for req_id {req_id} error");
-                    }
-                }
+    pub fn on_find_node_res(&mut self, req_id: u64, res: Option<u32>) {
+        if let Some(tx) = self.reqs.remove(&req_id) {
+            if tx.send(res).is_err() {
+                log::error!("[GatewayDestRequester] answer for req_id {req_id} error");
             }
         }
     }
