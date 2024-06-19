@@ -27,4 +27,5 @@ pub enum ClusterNodeInfo {
     Console(ClusterNodeGenericInfo),
     Gateway(ClusterNodeGenericInfo, ClusterGatewayInfo),
     Media(ClusterNodeGenericInfo, ClusterMediaInfo),
+    Connector(ClusterNodeGenericInfo),
 }

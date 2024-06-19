@@ -8,7 +8,7 @@ use media_server_protocol::cluster::{ClusterGatewayInfo, ClusterMediaInfo, Clust
 
 const NODE_TIMEOUT: u64 = 30_000;
 
-#[derive(poem_openapi::Object, Debug, Clone)]
+#[derive(poem_openapi::Object, Clone, Debug, PartialEq, Eq)]
 pub struct Connection {
     pub node: NodeId,
     pub addr: String,
@@ -25,7 +25,7 @@ impl From<ConnectionInfo> for Connection {
     }
 }
 
-#[derive(poem_openapi::Object)]
+#[derive(poem_openapi::Object, Debug, PartialEq, Eq)]
 pub struct ConsoleNode {
     pub addr: String,
     pub node_id: NodeId,
@@ -35,7 +35,7 @@ pub struct ConsoleNode {
     pub conns: Vec<Connection>,
 }
 
-#[derive(poem_openapi::Object)]
+#[derive(poem_openapi::Object, Debug, PartialEq, Eq)]
 pub struct GatewayNode {
     pub addr: String,
     pub node_id: NodeId,
@@ -47,7 +47,7 @@ pub struct GatewayNode {
     pub max: u32,
 }
 
-#[derive(poem_openapi::Object)]
+#[derive(poem_openapi::Object, Debug, PartialEq, Eq)]
 pub struct MediaNode {
     pub addr: String,
     pub node_id: NodeId,
@@ -59,7 +59,7 @@ pub struct MediaNode {
     pub max: u32,
 }
 
-#[derive(poem_openapi::Object)]
+#[derive(poem_openapi::Object, Debug, PartialEq, Eq)]
 pub struct ConnectorNode {
     pub addr: String,
     pub node_id: NodeId,
@@ -69,7 +69,7 @@ pub struct ConnectorNode {
     pub conns: Vec<Connection>,
 }
 
-#[derive(poem_openapi::Object)]
+#[derive(poem_openapi::Object, Debug, PartialEq)]
 pub struct Zone {
     pub lat: f32,
     pub lon: f32,
@@ -80,7 +80,7 @@ pub struct Zone {
     pub connectors: usize,
 }
 
-#[derive(poem_openapi::Object)]
+#[derive(poem_openapi::Object, Debug, PartialEq)]
 pub struct ZoneDetails {
     pub lat: f32,
     pub lon: f32,
@@ -113,6 +113,13 @@ struct MediaContainer {
     conns: Vec<Connection>,
 }
 
+#[derive(Debug)]
+struct ConnectorContainer {
+    last_updated: u64,
+    generic: ClusterNodeGenericInfo,
+    conns: Vec<Connection>,
+}
+
 #[derive(Debug, Default)]
 struct ZoneContainer {
     lat: f32,
@@ -120,6 +127,7 @@ struct ZoneContainer {
     consoles: HashMap<u32, ConsoleContainer>,
     gateways: HashMap<u32, GatewayContainer>,
     medias: HashMap<u32, MediaContainer>,
+    connectors: HashMap<u32, ConnectorContainer>,
 }
 
 #[derive(Debug, Default)]
@@ -133,8 +141,9 @@ impl Storage {
             zone.consoles.retain(|_, g| g.last_updated + NODE_TIMEOUT > now);
             zone.gateways.retain(|_, g| g.last_updated + NODE_TIMEOUT > now);
             zone.medias.retain(|_, g| g.last_updated + NODE_TIMEOUT > now);
+            zone.connectors.retain(|_, g| g.last_updated + NODE_TIMEOUT > now);
         }
-        self.zones.retain(|_, z| z.consoles.len() + z.gateways.len() + z.medias.len() > 0);
+        self.zones.retain(|_, z| z.consoles.len() + z.gateways.len() + z.medias.len() + z.connectors.len() > 0);
     }
 
     pub fn on_ping(&mut self, now: u64, node: NodeId, info: ClusterNodeInfo, conns: Vec<ConnectionInfo>) {
@@ -183,6 +192,20 @@ impl Storage {
                     },
                 );
             }
+            ClusterNodeInfo::Connector(generic) => {
+                let zone_id = node & 0xFF_FF_FF_00;
+                log::info!("Zone {zone_id} on connector ping, zones {}", self.zones.len());
+                let zone = self.zones.entry(zone_id).or_insert_with(Default::default);
+                zone.connectors.insert(
+                    node,
+                    ConnectorContainer {
+                        last_updated: now,
+                        generic,
+                        conns: conns.into_iter().map(|c| c.into()).collect::<Vec<_>>(),
+                    },
+                );
+                log::info!("Zone {zone_id} on console ping, after zones {}", self.zones.len());
+            }
         }
     }
 
@@ -196,7 +219,7 @@ impl Storage {
                 consoles: z.consoles.len(),
                 gateways: z.gateways.len(),
                 medias: z.medias.len(),
-                connectors: 0,
+                connectors: z.connectors.len(),
             })
             .collect::<Vec<_>>()
     }
@@ -246,7 +269,18 @@ impl Storage {
                     conns: g.conns.clone(),
                 })
                 .collect::<Vec<_>>(),
-            connectors: vec![],
+            connectors: z
+                .connectors
+                .iter()
+                .map(|(id, g)| ConnectorNode {
+                    addr: g.generic.addr.clone(),
+                    node_id: *id,
+                    cpu: g.generic.cpu,
+                    memory: g.generic.memory,
+                    disk: g.generic.disk,
+                    conns: g.conns.clone(),
+                })
+                .collect::<Vec<_>>(),
         })
     }
 }
@@ -271,5 +305,257 @@ impl StorageShared {
 
     pub fn zone(&self, zone_id: u32) -> Option<ZoneDetails> {
         self.storage.read().expect("should lock storage").zone(zone_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use media_server_protocol::cluster::{ClusterGatewayInfo, ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo};
+
+    use crate::server::console_storage::{ConnectorNode, ConsoleNode, GatewayNode, MediaNode, Zone, ZoneDetails, NODE_TIMEOUT};
+
+    use super::Storage;
+
+    #[test]
+    fn collect_console() {
+        let mut storage = Storage::default();
+
+        storage.on_ping(
+            0,
+            1,
+            ClusterNodeInfo::Console(ClusterNodeGenericInfo {
+                addr: "addr".to_string(),
+                cpu: 11,
+                memory: 22,
+                disk: 33,
+            }),
+            vec![],
+        );
+        storage.on_tick(0);
+
+        assert_eq!(
+            storage.zones(),
+            vec![Zone {
+                lat: 0.0,
+                lon: 0.0,
+                zone_id: 0,
+                consoles: 1,
+                gateways: 0,
+                medias: 0,
+                connectors: 0,
+            }]
+        );
+
+        assert_eq!(
+            storage.zone(0),
+            Some(ZoneDetails {
+                lat: 0.0,
+                lon: 0.0,
+                consoles: vec![ConsoleNode {
+                    addr: "addr".to_string(),
+                    node_id: 1,
+                    cpu: 11,
+                    memory: 22,
+                    disk: 33,
+                    conns: vec![],
+                }],
+                gateways: vec![],
+                medias: vec![],
+                connectors: vec![]
+            })
+        );
+
+        assert_eq!(storage.zone(1), None);
+
+        storage.on_tick(NODE_TIMEOUT);
+        //after timeout should clear
+        assert_eq!(storage.zones(), vec![]);
+        assert_eq!(storage.zone(0), None);
+    }
+
+    #[test]
+    fn collect_gateway() {
+        let mut storage = Storage::default();
+
+        storage.on_ping(
+            0,
+            1,
+            ClusterNodeInfo::Gateway(
+                ClusterNodeGenericInfo {
+                    addr: "addr".to_string(),
+                    cpu: 11,
+                    memory: 22,
+                    disk: 33,
+                },
+                ClusterGatewayInfo {
+                    live: 0,
+                    max: 100,
+                    lat: 10.0,
+                    lon: 11.0,
+                },
+            ),
+            vec![],
+        );
+        storage.on_tick(0);
+
+        assert_eq!(
+            storage.zones(),
+            vec![Zone {
+                lat: 10.0,
+                lon: 11.0,
+                zone_id: 0,
+                consoles: 0,
+                gateways: 1,
+                medias: 0,
+                connectors: 0,
+            }]
+        );
+
+        assert_eq!(
+            storage.zone(0),
+            Some(ZoneDetails {
+                lat: 10.0,
+                lon: 11.0,
+                consoles: vec![],
+                gateways: vec![GatewayNode {
+                    addr: "addr".to_string(),
+                    node_id: 1,
+                    cpu: 11,
+                    memory: 22,
+                    disk: 33,
+                    conns: vec![],
+                    live: 0,
+                    max: 100,
+                }],
+                medias: vec![],
+                connectors: vec![]
+            })
+        );
+
+        assert_eq!(storage.zone(1), None);
+
+        storage.on_tick(NODE_TIMEOUT);
+        //after timeout should clear
+        assert_eq!(storage.zones(), vec![]);
+        assert_eq!(storage.zone(0), None);
+    }
+
+    #[test]
+    fn collect_media() {
+        let mut storage = Storage::default();
+
+        storage.on_ping(
+            0,
+            1,
+            ClusterNodeInfo::Media(
+                ClusterNodeGenericInfo {
+                    addr: "addr".to_string(),
+                    cpu: 11,
+                    memory: 22,
+                    disk: 33,
+                },
+                ClusterMediaInfo { live: 0, max: 100 },
+            ),
+            vec![],
+        );
+        storage.on_tick(0);
+
+        assert_eq!(
+            storage.zones(),
+            vec![Zone {
+                lat: 0.0,
+                lon: 0.0,
+                zone_id: 0,
+                consoles: 0,
+                gateways: 0,
+                medias: 1,
+                connectors: 0,
+            }]
+        );
+
+        assert_eq!(
+            storage.zone(0),
+            Some(ZoneDetails {
+                lat: 0.0,
+                lon: 0.0,
+                consoles: vec![],
+                gateways: vec![],
+                medias: vec![MediaNode {
+                    addr: "addr".to_string(),
+                    node_id: 1,
+                    cpu: 11,
+                    memory: 22,
+                    disk: 33,
+                    conns: vec![],
+                    live: 0,
+                    max: 100,
+                }],
+                connectors: vec![]
+            })
+        );
+
+        assert_eq!(storage.zone(1), None);
+
+        storage.on_tick(NODE_TIMEOUT);
+        //after timeout should clear
+        assert_eq!(storage.zones(), vec![]);
+        assert_eq!(storage.zone(0), None);
+    }
+
+    #[test]
+    fn collect_connector() {
+        let mut storage = Storage::default();
+
+        storage.on_ping(
+            0,
+            1,
+            ClusterNodeInfo::Connector(ClusterNodeGenericInfo {
+                addr: "addr".to_string(),
+                cpu: 11,
+                memory: 22,
+                disk: 33,
+            }),
+            vec![],
+        );
+        storage.on_tick(0);
+
+        assert_eq!(
+            storage.zones(),
+            vec![Zone {
+                lat: 0.0,
+                lon: 0.0,
+                zone_id: 0,
+                consoles: 0,
+                gateways: 0,
+                medias: 0,
+                connectors: 1,
+            }]
+        );
+
+        assert_eq!(
+            storage.zone(0),
+            Some(ZoneDetails {
+                lat: 0.0,
+                lon: 0.0,
+                consoles: vec![],
+                gateways: vec![],
+                medias: vec![],
+                connectors: vec![ConnectorNode {
+                    addr: "addr".to_string(),
+                    node_id: 1,
+                    cpu: 11,
+                    memory: 22,
+                    disk: 33,
+                    conns: vec![],
+                }]
+            })
+        );
+
+        assert_eq!(storage.zone(1), None);
+
+        storage.on_tick(NODE_TIMEOUT);
+        //after timeout should clear
+        assert_eq!(storage.zones(), vec![]);
+        assert_eq!(storage.zone(0), None);
     }
 }
