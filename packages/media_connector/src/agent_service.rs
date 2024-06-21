@@ -16,7 +16,7 @@ use crate::{msg_queue::MessageQueue, AGENT_SERVICE_ID, AGENT_SERVICE_NAME, DATA_
 
 #[derive(Debug, Clone)]
 pub enum Control {
-    Fire(connector_request::Event),
+    Fire(u64, connector_request::Event),
     Sub,
 }
 
@@ -77,15 +77,15 @@ where
         }
     }
 
-    fn on_input(&mut self, _ctx: &ServiceCtx, now: u64, input: ServiceInput<UserData, FeaturesEvent, SC, TC>) {
+    fn on_input(&mut self, _ctx: &ServiceCtx, _now: u64, input: ServiceInput<UserData, FeaturesEvent, SC, TC>) {
         match input {
             ServiceInput::Control(owner, control) => {
                 if let Ok(control) = control.try_into() {
                     match control {
-                        Control::Fire(event) => {
+                        Control::Fire(ts, event) => {
                             let req_id = self.req_id_seed;
                             self.req_id_seed += 1;
-                            let req = ConnectorRequest { req_id, ts: now, event: Some(event) };
+                            let req = ConnectorRequest { req_id, ts, event: Some(event) };
                             log::info!("[ConnectorAgent] push msg to queue {:?}", req);
                             self.msg_queue.push(req);
                         }
@@ -118,9 +118,11 @@ where
         }
         let out = self.msg_queue.pop(now)?;
         let buf = out.encode_to_vec();
+        let mut meta = NetOutgoingMeta::secure();
+        meta.source = true;
         log::info!("[ConnectorAgent] send msg to net {:?}", out);
         Some(ServiceOutput::FeatureControl(
-            data::Control::DataSendRule(DATA_PORT, RouteRule::ToService(HANDLER_SERVICE_ID), NetOutgoingMeta::secure(), buf).into(),
+            data::Control::DataSendRule(DATA_PORT, RouteRule::ToService(HANDLER_SERVICE_ID), meta, buf).into(),
         ))
     }
 }

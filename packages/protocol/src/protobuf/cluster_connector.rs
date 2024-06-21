@@ -62,22 +62,34 @@ pub mod peer_event {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteBegin {
         #[prost(uint32, tag = "1")]
-        pub dest_node: u32,
+        pub gateway_node: u32,
         #[prost(string, tag = "2")]
         pub ip_addr: ::prost::alloc::string::String,
+        #[prost(string, optional, tag = "3")]
+        pub room: ::core::option::Option<::prost::alloc::string::String>,
+        #[prost(string, optional, tag = "4")]
+        pub peer: ::core::option::Option<::prost::alloc::string::String>,
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteSuccess {
         #[prost(uint32, tag = "1")]
+        pub gateway_node: u32,
+        #[prost(uint32, tag = "2")]
         pub after_ms: u32,
+        #[prost(uint32, tag = "3")]
+        pub dest_node: u32,
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteError {
         #[prost(uint32, tag = "1")]
+        pub gateway_node: u32,
+        #[prost(uint32, tag = "2")]
         pub after_ms: u32,
-        #[prost(enumeration = "route_error::ErrorType", tag = "2")]
+        #[prost(uint32, optional, tag = "3")]
+        pub dest_node: ::core::option::Option<u32>,
+        #[prost(enumeration = "route_error::ErrorType", tag = "4")]
         pub error: i32,
     }
     /// Nested message and enum types in `RouteError`.
@@ -97,6 +109,8 @@ pub mod peer_event {
         pub enum ErrorType {
             PoolEmpty = 0,
             Timeout = 1,
+            GatewayError = 2,
+            MediaError = 3,
         }
         impl ErrorType {
             /// String value of the enum field names used in the ProtoBuf definition.
@@ -107,6 +121,8 @@ pub mod peer_event {
                 match self {
                     ErrorType::PoolEmpty => "PoolEmpty",
                     ErrorType::Timeout => "Timeout",
+                    ErrorType::GatewayError => "GatewayError",
+                    ErrorType::MediaError => "MediaError",
                 }
             }
             /// Creates an enum from field names used in the ProtoBuf definition.
@@ -114,6 +130,8 @@ pub mod peer_event {
                 match value {
                     "PoolEmpty" => Some(Self::PoolEmpty),
                     "Timeout" => Some(Self::Timeout),
+                    "GatewayError" => Some(Self::GatewayError),
+                    "MediaError" => Some(Self::MediaError),
                     _ => None,
                 }
             }
@@ -122,9 +140,11 @@ pub mod peer_event {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Connecting {
-        #[prost(string, tag = "1")]
-        pub user_agent: ::prost::alloc::string::String,
+        #[prost(uint32, tag = "1")]
+        pub media_node: u32,
         #[prost(string, tag = "2")]
+        pub user_agent: ::prost::alloc::string::String,
+        #[prost(string, tag = "3")]
         pub ip_addr: ::prost::alloc::string::String,
     }
     #[allow(clippy::derive_partial_eq_without_eq)]

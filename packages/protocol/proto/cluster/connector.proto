@@ -29,27 +29,36 @@ message ConnectorResponse {
 
 message PeerEvent {
     message RouteBegin {
-        uint32 dest_node = 1;
+        uint32 gateway_node = 1;
         string ip_addr = 2;
+        optional string room = 3;
+        optional string peer = 4;
     }
 
     message RouteSuccess {
-        uint32 after_ms = 1;
+        uint32 gateway_node = 1;
+        uint32 after_ms = 2;
+        uint32 dest_node = 3;
     }
 
     message RouteError {
         enum ErrorType {
             PoolEmpty = 0;
             Timeout = 1;
+            GatewayError = 2;
+            MediaError = 3;
         }
 
-        uint32 after_ms = 1;
-        ErrorType error = 2;
+        uint32 gateway_node = 1;
+        uint32 after_ms = 2;
+        optional uint32 dest_node = 3;
+        ErrorType error = 4;
     }
 
     message Connecting {
-        string user_agent = 1;
-        string ip_addr = 2;
+        uint32 media_node = 1;
+        string user_agent = 2;
+        string ip_addr = 3;
     }
 
     message ConnectError {

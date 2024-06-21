@@ -16,7 +16,7 @@ use media_server_protocol::protobuf::cluster_connector::{
 };
 use prost::Message;
 
-use crate::{AGENT_SERVICE_ID, AGENT_SERVICE_NAME, DATA_PORT, HANDLER_SERVICE_ID, HANDLER_SERVICE_NAME};
+use crate::{DATA_PORT, HANDLER_SERVICE_ID, HANDLER_SERVICE_NAME};
 
 #[derive(Debug, Clone)]
 pub enum Control {
@@ -42,7 +42,7 @@ impl<UserData, SC, SE, TC, TW> ConnectorHandlerService<UserData, SC, SE, TC, TW>
         Self {
             subscriber: None,
             lru: LruCache::new(NonZeroUsize::new(10000).expect("should be non-zero")),
-            queue: VecDeque::default(),
+            queue: VecDeque::from([ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())]),
             _tmp: std::marker::PhantomData,
         }
     }
@@ -54,11 +54,11 @@ where
     SE: From<Event> + TryInto<Event>,
 {
     fn service_id(&self) -> u8 {
-        AGENT_SERVICE_ID
+        HANDLER_SERVICE_ID
     }
 
     fn service_name(&self) -> &str {
-        AGENT_SERVICE_NAME
+        HANDLER_SERVICE_NAME
     }
 
     fn on_shared_input<'a>(&mut self, _ctx: &ServiceCtx, _now: u64, _input: ServiceSharedInput) {}
@@ -98,10 +98,12 @@ where
                                 req_id: msg.req_id,
                                 response: Some(Response::Success(Success {})),
                             };
-                            log::info!("[ConnectorAgent] reply to net {:?}", res);
+                            log::info!("[ConnectorHandler] reply to net {:?}", res);
                             self.queue.push_back(ServiceOutput::FeatureControl(
                                 data::Control::DataSendRule(DATA_PORT, RouteRule::ToNode(source), NetOutgoingMeta::secure(), res.encode_to_vec()).into(),
                             ));
+                        } else {
+                            log::warn!("[ConnectorHandler] reject msg without source");
                         }
                     }
                     Err(er) => {

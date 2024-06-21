@@ -2,7 +2,10 @@ use std::{sync::Arc, time::Duration};
 
 use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
 use clap::Parser;
-use media_server_connector::handler_service::ConnectorHandlerServiceBuilder;
+use media_server_connector::{
+    handler_service::{self, ConnectorHandlerServiceBuilder},
+    HANDLER_SERVICE_ID,
+};
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
     connector::CONNECTOR_RPC_PORT,
@@ -10,6 +13,8 @@ use media_server_protocol::{
     rpc::quinn::QuinnServer,
 };
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
+use storage::ConnectorStorage;
+use tokio::sync::mpsc::channel;
 
 use crate::{
     node_metrics::NodeMetricsCollector,
@@ -17,7 +22,9 @@ use crate::{
     NodeConfig,
 };
 use sans_io_runtime::backend::PollingBackend;
+
 mod remote_rpc_handler;
+mod storage;
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 enum SC {
@@ -89,6 +96,17 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, _args: Args) 
     // for forwarding from other gateway
     let mut node_metrics_collector = NodeMetricsCollector::default();
 
+    // Susbcribe ConnectorHandler service
+    controller.service_control(HANDLER_SERVICE_ID.into(), (), handler_service::Control::Sub.into());
+
+    let mut connector_storage = ConnectorStorage::new();
+    let (connector_storage_tx, mut connector_storage_rx) = channel(1024);
+    tokio::task::spawn_local(async move {
+        while let Some((req_id, event)) = connector_storage_rx.recv().await {
+            connector_storage.on_event(req_id, event).await;
+        }
+    });
+
     loop {
         if controller.process().is_none() {
             break;
@@ -112,7 +130,9 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, _args: Args) 
             match out {
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
                     media_server_connector::handler_service::Event::Req(req_id, event) => {
-                        log::info!("[MediaConnector] on requst {req_id}, {:?}", event);
+                        if let Err(e) = connector_storage_tx.send((req_id, event)).await {
+                            log::error!("[MediaConnector] send event to storage error {:?}", e);
+                        }
                     }
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {

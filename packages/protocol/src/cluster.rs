@@ -29,3 +29,8 @@ pub enum ClusterNodeInfo {
     Media(ClusterNodeGenericInfo, ClusterMediaInfo),
     Connector(ClusterNodeGenericInfo),
 }
+
+/// Generate global cluster session_id
+pub fn gen_cluster_session_id() -> u64 {
+    rand::random()
+}

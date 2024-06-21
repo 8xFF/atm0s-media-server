@@ -88,6 +88,8 @@ pub struct WhipConnectRequest {
     pub room: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
     pub peer: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "6")]
+    pub session_id: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -137,6 +139,8 @@ pub struct WhepConnectRequest {
     pub room: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
     pub peer: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "6")]
+    pub session_id: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -182,6 +186,8 @@ pub struct WebrtcConnectRequest {
     pub ip: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "3")]
     pub req: ::core::option::Option<super::gateway::ConnectRequest>,
+    #[prost(uint64, tag = "4")]
+    pub session_id: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

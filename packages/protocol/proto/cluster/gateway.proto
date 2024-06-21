@@ -66,6 +66,7 @@ message WhipConnectRequest {
     string sdp = 3;
     string room = 4;
     string peer = 5;
+    uint64 session_id = 6;
 }
 
 message WhipConnectResponse {
@@ -97,6 +98,7 @@ message WhepConnectRequest {
     string sdp = 3;
     string room = 4;
     string peer = 5;
+    uint64 session_id = 6;
 }
 
 message WhepConnectResponse {
@@ -126,6 +128,7 @@ message WebrtcConnectRequest {
     string user_agent = 1;
     string ip = 2;
     gateway.ConnectRequest req = 3;
+    uint64 session_id = 4;
 }
 
 message WebrtcConnectResponse {

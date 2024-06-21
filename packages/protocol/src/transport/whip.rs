@@ -107,6 +107,7 @@ impl TryFrom<protobuf::cluster_gateway::WhipConnectRequest> for WhipConnectReq {
 impl From<WhipConnectReq> for protobuf::cluster_gateway::WhipConnectRequest {
     fn from(val: WhipConnectReq) -> Self {
         protobuf::cluster_gateway::WhipConnectRequest {
+            session_id: 0,
             user_agent: val.user_agent,
             ip: val.ip.to_string(),
             sdp: val.sdp,

@@ -1831,6 +1831,7 @@ dependencies = [
  "prost",
  "prost-build",
  "quinn",
+ "rand",
  "serde",
  "tera",
  "tokio",

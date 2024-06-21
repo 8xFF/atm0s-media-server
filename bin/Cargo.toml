@@ -34,7 +34,7 @@ sysinfo = { version = "0.30", optional = true }
 
 [features]
 default = ["console", "gateway", "media", "connector", "cert_utils"]
-gateway = ["media-server-gateway", "quinn_vnet", "node_metrics", "maxminddb"]
+gateway = ["media-server-gateway", "media-server-connector", "quinn_vnet", "node_metrics", "maxminddb"]
 media = ["media-server-runner", "quinn_vnet", "node_metrics"]
 console = []
 connector = ["quinn_vnet", "media-server-connector"]
