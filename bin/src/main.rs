@@ -80,7 +80,7 @@ async fn main() {
                 #[cfg(feature = "gateway")]
                 server::ServerType::Gateway(args) => server::run_media_gateway(workers, http_port, node, args).await,
                 #[cfg(feature = "connector")]
-                server::ServerType::Connector(args) => server::run_media_connector(workers, args).await,
+                server::ServerType::Connector(args) => server::run_media_connector(workers, node, args).await,
                 #[cfg(feature = "media")]
                 server::ServerType::Media(args) => server::run_media_server(workers, http_port, node, args).await,
                 #[cfg(feature = "cert_utils")]

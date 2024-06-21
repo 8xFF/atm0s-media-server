@@ -20,6 +20,7 @@ fn main() -> Result<()> {
                 "./proto/sdk/features.mixer.proto",
                 "./proto/sdk/gateway.proto",
                 "./proto/cluster/gateway.proto",
+                "./proto/cluster/connector.proto",
             ],
             &["./proto"],
         )?;

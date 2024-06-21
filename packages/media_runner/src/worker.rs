@@ -6,6 +6,7 @@ use atm0s_sdn::{
     services::{manual_discovery, visualization},
     ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, NetInput, NetOutput, NodeAddr, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot,
 };
+use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
 use media_server_core::cluster::{self, MediaCluster};
 use media_server_gateway::{agent_service::GatewayAgentServiceBuilder, NodeMetrics, ServiceKind, AGENT_SERVICE_ID};
 use media_server_protocol::{
@@ -55,12 +56,14 @@ pub enum UserData {
 pub enum SC {
     Visual(visualization::Control<ClusterNodeInfo>),
     Gateway(media_server_gateway::agent_service::Control),
+    Connector(media_server_connector::agent_service::Control),
 }
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 pub enum SE {
     Visual(visualization::Event<ClusterNodeInfo>),
     Gateway(media_server_gateway::agent_service::Event),
+    Connector(media_server_connector::agent_service::Event),
 }
 pub type TC = ();
 pub type TW = ();
@@ -138,6 +141,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             vec![generate_gateway_zone_tag(sdn_zone)],
         ));
         let gateway = Arc::new(GatewayAgentServiceBuilder::new(media.max_live));
+        let connector = Arc::new(ConnectorAgentServiceBuilder::new());
 
         let sdn_config = SdnConfig {
             node_id,
@@ -147,7 +151,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     authorization: Arc::new(StaticKeyAuthorization::new(secret)),
                     handshake_builder: Arc::new(HandshakeBuilderXDA),
                     random: Box::new(OsRng),
-                    services: vec![visualization.clone(), discovery.clone(), gateway.clone()],
+                    services: vec![visualization.clone(), discovery.clone(), gateway.clone(), connector.clone()],
                 })
             } else {
                 None

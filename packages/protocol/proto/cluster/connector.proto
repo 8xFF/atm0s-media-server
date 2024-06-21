@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package cluster_connector;
+
+message ConnectorRequest {
+    uint64 req_id = 1;
+    uint64 ts = 2;
+    oneof event {
+        PeerEvent peer = 3;
+    }
+}
+
+message ConnectorResponse {
+    message Success {
+
+    }
+
+    message Error {
+        uint32 code = 1;
+        string message = 2;
+    }
+
+    uint64 req_id = 1;
+    oneof response {
+        Success success = 2;
+        Error error = 3;
+    }
+}
+
+message PeerEvent {
+    message RouteBegin {
+        uint32 dest_node = 1;
+        string ip_addr = 2;
+    }
+
+    message RouteSuccess {
+        uint32 after_ms = 1;
+    }
+
+    message RouteError {
+        enum ErrorType {
+            PoolEmpty = 0;
+            Timeout = 1;
+        }
+
+        uint32 after_ms = 1;
+        ErrorType error = 2;
+    }
+
+    message Connecting {
+        string user_agent = 1;
+        string ip_addr = 2;
+    }
+
+    message ConnectError {
+        enum ErrorType {
+            InvalidSdp = 0;
+            Timeout = 1;
+        }
+    }
+
+    message Connected {
+        uint32 after_ms = 1;
+        string remote_ip = 2;
+    }
+
+    message Stats {
+        uint64 sent_bytes = 1;
+        uint64 received_bytes = 2;
+    }
+
+    message Reconnecting {
+        string remote_ip = 1;
+    }
+
+    message Reconnected {
+        uint32 after_ms = 1;
+        string remote_ip = 2;
+    }
+
+    message Disconnected {
+        enum Reason {
+            UserAction = 0;
+            Timeout = 1;
+            NodeShutdown = 2;
+            KickByAPI = 3;
+        }
+
+        uint32 duration_ms = 1;
+        Reason reason = 2;
+    }
+
+    uint64 session_id = 1;
+
+    oneof event {
+        RouteBegin route_begin = 2;
+        RouteSuccess route_success = 3;
+        RouteError route_error = 4;
+        Connecting connecting = 5;
+        Connected connected = 6;
+        ConnectError connect_error = 7;
+        Stats stats = 8;
+        Reconnecting reconnect = 9;
+        Reconnected reconnected = 10;
+        Disconnected disconnected =  11;
+    }
+}
+
+message Empty {}
+
+service MediaConnector {
+    rpc Hello (Empty) returns (Empty);
+}

@@ -1,4 +1,5 @@
 pub mod cluster;
+pub mod connector;
 pub mod endpoint;
 pub mod gateway;
 pub mod media;

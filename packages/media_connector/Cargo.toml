@@ -1,0 +1,12 @@
+[package]
+name = "media-server-connector"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+media-server-protocol = { path = "../protocol" }
+atm0s-sdn = { workspace = true }
+prost = { workspace = true }
+lru = "0.12"
