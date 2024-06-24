@@ -101,7 +101,7 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     // for forwarding from other gateway
     let mut node_metrics_collector = NodeMetricsCollector::default();
 
-    // Susbcribe ConnectorHandler service
+    // Subscribe ConnectorHandler service
     controller.service_control(HANDLER_SERVICE_ID.into(), (), handler_service::Control::Sub.into());
 
     let (connector_storage_tx, mut connector_storage_rx) = channel(1024);

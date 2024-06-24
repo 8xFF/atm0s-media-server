@@ -163,7 +163,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let mut live_sessions = 0;
     let mut max_sessions = 0;
 
-    // Susbcribe ConnectorHandler service
+    // Subscribe ConnectorHandler service
     controller.service_control(media_server_connector::AGENT_SERVICE_ID.into(), (), media_server_connector::agent_service::Control::Sub.into());
 
     loop {
