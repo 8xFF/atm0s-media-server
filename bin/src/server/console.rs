@@ -1,12 +1,21 @@
 use std::time::{Duration, Instant};
 
-use atm0s_sdn::{secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
+use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
 use clap::Parser;
-use media_server_protocol::cluster::{ClusterNodeGenericInfo, ClusterNodeInfo};
+use media_server_protocol::{
+    cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
+    protobuf::cluster_connector::MediaConnectorServiceClient,
+    rpc::quinn::QuinnClient,
+};
 use media_server_secure::jwt::MediaConsoleSecureJwt;
 use storage::StorageShared;
 
-use crate::{http::run_console_http_server, node_metrics::NodeMetricsCollector, NodeConfig};
+use crate::{
+    http::run_console_http_server,
+    node_metrics::NodeMetricsCollector,
+    quinn::{make_quinn_client, VirtualNetwork},
+    NodeConfig,
+};
 use sans_io_runtime::backend::PollingBackend;
 
 pub mod storage;
@@ -27,16 +36,9 @@ type TW = ();
 pub struct Args {}
 
 pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: NodeConfig, _args: Args) {
+    rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
+
     let storage = StorageShared::default();
-    if let Some(http_port) = http_port {
-        let secure = MediaConsoleSecureJwt::from(node.secret.as_bytes());
-        let storage = storage.clone();
-        tokio::spawn(async move {
-            if let Err(e) = run_console_http_server(http_port, secure, storage).await {
-                log::error!("HTTP Error: {}", e);
-            }
-        });
-    }
 
     let node_id = node.node_id;
     let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, node.udp_port, node.custom_addrs);
@@ -60,11 +62,32 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
     let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers, node_info);
     controller.service_control(visualization::SERVICE_ID.into(), (), visualization::Control::Subscribe.into());
 
+    let (mut vnet, vnet_tx, mut vnet_rx) = VirtualNetwork::new(node.node_id);
+
+    let connector_rpc_socket = vnet.udp_socket(0).await.expect("Should open virtual port for gateway rpc");
+    let connector_rpc_client = MediaConnectorServiceClient::new(QuinnClient::new(make_quinn_client(connector_rpc_socket, &[]).expect("Should create endpoint for media rpc client")));
+
+    tokio::task::spawn_local(async move { while vnet.recv().await.is_some() {} });
+
+    if let Some(http_port) = http_port {
+        let secure = MediaConsoleSecureJwt::from(node.secret.as_bytes());
+        let storage = storage.clone();
+        tokio::spawn(async move {
+            if let Err(e) = run_console_http_server(http_port, secure, storage, connector_rpc_client).await {
+                log::error!("HTTP Error: {}", e);
+            }
+        });
+    }
+
     let mut node_metrics_collector = NodeMetricsCollector::default();
 
     loop {
         if controller.process().is_none() {
             break;
+        }
+
+        while let Ok(control) = vnet_rx.try_recv() {
+            controller.feature_control((), control.into());
         }
 
         if let Some(metrics) = node_metrics_collector.pop_measure() {
@@ -92,7 +115,12 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
                         log::info!("Node del: {:?}", node);
                     }
                 },
-                SdnExtOut::FeaturesEvent(_, _) => {}
+                SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {
+                    if let Err(e) = vnet_tx.try_send(event) {
+                        log::error!("forward sdn SocketEvent error {:?}", e);
+                    }
+                }
+                _ => {}
             }
         }
         tokio::time::sleep(Duration::from_millis(10)).await;

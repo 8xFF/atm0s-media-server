@@ -53,38 +53,34 @@ pub mod connector_response {
 pub struct PeerEvent {
     #[prost(uint64, tag = "1")]
     pub session_id: u64,
-    #[prost(oneof = "peer_event::Event", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11")]
+    #[prost(
+        oneof = "peer_event::Event",
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13"
+    )]
     pub event: ::core::option::Option<peer_event::Event>,
 }
 /// Nested message and enum types in `PeerEvent`.
 pub mod peer_event {
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteBegin {
-        #[prost(uint32, tag = "1")]
-        pub gateway_node: u32,
         #[prost(string, tag = "2")]
         pub ip_addr: ::prost::alloc::string::String,
-        #[prost(string, optional, tag = "3")]
-        pub room: ::core::option::Option<::prost::alloc::string::String>,
-        #[prost(string, optional, tag = "4")]
-        pub peer: ::core::option::Option<::prost::alloc::string::String>,
     }
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteSuccess {
-        #[prost(uint32, tag = "1")]
-        pub gateway_node: u32,
         #[prost(uint32, tag = "2")]
         pub after_ms: u32,
         #[prost(uint32, tag = "3")]
         pub dest_node: u32,
     }
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteError {
-        #[prost(uint32, tag = "1")]
-        pub gateway_node: u32,
         #[prost(uint32, tag = "2")]
         pub after_ms: u32,
         #[prost(uint32, optional, tag = "3")]
@@ -137,16 +133,16 @@ pub mod peer_event {
             }
         }
     }
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Connecting {
-        #[prost(uint32, tag = "1")]
-        pub media_node: u32,
         #[prost(string, tag = "2")]
         pub user_agent: ::prost::alloc::string::String,
         #[prost(string, tag = "3")]
         pub ip_addr: ::prost::alloc::string::String,
     }
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct ConnectError {}
@@ -189,6 +185,25 @@ pub mod peer_event {
             }
         }
     }
+    #[derive(serde::Serialize)]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Join {
+        #[prost(string, tag = "1")]
+        pub room: ::prost::alloc::string::String,
+        #[prost(string, tag = "2")]
+        pub peer: ::prost::alloc::string::String,
+    }
+    #[derive(serde::Serialize)]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Leave {
+        #[prost(string, tag = "1")]
+        pub room: ::prost::alloc::string::String,
+        #[prost(string, tag = "2")]
+        pub peer: ::prost::alloc::string::String,
+    }
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Connected {
@@ -205,12 +220,14 @@ pub mod peer_event {
         #[prost(uint64, tag = "2")]
         pub received_bytes: u64,
     }
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Reconnecting {
         #[prost(string, tag = "1")]
         pub remote_ip: ::prost::alloc::string::String,
     }
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Reconnected {
@@ -219,6 +236,7 @@ pub mod peer_event {
         #[prost(string, tag = "2")]
         pub remote_ip: ::prost::alloc::string::String,
     }
+    #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Disconnected {
@@ -295,14 +313,50 @@ pub mod peer_event {
         Reconnected(Reconnected),
         #[prost(message, tag = "11")]
         Disconnected(Disconnected),
+        #[prost(message, tag = "12")]
+        Join(Join),
+        #[prost(message, tag = "13")]
+        Leave(Leave),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Empty {}
+pub struct GetParams {
+    #[prost(uint32, tag = "1")]
+    pub page: u32,
+    #[prost(uint32, tag = "2")]
+    pub limit: u32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetEvents {
+    #[prost(message, repeated, tag = "2")]
+    pub events: ::prost::alloc::vec::Vec<get_events::EventInfo>,
+}
+/// Nested message and enum types in `GetEvents`.
+pub mod get_events {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct EventInfo {
+        #[prost(int32, tag = "1")]
+        pub id: i32,
+        #[prost(uint32, tag = "2")]
+        pub node: u32,
+        #[prost(uint64, tag = "3")]
+        pub node_ts: u64,
+        #[prost(uint64, tag = "4")]
+        pub session: u64,
+        #[prost(uint64, tag = "5")]
+        pub created_at: u64,
+        #[prost(string, tag = "6")]
+        pub event: ::prost::alloc::string::String,
+        #[prost(string, optional, tag = "7")]
+        pub meta: ::core::option::Option<::prost::alloc::string::String>,
+    }
+}
 #[allow(async_fn_in_trait)]
 pub trait MediaConnectorServiceHandler<CTX> {
-    async fn hello(&self, ctx: &CTX, req: Empty) -> Option<Empty>;
+    async fn events(&self, ctx: &CTX, req: GetParams) -> Option<GetEvents>;
 }
 pub struct MediaConnectorServiceClient<
     D,
@@ -332,13 +386,13 @@ impl<
             _tmp: Default::default(),
         }
     }
-    pub async fn hello(&self, dest: D, req: Empty) -> Option<Empty> {
+    pub async fn events(&self, dest: D, req: GetParams) -> Option<GetEvents> {
         use prost::Message;
-        let mut stream = self.client.connect(dest, "hello.service").await?;
+        let mut stream = self.client.connect(dest, "events.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        Empty::decode(in_buf.as_slice()).ok()
+        GetEvents::decode(in_buf.as_slice()).ok()
     }
 }
 pub struct MediaConnectorServiceServer<
@@ -380,11 +434,11 @@ impl<
             let ctx = self.ctx.clone();
             let handler = self.handler.clone();
             match domain.as_str() {
-                "hello.service" => {
+                "events.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = Empty::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.hello(&ctx, req).await {
+                            if let Ok(req) = GetParams::decode(in_buf.as_slice()) {
+                                if let Some(res) = handler.events(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;

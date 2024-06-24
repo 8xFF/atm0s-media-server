@@ -2,6 +2,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use media_server_protocol::endpoint::ClusterConnId;
+#[cfg(feature = "console")]
+use media_server_protocol::protobuf::cluster_connector::MediaConnectorServiceClient;
+#[cfg(feature = "console")]
+use media_server_protocol::rpc::quinn::{QuinnClient, QuinnStream};
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use media_server_secure::{MediaEdgeSecure, MediaGatewaySecure};
 use poem::endpoint::StaticFilesEndpoint;
@@ -48,6 +52,7 @@ pub async fn run_console_http_server(
     port: u16,
     secure: media_server_secure::jwt::MediaConsoleSecureJwt,
     storage: crate::server::console_storage::StorageShared,
+    connector: MediaConnectorServiceClient<SocketAddr, QuinnClient, QuinnStream>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let user_service: OpenApiService<_, ()> = OpenApiService::new(api_console::user::Apis, "Console User APIs", env!("CARGO_PKG_VERSION")).server("/api/user/");
     let user_ui = user_service.swagger_ui();
@@ -57,7 +62,11 @@ pub async fn run_console_http_server(
     let cluster_ui = cluster_service.swagger_ui();
     let cluster_spec = cluster_service.spec();
 
-    let ctx = api_console::ConsoleApisCtx { secure, storage };
+    let connector_service: OpenApiService<_, ()> = OpenApiService::new(api_console::connector::Apis, "Console Connector APIs", env!("CARGO_PKG_VERSION")).server("/api/connector/");
+    let connector_ui = connector_service.swagger_ui();
+    let connector_spec = connector_service.spec();
+
+    let ctx = api_console::ConsoleApisCtx { secure, storage, connector };
 
     let route = Route::new()
         //TODO build UI and embed to here
@@ -70,6 +79,10 @@ pub async fn run_console_http_server(
         .nest("/api/cluster/", cluster_service.data(ctx.clone()))
         .nest("/api/cluster/ui", cluster_ui)
         .at("/api/cluster/spec", poem::endpoint::make_sync(move |_| cluster_spec.clone()))
+        //connector
+        .nest("/api/connector/", connector_service.data(ctx.clone()))
+        .nest("/api/connector/ui", connector_ui)
+        .at("/api/connector/spec", poem::endpoint::make_sync(move |_| connector_spec.clone()))
         .with(Cors::new());
 
     Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;

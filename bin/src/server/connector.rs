@@ -4,7 +4,8 @@ use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, service
 use clap::Parser;
 use media_server_connector::{
     handler_service::{self, ConnectorHandlerServiceBuilder},
-    HANDLER_SERVICE_ID,
+    sql_storage::ConnectorStorage,
+    Storage, HANDLER_SERVICE_ID,
 };
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
@@ -13,7 +14,6 @@ use media_server_protocol::{
     rpc::quinn::QuinnServer,
 };
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
-use storage::ConnectorStorage;
 use tokio::sync::mpsc::channel;
 
 use crate::{
@@ -24,7 +24,6 @@ use crate::{
 use sans_io_runtime::backend::PollingBackend;
 
 mod remote_rpc_handler;
-mod storage;
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 enum SC {
@@ -41,10 +40,16 @@ type TC = ();
 type TW = ();
 
 #[derive(Debug, Parser)]
-pub struct Args {}
+pub struct Args {
+    /// DB Uri
+    #[arg(env, long, default_value = "sqlite://connector.db?mode=rwc")]
+    db_uri: String,
+}
 
-pub async fn run_media_connector(workers: usize, node: NodeConfig, _args: Args) {
+pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
+
+    let mut connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri).await);
 
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
@@ -82,7 +87,7 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, _args: Args) 
     let media_rpc_socket = vnet.udp_socket(CONNECTOR_RPC_PORT).await.expect("Should open virtual port for gateway rpc");
     let mut media_rpc_server = MediaConnectorServiceServer::new(
         QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert.clone()).expect("Should create endpoint for media rpc server")),
-        remote_rpc_handler::Ctx {},
+        remote_rpc_handler::Ctx { storage: connector_storage.clone() },
         remote_rpc_handler::ConnectorRemoteRpcHandlerImpl::default(),
     );
 
@@ -99,11 +104,10 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, _args: Args) 
     // Susbcribe ConnectorHandler service
     controller.service_control(HANDLER_SERVICE_ID.into(), (), handler_service::Control::Sub.into());
 
-    let mut connector_storage = ConnectorStorage::new();
     let (connector_storage_tx, mut connector_storage_rx) = channel(1024);
     tokio::task::spawn_local(async move {
-        while let Some((req_id, event)) = connector_storage_rx.recv().await {
-            connector_storage.on_event(req_id, event).await;
+        while let Some((from, ts, req_id, event)) = connector_storage_rx.recv().await {
+            connector_storage.on_event(from, ts, req_id, event).await;
         }
     });
 
@@ -129,8 +133,8 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, _args: Args) 
         while let Some(out) = controller.pop_event() {
             match out {
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
-                    media_server_connector::handler_service::Event::Req(req_id, event) => {
-                        if let Err(e) = connector_storage_tx.send((req_id, event)).await {
+                    media_server_connector::handler_service::Event::Req(from, ts, req_id, event) => {
+                        if let Err(e) = connector_storage_tx.send((from, ts, req_id, event)).await {
                             log::error!("[MediaConnector] send event to storage error {:?}", e);
                         }
                     }

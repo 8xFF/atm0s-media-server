@@ -29,14 +29,10 @@ message ConnectorResponse {
 
 message PeerEvent {
     message RouteBegin {
-        uint32 gateway_node = 1;
         string ip_addr = 2;
-        optional string room = 3;
-        optional string peer = 4;
     }
 
     message RouteSuccess {
-        uint32 gateway_node = 1;
         uint32 after_ms = 2;
         uint32 dest_node = 3;
     }
@@ -49,14 +45,12 @@ message PeerEvent {
             MediaError = 3;
         }
 
-        uint32 gateway_node = 1;
         uint32 after_ms = 2;
         optional uint32 dest_node = 3;
         ErrorType error = 4;
     }
 
     message Connecting {
-        uint32 media_node = 1;
         string user_agent = 2;
         string ip_addr = 3;
     }
@@ -66,6 +60,16 @@ message PeerEvent {
             InvalidSdp = 0;
             Timeout = 1;
         }
+    }
+
+    message Join {
+        string room = 1;
+        string peer = 2;
+    }
+
+    message Leave {
+        string room = 1;
+        string peer = 2;
     }
 
     message Connected {
@@ -112,11 +116,30 @@ message PeerEvent {
         Reconnecting reconnect = 9;
         Reconnected reconnected = 10;
         Disconnected disconnected =  11;
+        Join join = 12;
+        Leave leave = 13;
     }
 }
 
-message Empty {}
+message GetParams {
+    uint32 page = 1;
+    uint32 limit = 2;
+}
+
+message GetEvents {
+    message EventInfo {
+        int32 id = 1;
+        uint32 node = 2;
+        uint64 node_ts = 3;
+        uint64 session = 4;
+        uint64 created_at = 5;
+        string event = 6;
+        optional string meta = 7;
+    }
+
+    repeated EventInfo events = 2;
+}
 
 service MediaConnector {
-    rpc Hello (Empty) returns (Empty);
+    rpc Events (GetParams) returns (GetEvents);
 }

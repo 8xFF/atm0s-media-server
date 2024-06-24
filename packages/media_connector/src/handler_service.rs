@@ -25,7 +25,7 @@ pub enum Control {
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    Req(u64, ConnectorEvent),
+    Req(NodeId, u64, u64, ConnectorEvent),
 }
 
 type ReqUuid = (NodeId, u64, u64);
@@ -88,7 +88,7 @@ where
                             log::info!("[ConnectorHandler] on event {:?}", msg);
                             if let Some(event) = msg.event {
                                 if let Some(actor) = self.subscriber {
-                                    self.queue.push_back(ServiceOutput::Event(actor, Event::Req(msg.req_id, event).into()));
+                                    self.queue.push_back(ServiceOutput::Event(actor, Event::Req(source, msg.ts, msg.req_id, event).into()));
                                 } else {
                                     log::warn!("[ConnectorHandler] subscriber not found");
                                 }

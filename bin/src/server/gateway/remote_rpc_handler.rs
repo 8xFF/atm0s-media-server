@@ -24,9 +24,8 @@ use media_server_protocol::{
     },
     transport::ConnLayer,
 };
+use media_server_utils::now_ms;
 use tokio::sync::mpsc::Sender;
-
-use crate::now_ms;
 
 use super::{dest_selector::GatewayDestSelector, ip_location::Ip2Location};
 
@@ -43,18 +42,13 @@ pub struct Ctx {
 pub struct MediaRemoteRpcHandlerImpl {}
 
 impl MediaRemoteRpcHandlerImpl {
-    async fn feedback_route_begin(ctx: &Ctx, session_id: u64, ip_addr: String, room: Option<String>, peer: Option<String>) {
+    async fn feedback_route_begin(ctx: &Ctx, session_id: u64, ip_addr: String) {
         ctx.connector_agent_tx
             .send(ConnectorControl::Fire(
                 now_ms(),
                 ConnectorEvent::Peer(PeerEvent {
                     session_id,
-                    event: Some(PeerEvent2::RouteBegin(RouteBegin {
-                        gateway_node: ctx.node,
-                        ip_addr,
-                        room,
-                        peer,
-                    })),
+                    event: Some(PeerEvent2::RouteBegin(RouteBegin { ip_addr })),
                 }),
             ))
             .await
@@ -68,7 +62,6 @@ impl MediaRemoteRpcHandlerImpl {
                 ConnectorEvent::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteSuccess(RouteSuccess {
-                        gateway_node: ctx.node,
                         after_ms: after_ms as u32,
                         dest_node: node,
                     })),
@@ -85,7 +78,6 @@ impl MediaRemoteRpcHandlerImpl {
                 ConnectorEvent::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteError(RouteError {
-                        gateway_node: ctx.node,
                         after_ms: after_ms as u32,
                         dest_node: node,
                         error: error as i32,
@@ -102,7 +94,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         let started_at = now_ms();
         let session_id = req.session_id;
         log::info!("On whip_connect from other gateway");
-        Self::feedback_route_begin(ctx, session_id, req.ip.clone(), Some(req.room.clone()), Some(req.peer.clone())).await;
+        Self::feedback_route_begin(ctx, session_id, req.ip.clone()).await;
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let node_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
@@ -139,7 +131,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         let started_at = now_ms();
         let session_id = req.session_id;
         log::info!("On whep_connect from other gateway");
-        Self::feedback_route_begin(ctx, session_id, req.ip.clone(), Some(req.room.clone()), Some(req.peer.clone())).await;
+        Self::feedback_route_begin(ctx, session_id, req.ip.clone()).await;
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
@@ -175,10 +167,8 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
     async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
         let started_at = now_ms();
         let session_id = req.session_id;
-        let room = req.req.as_ref().map(|r| r.join.as_ref().map(|j| j.room.clone())).flatten();
-        let peer = req.req.as_ref().map(|r| r.join.as_ref().map(|j| j.peer.clone())).flatten();
         log::info!("On webrtc_connect from other gateway");
-        Self::feedback_route_begin(ctx, session_id, req.ip.clone(), room, peer).await;
+        Self::feedback_route_begin(ctx, session_id, req.ip.clone()).await;
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);

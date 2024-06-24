@@ -12,6 +12,17 @@ fn main() -> Result<()> {
         .service_generator(Box::new(GenericRpcGenerator))
         .out_dir("src/protobuf")
         .include_file("mod.rs")
+        .type_attribute("cluster_connector.PeerEvent.RouteBegin", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.RouteSuccess", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.RouteError", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.Connecting", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.ConnectError", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.Connected", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.Reconnecting", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.Reconnected", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.Disconnected", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.Join", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.Leave", "#[derive(serde::Serialize)]")
         .compile_protos(
             &[
                 "./proto/shared.proto",

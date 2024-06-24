@@ -34,9 +34,10 @@ use media_server_protocol::{
         RpcError, RpcReq, RpcRes, RpcResult,
     },
 };
+use media_server_utils::now_ms;
 use tokio::sync::mpsc::Sender;
 
-use crate::{errors::MediaServerError, now_ms};
+use crate::errors::MediaServerError;
 
 use super::{dest_selector::GatewayDestSelector, ip_location::Ip2Location};
 
@@ -49,18 +50,13 @@ pub struct MediaLocalRpcHandler {
 }
 
 impl MediaLocalRpcHandler {
-    async fn feedback_route_begin(&self, session_id: u64, ip: IpAddr, room: Option<String>, peer: Option<String>) {
+    async fn feedback_route_begin(&self, session_id: u64, ip: IpAddr) {
         self.connector_agent_tx
             .send(ConnectorControl::Fire(
                 now_ms(),
                 ConnectorEvent::Peer(PeerEvent {
                     session_id,
-                    event: Some(PeerEvent2::RouteBegin(RouteBegin {
-                        gateway_node: self.node,
-                        ip_addr: ip.to_string(),
-                        room,
-                        peer,
-                    })),
+                    event: Some(PeerEvent2::RouteBegin(RouteBegin { ip_addr: ip.to_string() })),
                 }),
             ))
             .await
@@ -74,7 +70,6 @@ impl MediaLocalRpcHandler {
                 ConnectorEvent::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteSuccess(RouteSuccess {
-                        gateway_node: self.node,
                         after_ms: after_ms as u32,
                         dest_node: node,
                     })),
@@ -91,7 +86,6 @@ impl MediaLocalRpcHandler {
                 ConnectorEvent::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteError(RouteError {
-                        gateway_node: self.node,
                         after_ms: after_ms as u32,
                         dest_node: node,
                         error: error as i32,
@@ -151,7 +145,7 @@ impl MediaLocalRpcHandler {
     async fn whip_connect(&self, param: WhipConnectReq) -> RpcResult<WhipConnectRes<ClusterConnId>> {
         let session_id = gen_cluster_session_id();
         let started_at = now_ms();
-        self.feedback_route_begin(session_id, param.ip, Some(param.room.0.clone()), Some(param.peer.0.clone())).await;
+        self.feedback_route_begin(session_id, param.ip).await;
 
         if let Some(node_id) = self.selector.select(ServiceKind::Webrtc, self.ip2location.get_location(&param.ip)).await {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
@@ -220,7 +214,7 @@ impl MediaLocalRpcHandler {
     async fn whep_connect(&self, param: WhepConnectReq) -> RpcResult<WhepConnectRes<ClusterConnId>> {
         let session_id = gen_cluster_session_id();
         let started_at = now_ms();
-        self.feedback_route_begin(session_id, param.ip, Some(param.room.0.clone()), Some(param.peer.0.clone())).await;
+        self.feedback_route_begin(session_id, param.ip).await;
 
         if let Some(node_id) = self.selector.select(ServiceKind::Webrtc, self.ip2location.get_location(&param.ip)).await {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
@@ -288,8 +282,7 @@ impl MediaLocalRpcHandler {
     async fn webrtc_connect(&self, ip: IpAddr, user_agent: String, req: ConnectRequest) -> RpcResult<(ClusterConnId, ConnectResponse)> {
         let session_id = gen_cluster_session_id();
         let started_at = now_ms();
-        self.feedback_route_begin(session_id, ip, req.join.as_ref().map(|j| j.room.clone()), req.join.as_ref().map(|j| j.peer.clone()))
-            .await;
+        self.feedback_route_begin(session_id, ip).await;
 
         if let Some(node_id) = self.selector.select(ServiceKind::Webrtc, self.ip2location.get_location(&ip)).await {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);

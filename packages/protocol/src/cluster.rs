@@ -32,5 +32,5 @@ pub enum ClusterNodeInfo {
 
 /// Generate global cluster session_id
 pub fn gen_cluster_session_id() -> u64 {
-    rand::random()
+    rand::random::<u64>() & 0x7FFF_FFFF_FFFF_FFFF //avoid over i64, which some database will error
 }
