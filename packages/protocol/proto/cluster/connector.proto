@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package cluster_connector;
 
+import "shared.proto";
+
 message ConnectorRequest {
     uint64 req_id = 1;
     uint64 ts = 2;
@@ -29,12 +31,12 @@ message ConnectorResponse {
 
 message PeerEvent {
     message RouteBegin {
-        string ip_addr = 2;
+        string remote_ip = 1;
     }
 
     message RouteSuccess {
-        uint32 after_ms = 2;
-        uint32 dest_node = 3;
+        uint32 after_ms = 1;
+        uint32 dest_node = 2;
     }
 
     message RouteError {
@@ -45,14 +47,13 @@ message PeerEvent {
             MediaError = 3;
         }
 
-        uint32 after_ms = 2;
-        optional uint32 dest_node = 3;
-        ErrorType error = 4;
+        uint32 after_ms = 1;
+        optional uint32 dest_node = 2;
+        ErrorType error = 3;
     }
 
     message Connecting {
-        string user_agent = 2;
-        string ip_addr = 3;
+        string remote_ip = 1;
     }
 
     message ConnectError {
@@ -60,6 +61,9 @@ message PeerEvent {
             InvalidSdp = 0;
             Timeout = 1;
         }
+
+        uint32 after_ms = 1;
+        ErrorType error = 2;
     }
 
     message Join {
@@ -103,6 +107,38 @@ message PeerEvent {
         Reason reason = 2;
     }
 
+    message RemoteTrackStarted {
+        string track = 1;
+        shared.Kind kind = 2;
+    }
+
+    message RemoteTrackEnded {
+        string track = 1;
+        shared.Kind kind = 2;
+    }
+
+    message LocalTrackStarted {
+        string track = 1;
+        shared.Kind kind = 2;
+    }
+
+    message LocalTrackAttach {
+        string track = 1;
+        string remote_peer = 2;
+        string remote_track = 3;
+    }
+
+    message LocalTrackDetach {
+        string track = 1;
+        string remote_peer = 2;
+        string remote_track = 3;
+    }
+
+    message LocalTrackEnded {
+        string track = 1;
+        shared.Kind kind = 2;
+    }
+
     uint64 session_id = 1;
 
     oneof event {
@@ -118,12 +154,77 @@ message PeerEvent {
         Disconnected disconnected =  11;
         Join join = 12;
         Leave leave = 13;
+        RemoteTrackStarted remote_track_started = 14;
+        RemoteTrackEnded remote_track_ended = 15;
+        LocalTrackStarted local_track_started = 16;
+        LocalTrackAttach local_track_attach = 17;
+        LocalTrackDetach local_track_detach = 18;
+        LocalTrackEnded local_track_ended = 19;
     }
 }
 
 message GetParams {
     uint32 page = 1;
     uint32 limit = 2;
+}
+
+message GetRooms {
+    message RoomInfo {
+        int32 id = 1;
+        string room = 2;
+    }
+
+    repeated RoomInfo rooms = 1;
+}
+
+message GetPeerParams {
+    optional int32 room = 1;
+    uint32 page = 2;
+    uint32 limit = 3;
+}
+
+message PeerSession {
+    int32 id = 1;
+    int32 peer_id = 2;
+    string peer = 3;
+    uint64 session = 4;
+    uint64 created_at = 5;
+    uint64 joined_at = 6;
+    optional uint64 leaved_at = 7;
+}
+
+message GetPeers {
+    message PeerInfo {
+        int32 id = 1;
+        int32 room_id = 2;
+        string room = 3;
+        string peer = 4;
+        uint64 created_at = 5;
+        repeated PeerSession sessions = 6;
+    }
+
+    repeated PeerInfo peers = 1;
+}
+
+message GetSessions {
+    message SessionInfo {
+        uint64 id = 1;
+        optional string ip = 2;
+        optional string user_agent = 3;
+        optional string sdk = 4;
+        uint64 created_at = 5;
+        repeated PeerSession peers = 6;
+    }
+
+    repeated SessionInfo sessions = 1;
+}
+
+message GetEventParams {
+    optional uint64 session = 1;
+    optional uint64 start_ts = 2;
+    optional uint64 end_ts = 3;
+    uint32 page = 4;
+    uint32 limit = 5;
 }
 
 message GetEvents {
@@ -137,9 +238,12 @@ message GetEvents {
         optional string meta = 7;
     }
 
-    repeated EventInfo events = 2;
+    repeated EventInfo events = 1;
 }
 
 service MediaConnector {
-    rpc Events (GetParams) returns (GetEvents);
+    rpc Rooms (GetParams) returns (GetRooms);
+    rpc Peers (GetPeerParams) returns (GetPeers);
+    rpc Sessions (GetParams) returns (GetSessions);
+    rpc Events (GetEventParams) returns (GetEvents);
 }

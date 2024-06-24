@@ -55,7 +55,7 @@ pub struct PeerEvent {
     pub session_id: u64,
     #[prost(
         oneof = "peer_event::Event",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19"
     )]
     pub event: ::core::option::Option<peer_event::Event>,
 }
@@ -65,27 +65,27 @@ pub mod peer_event {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteBegin {
-        #[prost(string, tag = "2")]
-        pub ip_addr: ::prost::alloc::string::String,
+        #[prost(string, tag = "1")]
+        pub remote_ip: ::prost::alloc::string::String,
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteSuccess {
-        #[prost(uint32, tag = "2")]
+        #[prost(uint32, tag = "1")]
         pub after_ms: u32,
-        #[prost(uint32, tag = "3")]
+        #[prost(uint32, tag = "2")]
         pub dest_node: u32,
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RouteError {
-        #[prost(uint32, tag = "2")]
+        #[prost(uint32, tag = "1")]
         pub after_ms: u32,
-        #[prost(uint32, optional, tag = "3")]
+        #[prost(uint32, optional, tag = "2")]
         pub dest_node: ::core::option::Option<u32>,
-        #[prost(enumeration = "route_error::ErrorType", tag = "4")]
+        #[prost(enumeration = "route_error::ErrorType", tag = "3")]
         pub error: i32,
     }
     /// Nested message and enum types in `RouteError`.
@@ -137,15 +137,18 @@ pub mod peer_event {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Connecting {
-        #[prost(string, tag = "2")]
-        pub user_agent: ::prost::alloc::string::String,
-        #[prost(string, tag = "3")]
-        pub ip_addr: ::prost::alloc::string::String,
+        #[prost(string, tag = "1")]
+        pub remote_ip: ::prost::alloc::string::String,
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct ConnectError {}
+    pub struct ConnectError {
+        #[prost(uint32, tag = "1")]
+        pub after_ms: u32,
+        #[prost(enumeration = "connect_error::ErrorType", tag = "2")]
+        pub error: i32,
+    }
     /// Nested message and enum types in `ConnectError`.
     pub mod connect_error {
         #[derive(
@@ -290,6 +293,64 @@ pub mod peer_event {
             }
         }
     }
+    #[derive(serde::Serialize)]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct RemoteTrackStarted {
+        #[prost(string, tag = "1")]
+        pub track: ::prost::alloc::string::String,
+        #[prost(enumeration = "super::super::shared::Kind", tag = "2")]
+        pub kind: i32,
+    }
+    #[derive(serde::Serialize)]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct RemoteTrackEnded {
+        #[prost(string, tag = "1")]
+        pub track: ::prost::alloc::string::String,
+        #[prost(enumeration = "super::super::shared::Kind", tag = "2")]
+        pub kind: i32,
+    }
+    #[derive(serde::Serialize)]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct LocalTrackStarted {
+        #[prost(string, tag = "1")]
+        pub track: ::prost::alloc::string::String,
+        #[prost(enumeration = "super::super::shared::Kind", tag = "2")]
+        pub kind: i32,
+    }
+    #[derive(serde::Serialize)]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct LocalTrackAttach {
+        #[prost(string, tag = "1")]
+        pub track: ::prost::alloc::string::String,
+        #[prost(string, tag = "2")]
+        pub remote_peer: ::prost::alloc::string::String,
+        #[prost(string, tag = "3")]
+        pub remote_track: ::prost::alloc::string::String,
+    }
+    #[derive(serde::Serialize)]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct LocalTrackDetach {
+        #[prost(string, tag = "1")]
+        pub track: ::prost::alloc::string::String,
+        #[prost(string, tag = "2")]
+        pub remote_peer: ::prost::alloc::string::String,
+        #[prost(string, tag = "3")]
+        pub remote_track: ::prost::alloc::string::String,
+    }
+    #[derive(serde::Serialize)]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct LocalTrackEnded {
+        #[prost(string, tag = "1")]
+        pub track: ::prost::alloc::string::String,
+        #[prost(enumeration = "super::super::shared::Kind", tag = "2")]
+        pub kind: i32,
+    }
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Event {
@@ -317,6 +378,18 @@ pub mod peer_event {
         Join(Join),
         #[prost(message, tag = "13")]
         Leave(Leave),
+        #[prost(message, tag = "14")]
+        RemoteTrackStarted(RemoteTrackStarted),
+        #[prost(message, tag = "15")]
+        RemoteTrackEnded(RemoteTrackEnded),
+        #[prost(message, tag = "16")]
+        LocalTrackStarted(LocalTrackStarted),
+        #[prost(message, tag = "17")]
+        LocalTrackAttach(LocalTrackAttach),
+        #[prost(message, tag = "18")]
+        LocalTrackDetach(LocalTrackDetach),
+        #[prost(message, tag = "19")]
+        LocalTrackEnded(LocalTrackEnded),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -329,8 +402,117 @@ pub struct GetParams {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetRooms {
+    #[prost(message, repeated, tag = "1")]
+    pub rooms: ::prost::alloc::vec::Vec<get_rooms::RoomInfo>,
+}
+/// Nested message and enum types in `GetRooms`.
+pub mod get_rooms {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct RoomInfo {
+        #[prost(int32, tag = "1")]
+        pub id: i32,
+        #[prost(string, tag = "2")]
+        pub room: ::prost::alloc::string::String,
+    }
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPeerParams {
+    #[prost(int32, optional, tag = "1")]
+    pub room: ::core::option::Option<i32>,
+    #[prost(uint32, tag = "2")]
+    pub page: u32,
+    #[prost(uint32, tag = "3")]
+    pub limit: u32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PeerSession {
+    #[prost(int32, tag = "1")]
+    pub id: i32,
+    #[prost(int32, tag = "2")]
+    pub peer_id: i32,
+    #[prost(string, tag = "3")]
+    pub peer: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "4")]
+    pub session: u64,
+    #[prost(uint64, tag = "5")]
+    pub created_at: u64,
+    #[prost(uint64, tag = "6")]
+    pub joined_at: u64,
+    #[prost(uint64, optional, tag = "7")]
+    pub leaved_at: ::core::option::Option<u64>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPeers {
+    #[prost(message, repeated, tag = "1")]
+    pub peers: ::prost::alloc::vec::Vec<get_peers::PeerInfo>,
+}
+/// Nested message and enum types in `GetPeers`.
+pub mod get_peers {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct PeerInfo {
+        #[prost(int32, tag = "1")]
+        pub id: i32,
+        #[prost(int32, tag = "2")]
+        pub room_id: i32,
+        #[prost(string, tag = "3")]
+        pub room: ::prost::alloc::string::String,
+        #[prost(string, tag = "4")]
+        pub peer: ::prost::alloc::string::String,
+        #[prost(uint64, tag = "5")]
+        pub created_at: u64,
+        #[prost(message, repeated, tag = "6")]
+        pub sessions: ::prost::alloc::vec::Vec<super::PeerSession>,
+    }
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetSessions {
+    #[prost(message, repeated, tag = "1")]
+    pub sessions: ::prost::alloc::vec::Vec<get_sessions::SessionInfo>,
+}
+/// Nested message and enum types in `GetSessions`.
+pub mod get_sessions {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct SessionInfo {
+        #[prost(uint64, tag = "1")]
+        pub id: u64,
+        #[prost(string, optional, tag = "2")]
+        pub ip: ::core::option::Option<::prost::alloc::string::String>,
+        #[prost(string, optional, tag = "3")]
+        pub user_agent: ::core::option::Option<::prost::alloc::string::String>,
+        #[prost(string, optional, tag = "4")]
+        pub sdk: ::core::option::Option<::prost::alloc::string::String>,
+        #[prost(uint64, tag = "5")]
+        pub created_at: u64,
+        #[prost(message, repeated, tag = "6")]
+        pub peers: ::prost::alloc::vec::Vec<super::PeerSession>,
+    }
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetEventParams {
+    #[prost(uint64, optional, tag = "1")]
+    pub session: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "2")]
+    pub start_ts: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "3")]
+    pub end_ts: ::core::option::Option<u64>,
+    #[prost(uint32, tag = "4")]
+    pub page: u32,
+    #[prost(uint32, tag = "5")]
+    pub limit: u32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetEvents {
-    #[prost(message, repeated, tag = "2")]
+    #[prost(message, repeated, tag = "1")]
     pub events: ::prost::alloc::vec::Vec<get_events::EventInfo>,
 }
 /// Nested message and enum types in `GetEvents`.
@@ -356,7 +538,10 @@ pub mod get_events {
 }
 #[allow(async_fn_in_trait)]
 pub trait MediaConnectorServiceHandler<CTX> {
-    async fn events(&self, ctx: &CTX, req: GetParams) -> Option<GetEvents>;
+    async fn rooms(&self, ctx: &CTX, req: GetParams) -> Option<GetRooms>;
+    async fn peers(&self, ctx: &CTX, req: GetPeerParams) -> Option<GetPeers>;
+    async fn sessions(&self, ctx: &CTX, req: GetParams) -> Option<GetSessions>;
+    async fn events(&self, ctx: &CTX, req: GetEventParams) -> Option<GetEvents>;
 }
 pub struct MediaConnectorServiceClient<
     D,
@@ -386,7 +571,31 @@ impl<
             _tmp: Default::default(),
         }
     }
-    pub async fn events(&self, dest: D, req: GetParams) -> Option<GetEvents> {
+    pub async fn rooms(&self, dest: D, req: GetParams) -> Option<GetRooms> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "rooms.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        GetRooms::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn peers(&self, dest: D, req: GetPeerParams) -> Option<GetPeers> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "peers.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        GetPeers::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn sessions(&self, dest: D, req: GetParams) -> Option<GetSessions> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "sessions.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        GetSessions::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn events(&self, dest: D, req: GetEventParams) -> Option<GetEvents> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "events.service").await?;
         let out_buf = req.encode_to_vec();
@@ -434,10 +643,49 @@ impl<
             let ctx = self.ctx.clone();
             let handler = self.handler.clone();
             match domain.as_str() {
-                "events.service" => {
+                "rooms.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
                             if let Ok(req) = GetParams::decode(in_buf.as_slice()) {
+                                if let Some(res) = handler.rooms(&ctx, req).await {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "peers.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = GetPeerParams::decode(in_buf.as_slice()) {
+                                if let Some(res) = handler.peers(&ctx, req).await {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "sessions.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = GetParams::decode(in_buf.as_slice()) {
+                                if let Some(res) = handler.sessions(&ctx, req).await {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "events.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = GetEventParams::decode(in_buf.as_slice()) {
                                 if let Some(res) = handler.events(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;

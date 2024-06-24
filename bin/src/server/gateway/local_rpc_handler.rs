@@ -12,10 +12,9 @@ use media_server_protocol::protobuf::{
         peer_event::{route_error::ErrorType, Event as PeerEvent2, RouteError, RouteSuccess},
         PeerEvent,
     },
-    cluster_gateway::{WhepConnectRequest, WhipConnectRequest},
+    cluster_gateway::WhipConnectRequest,
 };
 use media_server_protocol::{
-    cluster::gen_cluster_session_id,
     endpoint::ClusterConnId,
     gateway::GATEWAY_RPC_PORT,
     protobuf::{
@@ -42,7 +41,6 @@ use crate::errors::MediaServerError;
 use super::{dest_selector::GatewayDestSelector, ip_location::Ip2Location};
 
 pub struct MediaLocalRpcHandler {
-    node: NodeId,
     connector_agent_tx: Sender<ConnectorControl>,
     selector: GatewayDestSelector,
     client: MediaEdgeServiceClient<SocketAddr, QuinnClient, QuinnStream>,
@@ -56,7 +54,7 @@ impl MediaLocalRpcHandler {
                 now_ms(),
                 ConnectorEvent::Peer(PeerEvent {
                     session_id,
-                    event: Some(PeerEvent2::RouteBegin(RouteBegin { ip_addr: ip.to_string() })),
+                    event: Some(PeerEvent2::RouteBegin(RouteBegin { remote_ip: ip.to_string() })),
                 }),
             ))
             .await
@@ -99,14 +97,12 @@ impl MediaLocalRpcHandler {
 
 impl MediaLocalRpcHandler {
     pub fn new(
-        node: NodeId,
         connector_agent_tx: Sender<ConnectorControl>,
         selector: GatewayDestSelector,
         client: MediaEdgeServiceClient<SocketAddr, QuinnClient, QuinnStream>,
         ip2location: Arc<Ip2Location>,
     ) -> Self {
         Self {
-            node,
             connector_agent_tx,
             selector,
             client,
@@ -127,7 +123,7 @@ impl MediaLocalRpcHandler {
                 whep::RpcReq::Delete(param) => RpcRes::Whep(whep::RpcRes::Delete(self.whep_delete(conn_part, param).await)),
             },
             RpcReq::Webrtc(param) => match param {
-                webrtc::RpcReq::Connect(ip, user_agent, param) => RpcRes::Webrtc(webrtc::RpcRes::Connect(self.webrtc_connect(ip, user_agent, param).await)),
+                webrtc::RpcReq::Connect(session_id, ip, user_agent, param) => RpcRes::Webrtc(webrtc::RpcRes::Connect(self.webrtc_connect(session_id, ip, user_agent, param).await)),
                 webrtc::RpcReq::RemoteIce(conn, param) => RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(self.webrtc_remote_ice(conn_part, conn, param).await)),
                 webrtc::RpcReq::RestartIce(conn, ip, user_agent, req) => RpcRes::Webrtc(webrtc::RpcRes::RestartIce(self.webrtc_restart_ice(conn_part, conn, ip, user_agent, req).await)),
                 webrtc::RpcReq::Delete(_) => {
@@ -143,7 +139,7 @@ impl MediaLocalRpcHandler {
     */
 
     async fn whip_connect(&self, param: WhipConnectReq) -> RpcResult<WhipConnectRes<ClusterConnId>> {
-        let session_id = gen_cluster_session_id();
+        let session_id = param.session_id;
         let started_at = now_ms();
         self.feedback_route_begin(session_id, param.ip).await;
 
@@ -212,17 +208,14 @@ impl MediaLocalRpcHandler {
     */
 
     async fn whep_connect(&self, param: WhepConnectReq) -> RpcResult<WhepConnectRes<ClusterConnId>> {
-        let session_id = gen_cluster_session_id();
         let started_at = now_ms();
+        let session_id = param.session_id;
         self.feedback_route_begin(session_id, param.ip).await;
 
         if let Some(node_id) = self.selector.select(ServiceKind::Webrtc, self.ip2location.get_location(&param.ip)).await {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             log::info!("[Gateway] selected node {node_id}");
-            let mut rpc_req: WhepConnectRequest = param.into();
-            rpc_req.session_id = session_id;
-
-            let res = self.client.whep_connect(sock_addr, rpc_req).await;
+            let res = self.client.whep_connect(sock_addr, param.into()).await;
             log::info!("[Gateway] response from node {node_id} => {:?}", res);
             if let Some(res) = res {
                 self.feedback_route_success(session_id, now_ms() - started_at, node_id).await;
@@ -279,8 +272,7 @@ impl MediaLocalRpcHandler {
     Webrtc part
     */
 
-    async fn webrtc_connect(&self, ip: IpAddr, user_agent: String, req: ConnectRequest) -> RpcResult<(ClusterConnId, ConnectResponse)> {
-        let session_id = gen_cluster_session_id();
+    async fn webrtc_connect(&self, session_id: u64, ip: IpAddr, user_agent: String, req: ConnectRequest) -> RpcResult<(ClusterConnId, ConnectResponse)> {
         let started_at = now_ms();
         self.feedback_route_begin(session_id, ip).await;
 

@@ -18,11 +18,19 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(belongs_to = "super::peer::Entity", from = "Column::Peer", to = "super::peer::Column::Id")]
     Peer,
+    #[sea_orm(belongs_to = "super::session::Entity", from = "Column::Session", to = "super::session::Column::Id")]
+    Session,
 }
 
 impl Related<super::peer::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Peer.def()
+    }
+}
+
+impl Related<super::session::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Session.def()
     }
 }
 

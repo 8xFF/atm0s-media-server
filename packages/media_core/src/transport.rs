@@ -1,5 +1,5 @@
 use derive_more::{Display, From};
-use std::time::Instant;
+use std::{net::IpAddr, time::Instant};
 
 use media_server_protocol::{
     endpoint::{TrackMeta, TrackPriority},
@@ -25,10 +25,10 @@ pub enum TransportError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TransportState {
-    Connecting,
+    Connecting(IpAddr),
     ConnectError(TransportError),
-    Connected,
-    Reconnecting,
+    Connected(IpAddr),
+    Reconnecting(IpAddr),
     Disconnected(Option<TransportError>),
 }
 

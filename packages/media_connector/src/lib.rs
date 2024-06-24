@@ -14,6 +14,7 @@ pub const AGENT_SERVICE_NAME: &str = "connector-agent";
 pub const HANDLER_SERVICE_ID: u8 = 104;
 pub const HANDLER_SERVICE_NAME: &str = "connector-handler";
 
+#[derive(Debug)]
 pub struct RoomInfo {
     pub id: i32,
     pub room: String,
@@ -21,23 +22,37 @@ pub struct RoomInfo {
     pub peers: usize,
 }
 
-pub struct PeerInfo {
+#[derive(Debug)]
+pub struct PeerSession {
     pub id: i32,
-    pub room: i32,
+    pub peer_id: i32,
     pub peer: String,
-    pub created_at: u64,
-    pub sessions: usize,
+    pub session: u64,
+    pub joined_at: u64,
+    pub leaved_at: Option<u64>,
 }
 
+#[derive(Debug)]
+pub struct PeerInfo {
+    pub id: i32,
+    pub room_id: i32,
+    pub room: String,
+    pub peer: String,
+    pub created_at: u64,
+    pub sessions: Vec<PeerSession>,
+}
+
+#[derive(Debug)]
 pub struct SessionInfo {
     pub id: u64,
     pub created_at: u64,
     pub ip: Option<String>,
     pub user_agent: Option<String>,
     pub sdk: Option<String>,
-    pub events: usize,
+    pub peers: Vec<PeerSession>,
 }
 
+#[derive(Debug)]
 pub struct EventInfo {
     pub id: i32,
     pub node: u32,
@@ -54,10 +69,7 @@ pub trait Storage {
 
 pub trait Querier {
     fn rooms(&self, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<RoomInfo>>> + Send;
-    fn room(&self, room: i32) -> impl std::future::Future<Output = Option<RoomInfo>> + Send;
     fn peers(&self, room: Option<i32>, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<PeerInfo>>> + Send;
-    fn peer(&self, peer: i32) -> impl std::future::Future<Output = Option<PeerInfo>> + Send;
-    fn sessions(&self, peer: Option<i32>, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<SessionInfo>>> + Send;
-    fn session(&self, session: u64) -> impl std::future::Future<Output = Option<SessionInfo>> + Send;
-    fn events(&self, session: Option<i32>, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<EventInfo>>> + Send;
+    fn sessions(&self, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<SessionInfo>>> + Send;
+    fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<EventInfo>>> + Send;
 }

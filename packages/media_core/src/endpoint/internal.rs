@@ -4,6 +4,7 @@ use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, AudioMixerMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
+    protobuf::cluster_connector::peer_event,
     transport::RpcError,
 };
 use media_server_utils::Small2dMap;
@@ -31,9 +32,10 @@ enum TaskType {
     BitrateAllocator,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum InternalOutput {
     Event(EndpointEvent),
+    PeerEvent(Instant, peer_event::Event),
     RpcRes(EndpointReqId, EndpointRes),
     Cluster(ClusterRoomHash, ClusterEndpointControl),
     Destroy,
@@ -41,7 +43,7 @@ pub enum InternalOutput {
 
 pub struct EndpointInternal {
     cfg: EndpointCfg,
-    state: TransportState,
+    state: Option<(Instant, TransportState)>,
     wait_join: Option<(EndpointReqId, RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>)>,
     joined: Option<(ClusterRoomHash, RoomId, PeerId, Option<AudioMixerMode>)>,
     local_tracks_id: Small2dMap<LocalTrackId, usize>,
@@ -57,7 +59,7 @@ pub struct EndpointInternal {
 impl EndpointInternal {
     pub fn new(cfg: EndpointCfg) -> Self {
         Self {
-            state: TransportState::Connecting,
+            state: None,
             wait_join: None,
             joined: None,
             local_tracks_id: Default::default(),
@@ -113,14 +115,15 @@ impl EndpointInternal {
 
     pub fn on_transport_rpc(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointReq) {
         match req {
-            EndpointReq::JoinRoom(room, peer, meta, publish, subscribe, mixer) => {
-                if matches!(self.state, TransportState::Connecting) {
+            EndpointReq::JoinRoom(room, peer, meta, publish, subscribe, mixer) => match &self.state {
+                None | Some((_, TransportState::Connecting(_))) => {
                     log::info!("[EndpointInternal] join_room({room}, {peer}) but in Connecting state => wait");
                     self.wait_join = Some((req_id, room, peer, meta, publish, subscribe, mixer));
-                } else {
+                }
+                _ => {
                     self.join_room(now, req_id, room, peer, meta, publish, subscribe, mixer);
                 }
-            }
+            },
             EndpointReq::LeaveRoom => {
                 if let Some((_req_id, room, peer, _meta, _publish, _subscribe, _mixer)) = self.wait_join.take() {
                     log::info!("[EndpointInternal] leave_room({room}, {peer}) but in Connecting state => only clear local");
@@ -186,26 +189,61 @@ impl EndpointInternal {
     }
 
     fn on_transport_state_changed(&mut self, now: Instant, state: TransportState) {
-        self.state = state;
-        match &self.state {
-            TransportState::Connecting => {
+        let pre_state = self.state.take();
+        self.state = Some((now, state));
+        match &(self.state.as_ref().expect("Should have state").1) {
+            TransportState::Connecting(ip) => {
                 log::info!("[EndpointInternal] connecting");
+                self.queue
+                    .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Connecting(peer_event::Connecting { remote_ip: ip.to_string() })));
             }
             TransportState::ConnectError(err) => {
                 log::info!("[EndpointInternal] connect error {:?}", err);
+                let (pre_ts, _pre_event) = pre_state.expect("Should have previous state");
+                self.queue.push_back(InternalOutput::PeerEvent(
+                    now,
+                    peer_event::Event::ConnectError(peer_event::ConnectError {
+                        after_ms: (pre_ts - now).as_millis() as u32,
+                        error: 0,
+                    }),
+                ));
                 self.queue.push_back(InternalOutput::Destroy);
             }
-            TransportState::Connected => {
+            TransportState::Connected(ip) => {
                 log::info!("[EndpointInternal] connected");
+                let (pre_ts, pre_event) = pre_state.expect("Should have previous state");
+                if matches!(pre_event, TransportState::Reconnecting(_)) {
+                    self.queue.push_back(InternalOutput::PeerEvent(
+                        now,
+                        peer_event::Event::Reconnected(peer_event::Reconnected {
+                            after_ms: (pre_ts - now).as_millis() as u32,
+                            remote_ip: ip.to_string(),
+                        }),
+                    ));
+                } else {
+                    self.queue.push_back(InternalOutput::PeerEvent(
+                        now,
+                        peer_event::Event::Connected(peer_event::Connected {
+                            after_ms: (pre_ts - now).as_millis() as u32,
+                            remote_ip: ip.to_string(),
+                        }),
+                    ));
+                }
                 let (req_id, room, peer, meta, publish, subscribe, mixer) = return_if_none!(self.wait_join.take());
                 log::info!("[EndpointInternal] join_room({room}, {peer}) after connected");
                 self.join_room(now, req_id, room, peer, meta, publish, subscribe, mixer);
             }
-            TransportState::Reconnecting => {
+            TransportState::Reconnecting(ip) => {
                 log::info!("[EndpointInternal] reconnecting");
+                self.queue
+                    .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Reconnect(peer_event::Reconnecting { remote_ip: ip.to_string() })));
             }
             TransportState::Disconnected(err) => {
                 log::info!("[EndpointInternal] disconnected {:?}", err);
+                self.queue.push_back(InternalOutput::PeerEvent(
+                    now,
+                    peer_event::Event::Disconnected(peer_event::Disconnected { duration_ms: 0, reason: 0 }), //TODO provide correct reason
+                ));
                 self.leave_room(now);
                 self.queue.push_back(InternalOutput::Destroy);
             }
@@ -246,7 +284,9 @@ impl EndpointInternal {
 
         self.joined = Some(((&room).into(), room.clone(), peer.clone(), mixer.as_ref().map(|m| m.mode)));
         self.queue
-            .push_back(InternalOutput::Cluster((&room).into(), ClusterEndpointControl::Join(peer, meta, publish, subscribe, mixer)));
+            .push_back(InternalOutput::Cluster((&room).into(), ClusterEndpointControl::Join(peer.clone(), meta, publish, subscribe, mixer)));
+        self.queue
+            .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Join(peer_event::Join { room: room.0, peer: peer.0 })));
 
         for (_track_id, index) in self.local_tracks_id.pairs() {
             self.local_tracks.input(&mut self.switcher).on_event(now, index, local_track::Input::JoinRoom(room_hash));
@@ -278,6 +318,8 @@ impl EndpointInternal {
         }
 
         self.queue.push_back(InternalOutput::Cluster(hash, ClusterEndpointControl::Leave));
+        self.queue
+            .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.0, peer: peer.0 })));
     }
 }
 
@@ -402,9 +444,13 @@ impl EndpointInternal {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
+    use std::{
+        net::{IpAddr, Ipv4Addr},
+        time::Instant,
+    };
 
     use media_server_protocol::endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe};
+    use media_server_protocol::protobuf::cluster_connector::peer_event;
     use sans_io_runtime::TaskSwitcherChild;
 
     use crate::{
@@ -422,8 +468,25 @@ mod tests {
             max_ingress_bitrate: 2_000_000,
         });
 
+        let remote = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let now = Instant::now();
-        internal.on_transport_event(now, TransportEvent::State(TransportState::Connected));
+        internal.on_transport_event(now, TransportEvent::State(TransportState::Connecting(remote)));
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(now, peer_event::Event::Connecting(peer_event::Connecting { remote_ip: remote.to_string() })))
+        );
+        assert_eq!(internal.pop_output(now), None);
+        internal.on_transport_event(now, TransportEvent::State(TransportState::Connected(remote)));
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::Connected(peer_event::Connected {
+                    remote_ip: remote.to_string(),
+                    after_ms: 0
+                })
+            ))
+        );
         assert_eq!(internal.pop_output(now), None);
 
         let room: RoomId = "room".into();
@@ -436,7 +499,17 @@ mod tests {
         let room_hash = ClusterRoomHash::from(&room);
         assert_eq!(
             internal.pop_output(now),
-            Some(InternalOutput::Cluster(room_hash, ClusterEndpointControl::Join(peer, meta, publish, subscribe, None)))
+            Some(InternalOutput::Cluster(room_hash, ClusterEndpointControl::Join(peer.clone(), meta, publish, subscribe, None)))
+        );
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::Join(peer_event::Join {
+                    room: room.0.clone(),
+                    peer: peer.0.clone(),
+                })
+            ))
         );
         assert_eq!(internal.pop_output(now), None);
 
@@ -444,6 +517,16 @@ mod tests {
         internal.on_transport_rpc(now, 1.into(), EndpointReq::LeaveRoom);
         assert_eq!(internal.pop_output(now), Some(InternalOutput::RpcRes(1.into(), EndpointRes::LeaveRoom(Ok(())))));
         assert_eq!(internal.pop_output(now), Some(InternalOutput::Cluster(room_hash, ClusterEndpointControl::Leave)));
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::Leave(peer_event::Leave {
+                    room: room.0.clone(),
+                    peer: peer.0.clone(),
+                })
+            ))
+        );
         assert_eq!(internal.pop_output(now), None);
     }
 
@@ -454,8 +537,25 @@ mod tests {
             max_ingress_bitrate: 2_000_000,
         });
 
+        let remote = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let now = Instant::now();
-        internal.on_transport_event(now, TransportEvent::State(TransportState::Connected));
+        internal.on_transport_event(now, TransportEvent::State(TransportState::Connecting(remote)));
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(now, peer_event::Event::Connecting(peer_event::Connecting { remote_ip: remote.to_string() })))
+        );
+        assert_eq!(internal.pop_output(now), None);
+        internal.on_transport_event(now, TransportEvent::State(TransportState::Connected(remote)));
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::Connected(peer_event::Connected {
+                    remote_ip: remote.to_string(),
+                    after_ms: 0
+                })
+            ))
+        );
         assert_eq!(internal.pop_output(now), None);
 
         let room1: RoomId = "room1".into();
@@ -478,6 +578,16 @@ mod tests {
                 ClusterEndpointControl::Join(peer.clone(), meta.clone(), publish.clone(), subscribe.clone(), None),
             ))
         );
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::Join(peer_event::Join {
+                    room: room1.0.clone(),
+                    peer: peer.0.clone(),
+                })
+            ))
+        );
         assert_eq!(internal.pop_output(now), None);
 
         //now join other room should success
@@ -492,6 +602,16 @@ mod tests {
         assert_eq!(internal.pop_output(now), Some(InternalOutput::RpcRes(1.into(), EndpointRes::JoinRoom(Ok(())))));
         //it will auto leave room1
         assert_eq!(internal.pop_output(now), Some(InternalOutput::Cluster(room1_hash, ClusterEndpointControl::Leave)));
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::Leave(peer_event::Leave {
+                    room: room1.0.clone(),
+                    peer: peer.0.clone(),
+                })
+            ))
+        );
 
         //and after that join room2
         assert_eq!(
@@ -499,6 +619,16 @@ mod tests {
             Some(InternalOutput::Cluster(
                 room2_hash,
                 ClusterEndpointControl::Join(peer.clone(), meta.clone(), publish.clone(), subscribe.clone(), None),
+            ))
+        );
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::Join(peer_event::Join {
+                    room: room2.0.clone(),
+                    peer: peer.0.clone(),
+                })
             ))
         );
         assert_eq!(internal.pop_output(now), None);

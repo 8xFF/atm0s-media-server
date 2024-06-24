@@ -3,10 +3,10 @@ use std::time::Duration;
 use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_connector::{connector_request, peer_event};
 use media_server_utils::now_ms;
-use sea_orm::{sea_query::OnConflict, ActiveModelTrait, ActiveValue::NotSet, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
+use sea_orm::{sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
 use sea_orm_migration::MigratorTrait;
 
-use crate::{EventInfo, Querier, RoomInfo, SessionInfo, Storage};
+use crate::{EventInfo, PeerInfo, PeerSession, Querier, RoomInfo, SessionInfo, Storage};
 
 mod entity;
 mod migration;
@@ -24,7 +24,7 @@ impl ConnectorStorage {
             .acquire_timeout(Duration::from_secs(8))
             .idle_timeout(Duration::from_secs(8))
             .max_lifetime(Duration::from_secs(8))
-            .sqlx_logging(true)
+            .sqlx_logging(false)
             .sqlx_logging_level(log::LevelFilter::Info); // Setting default PostgreSQL schema
 
         let db = Database::connect(opt).await.expect("Should connect to sql server");
@@ -39,7 +39,7 @@ impl ConnectorStorage {
                 entity::session::Entity::insert(entity::session::ActiveModel {
                     id: Set(session as i64),
                     created_at: Set(now_ms() as i64),
-                    ip: Set(Some(params.ip_addr.clone())),
+                    ip: Set(Some(params.remote_ip.clone())),
                     ..Default::default()
                 })
                 .exec(&self.db)
@@ -95,7 +95,6 @@ impl ConnectorStorage {
                 entity::session::Entity::insert(entity::session::ActiveModel {
                     id: Set(session as i64),
                     created_at: Set(now_ms() as i64),
-                    ip: Set(Some(params.ip_addr.clone())),
                     ..Default::default()
                 })
                 .on_conflict(
@@ -244,6 +243,96 @@ impl ConnectorStorage {
                 .ok()?;
                 Some(())
             }
+            peer_event::Event::RemoteTrackStarted(params) => {
+                entity::event::ActiveModel {
+                    node: Set(from),
+                    node_ts: Set(ts as i64),
+                    session: Set(session as i64),
+                    created_at: Set(now_ms() as i64),
+                    event: Set("RemoteTrackStarted".to_owned()),
+                    meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
+                    ..Default::default()
+                }
+                .insert(&self.db)
+                .await
+                .ok()?;
+                Some(())
+            }
+            peer_event::Event::RemoteTrackEnded(params) => {
+                entity::event::ActiveModel {
+                    node: Set(from),
+                    node_ts: Set(ts as i64),
+                    session: Set(session as i64),
+                    created_at: Set(now_ms() as i64),
+                    event: Set("RemoteTrackEnded".to_owned()),
+                    meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
+                    ..Default::default()
+                }
+                .insert(&self.db)
+                .await
+                .ok()?;
+                Some(())
+            }
+            peer_event::Event::LocalTrackStarted(params) => {
+                entity::event::ActiveModel {
+                    node: Set(from),
+                    node_ts: Set(ts as i64),
+                    session: Set(session as i64),
+                    created_at: Set(now_ms() as i64),
+                    event: Set("LocalTrackStarted".to_owned()),
+                    meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
+                    ..Default::default()
+                }
+                .insert(&self.db)
+                .await
+                .ok()?;
+                Some(())
+            }
+            peer_event::Event::LocalTrackAttach(params) => {
+                entity::event::ActiveModel {
+                    node: Set(from),
+                    node_ts: Set(ts as i64),
+                    session: Set(session as i64),
+                    created_at: Set(now_ms() as i64),
+                    event: Set("LocalTrackAttach".to_owned()),
+                    meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
+                    ..Default::default()
+                }
+                .insert(&self.db)
+                .await
+                .ok()?;
+                Some(())
+            }
+            peer_event::Event::LocalTrackDetach(params) => {
+                entity::event::ActiveModel {
+                    node: Set(from),
+                    node_ts: Set(ts as i64),
+                    session: Set(session as i64),
+                    created_at: Set(now_ms() as i64),
+                    event: Set("LocalTrackDetach".to_owned()),
+                    meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
+                    ..Default::default()
+                }
+                .insert(&self.db)
+                .await
+                .ok()?;
+                Some(())
+            }
+            peer_event::Event::LocalTrackEnded(params) => {
+                entity::event::ActiveModel {
+                    node: Set(from),
+                    node_ts: Set(ts as i64),
+                    session: Set(session as i64),
+                    created_at: Set(now_ms() as i64),
+                    event: Set("LocalTrackEnded".to_owned()),
+                    meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
+                    ..Default::default()
+                }
+                .insert(&self.db)
+                .await
+                .ok()?;
+                Some(())
+            }
         }
     }
 
@@ -339,44 +428,98 @@ impl Querier for ConnectorStorage {
         Some(rooms)
     }
 
-    async fn room(&self, room: i32) -> Option<crate::RoomInfo> {
-        todo!()
+    async fn peers(&self, room: Option<i32>, page: usize, count: usize) -> Option<Vec<PeerInfo>> {
+        let peers = entity::peer::Entity::find();
+        let peers = if let Some(room) = room {
+            peers.filter(entity::peer::Column::Room.eq(room))
+        } else {
+            peers
+        };
+
+        let peers = peers
+            .limit(count as u64)
+            .offset((page * count) as u64)
+            .find_with_related(entity::peer_session::Entity)
+            .all(&self.db)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|(r, sessions)| PeerInfo {
+                id: r.id,
+                room_id: r.room,
+                room: "".to_string(), //TODO get room
+                peer: r.peer.clone(),
+                created_at: r.created_at as u64,
+                sessions: sessions
+                    .into_iter()
+                    .map(|s| PeerSession {
+                        id: s.id,
+                        peer_id: s.peer,
+                        peer: r.peer.clone(),
+                        session: s.session as u64,
+                        joined_at: s.joined_at as u64,
+                        leaved_at: s.leaved_at.map(|l| l as u64),
+                    })
+                    .collect::<Vec<_>>(),
+            })
+            .collect::<Vec<_>>();
+
+        Some(peers)
     }
 
-    async fn peers(&self, room: Option<i32>, page: usize, count: usize) -> Option<Vec<crate::PeerInfo>> {
-        todo!()
-    }
-
-    async fn peer(&self, peer: i32) -> Option<crate::PeerInfo> {
-        todo!()
-    }
-
-    async fn sessions(&self, peer: Option<i32>, page: usize, count: usize) -> Option<Vec<SessionInfo>> {
+    async fn sessions(&self, page: usize, count: usize) -> Option<Vec<SessionInfo>> {
         let sessions = entity::session::Entity::find()
             .limit(count as u64)
             .offset((page * count) as u64)
+            .find_with_related(entity::peer_session::Entity)
             .all(&self.db)
             .await
             .ok()?
             .into_iter()
-            .map(|r| SessionInfo {
+            .map(|(r, peers)| SessionInfo {
                 id: r.id as u64,
                 created_at: r.created_at as u64,
                 ip: r.ip,
                 user_agent: r.user_agent,
                 sdk: r.sdk,
-                events: 0, //TODO count events
+                peers: peers
+                    .into_iter()
+                    .map(|s| PeerSession {
+                        id: s.id,
+                        peer_id: s.peer,
+                        peer: "_".to_string(), //TODO get peer
+                        session: s.session as u64,
+                        joined_at: s.joined_at as u64,
+                        leaved_at: s.leaved_at.map(|l| l as u64),
+                    })
+                    .collect::<Vec<_>>(),
             })
             .collect::<Vec<_>>();
+        log::info!("{:?}", sessions);
         Some(sessions)
     }
 
-    async fn session(&self, session: u64) -> Option<crate::SessionInfo> {
-        todo!()
-    }
+    async fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> Option<Vec<EventInfo>> {
+        let events = entity::event::Entity::find();
+        let events = if let Some(session) = session {
+            events.filter(entity::event::Column::Session.eq(session as i64))
+        } else {
+            events
+        };
 
-    async fn events(&self, session: Option<i32>, page: usize, count: usize) -> Option<Vec<EventInfo>> {
-        let events = entity::event::Entity::find()
+        let events = if let Some(from) = from {
+            events.filter(entity::event::Column::CreatedAt.gte(from as i64))
+        } else {
+            events
+        };
+
+        let events = if let Some(to) = to {
+            events.filter(entity::event::Column::CreatedAt.lte(to as i64))
+        } else {
+            events
+        };
+
+        let events = events
             .limit(count as u64)
             .offset((page * count) as u64)
             .all(&self.db)

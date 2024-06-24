@@ -1,4 +1,5 @@
 use std::{
+    net::IpAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -72,6 +73,7 @@ enum TransportWebrtcError {
 }
 
 pub struct TransportWebrtcSdk<ES> {
+    remote: IpAddr,
     join: Option<(RoomId, PeerId, Option<String>, RoomInfoPublish, RoomInfoSubscribe)>,
     state: State,
     queue: DynamicDeque<InternalOutput, 4>,
@@ -86,12 +88,13 @@ pub struct TransportWebrtcSdk<ES> {
 }
 
 impl<ES> TransportWebrtcSdk<ES> {
-    pub fn new(req: ConnectRequest, secure: Arc<ES>) -> Self {
+    pub fn new(req: ConnectRequest, secure: Arc<ES>, remote: IpAddr) -> Self {
         let tracks = req.tracks.unwrap_or_default();
         let local_tracks: Vec<LocalTrack> = tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect();
         let remote_tracks: Vec<RemoteTrack> = tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect();
         if let Some(j) = req.join {
             Self {
+                remote,
                 join: Some((j.room.into(), j.peer.into(), j.metadata, j.publish.unwrap_or_default().into(), j.subscribe.unwrap_or_default().into())),
                 state: State::New,
                 audio_mixer: j.features.and_then(|f| {
@@ -119,6 +122,7 @@ impl<ES> TransportWebrtcSdk<ES> {
             }
         } else {
             Self {
+                remote,
                 join: None,
                 state: State::New,
                 local_tracks,
@@ -190,7 +194,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             State::New => {
                 self.state = State::Connecting { at: now };
                 self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting))));
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(self.remote)))));
             }
             State::Connecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
@@ -422,7 +426,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 self.channel = Some(channel);
                 log::info!("[TransportWebrtcSdk] channel {name} opened, join state {:?}", self.join);
                 self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(self.remote))))); //TODO get paired ip from webrtc
                 if let Some((room, peer, metadata, publish, subscribe)) = &self.join {
                     self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                         0.into(),
@@ -534,8 +538,9 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                 if let State::Reconnecting { at } = &self.state {
                     log::info!("[TransportWebrtcSdk] switched to reconnected after {:?}", now - *at);
                     self.state = State::Connected;
+                    //TODO get paired ip
                     self.queue
-                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(self.remote)))));
                 }
             }
             IceConnectionState::Disconnected => {
@@ -543,7 +548,9 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     self.state = State::Reconnecting { at: now };
                     log::info!("[TransportWebrtcSdk] switched to reconnecting");
                     self.queue
-                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Reconnecting))));
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Reconnecting(
+                            self.remote,
+                        )))));
                 }
             }
         }
@@ -784,7 +791,11 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Instant};
+    use std::{
+        net::{IpAddr, Ipv4Addr},
+        sync::Arc,
+        time::Instant,
+    };
 
     use media_server_core::{
         endpoint::EndpointReq,
@@ -831,14 +842,21 @@ mod tests {
         let channel_id = create_channel_id();
 
         let now = Instant::now();
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
-        let mut transport = TransportWebrtcSdk::new(req, secure_jwt.clone());
+        let mut transport = TransportWebrtcSdk::new(req, secure_jwt.clone(), ip);
         assert_eq!(transport.pop_output(now), None);
+
+        transport.on_tick(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(ip)))))
+        );
 
         transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
         assert_eq!(
             transport.pop_output(now),
-            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(ip)))))
         );
         assert_eq!(
             transport.pop_output(now),
@@ -866,15 +884,22 @@ mod tests {
         let channel_id = create_channel_id();
 
         let now = Instant::now();
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let gateway_jwt = MediaGatewaySecureJwt::from(b"1234".as_slice());
         let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
-        let mut transport = TransportWebrtcSdk::new(req, secure_jwt.clone());
+        let mut transport = TransportWebrtcSdk::new(req, secure_jwt.clone(), ip);
         assert_eq!(transport.pop_output(now), None);
+
+        transport.on_tick(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(ip)))))
+        );
 
         transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
         assert_eq!(
             transport.pop_output(now),
-            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))))
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(ip)))))
         );
         assert_eq!(transport.pop_output(now), None);
 

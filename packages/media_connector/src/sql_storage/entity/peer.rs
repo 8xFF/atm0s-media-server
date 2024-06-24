@@ -24,7 +24,7 @@ impl Related<super::room::Entity> for Entity {
     }
 }
 
-impl Related<super::session::Entity> for Entity {
+impl Related<super::peer_session::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Sessions.def()
     }

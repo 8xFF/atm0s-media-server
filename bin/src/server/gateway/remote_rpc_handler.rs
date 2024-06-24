@@ -31,7 +31,6 @@ use super::{dest_selector::GatewayDestSelector, ip_location::Ip2Location};
 
 #[derive(Clone)]
 pub struct Ctx {
-    pub(crate) node: NodeId,
     pub(crate) connector_agent_tx: Sender<media_server_connector::agent_service::Control>,
     pub(crate) selector: GatewayDestSelector,
     pub(crate) client: MediaEdgeServiceClient<SocketAddr, QuinnClient, QuinnStream>,
@@ -42,13 +41,13 @@ pub struct Ctx {
 pub struct MediaRemoteRpcHandlerImpl {}
 
 impl MediaRemoteRpcHandlerImpl {
-    async fn feedback_route_begin(ctx: &Ctx, session_id: u64, ip_addr: String) {
+    async fn feedback_route_begin(ctx: &Ctx, session_id: u64, remote_ip: String) {
         ctx.connector_agent_tx
             .send(ConnectorControl::Fire(
                 now_ms(),
                 ConnectorEvent::Peer(PeerEvent {
                     session_id,
-                    event: Some(PeerEvent2::RouteBegin(RouteBegin { ip_addr })),
+                    event: Some(PeerEvent2::RouteBegin(RouteBegin { remote_ip })),
                 }),
             ))
             .await

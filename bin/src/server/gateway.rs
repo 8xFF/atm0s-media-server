@@ -141,7 +141,6 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let mut media_rpc_server = MediaEdgeServiceServer::new(
         QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert.clone()).expect("Should create endpoint for media rpc server")),
         remote_rpc_handler::Ctx {
-            node: node_id,
             connector_agent_tx: connector_agent_tx.clone(),
             selector: selector.clone(),
             client: media_rpc_client.clone(),
@@ -150,7 +149,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         remote_rpc_handler::MediaRemoteRpcHandlerImpl::default(),
     );
 
-    let local_rpc_processor = Arc::new(MediaLocalRpcHandler::new(node_id, connector_agent_tx.clone(), selector, media_rpc_client, ip2location));
+    let local_rpc_processor = Arc::new(MediaLocalRpcHandler::new(connector_agent_tx.clone(), selector, media_rpc_client, ip2location));
 
     tokio::task::spawn_local(async move {
         media_rpc_server.run().await;
