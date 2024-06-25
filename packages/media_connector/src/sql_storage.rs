@@ -528,3 +528,105 @@ impl Querier for ConnectorStorage {
         Some(events)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use media_server_protocol::protobuf::cluster_connector::{
+        connector_request,
+        peer_event::{Connected, Connecting, Event, Join, RouteBegin},
+        PeerEvent,
+    };
+
+    use crate::{Querier, Storage};
+
+    use super::ConnectorStorage;
+
+    #[tokio::test]
+    async fn test_event() {
+        let session_id = 10000;
+        let node = 1;
+        let ts = 1000;
+        let req_id = 0;
+        let remote_ip = "127.0.0.1".to_string();
+        let storage = ConnectorStorage::new("sqlite::memory:").await;
+        storage
+            .on_event(
+                node,
+                ts,
+                req_id,
+                connector_request::Event::Peer(PeerEvent {
+                    session_id,
+                    event: Some(Event::RouteBegin(RouteBegin { remote_ip: remote_ip.clone() })),
+                }),
+            )
+            .await
+            .expect("Should process event");
+
+        assert_eq!(storage.sessions(0, 2).await.expect("Should got sessions").len(), 1);
+        assert_eq!(storage.events(None, None, None, 0, 2).await.expect("Should got events").len(), 1);
+        assert_eq!(storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_room() {
+        let session_id = 10000;
+        let node = 1;
+        let ts = 1000;
+        let req_id = 0;
+        let remote_ip = "127.0.0.1".to_string();
+        let storage = ConnectorStorage::new("sqlite::memory:").await;
+        storage
+            .on_event(
+                node,
+                ts,
+                req_id,
+                connector_request::Event::Peer(PeerEvent {
+                    session_id,
+                    event: Some(Event::Connecting(Connecting { remote_ip: remote_ip.clone() })),
+                }),
+            )
+            .await
+            .expect("Should process event");
+
+        assert_eq!(storage.sessions(0, 2).await.expect("Should got sessions").len(), 1);
+        assert_eq!(storage.events(None, None, None, 0, 2).await.expect("Should got events").len(), 1);
+        assert_eq!(storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events").len(), 1);
+
+        storage
+            .on_event(
+                node,
+                ts,
+                req_id,
+                connector_request::Event::Peer(PeerEvent {
+                    session_id,
+                    event: Some(Event::Connected(Connected {
+                        after_ms: 10,
+                        remote_ip: remote_ip.clone(),
+                    })),
+                }),
+            )
+            .await
+            .expect("Should process event");
+
+        assert_eq!(storage.rooms(0, 2).await.expect("Should got rooms").len(), 0);
+
+        storage
+            .on_event(
+                node,
+                ts,
+                req_id,
+                connector_request::Event::Peer(PeerEvent {
+                    session_id,
+                    event: Some(Event::Join(Join {
+                        room: "demo".to_string(),
+                        peer: "peer".to_string(),
+                    })),
+                }),
+            )
+            .await
+            .expect("Should process event");
+
+        assert_eq!(storage.rooms(0, 2).await.expect("Should got rooms").len(), 1);
+        assert_eq!(storage.peers(None, 0, 2).await.expect("Should got rooms").len(), 1);
+    }
+}

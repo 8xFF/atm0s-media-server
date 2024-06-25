@@ -15,3 +15,6 @@ async-trait = "0.1"
 sea-orm-migration = "0.12"
 sea-orm = { version = "0.12", features = ["sqlx-sqlite", "runtime-tokio-rustls"] }
 serde_json = "1.0"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
