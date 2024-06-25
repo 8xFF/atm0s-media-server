@@ -4,7 +4,7 @@ use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, AudioMixerMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
-    protobuf::cluster_connector::peer_event,
+    protobuf::{cluster_connector::peer_event, shared::Kind},
     transport::RpcError,
 };
 use media_server_utils::Small2dMap;
@@ -265,8 +265,18 @@ impl EndpointInternal {
         if let Some(kind) = event.need_create() {
             log::info!("[EndpointInternal] create local track {:?}", track);
             let room = self.joined.as_ref().map(|j| j.0);
-            let index = self.local_tracks.input(&mut self.switcher).add_task(EndpointLocalTrack::new(kind, room));
+            let index = self.local_tracks.input(&mut self.switcher).add_task(EndpointLocalTrack::new(track, kind, room));
             self.local_tracks_id.insert(track, index);
+
+            // We need to fire event here because local track never removed.
+            // Inside local track we only fire attach or detach event
+            self.queue.push_back(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::LocalTrack(peer_event::LocalTrack {
+                    track: track.0 as i32,
+                    kind: Kind::from(kind) as i32,
+                }),
+            ));
         }
         let index = return_if_none!(self.local_tracks_id.get1(&track));
         self.local_tracks.input(&mut self.switcher).on_event(now, *index, local_track::Input::Event(event));
@@ -385,6 +395,9 @@ impl EndpointInternal {
                 }
                 self.remote_tracks.input(&mut self.switcher).remove_task(index);
             }
+            remote_track::Output::PeerEvent(ts, event) => {
+                self.queue.push_back(InternalOutput::PeerEvent(ts, event));
+            }
         }
     }
 
@@ -417,6 +430,9 @@ impl EndpointInternal {
                 if kind.is_video() {
                     self.bitrate_allocator.input(&mut self.switcher).del_egress_video_track(id);
                 }
+            }
+            local_track::Output::PeerEvent(ts, event) => {
+                self.queue.push_back(InternalOutput::PeerEvent(ts, event));
             }
         }
     }

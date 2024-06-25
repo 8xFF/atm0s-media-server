@@ -55,7 +55,7 @@ pub struct PeerEvent {
     pub session_id: u64,
     #[prost(
         oneof = "peer_event::Event",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18"
     )]
     pub event: ::core::option::Option<peer_event::Event>,
 }
@@ -314,9 +314,9 @@ pub mod peer_event {
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct LocalTrackStarted {
-        #[prost(string, tag = "1")]
-        pub track: ::prost::alloc::string::String,
+    pub struct LocalTrack {
+        #[prost(int32, tag = "1")]
+        pub track: i32,
         #[prost(enumeration = "super::super::shared::Kind", tag = "2")]
         pub kind: i32,
     }
@@ -324,8 +324,8 @@ pub mod peer_event {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct LocalTrackAttach {
-        #[prost(string, tag = "1")]
-        pub track: ::prost::alloc::string::String,
+        #[prost(int32, tag = "1")]
+        pub track: i32,
         #[prost(string, tag = "2")]
         pub remote_peer: ::prost::alloc::string::String,
         #[prost(string, tag = "3")]
@@ -335,21 +335,12 @@ pub mod peer_event {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct LocalTrackDetach {
-        #[prost(string, tag = "1")]
-        pub track: ::prost::alloc::string::String,
+        #[prost(int32, tag = "1")]
+        pub track: i32,
         #[prost(string, tag = "2")]
         pub remote_peer: ::prost::alloc::string::String,
         #[prost(string, tag = "3")]
         pub remote_track: ::prost::alloc::string::String,
-    }
-    #[derive(serde::Serialize)]
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct LocalTrackEnded {
-        #[prost(string, tag = "1")]
-        pub track: ::prost::alloc::string::String,
-        #[prost(enumeration = "super::super::shared::Kind", tag = "2")]
-        pub kind: i32,
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
@@ -383,13 +374,11 @@ pub mod peer_event {
         #[prost(message, tag = "15")]
         RemoteTrackEnded(RemoteTrackEnded),
         #[prost(message, tag = "16")]
-        LocalTrackStarted(LocalTrackStarted),
+        LocalTrack(LocalTrack),
         #[prost(message, tag = "17")]
         LocalTrackAttach(LocalTrackAttach),
         #[prost(message, tag = "18")]
         LocalTrackDetach(LocalTrackDetach),
-        #[prost(message, tag = "19")]
-        LocalTrackEnded(LocalTrackEnded),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

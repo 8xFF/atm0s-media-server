@@ -62,11 +62,9 @@ pub enum ClusterLocalTrackControl {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClusterLocalTrackEvent {
-    Started,
     RelayChanged,
     SourceChanged,
     Media(u64, MediaPacket),
-    Ended,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

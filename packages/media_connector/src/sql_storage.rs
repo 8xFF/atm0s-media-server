@@ -3,7 +3,7 @@ use std::time::Duration;
 use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_connector::{connector_request, peer_event};
 use media_server_utils::now_ms;
-use sea_orm::{sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, QueryFilter, QuerySelect, Set};
+use sea_orm::{sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 use sea_orm_migration::MigratorTrait;
 
 use crate::{EventInfo, PeerInfo, PeerSession, Querier, RoomInfo, SessionInfo, Storage};
@@ -273,13 +273,13 @@ impl ConnectorStorage {
                 .ok()?;
                 Some(())
             }
-            peer_event::Event::LocalTrackStarted(params) => {
+            peer_event::Event::LocalTrack(params) => {
                 entity::event::ActiveModel {
                     node: Set(from),
                     node_ts: Set(ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms() as i64),
-                    event: Set("LocalTrackStarted".to_owned()),
+                    event: Set("LocalTrack".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
@@ -310,21 +310,6 @@ impl ConnectorStorage {
                     session: Set(session as i64),
                     created_at: Set(now_ms() as i64),
                     event: Set("LocalTrackDetach".to_owned()),
-                    meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
-                }
-                .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
-            }
-            peer_event::Event::LocalTrackEnded(params) => {
-                entity::event::ActiveModel {
-                    node: Set(from),
-                    node_ts: Set(ts as i64),
-                    session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
-                    event: Set("LocalTrackEnded".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
@@ -402,7 +387,7 @@ impl ConnectorStorage {
 }
 
 impl Storage for ConnectorStorage {
-    async fn on_event(&self, from: NodeId, ts: u64, req_id: u64, event: connector_request::Event) -> Option<()> {
+    async fn on_event(&self, from: NodeId, ts: u64, _req_id: u64, event: connector_request::Event) -> Option<()> {
         match event {
             connector_request::Event::Peer(event) => self.on_peer_event(from, ts, event.session_id, event.event?).await,
         }
@@ -412,6 +397,7 @@ impl Storage for ConnectorStorage {
 impl Querier for ConnectorStorage {
     async fn rooms(&self, page: usize, count: usize) -> Option<Vec<RoomInfo>> {
         let rooms = entity::room::Entity::find()
+            .order_by(entity::room::Column::CreatedAt, sea_orm::Order::Desc)
             .limit(count as u64)
             .offset((page * count) as u64)
             .all(&self.db)
@@ -437,6 +423,7 @@ impl Querier for ConnectorStorage {
         };
 
         let peers = peers
+            .order_by(entity::peer::Column::CreatedAt, sea_orm::Order::Desc)
             .limit(count as u64)
             .offset((page * count) as u64)
             .find_with_related(entity::peer_session::Entity)
@@ -469,6 +456,7 @@ impl Querier for ConnectorStorage {
 
     async fn sessions(&self, page: usize, count: usize) -> Option<Vec<SessionInfo>> {
         let sessions = entity::session::Entity::find()
+            .order_by(entity::session::Column::CreatedAt, sea_orm::Order::Desc)
             .limit(count as u64)
             .offset((page * count) as u64)
             .find_with_related(entity::peer_session::Entity)
@@ -520,6 +508,7 @@ impl Querier for ConnectorStorage {
         };
 
         let events = events
+            .order_by(entity::event::Column::CreatedAt, sea_orm::Order::Desc)
             .limit(count as u64)
             .offset((page * count) as u64)
             .all(&self.db)

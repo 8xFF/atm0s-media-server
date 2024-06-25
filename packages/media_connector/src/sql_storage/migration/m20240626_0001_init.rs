@@ -18,6 +18,9 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
+        manager.create_index(Index::create().name("room_query_room").table(Room::Table).col(Room::Room).to_owned()).await?;
+        manager.create_index(Index::create().name("room_order").table(Room::Table).col(Room::CreatedAt).to_owned()).await?;
+
         manager
             .create_table(
                 Table::create()
@@ -30,6 +33,10 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
+
+        manager.create_index(Index::create().name("peer_query_room").table(Peer::Table).col(Peer::Room).to_owned()).await?;
+        manager.create_index(Index::create().name("peer_query_peer").table(Peer::Table).col(Peer::Peer).to_owned()).await?;
+        manager.create_index(Index::create().name("peer_order").table(Peer::Table).col(Peer::CreatedAt).to_owned()).await?;
 
         manager
             .create_table(
@@ -48,6 +55,10 @@ impl MigrationTrait for Migration {
             .await?;
 
         manager
+            .create_index(Index::create().name("session_order").table(Session::Table).col(Session::CreatedAt).to_owned())
+            .await?;
+
+        manager
             .create_table(
                 Table::create()
                     .table(PeerSession::Table)
@@ -60,6 +71,16 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(PeerSession::LeavedAt).big_integer())
                     .to_owned(),
             )
+            .await?;
+
+        manager
+            .create_index(Index::create().name("peer_session_peer").table(PeerSession::Table).col(PeerSession::Peer).to_owned())
+            .await?;
+        manager
+            .create_index(Index::create().name("peer_session_session").table(PeerSession::Table).col(PeerSession::Session).to_owned())
+            .await?;
+        manager
+            .create_index(Index::create().name("peer_session_order").table(PeerSession::Table).col(PeerSession::CreatedAt).to_owned())
             .await?;
 
         manager
@@ -77,6 +98,11 @@ impl MigrationTrait for Migration {
                     .to_owned(),
             )
             .await?;
+
+        manager
+            .create_index(Index::create().name("event_session_match").table(Event::Table).col(Event::Session).to_owned())
+            .await?;
+        manager.create_index(Index::create().name("event_order").table(Event::Table).col(Event::CreatedAt).to_owned()).await?;
 
         Ok(())
     }

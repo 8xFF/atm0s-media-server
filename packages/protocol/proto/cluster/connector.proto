@@ -117,26 +117,21 @@ message PeerEvent {
         shared.Kind kind = 2;
     }
 
-    message LocalTrackStarted {
-        string track = 1;
+    message LocalTrack {
+        int32 track = 1;
         shared.Kind kind = 2;
     }
 
     message LocalTrackAttach {
-        string track = 1;
+        int32 track = 1;
         string remote_peer = 2;
         string remote_track = 3;
     }
 
     message LocalTrackDetach {
-        string track = 1;
+        int32 track = 1;
         string remote_peer = 2;
         string remote_track = 3;
-    }
-
-    message LocalTrackEnded {
-        string track = 1;
-        shared.Kind kind = 2;
     }
 
     uint64 session_id = 1;
@@ -156,10 +151,9 @@ message PeerEvent {
         Leave leave = 13;
         RemoteTrackStarted remote_track_started = 14;
         RemoteTrackEnded remote_track_ended = 15;
-        LocalTrackStarted local_track_started = 16;
+        LocalTrack local_track = 16;
         LocalTrackAttach local_track_attach = 17;
         LocalTrackDetach local_track_detach = 18;
-        LocalTrackEnded local_track_ended = 19;
     }
 }
 

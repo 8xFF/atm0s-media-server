@@ -25,10 +25,9 @@ fn main() -> Result<()> {
         .type_attribute("cluster_connector.PeerEvent.Leave", "#[derive(serde::Serialize)]")
         .type_attribute("cluster_connector.PeerEvent.RemoteTrackStarted", "#[derive(serde::Serialize)]")
         .type_attribute("cluster_connector.PeerEvent.RemoteTrackEnded", "#[derive(serde::Serialize)]")
-        .type_attribute("cluster_connector.PeerEvent.LocalTrackStarted", "#[derive(serde::Serialize)]")
+        .type_attribute("cluster_connector.PeerEvent.LocalTrack", "#[derive(serde::Serialize)]")
         .type_attribute("cluster_connector.PeerEvent.LocalTrackAttach", "#[derive(serde::Serialize)]")
         .type_attribute("cluster_connector.PeerEvent.LocalTrackDetach", "#[derive(serde::Serialize)]")
-        .type_attribute("cluster_connector.PeerEvent.LocalTrackEnded", "#[derive(serde::Serialize)]")
         .compile_protos(
             &[
                 "./proto/shared.proto",
