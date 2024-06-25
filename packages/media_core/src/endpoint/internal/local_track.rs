@@ -8,8 +8,8 @@ use atm0s_sdn::TimePivot;
 use media_server_protocol::{
     endpoint::{PeerId, TrackName, TrackPriority},
     media::{MediaKind, MediaMeta},
-    protobuf::shared::receiver::Status as ProtoStatus,
-    transport::RpcError,
+    protobuf::{cluster_connector::peer_event, shared::receiver::Status as ProtoStatus},
+    transport::{LocalTrackId, RpcError},
 };
 use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
@@ -42,6 +42,7 @@ pub enum Input {
 pub enum Output {
     Event(EndpointLocalTrackEvent),
     Cluster(ClusterRoomHash, ClusterLocalTrackControl),
+    PeerEvent(Instant, peer_event::Event),
     RpcRes(EndpointReqId, EndpointLocalTrackRes),
     Started(MediaKind, TrackPriority),
     Updated(MediaKind, TrackPriority),
@@ -56,6 +57,7 @@ enum Status {
 }
 
 pub struct EndpointLocalTrack {
+    track: LocalTrackId,
     kind: MediaKind,
     room: Option<ClusterRoomHash>,
     bind: Option<(PeerId, TrackName, Status)>,
@@ -66,9 +68,10 @@ pub struct EndpointLocalTrack {
 }
 
 impl EndpointLocalTrack {
-    pub fn new(kind: MediaKind, room: Option<ClusterRoomHash>) -> Self {
+    pub fn new(track: LocalTrackId, kind: MediaKind, room: Option<ClusterRoomHash>) -> Self {
         log::info!("[EndpointLocalTrack] track {kind}, room {:?}", room);
         Self {
+            track,
             kind,
             room,
             bind: None,
@@ -86,18 +89,25 @@ impl EndpointLocalTrack {
         self.room = Some(room);
     }
 
-    fn on_leave_room(&mut self, _now: Instant) {
+    fn on_leave_room(&mut self, now: Instant) {
         assert_ne!(self.room, None);
         let room = return_if_none!(self.room.take());
         log::info!("[EndpointLocalTrack] leave room {room}");
         let (peer, track, _) = return_if_none!(self.bind.take());
         log::info!("[EndpointLocalTrack] leave room {room} => auto Unsubscribe {peer} {track}");
         self.queue.push_back(Output::Cluster(room, ClusterLocalTrackControl::Unsubscribe));
+        self.queue.push_back(Output::PeerEvent(
+            now,
+            peer_event::Event::LocalTrackDetach(peer_event::LocalTrackDetach {
+                track: self.track.0 as i32,
+                remote_peer: peer.0,
+                remote_track: track.0,
+            }),
+        ));
     }
 
     fn on_cluster_event(&mut self, now: Instant, event: ClusterLocalTrackEvent) {
         match event {
-            ClusterLocalTrackEvent::Started => todo!(),
             ClusterLocalTrackEvent::RelayChanged => {
                 if self.kind.is_video() {
                     let room = return_if_none!(self.room.as_ref());
@@ -137,7 +147,6 @@ impl EndpointLocalTrack {
                     self.queue.push_back(Output::Event(EndpointLocalTrackEvent::Media(pkt)));
                 }
             }
-            ClusterLocalTrackEvent::Ended => todo!(),
         }
     }
 
@@ -177,7 +186,15 @@ impl EndpointLocalTrack {
                     self.bind = Some((peer.clone(), track.clone(), Status::Waiting));
                     self.selector.set_limit_layer(now_ms, config.max_spatial, config.max_temporal);
                     self.queue.push_back(Output::Started(self.kind, config.priority));
-                    self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer, track)));
+                    self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer.clone(), track.clone())));
+                    self.queue.push_back(Output::PeerEvent(
+                        now,
+                        peer_event::Event::LocalTrackAttach(peer_event::LocalTrackAttach {
+                            track: self.track.0 as i32,
+                            remote_peer: peer.0,
+                            remote_track: track.0,
+                        }),
+                    ));
                     self.selector.reset();
                 } else {
                     log::warn!("[EndpointLocalTrack] track {} view but not in room", self.kind);
@@ -189,10 +206,18 @@ impl EndpointLocalTrack {
                 //TODO process config here
                 if let Some(room) = self.room.as_ref() {
                     if let Some((peer, track, _)) = self.bind.take() {
+                        log::info!("[EndpointLocalTrack] unview room {room} peer {peer} track {track}");
                         self.queue.push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Detach(Ok(()))));
                         self.queue.push_back(Output::Stopped(self.kind));
                         self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
-                        log::info!("[EndpointLocalTrack] unview room {room} peer {peer} track {track}");
+                        self.queue.push_back(Output::PeerEvent(
+                            now,
+                            peer_event::Event::LocalTrackDetach(peer_event::LocalTrackDetach {
+                                track: self.track.0 as i32,
+                                remote_peer: peer.0,
+                                remote_track: track.0,
+                            }),
+                        ));
                     } else {
                         log::warn!("[EndpointLocalTrack] unview but not bind to any source");
                         self.queue

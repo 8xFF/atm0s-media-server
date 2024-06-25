@@ -9,6 +9,7 @@ use super::{ConnLayer, RpcResult};
 
 #[derive(Debug, Clone)]
 pub struct WhepConnectReq {
+    pub session_id: u64,
     pub sdp: String,
     pub room: RoomId,
     pub peer: PeerId,
@@ -95,6 +96,7 @@ impl TryFrom<protobuf::cluster_gateway::WhepConnectRequest> for WhepConnectReq {
     type Error = ();
     fn try_from(value: protobuf::cluster_gateway::WhepConnectRequest) -> Result<Self, Self::Error> {
         Ok(Self {
+            session_id: value.session_id,
             sdp: value.sdp,
             room: value.room.into(),
             peer: value.peer.into(),
@@ -107,6 +109,7 @@ impl TryFrom<protobuf::cluster_gateway::WhepConnectRequest> for WhepConnectReq {
 impl From<WhepConnectReq> for protobuf::cluster_gateway::WhepConnectRequest {
     fn from(val: WhepConnectReq) -> Self {
         protobuf::cluster_gateway::WhepConnectRequest {
+            session_id: val.session_id,
             user_agent: val.user_agent,
             ip: val.ip.to_string(),
             sdp: val.sdp,

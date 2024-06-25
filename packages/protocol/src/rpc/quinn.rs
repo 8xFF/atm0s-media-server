@@ -122,6 +122,9 @@ impl RpcStream for QuinnStream {
                 let len = self.recv.read_u32().await.ok()?;
                 self.buf_goal = Some(len as usize);
                 log::debug!("Got frame len {}", len);
+                if len == 0 {
+                    return Some(vec![]);
+                }
             }
         }
     }

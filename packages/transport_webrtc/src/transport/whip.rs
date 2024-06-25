@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    net::IpAddr,
     time::{Duration, Instant},
 };
 
@@ -44,6 +45,7 @@ enum TransportWebrtcError {
 }
 
 pub struct TransportWebrtcWhip {
+    remote: IpAddr,
     room: RoomId,
     peer: PeerId,
     state: State,
@@ -55,8 +57,9 @@ pub struct TransportWebrtcWhip {
 }
 
 impl TransportWebrtcWhip {
-    pub fn new(room: RoomId, peer: PeerId) -> Self {
+    pub fn new(room: RoomId, peer: PeerId, remote: IpAddr) -> Self {
         Self {
+            remote,
             room,
             peer,
             state: State::New,
@@ -78,7 +81,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             State::New => {
                 self.state = State::Connecting { at: now };
                 self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting))));
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(self.remote)))));
             }
             State::Connecting { at } => {
                 if now - *at >= Duration::from_secs(TIMEOUT_SEC) {
@@ -144,7 +147,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                 self.state = State::Connected;
                 log::info!("[TransportWebrtcWhip] connected");
                 self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(self.remote)))));
                 self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(),
                     EndpointReq::JoinRoom(
@@ -214,7 +217,7 @@ impl TransportWebrtcWhip {
                     log::info!("[TransportWebrtcWhip] switched to reconnected after {:?}", now - *at);
                     self.state = State::Connected;
                     self.queue
-                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected))));
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(self.remote)))));
                 }
             }
             IceConnectionState::Disconnected => {
@@ -222,7 +225,9 @@ impl TransportWebrtcWhip {
                     self.state = State::Reconnecting { at: now };
                     log::info!("[TransportWebrtcWhip] switched to reconnecting");
                     self.queue
-                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Reconnecting))));
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Reconnecting(
+                            self.remote,
+                        )))));
                 }
             }
         }

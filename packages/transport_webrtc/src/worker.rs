@@ -1,10 +1,19 @@
-use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::Instant};
+use std::{
+    collections::VecDeque,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+    time::Instant,
+};
 
 use media_server_core::{
     cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterRoomHash},
     endpoint::{Endpoint, EndpointCfg, EndpointInput, EndpointOutput},
 };
-use media_server_protocol::transport::{RpcError, RpcResult};
+use media_server_protocol::{
+    cluster::gen_cluster_session_id,
+    protobuf::cluster_connector::peer_event,
+    transport::{RpcError, RpcResult},
+};
 use media_server_secure::MediaEdgeSecure;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
@@ -31,6 +40,7 @@ pub enum GroupInput {
 pub enum GroupOutput {
     Net(BackendOutgoing),
     Cluster(WebrtcSession, ClusterRoomHash, ClusterEndpointControl),
+    PeerEvent(WebrtcSession, u64, Instant, peer_event::Event),
     Ext(WebrtcSession, ExtOut),
     Shutdown(WebrtcSession),
     Continue,
@@ -60,7 +70,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
         }
     }
 
-    pub fn spawn(&mut self, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
+    pub fn spawn(&mut self, remote: IpAddr, session_id: u64, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
         let cfg = match &variant {
             VariantParams::Whip(_, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
@@ -70,13 +80,13 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
             },
-            VariantParams::Webrtc(_, _, _, _) => EndpointCfg {
+            VariantParams::Webrtc(_, _, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
             },
         };
-        let (tran, ufrag, sdp) = TransportWebrtc::new(variant, offer, self.dtls_cert.clone(), self.addrs.clone(), self.ice_lite)?;
-        let endpoint = Endpoint::new(cfg, tran);
+        let (tran, ufrag, sdp) = TransportWebrtc::new(remote, variant, offer, self.dtls_cert.clone(), self.addrs.clone(), self.ice_lite)?;
+        let endpoint = Endpoint::new(session_id, cfg, tran);
         let index = self.endpoints.add_task(endpoint);
         log::info!("[TransportWebrtc] create endpoint {index}");
         self.shared_port.add_ufrag(ufrag, index);
@@ -87,6 +97,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
         match out {
             EndpointOutput::Net(net) => GroupOutput::Net(net),
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcSession(index), room, control),
+            EndpointOutput::PeerEvent(session_id, ts, event) => GroupOutput::PeerEvent(WebrtcSession(index), session_id, ts, event),
             EndpointOutput::Destroy => {
                 log::info!("[TransportWebrtc] destroy endpoint {index}");
                 self.endpoints.remove_task(index);
@@ -134,7 +145,8 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                         }
                         ExtIn::RestartIce(req_id, variant, remote, useragent, req) => {
                             let sdp = req.sdp.clone();
-                            if let Ok((ice_lite, sdp, index)) = self.spawn(VariantParams::Webrtc(remote, useragent, req, self.secure.clone()), &sdp) {
+                            let session_id = gen_cluster_session_id(); //TODO need to reuse old session_id
+                            if let Ok((ice_lite, sdp, index)) = self.spawn(remote, session_id, VariantParams::Webrtc(useragent, req, self.secure.clone()), &sdp) {
                                 self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));
                             } else {
                                 self.queue

@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
 use clap::Parser;
+use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
 use media_server_gateway::{store_service::GatewayStoreServiceBuilder, STORE_SERVICE_ID};
 use media_server_protocol::{
     cluster::{ClusterGatewayInfo, ClusterNodeGenericInfo, ClusterNodeInfo},
@@ -31,12 +32,14 @@ mod remote_rpc_handler;
 enum SC {
     Visual(visualization::Control<ClusterNodeInfo>),
     Gateway(media_server_gateway::store_service::Control),
+    Connector(media_server_connector::agent_service::Control),
 }
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 enum SE {
     Visual(visualization::Event<ClusterNodeInfo>),
     Gateway(media_server_gateway::store_service::Event),
+    Connector(media_server_connector::agent_service::Event),
 }
 type TC = ();
 type TW = ();
@@ -76,6 +79,9 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let default_cluster_cert = CertificateDer::from(default_cluster_cert_buf.to_vec());
     let default_cluster_key = PrivatePkcs8KeyDer::from(default_cluster_key_buf.to_vec());
 
+    // This tx and rx is for sending event to connector in other tasks
+    let (connector_agent_tx, mut connector_agent_rx) = tokio::sync::mpsc::channel::<media_server_connector::agent_service::Control>(1024);
+
     let edge_secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let gateway_secure = Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes()));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
@@ -109,6 +115,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
     builder.set_manual_discovery(vec!["gateway".to_string(), generate_gateway_zone_tag(node.zone)], vec!["gateway".to_string()]);
     builder.add_service(Arc::new(GatewayStoreServiceBuilder::new(node.zone, args.lat, args.lon, args.max_cpu, args.max_memory, args.max_disk)));
+    builder.add_service(Arc::new(ConnectorAgentServiceBuilder::new()));
 
     for seed in node.seeds {
         builder.add_seed(seed);
@@ -134,6 +141,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let mut media_rpc_server = MediaEdgeServiceServer::new(
         QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert.clone()).expect("Should create endpoint for media rpc server")),
         remote_rpc_handler::Ctx {
+            connector_agent_tx: connector_agent_tx.clone(),
             selector: selector.clone(),
             client: media_rpc_client.clone(),
             ip2location: ip2location.clone(),
@@ -141,7 +149,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         remote_rpc_handler::MediaRemoteRpcHandlerImpl::default(),
     );
 
-    let local_rpc_processor = Arc::new(MediaLocalRpcHandler::new(selector, media_rpc_client, ip2location));
+    let local_rpc_processor = Arc::new(MediaLocalRpcHandler::new(connector_agent_tx.clone(), selector, media_rpc_client, ip2location));
 
     tokio::task::spawn_local(async move {
         media_rpc_server.run().await;
@@ -154,6 +162,9 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let mut node_metrics_collector = NodeMetricsCollector::default();
     let mut live_sessions = 0;
     let mut max_sessions = 0;
+
+    // Subscribe ConnectorHandler service
+    controller.service_control(media_server_connector::AGENT_SERVICE_ID.into(), (), media_server_connector::agent_service::Control::Sub.into());
 
     loop {
         if controller.process().is_none() {
@@ -196,6 +207,9 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                 res_tx.send(res).print_err2("answer http request error");
             });
         }
+        while let Ok(control) = connector_agent_rx.try_recv() {
+            controller.service_control(media_server_connector::AGENT_SERVICE_ID.into(), (), control.into());
+        }
 
         while let Some(out) = controller.pop_event() {
             match out {
@@ -205,6 +219,9 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                         max_sessions = max;
                     }
                     media_server_gateway::store_service::Event::FindNodeRes(req_id, res) => requester.on_find_node_res(req_id, res),
+                },
+                SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
+                    media_server_connector::agent_service::Event::Stats { queue, inflight, acked } => {}
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {
                     if let Err(e) = vnet_tx.try_send(event) {

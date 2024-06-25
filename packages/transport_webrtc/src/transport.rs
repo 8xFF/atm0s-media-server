@@ -45,7 +45,7 @@ mod whip;
 pub enum VariantParams<ES> {
     Whip(RoomId, PeerId),
     Whep(RoomId, PeerId),
-    Webrtc(IpAddr, String, ConnectRequest, Arc<ES>),
+    Webrtc(String, ConnectRequest, Arc<ES>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -112,7 +112,7 @@ pub struct TransportWebrtc<ES> {
 }
 
 impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
-    pub fn new(variant: VariantParams<ES>, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>, rtc_ice_lite: bool) -> RpcResult<(Self, String, String)> {
+    pub fn new(remote: IpAddr, variant: VariantParams<ES>, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>, rtc_ice_lite: bool) -> RpcResult<(Self, String, String)> {
         let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::InvalidSdp))?;
         let rtc_config = Rtc::builder()
             .set_rtp_mode(true)
@@ -133,9 +133,9 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
 
         let mut rtc = rtc_config.build();
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
-            VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer)),
-            VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer)),
-            VariantParams::Webrtc(_ip, _user_agent, req, secure) => {
+            VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer, remote)),
+            VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer, remote)),
+            VariantParams::Webrtc(_user_agent, req, secure) => {
                 rtc.direct_api().create_data_channel(ChannelConfig {
                     label: "data".to_string(),
                     negotiated: Some(1000),
@@ -144,7 +144,7 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
                 //we need to start sctp as client side for handling restart-ice in new server
                 //if not, datachannel will not connect successful after reconnect to new server
                 rtc.direct_api().start_sctp(true);
-                Box::new(webrtc::TransportWebrtcSdk::new(req, secure))
+                Box::new(webrtc::TransportWebrtcSdk::new(req, secure, remote))
             }
         };
 

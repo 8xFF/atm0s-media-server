@@ -1,3 +1,9 @@
+use std::net::SocketAddr;
+
+use media_server_protocol::{
+    protobuf::cluster_connector::MediaConnectorServiceClient,
+    rpc::quinn::{QuinnClient, QuinnStream},
+};
 use media_server_secure::{jwt::MediaConsoleSecureJwt, MediaConsoleSecure};
 use poem::Request;
 use poem_openapi::{auth::ApiKey, SecurityScheme};
@@ -5,12 +11,14 @@ use poem_openapi::{auth::ApiKey, SecurityScheme};
 use crate::server::console_storage::StorageShared;
 
 pub mod cluster;
+pub mod connector;
 pub mod user;
 
 #[derive(Clone)]
 pub struct ConsoleApisCtx {
     pub secure: MediaConsoleSecureJwt, //TODO make it generic
     pub storage: StorageShared,
+    pub connector: MediaConnectorServiceClient<SocketAddr, QuinnClient, QuinnStream>,
 }
 
 /// ApiKey authorization

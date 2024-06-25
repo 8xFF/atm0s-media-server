@@ -1,0 +1,20 @@
+[package]
+name = "media-server-connector"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+media-server-protocol = { path = "../protocol" }
+media-server-utils = { path = "../media_utils" }
+atm0s-sdn = { workspace = true }
+prost = { workspace = true }
+lru = "0.12"
+async-trait = "0.1"
+sea-orm-migration = "0.12"
+sea-orm = { version = "0.12", features = ["sqlx-sqlite", "runtime-tokio-rustls"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

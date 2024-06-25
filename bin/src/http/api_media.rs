@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use media_server_protocol::{
+    cluster::gen_cluster_session_id,
     endpoint::ClusterConnId,
     protobuf::gateway::{ConnectRequest, ConnectResponse, RemoteIceRequest, RemoteIceResponse},
     tokens::{WebrtcToken, WhepToken, WhipToken},
@@ -59,9 +60,11 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
         TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
+        let session_id = gen_cluster_session_id();
         let token = ctx.secure.decode_obj::<WhipToken>("whip", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create whip endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::Connect(WhipConnectReq {
+            session_id,
             ip: ip_addr,
             sdp: body.0,
             room: token.room.into(),
@@ -153,9 +156,11 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
         TokenAuthorization(token): TokenAuthorization,
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
+        let session_id = gen_cluster_session_id();
         let token = ctx.secure.decode_obj::<WhepToken>("whep", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create whep endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whep(whep::RpcReq::Connect(WhepConnectReq {
+            session_id,
             ip: ip_addr,
             sdp: body.0,
             room: token.room.into(),
@@ -247,6 +252,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
         TokenAuthorization(token): TokenAuthorization,
         connect: Protobuf<ConnectRequest>,
     ) -> Result<HttpResponse<Protobuf<ConnectResponse>>> {
+        let session_id = gen_cluster_session_id();
         let token = ctx.secure.decode_obj::<WebrtcToken>("webrtc", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create webrtc with token {:?}, ip {}, user_agent {}, request {:?}", token, ip_addr, user_agent, connect);
         if let Some(join) = &connect.join {
@@ -258,7 +264,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
                 return Err(poem::Error::from_string("Wrong peer".to_string(), StatusCode::FORBIDDEN));
             }
         }
-        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::Connect(ip_addr, user_agent, connect.0)));
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::Connect(session_id, ip_addr, user_agent, connect.0)));
         ctx.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         match res {
