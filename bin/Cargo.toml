@@ -13,6 +13,7 @@ rand = { workspace = true }
 prost = { workspace = true }
 poem = { version = "3.0", features = ["static-files"] }
 poem-openapi = { version = "5.0", features = ["swagger-ui"] }
+rust-embed = { version = "8.0", features = ["compression"], optional = true }
 tokio = { version = "1.37", features = ["full"] }
 sans-io-runtime = { workspace = true }
 atm0s-sdn = { workspace = true }
@@ -32,13 +33,16 @@ derive_more = { workspace = true }
 rcgen = { version = "0.13", optional = true }
 maxminddb = { version = "0.24", optional = true }
 sysinfo = { version = "0.30", optional = true }
+hex = { version = "0.4", optional = true }
+mime_guess = { version = "2.0", optional = true }
 
 [features]
 default = ["console", "gateway", "media", "connector", "cert_utils"]
-gateway = ["media-server-gateway", "media-server-connector", "quinn_vnet", "node_metrics", "maxminddb"]
+gateway = ["media-server-gateway", "media-server-connector", "quinn_vnet", "node_metrics", "maxminddb", "rust-embed"]
 media = ["media-server-runner", "quinn_vnet", "node_metrics"]
 console = []
 connector = ["quinn_vnet", "media-server-connector", "media-server-utils"]
 cert_utils = ["rcgen", "rustls"]
 quinn_vnet = ["rustls", "quinn"]
 node_metrics = ["sysinfo"]
+embed_static = ["rust-embed", "hex", "mime_guess"]

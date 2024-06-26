@@ -1,3 +1,4 @@
+mod embeded_files;
 mod payload_protobuf;
 mod payload_sdp;
 mod remote_ip;
@@ -9,3 +10,4 @@ pub use payload_sdp::*;
 pub use remote_ip::*;
 pub use token::*;
 pub use user_agent::*;
+pub use embeded_files::*;
