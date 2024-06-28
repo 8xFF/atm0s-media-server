@@ -11,6 +11,8 @@
 use std::{fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::features::{dht_kv, FeaturesControl, FeaturesEvent};
+use datachannel::RoomChannel;
+use media_server_protocol::datachannel::DataChannelPacket;
 use sans_io_runtime::{return_if_none, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::transport::{LocalTrackId, RemoteTrackId};
@@ -22,6 +24,7 @@ use metadata::RoomMetadata;
 use super::{id_generator, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackControl, ClusterRemoteTrackControl, ClusterRoomHash};
 
 mod audio_mixer;
+mod datachannel;
 mod media_track;
 mod metadata;
 
@@ -30,6 +33,7 @@ pub enum RoomFeature {
     MetaData,
     MediaTrack,
     AudioMixer,
+    DataChannel,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -53,6 +57,7 @@ enum TaskType {
     Metadata,
     MediaTrack,
     AudioMixer,
+    DataChannel,
 }
 
 pub struct ClusterRoom<Endpoint: Debug + Copy + Clone + Hash + Eq> {
@@ -60,6 +65,7 @@ pub struct ClusterRoom<Endpoint: Debug + Copy + Clone + Hash + Eq> {
     metadata: TaskSwitcherBranch<RoomMetadata<Endpoint>, metadata::Output<Endpoint>>,
     media_track: TaskSwitcherBranch<MediaTrack<Endpoint>, media_track::Output<Endpoint>>,
     audio_mixer: TaskSwitcherBranch<AudioMixer<Endpoint>, audio_mixer::Output<Endpoint>>,
+    datachannel: TaskSwitcherBranch<RoomChannel<Endpoint>, datachannel::Output<Endpoint>>,
     switcher: TaskSwitcher,
 }
 
@@ -122,6 +128,19 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                         }
                     }
                 }
+                TaskType::DataChannel => {
+                    if let Some(out) = self.datachannel.pop_output((), &mut self.switcher) {
+                        match out {
+                            datachannel::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
+                            datachannel::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::DataChannel), FeaturesControl::PubSub(control))),
+                            datachannel::Output::OnResourceEmpty => {
+                                if self.is_empty() {
+                                    break Some(Output::Destroy(self.room));
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -135,7 +154,8 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             metadata: TaskSwitcherBranch::new(RoomMetadata::new(room), TaskType::Metadata),
             media_track: TaskSwitcherBranch::new(MediaTrack::new(room), TaskType::MediaTrack),
             audio_mixer: TaskSwitcherBranch::new(AudioMixer::new(room, mixer_channel_id), TaskType::AudioMixer),
-            switcher: TaskSwitcher::new(3),
+            datachannel: TaskSwitcherBranch::new(RoomChannel::new(room), TaskType::DataChannel),
+            switcher: TaskSwitcher::new(4),
         }
     }
 
@@ -154,6 +174,9 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             }
             (RoomFeature::AudioMixer, FeaturesEvent::PubSub(event)) => {
                 self.audio_mixer.input(&mut self.switcher).on_pubsub_event(now, event);
+            }
+            (RoomFeature::DataChannel, FeaturesEvent::PubSub(event)) => {
+                self.datachannel.input(&mut self.switcher).on_pubsub_event(event);
             }
             _ => {}
         }
@@ -180,6 +203,12 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             }
             ClusterEndpointControl::RemoteTrack(track, control) => self.on_control_remote_track(now, endpoint, track, control),
             ClusterEndpointControl::LocalTrack(track, control) => self.on_control_local_track(now, endpoint, track, control),
+            ClusterEndpointControl::SubscribeChannel(key) => self.datachannel.input(&mut self.switcher).on_channel_subscribe(endpoint, &key),
+            ClusterEndpointControl::PublishChannel(key, peer, message) => {
+                let data_packet = DataChannelPacket { from: peer, data: message };
+                self.datachannel.input(&mut self.switcher).on_channel_data(endpoint, &key, data_packet);
+            }
+            ClusterEndpointControl::UnsubscribeChannel(key) => self.datachannel.input(&mut self.switcher).on_channel_unsubscribe(endpoint, &key),
         }
     }
 }

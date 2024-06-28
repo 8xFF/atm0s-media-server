@@ -22,9 +22,13 @@ use media_server_protocol::{
         },
         gateway::ConnectRequest,
         session::{
+            response::{
+                room::{PublishChannel, Response as ProtoRoomSessionResponses, SubscribeChannel, UnsubscribeChannel},
+                Room as ProtoRoomSessionResponse,
+            },
             server_event::{
                 receiver::{Event as ProtoReceiverEvent, State as ProtoReceiverState, VoiceActivity as ProtoReceiverVoiceActivity},
-                room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted, TrackStopped},
+                room::{ChannelMessage, Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted, TrackStopped},
                 sender::{Event as ProtoSenderEvent, State as ProtoSenderState},
                 Event as ProtoServerEvent, Receiver as ProtoReceiverEventContainer, Room as ProtoRoomEvent, Sender as ProtoSenderEventContainer,
             },
@@ -342,6 +346,12 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 log::debug!("[TransportWebrtcSdk] config bwe current {current} desired {desired}");
                 self.queue.push_back(InternalOutput::Str0mBwe(current, desired))
             }
+            EndpointEvent::ChannelMessage(key, from, message) => {
+                log::info!("[TransportWebrtcSdk] datachannel message {key}");
+                self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
+                    event: Some(ProtoRoomEvent2::ChannelMessage(ChannelMessage { key, peer: from.0, message: message })),
+                }))
+            }
             EndpointEvent::GoAway(_, _) => {}
         }
     }
@@ -416,6 +426,27 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 media_server_core::endpoint::EndpointAudioMixerRes::Attach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
                 media_server_core::endpoint::EndpointAudioMixerRes::Detach(Err(err)) => self.send_rpc_res_err(req_id.0, err),
             },
+            EndpointRes::PublishChannel(Ok(_)) => self.send_rpc_res(
+                req_id.0,
+                media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
+                    response: Some(ProtoRoomSessionResponses::PublishChannel(PublishChannel {})),
+                }),
+            ),
+            EndpointRes::SubscribeChannel(Ok(_)) => self.send_rpc_res(
+                req_id.0,
+                media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
+                    response: Some(ProtoRoomSessionResponses::SubscribeChannel(SubscribeChannel {})),
+                }),
+            ),
+            EndpointRes::UnsubscribeChannel(Ok(_)) => self.send_rpc_res(
+                req_id.0,
+                media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
+                    response: Some(ProtoRoomSessionResponses::UnsubscribeChannel(UnsubscribeChannel {})),
+                }),
+            ),
+            EndpointRes::PublishChannel(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+            EndpointRes::SubscribeChannel(Err(err)) => self.send_rpc_res_err(req_id.0, err),
+            EndpointRes::UnsubscribeChannel(Err(err)) => self.send_rpc_res_err(req_id.0, err),
         }
     }
 
@@ -613,9 +644,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     Some(receiver_req) => self.on_recever_req(req.req_id, &receiver.name, receiver_req),
                     None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
                 },
-                Some(protobuf::session::request::Request::Room(_room)) => {
-                    todo!()
-                }
+                Some(protobuf::session::request::Request::Room(room)) => match room.request {
+                    Some(room_req) => self.on_room_req(req.req_id, room_req),
+                    None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
+                },
                 Some(protobuf::session::request::Request::Features(features_req)) => match features_req.request {
                     Some(protobuf::features::request::Request::Mixer(mixer_req)) => {
                         if let Some(mixer_req) = mixer_req.request {
@@ -784,6 +816,28 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     req_id.into(),
                     EndpointReq::AudioMixer(EndpointAudioMixerReq::Detach(sources)),
                 )));
+            }
+        }
+    }
+
+    fn on_room_req(&mut self, req_id: u32, req: protobuf::session::request::room::Request) {
+        match req {
+            protobuf::session::request::room::Request::SubscribeChannel(req) => {
+                self.queue
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), EndpointReq::SubscribeChannel(req.key))));
+            }
+            protobuf::session::request::room::Request::UnsubscribeChannel(req) => {
+                self.queue
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), EndpointReq::UnsubscribeChannel(req.key))));
+            }
+            protobuf::session::request::room::Request::PublishChannel(req) => {
+                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                    req_id.into(),
+                    EndpointReq::PublishChannel(req.key, req.message.into()),
+                )));
+            }
+            _ => {
+                // self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcNotImplemented));
             }
         }
     }

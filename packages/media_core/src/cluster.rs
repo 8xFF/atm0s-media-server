@@ -88,6 +88,9 @@ pub enum ClusterEndpointControl {
     AudioMixer(ClusterAudioMixerControl),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackControl),
     LocalTrack(LocalTrackId, ClusterLocalTrackControl),
+    SubscribeChannel(String),
+    UnsubscribeChannel(String),
+    PublishChannel(String, PeerId, String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,6 +102,7 @@ pub enum ClusterEndpointEvent {
     AudioMixer(ClusterAudioMixerEvent),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackEvent),
     LocalTrack(LocalTrackId, ClusterLocalTrackEvent),
+    ChannelMessage(String, PeerId, String),
 }
 
 pub enum Input<Endpoint> {

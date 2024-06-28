@@ -112,6 +112,9 @@ pub enum EndpointReq {
     AudioMixer(EndpointAudioMixerReq),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackReq),
     LocalTrack(LocalTrackId, EndpointLocalTrackReq),
+    SubscribeChannel(String),
+    UnsubscribeChannel(String),
+    PublishChannel(String, String),
 }
 
 /// This is response, which is used to send response back to Endpoint SDK
@@ -124,6 +127,9 @@ pub enum EndpointRes {
     AudioMixer(EndpointAudioMixerRes),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackRes),
     LocalTrack(LocalTrackId, EndpointLocalTrackRes),
+    SubscribeChannel(RpcResult<()>),
+    UnsubscribeChannel(RpcResult<()>),
+    PublishChannel(RpcResult<()>),
 }
 
 /// This is used for controlling the local track, which is sent from endpoint
@@ -164,6 +170,9 @@ pub enum EndpointEvent {
     },
     /// This session will be disconnect after some seconds
     GoAway(u8, Option<String>),
+
+    /// DataChannel events
+    ChannelMessage(String, PeerId, String),
 }
 
 pub enum EndpointInput<Ext> {

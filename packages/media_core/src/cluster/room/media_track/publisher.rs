@@ -82,7 +82,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
 
     pub fn on_track_publish(&mut self, endpoint: Endpoint, track: RemoteTrackId, peer: PeerId, name: TrackName) {
         log::info!("[ClusterRoom {}/Publishers] peer ({peer} started track ({name})", self.room);
-        let channel_id = id_generator::gen_channel_id(self.room, &peer, &name);
+        let channel_id = id_generator::gen_track_channel_id(self.room, &peer, &name);
         self.tracks.insert((endpoint, track), (peer.clone(), name.clone(), channel_id));
         self.tracks_source.insert(channel_id, (endpoint, track));
 
@@ -140,7 +140,7 @@ mod tests {
         transport::RemoteTrackId,
     };
 
-    use super::id_generator::gen_channel_id;
+    use super::id_generator::gen_track_channel_id;
     use super::{super::Output, RoomChannelPublisher};
 
     pub fn fake_audio() -> MediaPacket {
@@ -167,7 +167,7 @@ mod tests {
         let track = RemoteTrackId(3);
         let peer = "peer1".to_string().into();
         let name = "audio_main".to_string().into();
-        let channel_id = gen_channel_id(room, &peer, &name);
+        let channel_id = gen_track_channel_id(room, &peer, &name);
         publisher.on_track_publish(endpoint, track, peer, name);
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
         assert_eq!(publisher.pop_output(()), None);
@@ -194,7 +194,7 @@ mod tests {
         let track = RemoteTrackId(3);
         let peer = "peer1".to_string().into();
         let name = "audio_main".to_string().into();
-        let channel_id = gen_channel_id(room, &peer, &name);
+        let channel_id = gen_track_channel_id(room, &peer, &name);
         publisher.on_track_publish(endpoint, track, peer, name);
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStart))));
         assert_eq!(publisher.pop_output(()), None);

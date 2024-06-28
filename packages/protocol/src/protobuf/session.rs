@@ -70,12 +70,12 @@ pub mod request {
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct Rooom {
-        #[prost(oneof = "rooom::Request", tags = "1, 2")]
-        pub request: ::core::option::Option<rooom::Request>,
+    pub struct Room {
+        #[prost(oneof = "room::Request", tags = "1, 2, 3, 4, 5")]
+        pub request: ::core::option::Option<room::Request>,
     }
-    /// Nested message and enum types in `Rooom`.
-    pub mod rooom {
+    /// Nested message and enum types in `Room`.
+    pub mod room {
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Message)]
         pub struct SubscribePeer {
@@ -89,12 +89,38 @@ pub mod request {
             pub peer: ::prost::alloc::string::String,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct SubscribeChannel {
+            #[prost(string, tag = "1")]
+            pub key: ::prost::alloc::string::String,
+        }
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct UnsubscribeChannel {
+            #[prost(string, tag = "1")]
+            pub key: ::prost::alloc::string::String,
+        }
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct PublishChannel {
+            #[prost(string, tag = "1")]
+            pub key: ::prost::alloc::string::String,
+            #[prost(string, tag = "2")]
+            pub message: ::prost::alloc::string::String,
+        }
+        #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Oneof)]
         pub enum Request {
             #[prost(message, tag = "1")]
             Subscribe(SubscribePeer),
             #[prost(message, tag = "2")]
             Unsubscribe(UnsubscribePeer),
+            #[prost(message, tag = "3")]
+            SubscribeChannel(SubscribeChannel),
+            #[prost(message, tag = "4")]
+            UnsubscribeChannel(UnsubscribeChannel),
+            #[prost(message, tag = "5")]
+            PublishChannel(PublishChannel),
         }
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
@@ -175,7 +201,7 @@ pub mod request {
         #[prost(message, tag = "2")]
         Session(Session),
         #[prost(message, tag = "3")]
-        Room(Rooom),
+        Room(Room),
         #[prost(message, tag = "4")]
         Sender(Sender),
         #[prost(message, tag = "5")]
@@ -233,7 +259,7 @@ pub mod response {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Room {
-        #[prost(oneof = "room::Response", tags = "1, 2")]
+        #[prost(oneof = "room::Response", tags = "1, 2, 3, 4, 5")]
         pub response: ::core::option::Option<room::Response>,
     }
     /// Nested message and enum types in `Room`.
@@ -245,12 +271,27 @@ pub mod response {
         #[derive(Clone, PartialEq, ::prost::Message)]
         pub struct UnsubscribePeer {}
         #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct SubscribeChannel {}
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct UnsubscribeChannel {}
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct PublishChannel {}
+        #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Oneof)]
         pub enum Response {
             #[prost(message, tag = "1")]
             Subscribe(SubscribePeer),
             #[prost(message, tag = "2")]
             Unsubscribe(UnsubscribePeer),
+            #[prost(message, tag = "3")]
+            SubscribeChannel(SubscribeChannel),
+            #[prost(message, tag = "4")]
+            UnsubscribeChannel(UnsubscribeChannel),
+            #[prost(message, tag = "5")]
+            PublishChannel(PublishChannel),
         }
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
@@ -395,7 +436,7 @@ pub mod server_event {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Room {
-        #[prost(oneof = "room::Event", tags = "1, 2, 3, 4, 5, 6")]
+        #[prost(oneof = "room::Event", tags = "1, 2, 3, 4, 5, 6, 7")]
         pub event: ::core::option::Option<room::Event>,
     }
     /// Nested message and enum types in `Room`.
@@ -457,6 +498,16 @@ pub mod server_event {
             pub kind: i32,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct ChannelMessage {
+            #[prost(string, tag = "1")]
+            pub key: ::prost::alloc::string::String,
+            #[prost(string, tag = "2")]
+            pub peer: ::prost::alloc::string::String,
+            #[prost(string, tag = "3")]
+            pub message: ::prost::alloc::string::String,
+        }
+        #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Oneof)]
         pub enum Event {
             #[prost(message, tag = "1")]
@@ -471,6 +522,8 @@ pub mod server_event {
             TrackUpdated(TrackUpdated),
             #[prost(message, tag = "6")]
             TrackStopped(TrackStopped),
+            #[prost(message, tag = "7")]
+            ChannelMessage(ChannelMessage),
         }
     }
     #[allow(clippy::derive_partial_eq_without_eq)]

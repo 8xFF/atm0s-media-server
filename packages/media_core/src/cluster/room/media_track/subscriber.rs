@@ -96,7 +96,7 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
     }
 
     pub fn on_track_subscribe(&mut self, endpoint: Endpoint, track: LocalTrackId, target_peer: PeerId, target_track: TrackName) {
-        let channel_id: ChannelId = id_generator::gen_channel_id(self.room, &target_peer, &target_track);
+        let channel_id: ChannelId = id_generator::gen_track_channel_id(self.room, &target_peer, &target_track);
         log::info!(
             "[ClusterRoom {}/Subscribers] endpoint {:?} track {track} subscribe peer {target_peer} track {target_track}), channel: {channel_id}",
             self.room,
@@ -200,7 +200,7 @@ mod tests {
         transport::LocalTrackId,
     };
 
-    use super::id_generator::gen_channel_id;
+    use super::id_generator::gen_track_channel_id;
     use super::{Output, RoomChannelSubscribe};
     use super::{BITRATE_FEEDBACK_INTERVAL, BITRATE_FEEDBACK_KIND, BITRATE_FEEDBACK_TIMEOUT, KEYFRAME_FEEDBACK_INTERVAL, KEYFRAME_FEEDBACK_KIND, KEYFRAME_FEEDBACK_TIMEOUT};
 
@@ -227,7 +227,7 @@ mod tests {
         let track = LocalTrackId(3);
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
-        let channel_id = gen_channel_id(room, &target_peer, &target_track);
+        let channel_id = gen_track_channel_id(room, &target_peer, &target_track);
         subscriber.on_track_subscribe(endpoint, track, target_peer.clone(), target_track.clone());
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
         assert_eq!(subscriber.pop_output(()), None);
@@ -259,7 +259,7 @@ mod tests {
         let track = LocalTrackId(3);
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
-        let channel_id = gen_channel_id(room, &target_peer, &target_track);
+        let channel_id = gen_track_channel_id(room, &target_peer, &target_track);
         subscriber.on_track_subscribe(endpoint, track, target_peer.clone(), target_track.clone());
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
         assert_eq!(subscriber.pop_output(()), None);
@@ -290,7 +290,7 @@ mod tests {
         let track1 = LocalTrackId(3);
         let target_peer: PeerId = "peer2".to_string().into();
         let target_track: TrackName = "audio_main".to_string().into();
-        let channel_id = gen_channel_id(room, &target_peer, &target_track);
+        let channel_id = gen_track_channel_id(room, &target_peer, &target_track);
         subscriber.on_track_subscribe(endpoint1, track1, target_peer.clone(), target_track.clone());
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::SubAuto))));
         assert_eq!(subscriber.pop_output(()), None);

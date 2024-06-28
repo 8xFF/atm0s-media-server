@@ -138,6 +138,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
             EndpointEvent::BweConfig { .. } => {}
             EndpointEvent::GoAway(_, _) => {}
             EndpointEvent::AudioMixer(_) => {}
+            EndpointEvent::ChannelMessage(..) => {}
         }
     }
 

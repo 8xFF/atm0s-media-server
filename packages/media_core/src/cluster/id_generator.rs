@@ -33,11 +33,20 @@ pub fn tracks_key(peer: &PeerId, track: &TrackName) -> Key {
     h.finish().into()
 }
 
-pub fn gen_channel_id<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track: &TrackName) -> T {
+pub fn gen_track_channel_id<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track: &TrackName) -> T {
     let mut h = std::hash::DefaultHasher::new();
     room.as_ref().hash(&mut h);
     peer.as_ref().hash(&mut h);
     track.as_ref().hash(&mut h);
+    h.finish().into()
+}
+
+pub fn gen_datachannel_id<T: From<u64>, Endpoint: Hash>(room: ClusterRoomHash, endpoint: Endpoint, key: String) -> T {
+    let mut h = std::hash::DefaultHasher::new();
+    room.as_ref().hash(&mut h);
+    key.hash(&mut h);
+    endpoint.hash(&mut h);
+    "datachannel".hash(&mut h);
     h.finish().into()
 }
 
