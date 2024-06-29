@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 as base
+FROM ubuntu:24.04 as base
 ARG TARGETPLATFORM
 COPY . /tmp
 WORKDIR /tmp
@@ -14,7 +14,7 @@ RUN case $TARGETPLATFORM in \
     mv /tmp/$BUILD/atm0s-media-server-$BUILD /atm0s-media-server; \
     chmod +x /atm0s-media-server
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 COPY maxminddb-data /maxminddb-data
 COPY --from=base /atm0s-media-server /atm0s-media-server
