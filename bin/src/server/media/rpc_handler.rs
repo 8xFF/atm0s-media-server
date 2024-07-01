@@ -122,7 +122,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
     /* Start of sdk */
     async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
         log::info!("On webrtc_connect from gateway");
-        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::Connect(req.session_id, req.ip.parse().ok()?, req.user_agent, req.req?)));
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::Connect(req.session_id, req.ip.parse().ok()?, req.user_agent, req.req?, req.record)));
         ctx.req_tx.send(req).await.ok()?;
         let res = rx.await.ok()?;
         match res {
@@ -147,7 +147,13 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
 
     async fn webrtc_restart_ice(&self, ctx: &Ctx, req: WebrtcRestartIceRequest) -> Option<WebrtcRestartIceResponse> {
         log::info!("On webrtc_restart_ice from gateway");
-        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(req.conn.parse().ok()?, req.ip.parse().ok()?, req.user_agent, req.req?)));
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(
+            req.conn.parse().ok()?,
+            req.ip.parse().ok()?,
+            req.user_agent,
+            req.req?,
+            req.record,
+        )));
         ctx.req_tx.send(req).await.ok()?;
         let res = rx.await.ok()?;
         match res {

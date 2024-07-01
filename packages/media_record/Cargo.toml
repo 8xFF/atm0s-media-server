@@ -1,0 +1,7 @@
+[package]
+name = "media-server-record"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+media-server-protocol = { path = "../protocol" }

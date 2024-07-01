@@ -6,6 +6,7 @@ use media_server_protocol::{
     endpoint::{AudioMixerConfig, BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority, TrackSource},
     media::MediaPacket,
     protobuf::{self, cluster_connector::peer_event},
+    record::SessionRecordEvent,
     transport::RpcResult,
 };
 use sans_io_runtime::{
@@ -177,6 +178,7 @@ pub enum EndpointOutput<Ext> {
     Net(BackendOutgoing),
     Cluster(ClusterRoomHash, ClusterEndpointControl),
     PeerEvent(u64, Instant, peer_event::Event),
+    RecordEvent(u64, Instant, SessionRecordEvent),
     Ext(Ext),
     Continue,
     Destroy,
@@ -192,6 +194,7 @@ enum TaskType {
 pub struct EndpointCfg {
     pub max_egress_bitrate: u64,
     pub max_ingress_bitrate: u64,
+    pub record: bool,
 }
 
 pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
@@ -297,6 +300,7 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
             InternalOutput::Cluster(room, control) => Some(EndpointOutput::Cluster(room, control)),
             InternalOutput::Destroy => Some(EndpointOutput::Destroy),
             InternalOutput::PeerEvent(ts, event) => Some(EndpointOutput::PeerEvent(self.session_id, ts, event)),
+            InternalOutput::RecordEvent(ts, event) => Some(EndpointOutput::RecordEvent(self.session_id, ts, event)),
         }
     }
 }

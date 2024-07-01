@@ -8,7 +8,7 @@ use media_server_protocol::{
     gateway::GATEWAY_RPC_PORT,
     protobuf::{
         cluster_connector::{
-            connector_request::Event as ConnectorEvent,
+            connector_request::Request as ConnectorRequest,
             peer_event::{route_error::ErrorType, Event as PeerEvent2, RouteBegin, RouteError, RouteSuccess},
             PeerEvent,
         },
@@ -43,9 +43,9 @@ pub struct MediaRemoteRpcHandlerImpl {}
 impl MediaRemoteRpcHandlerImpl {
     async fn feedback_route_begin(ctx: &Ctx, session_id: u64, remote_ip: String) {
         ctx.connector_agent_tx
-            .send(ConnectorControl::Fire(
+            .send(ConnectorControl::Request(
                 now_ms(),
-                ConnectorEvent::Peer(PeerEvent {
+                ConnectorRequest::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteBegin(RouteBegin { remote_ip })),
                 }),
@@ -56,9 +56,9 @@ impl MediaRemoteRpcHandlerImpl {
 
     async fn feedback_route_success(ctx: &Ctx, session_id: u64, after_ms: u64, node: NodeId) {
         ctx.connector_agent_tx
-            .send(ConnectorControl::Fire(
+            .send(ConnectorControl::Request(
                 now_ms(),
-                ConnectorEvent::Peer(PeerEvent {
+                ConnectorRequest::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteSuccess(RouteSuccess {
                         after_ms: after_ms as u32,
@@ -72,9 +72,9 @@ impl MediaRemoteRpcHandlerImpl {
 
     async fn feedback_route_error(ctx: &Ctx, session_id: u64, after_ms: u64, node: Option<NodeId>, error: ErrorType) {
         ctx.connector_agent_tx
-            .send(ConnectorControl::Fire(
+            .send(ConnectorControl::Request(
                 now_ms(),
-                ConnectorEvent::Peer(PeerEvent {
+                ConnectorRequest::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteError(RouteError {
                         after_ms: after_ms as u32,

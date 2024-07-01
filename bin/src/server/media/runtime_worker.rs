@@ -3,10 +3,12 @@ use std::{collections::VecDeque, time::Instant};
 use atm0s_sdn::{SdnExtIn, SdnExtOut, SdnWorkerBusEvent};
 
 use media_server_gateway::NodeMetrics;
-use media_server_protocol::transport::{RpcReq, RpcRes};
+use media_server_protocol::{
+    record::SessionRecordEvent,
+    transport::{RpcReq, RpcRes},
+};
 use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, UserData, SC, SE, TC, TW};
 use media_server_secure::MediaEdgeSecure;
-use rand::random;
 use sans_io_runtime::{BusChannelControl, BusControl, BusEvent, WorkerInner, WorkerInnerInput, WorkerInnerOutput};
 
 use crate::NodeConfig;
@@ -22,6 +24,7 @@ pub enum ExtIn {
 pub enum ExtOut {
     Rpc(u64, u16, RpcRes<usize>),
     Sdn(SdnExtOut<UserData, SE>),
+    Record(u64, Instant, SessionRecordEvent),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -58,7 +61,7 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
         let worker = MediaServerWorker::new(
             index,
             cfg.node.node_id,
-            random(),
+            cfg.session,
             &cfg.node.secret,
             cfg.controller,
             cfg.node.udp_port,
@@ -115,6 +118,7 @@ impl<ES: MediaEdgeSecure> MediaRuntimeWorker<ES> {
             },
             WorkerOutput::Net(owner, out) => Output::Net(owner, out),
             WorkerOutput::Continue => Output::Continue,
+            WorkerOutput::Record(session_id, ts, event) => Output::Ext(true, ExtOut::Record(session_id, ts, event)),
         }
     }
 

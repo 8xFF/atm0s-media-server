@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_connector::{connector_request, peer_event};
+use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, peer_event, PeerRes, RecordRes};
 use media_server_utils::now_ms;
 use sea_orm::{sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
 use sea_orm_migration::MigratorTrait;
@@ -387,9 +387,16 @@ impl ConnectorStorage {
 }
 
 impl Storage for ConnectorStorage {
-    async fn on_event(&self, from: NodeId, ts: u64, _req_id: u64, event: connector_request::Event) -> Option<()> {
+    async fn on_event(&self, from: NodeId, ts: u64, event: connector_request::Request) -> Option<connector_response::Response> {
         match event {
-            connector_request::Event::Peer(event) => self.on_peer_event(from, ts, event.session_id, event.event?).await,
+            connector_request::Request::Peer(event) => {
+                self.on_peer_event(from, ts, event.session_id, event.event?).await;
+                Some(connector_response::Response::Peer(PeerRes {}))
+            }
+            connector_request::Request::Record(_req) => {
+                //TODO generate s3 uri
+                Some(connector_response::Response::Record(RecordRes { s3_uri: "s3_uri_here".to_string() }))
+            }
         }
     }
 }
@@ -546,15 +553,13 @@ mod tests {
         let session_id = 10000;
         let node = 1;
         let ts = 1000;
-        let req_id = 0;
         let remote_ip = "127.0.0.1".to_string();
         let storage = ConnectorStorage::new("sqlite::memory:").await;
         storage
             .on_event(
                 node,
                 ts,
-                req_id,
-                connector_request::Event::Peer(PeerEvent {
+                connector_request::Request::Peer(PeerEvent {
                     session_id,
                     event: Some(Event::RouteBegin(RouteBegin { remote_ip: remote_ip.clone() })),
                 }),
@@ -579,8 +584,7 @@ mod tests {
             .on_event(
                 node,
                 ts,
-                req_id,
-                connector_request::Event::Peer(PeerEvent {
+                connector_request::Request::Peer(PeerEvent {
                     session_id,
                     event: Some(Event::Connecting(Connecting { remote_ip: remote_ip.clone() })),
                 }),
@@ -596,8 +600,7 @@ mod tests {
             .on_event(
                 node,
                 ts,
-                req_id,
-                connector_request::Event::Peer(PeerEvent {
+                connector_request::Request::Peer(PeerEvent {
                     session_id,
                     event: Some(Event::Connected(Connected {
                         after_ms: 10,
@@ -614,8 +617,7 @@ mod tests {
             .on_event(
                 node,
                 ts,
-                req_id,
-                connector_request::Event::Peer(PeerEvent {
+                connector_request::Request::Peer(PeerEvent {
                     session_id,
                     event: Some(Event::Join(Join {
                         room: "demo".to_string(),

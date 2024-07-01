@@ -6,16 +6,18 @@ pub struct ConnectorRequest {
     pub req_id: u64,
     #[prost(uint64, tag = "2")]
     pub ts: u64,
-    #[prost(oneof = "connector_request::Event", tags = "3")]
-    pub event: ::core::option::Option<connector_request::Event>,
+    #[prost(oneof = "connector_request::Request", tags = "3, 4")]
+    pub request: ::core::option::Option<connector_request::Request>,
 }
 /// Nested message and enum types in `ConnectorRequest`.
 pub mod connector_request {
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Event {
+    pub enum Request {
         #[prost(message, tag = "3")]
         Peer(super::PeerEvent),
+        #[prost(message, tag = "4")]
+        Record(super::RecordReq),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -23,14 +25,11 @@ pub mod connector_request {
 pub struct ConnectorResponse {
     #[prost(uint64, tag = "1")]
     pub req_id: u64,
-    #[prost(oneof = "connector_response::Response", tags = "2, 3")]
+    #[prost(oneof = "connector_response::Response", tags = "2, 3, 4")]
     pub response: ::core::option::Option<connector_response::Response>,
 }
 /// Nested message and enum types in `ConnectorResponse`.
 pub mod connector_response {
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct Success {}
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Error {
@@ -43,9 +42,11 @@ pub mod connector_response {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Response {
         #[prost(message, tag = "2")]
-        Success(Success),
-        #[prost(message, tag = "3")]
         Error(Error),
+        #[prost(message, tag = "3")]
+        Peer(super::PeerRes),
+        #[prost(message, tag = "4")]
+        Record(super::RecordRes),
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -380,6 +381,29 @@ pub mod peer_event {
         #[prost(message, tag = "18")]
         LocalTrackDetach(LocalTrackDetach),
     }
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PeerRes {}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RecordReq {
+    #[prost(string, tag = "1")]
+    pub room: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub peer: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "3")]
+    pub session: u64,
+    #[prost(uint64, tag = "4")]
+    pub from_ts: u64,
+    #[prost(uint64, tag = "5")]
+    pub to_ts: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RecordRes {
+    #[prost(string, tag = "1")]
+    pub s3_uri: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

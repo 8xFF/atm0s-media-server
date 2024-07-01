@@ -226,6 +226,7 @@ dependencies = [
  "media-server-connector",
  "media-server-gateway",
  "media-server-protocol",
+ "media-server-record",
  "media-server-runner",
  "media-server-secure",
  "media-server-utils",
@@ -2151,6 +2152,13 @@ dependencies = [
  "serde",
  "tera",
  "tokio",
+]
+
+[[package]]
+name = "media-server-record"
+version = "0.1.0"
+dependencies = [
+ "media-server-protocol",
 ]
 
 [[package]]

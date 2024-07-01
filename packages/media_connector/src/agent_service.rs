@@ -1,4 +1,7 @@
-use std::{collections::VecDeque, fmt::Debug};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Debug,
+};
 
 use atm0s_sdn::{
     base::{
@@ -9,27 +12,29 @@ use atm0s_sdn::{
     RouteRule,
 };
 
-use media_server_protocol::protobuf::cluster_connector::{connector_request, ConnectorRequest, ConnectorResponse};
+use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, ConnectorRequest, ConnectorResponse};
 use prost::Message;
 
 use crate::{msg_queue::MessageQueue, AGENT_SERVICE_ID, AGENT_SERVICE_NAME, DATA_PORT, HANDLER_SERVICE_ID};
 
 #[derive(Debug, Clone)]
 pub enum Control {
-    Fire(u64, connector_request::Event),
     Sub,
+    Request(u64, connector_request::Request),
 }
 
 #[derive(Debug, Clone)]
 pub enum Event {
+    Response(connector_response::Response),
     Stats { queue: usize, inflight: usize, acked: usize },
 }
 
 pub struct ConnectorAgentService<UserData, SC, SE, TC, TW> {
     req_id_seed: u64,
+    req_data: HashMap<u64, ServiceControlActor<UserData>>,
     subscriber: Option<ServiceControlActor<UserData>>,
     msg_queue: MessageQueue<ConnectorRequest, 1024>,
-    queue: Option<ServiceOutput<UserData, FeaturesControl, SE, TW>>,
+    queue: VecDeque<ServiceOutput<UserData, FeaturesControl, SE, TW>>,
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
@@ -37,8 +42,9 @@ impl<UserData, SC, SE, TC, TW> ConnectorAgentService<UserData, SC, SE, TC, TW> {
     pub fn new() -> Self {
         Self {
             req_id_seed: 0,
+            req_data: HashMap::new(),
             subscriber: None,
-            queue: Some(ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())),
+            queue: VecDeque::from([ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())]),
             msg_queue: MessageQueue::default(),
             _tmp: std::marker::PhantomData,
         }
@@ -62,7 +68,7 @@ where
         match input {
             ServiceSharedInput::Tick(_) => {
                 if let Some(subscriber) = self.subscriber {
-                    self.queue = Some(ServiceOutput::Event(
+                    self.queue.push_back(ServiceOutput::Event(
                         subscriber,
                         Event::Stats {
                             queue: self.msg_queue.waits(),
@@ -82,10 +88,11 @@ where
             ServiceInput::Control(owner, control) => {
                 if let Ok(control) = control.try_into() {
                     match control {
-                        Control::Fire(ts, event) => {
+                        Control::Request(ts, request) => {
                             let req_id = self.req_id_seed;
                             self.req_id_seed += 1;
-                            let req = ConnectorRequest { req_id, ts, event: Some(event) };
+                            self.req_data.insert(req_id, owner);
+                            let req = ConnectorRequest { req_id, ts, request: Some(request) };
                             log::info!("[ConnectorAgent] push msg to queue {:?}", req);
                             self.msg_queue.push(req);
                         }
@@ -100,8 +107,15 @@ where
                 data::Event::Pong(_, _) => {}
                 data::Event::Recv(_port, _meta, buf) => match ConnectorResponse::decode(buf.as_slice()) {
                     Ok(msg) => {
-                        self.msg_queue.on_ack(msg.req_id);
-                        log::info!("[ConnectorAgent] on msg response {:?}", msg);
+                        if let Some(actor) = self.req_data.remove(&msg.req_id) {
+                            log::info!("[ConnectorAgent] on msg response {:?}", msg);
+                            self.msg_queue.on_ack(msg.req_id);
+                            if let Some(res) = msg.response {
+                                self.queue.push_back(ServiceOutput::Event(actor, Event::Response(res).into()));
+                            }
+                        } else {
+                            log::warn!("[ConnectorAgent] missing info for msg response {:?}", msg);
+                        }
                     }
                     Err(er) => {
                         log::error!("[ConnectorAgent] decode data error {}", er);
@@ -113,7 +127,7 @@ where
     }
 
     fn pop_output2(&mut self, now: u64) -> Option<ServiceOutput<UserData, FeaturesControl, SE, TW>> {
-        if let Some(out) = self.queue.take() {
+        if let Some(out) = self.queue.pop_front() {
             return Some(out);
         }
         let out = self.msg_queue.pop(now)?;

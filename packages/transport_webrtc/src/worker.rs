@@ -12,6 +12,7 @@ use media_server_core::{
 use media_server_protocol::{
     cluster::gen_cluster_session_id,
     protobuf::cluster_connector::peer_event,
+    record::SessionRecordEvent,
     transport::{RpcError, RpcResult},
 };
 use media_server_secure::MediaEdgeSecure;
@@ -41,6 +42,7 @@ pub enum GroupOutput {
     Net(BackendOutgoing),
     Cluster(WebrtcSession, ClusterRoomHash, ClusterEndpointControl),
     PeerEvent(WebrtcSession, u64, Instant, peer_event::Event),
+    RecordEvent(WebrtcSession, u64, Instant, SessionRecordEvent),
     Ext(WebrtcSession, ExtOut),
     Shutdown(WebrtcSession),
     Continue,
@@ -72,17 +74,20 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
 
     pub fn spawn(&mut self, remote: IpAddr, session_id: u64, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
         let cfg = match &variant {
-            VariantParams::Whip(_, _) => EndpointCfg {
+            VariantParams::Whip(_, _, record) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
+                record: *record,
             },
             VariantParams::Whep(_, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
+                record: false,
             },
-            VariantParams::Webrtc(_, _, _) => EndpointCfg {
+            VariantParams::Webrtc(_, _, record, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
+                record: *record,
             },
         };
         let (tran, ufrag, sdp) = TransportWebrtc::new(remote, variant, offer, self.dtls_cert.clone(), self.addrs.clone(), self.ice_lite)?;
@@ -98,6 +103,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
             EndpointOutput::Net(net) => GroupOutput::Net(net),
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcSession(index), room, control),
             EndpointOutput::PeerEvent(session_id, ts, event) => GroupOutput::PeerEvent(WebrtcSession(index), session_id, ts, event),
+            EndpointOutput::RecordEvent(session_id, ts, event) => GroupOutput::RecordEvent(WebrtcSession(index), session_id, ts, event),
             EndpointOutput::Destroy => {
                 log::info!("[TransportWebrtc] destroy endpoint {index}");
                 self.endpoints.remove_task(index);
@@ -143,10 +149,10 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                             self.queue
                                 .push_back(GroupOutput::Ext(owner, ExtOut::RemoteIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
                         }
-                        ExtIn::RestartIce(req_id, variant, remote, useragent, req) => {
+                        ExtIn::RestartIce(req_id, variant, remote, useragent, req, record) => {
                             let sdp = req.sdp.clone();
                             let session_id = gen_cluster_session_id(); //TODO need to reuse old session_id
-                            if let Ok((ice_lite, sdp, index)) = self.spawn(remote, session_id, VariantParams::Webrtc(useragent, req, self.secure.clone()), &sdp) {
+                            if let Ok((ice_lite, sdp, index)) = self.spawn(remote, session_id, VariantParams::Webrtc(useragent, req, record, self.secure.clone()), &sdp) {
                                 self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));
                             } else {
                                 self.queue

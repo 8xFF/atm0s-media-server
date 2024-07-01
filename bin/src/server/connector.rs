@@ -10,7 +10,7 @@ use media_server_connector::{
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
     connector::CONNECTOR_RPC_PORT,
-    protobuf::cluster_connector::MediaConnectorServiceServer,
+    protobuf::cluster_connector::{connector_response, MediaConnectorServiceServer},
     rpc::quinn::QuinnServer,
 };
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
@@ -49,7 +49,7 @@ pub struct Args {
 pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
-    let mut connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri).await);
+    let connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri).await);
 
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
@@ -105,9 +105,26 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     controller.service_control(HANDLER_SERVICE_ID.into(), (), handler_service::Control::Sub.into());
 
     let (connector_storage_tx, mut connector_storage_rx) = channel(1024);
+    let (connector_handler_control_tx, mut connector_handler_control_rx) = channel(1024);
     tokio::task::spawn_local(async move {
         while let Some((from, ts, req_id, event)) = connector_storage_rx.recv().await {
-            connector_storage.on_event(from, ts, req_id, event).await;
+            match connector_storage.on_event(from, ts, event).await {
+                Some(res) => {
+                    connector_handler_control_tx.send(handler_service::Control::Res(from, req_id, res)).await;
+                }
+                None => {
+                    connector_handler_control_tx
+                        .send(handler_service::Control::Res(
+                            from,
+                            req_id,
+                            connector_response::Response::Error(connector_response::Error {
+                                code: 0, //TODO return error from storage
+                                message: "STORAGE_ERROR".to_string(),
+                            }),
+                        ))
+                        .await;
+                }
+            }
         }
     });
 
@@ -128,6 +145,10 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
         }
         while let Ok(control) = vnet_rx.try_recv() {
             controller.feature_control((), control.into());
+        }
+
+        while let Ok(control) = connector_handler_control_rx.try_recv() {
+            controller.service_control(HANDLER_SERVICE_ID.into(), (), control.into());
         }
 
         while let Some(out) = controller.pop_event() {

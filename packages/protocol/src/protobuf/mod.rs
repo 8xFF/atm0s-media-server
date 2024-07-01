@@ -14,6 +14,9 @@ pub mod features {
 pub mod gateway {
     include!("gateway.rs");
 }
+pub mod record {
+    include!("record.rs");
+}
 pub mod session {
     include!("session.rs");
 }

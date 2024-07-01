@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+import "shared.proto";
+
+package record;
+
+message RecordHeader {
+    uint64 start_ts = 1;
+    uint64 session = 2;
+    string ip_addr = 3;
+    string user_agent = 4;
+    string room = 5;
+    string peer = 6;
+}
+
+message RecordChunk {
+    message TrackStarted {
+        shared.Kind kind = 1;
+        string name = 2;
+        string codec = 3;
+    }
+
+    message TrackStopped {
+
+    }
+
+    message TrackMedia {
+        uint32 media_ts = 1;
+        uint32 media_seq = 2;
+        bool marker = 3;
+        bytes payload = 4;
+    }
+
+    uint32 track_id = 1;
+    uint32 ts = 2;
+    oneof chunk {
+        TrackStarted track_started = 3;
+        TrackStopped track_stopped = 4;
+        TrackMedia track_media = 5;
+    }
+}

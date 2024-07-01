@@ -908,6 +908,7 @@ mod tests {
             WebrtcToken {
                 room: Some("demo".to_string()),
                 peer: Some("peer1".to_string()),
+                record: false,
             },
             10000,
         );

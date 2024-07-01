@@ -43,9 +43,9 @@ mod whep;
 mod whip;
 
 pub enum VariantParams<ES> {
-    Whip(RoomId, PeerId),
+    Whip(RoomId, PeerId, bool),
     Whep(RoomId, PeerId),
-    Webrtc(String, ConnectRequest, Arc<ES>),
+    Webrtc(String, ConnectRequest, bool, Arc<ES>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -57,7 +57,8 @@ pub enum Variant {
 
 pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
-    RestartIce(u64, Variant, IpAddr, String, ConnectRequest),
+    ///Last bool is record flag
+    RestartIce(u64, Variant, IpAddr, String, ConnectRequest, bool),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -133,9 +134,9 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
 
         let mut rtc = rtc_config.build();
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
-            VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer, remote)),
+            VariantParams::Whip(room, peer, record) => Box::new(whip::TransportWebrtcWhip::new(room, peer, remote)),
             VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer, remote)),
-            VariantParams::Webrtc(_user_agent, req, secure) => {
+            VariantParams::Webrtc(_user_agent, req, record, secure) => {
                 rtc.direct_api().create_data_channel(ChannelConfig {
                     label: "data".to_string(),
                     negotiated: Some(1000),
@@ -294,7 +295,7 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                     }
                     self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))));
                 }
-                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req) => {
+                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req, _record) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_codec_config(self.rtc.codec_config());

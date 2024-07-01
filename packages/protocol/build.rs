@@ -37,6 +37,7 @@ fn main() -> Result<()> {
                 "./proto/sdk/gateway.proto",
                 "./proto/cluster/gateway.proto",
                 "./proto/cluster/connector.proto",
+                "./proto/record/file_rec.proto",
             ],
             &["./proto"],
         )?;
