@@ -185,6 +185,33 @@ impl EndpointInternal {
                     }
                 }
             },
+            EndpointReq::SubscribeChannel(key) => {
+                if let Some((room, _, _, _)) = &self.joined {
+                    self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::SubscribeChannel(Ok(()))));
+                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::SubscribeChannel(key)));
+                } else {
+                    self.queue
+                        .push_back(InternalOutput::RpcRes(req_id, EndpointRes::SubscribeChannel(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))));
+                }
+            }
+            EndpointReq::UnsubscribeChannel(key) => {
+                if let Some((room, _, _, _)) = &self.joined {
+                    self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::UnsubscribeChannel(Ok(()))));
+                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::UnsubscribeChannel(key)));
+                } else {
+                    self.queue
+                        .push_back(InternalOutput::RpcRes(req_id, EndpointRes::UnsubscribeChannel(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))));
+                }
+            }
+            EndpointReq::PublishChannel(key, msg) => {
+                if let Some((room, _, peer, _)) = &self.joined {
+                    self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::PublishChannel(Ok(()))));
+                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::PublishChannel(key, peer.clone(), msg)));
+                } else {
+                    self.queue
+                        .push_back(InternalOutput::RpcRes(req_id, EndpointRes::PublishChannel(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))));
+                }
+            }
         }
     }
 
@@ -349,6 +376,7 @@ impl EndpointInternal {
             },
             ClusterEndpointEvent::RemoteTrack(track, event) => self.on_cluster_remote_track(now, track, event),
             ClusterEndpointEvent::LocalTrack(track, event) => self.on_cluster_local_track(now, track, event),
+            ClusterEndpointEvent::ChannelMessage(key, from, message) => self.queue.push_back(InternalOutput::Event(EndpointEvent::ChannelMessage(key, from, message))),
         }
     }
 

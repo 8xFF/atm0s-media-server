@@ -51,7 +51,7 @@ impl<Endpoint: Clone> ManualMixer<Endpoint> {
     }
 
     fn attach(&mut self, _now: Instant, source: TrackSource) {
-        let channel_id = id_generator::gen_channel_id(self.room, &source.peer, &source.track);
+        let channel_id = id_generator::gen_track_channel_id(self.room, &source.peer, &source.track);
         if !self.sources.contains_key(&channel_id) {
             log::info!("[ClusterManualMixer] add source {:?} => sub {channel_id}", source);
             self.sources.insert(channel_id, source);
@@ -84,7 +84,7 @@ impl<Endpoint: Clone> ManualMixer<Endpoint> {
     }
 
     fn detach(&mut self, _now: Instant, source: TrackSource) {
-        let channel_id = id_generator::gen_channel_id(self.room, &source.peer, &source.track);
+        let channel_id = id_generator::gen_track_channel_id(self.room, &source.peer, &source.track);
         if let Some(_) = self.sources.remove(&channel_id) {
             log::info!("[ClusterManualMixer] remove source {:?} => unsub {channel_id}", source);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)));
@@ -183,7 +183,7 @@ mod test {
             peer: "peer1".into(),
             track: "audio".into(),
         };
-        let channel_id = id_generator::gen_channel_id(room, &source.peer, &source.track);
+        let channel_id = id_generator::gen_track_channel_id(room, &source.peer, &source.track);
 
         manual.attach(t0, source.clone());
         assert_eq!(manual.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto))));
@@ -234,7 +234,7 @@ mod test {
             peer: "peer1".into(),
             track: "audio".into(),
         };
-        let channel_id = id_generator::gen_channel_id(room, &source.peer, &source.track);
+        let channel_id = id_generator::gen_track_channel_id(room, &source.peer, &source.track);
 
         manual.attach(t0, source.clone());
         assert_eq!(manual.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto))));

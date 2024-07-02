@@ -42,7 +42,7 @@ message Request {
         }
     }
 
-    message Rooom {
+    message Room {
         message SubscribePeer {
             string peer = 1;
         }
@@ -51,9 +51,25 @@ message Request {
             string peer = 1;
         }
 
+        message SubscribeChannel {
+            string key = 1;
+        }
+
+        message UnsubscribeChannel {
+            string key = 1;
+        }
+
+        message PublishChannel {
+            string key = 1;
+            bytes message = 2;
+        }
+
         oneof request {
             SubscribePeer subscribe = 1;
             UnsubscribePeer unsubscribe = 2;
+            SubscribeChannel subscribe_channel = 3;
+            UnsubscribeChannel unsubscribe_channel = 4;
+            PublishChannel publish_channel = 5;
         }
     }
 
@@ -96,7 +112,7 @@ message Request {
     uint32 req_id = 1;
     oneof request {
         Session session = 2;
-        Rooom room = 3;
+        Room room = 3;
         Sender sender = 4;
         Receiver receiver = 5;
         features.Request features = 6;
@@ -138,9 +154,24 @@ message Response {
 
         }
 
+        message SubscribeChannel {
+
+        }
+
+        message UnsubscribeChannel {
+
+        }
+
+        message PublishChannel {
+
+        }
+
         oneof response {
             SubscribePeer subscribe = 1;
             UnsubscribePeer unsubscribe = 2;
+            SubscribeChannel subscribe_channel = 3;
+            UnsubscribeChannel unsubscribe_channel = 4;
+            PublishChannel publish_channel = 5;
         }
     }
 
@@ -264,6 +295,12 @@ message ServerEvent {
             shared.Kind kind = 3;
         }
 
+        message ChannelMessage {
+            string key = 1;
+            string peer = 2;
+            bytes message = 3;
+        }
+
         oneof event {
             PeerJoined peer_joined = 1;
             PeerUpdated peer_updated = 2;
@@ -271,6 +308,7 @@ message ServerEvent {
             TrackStarted track_started = 4;
             TrackUpdated track_updated = 5;
             TrackStopped track_stopped = 6;
+            ChannelMessage channel_message = 7;
         }
     }
 
