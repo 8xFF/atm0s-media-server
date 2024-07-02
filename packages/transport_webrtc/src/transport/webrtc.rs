@@ -349,7 +349,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             EndpointEvent::ChannelMessage(key, from, message) => {
                 log::info!("[TransportWebrtcSdk] datachannel message {key}");
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
-                    event: Some(ProtoRoomEvent2::ChannelMessage(ChannelMessage { key, peer: from.0, message: message })),
+                    event: Some(ProtoRoomEvent2::ChannelMessage(ChannelMessage { key, peer: from.0, message })),
                 }))
             }
             EndpointEvent::GoAway(_, _) => {}
@@ -833,7 +833,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
             protobuf::session::request::room::Request::PublishChannel(req) => {
                 self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     req_id.into(),
-                    EndpointReq::PublishChannel(req.key, req.message.into()),
+                    EndpointReq::PublishChannel(req.key, req.message),
                 )));
             }
             _ => {

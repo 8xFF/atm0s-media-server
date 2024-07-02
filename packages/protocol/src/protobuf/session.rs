@@ -105,8 +105,8 @@ pub mod request {
         pub struct PublishChannel {
             #[prost(string, tag = "1")]
             pub key: ::prost::alloc::string::String,
-            #[prost(string, tag = "2")]
-            pub message: ::prost::alloc::string::String,
+            #[prost(bytes = "vec", tag = "2")]
+            pub message: ::prost::alloc::vec::Vec<u8>,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Oneof)]
@@ -504,8 +504,8 @@ pub mod server_event {
             pub key: ::prost::alloc::string::String,
             #[prost(string, tag = "2")]
             pub peer: ::prost::alloc::string::String,
-            #[prost(string, tag = "3")]
-            pub message: ::prost::alloc::string::String,
+            #[prost(bytes = "vec", tag = "3")]
+            pub message: ::prost::alloc::vec::Vec<u8>,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Oneof)]

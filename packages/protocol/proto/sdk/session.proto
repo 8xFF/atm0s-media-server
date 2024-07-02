@@ -61,7 +61,7 @@ message Request {
 
         message PublishChannel {
             string key = 1;
-            string message = 2;
+            bytes message = 2;
         }
 
         oneof request {
@@ -298,7 +298,7 @@ message ServerEvent {
         message ChannelMessage {
             string key = 1;
             string peer = 2;
-            string message = 3;
+            bytes message = 3;
         }
 
         oneof event {

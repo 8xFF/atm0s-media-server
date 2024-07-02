@@ -114,7 +114,7 @@ pub enum EndpointReq {
     LocalTrack(LocalTrackId, EndpointLocalTrackReq),
     SubscribeChannel(String),
     UnsubscribeChannel(String),
-    PublishChannel(String, String),
+    PublishChannel(String, Vec<u8>),
 }
 
 /// This is response, which is used to send response back to Endpoint SDK
@@ -172,7 +172,7 @@ pub enum EndpointEvent {
     GoAway(u8, Option<String>),
 
     /// DataChannel events
-    ChannelMessage(String, PeerId, String),
+    ChannelMessage(String, PeerId, Vec<u8>),
 }
 
 pub enum EndpointInput<Ext> {

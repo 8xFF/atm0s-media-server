@@ -22,23 +22,11 @@ impl<Endpoint: Hash + Eq + Copy + Debug> DataChannelPublisher<Endpoint> {
         self.queue.is_empty()
     }
 
-    pub fn on_channel_publish(&mut self, endpoint: Endpoint, key: &str) {
-        log::trace!("[ClusterRoom {}/Publishers] peer {:?} publish datachannel", self.room, endpoint);
-        let channel_id: ChannelId = id_generator::gen_datachannel_id(self.room, endpoint, key.to_string());
-        self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStart)))
-    }
-
-    pub fn on_channel_data(&mut self, endpoint: Endpoint, key: &str, data: DataChannelPacket) {
-        log::trace!("[ClusterRoom {}/Publishers] peer {:?} publish datachannel", self.room, endpoint);
+    pub fn on_channel_data(&mut self, key: &str, data: DataChannelPacket) {
+        log::trace!("[ClusterRoomDataChannel {}/Publishers] publish virtual datachannel", self.room);
         let data = data.serialize();
-        let channel_id: ChannelId = id_generator::gen_datachannel_id(self.room, endpoint, key.to_string());
+        let channel_id: ChannelId = id_generator::gen_datachannel_id(self.room, key.to_string());
         self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubData(data))))
-    }
-
-    pub fn on_channel_unpublish(&mut self, endpoint: Endpoint, key: &str) {
-        let channel_id: ChannelId = id_generator::gen_datachannel_id(self.room, endpoint, key.to_string());
-        log::info!("[ClusterRoom {}/Publishers] peer {:?} stopped datachannel", self.room, endpoint);
-        self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)));
     }
 }
 
@@ -51,7 +39,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
 
 impl<Endpoint> Drop for DataChannelPublisher<Endpoint> {
     fn drop(&mut self) {
-        log::info!("[ClusterRoom {}/Publishers] Drop", self.room);
+        log::info!("[ClusterRoomDataChannel {}/Publishers] Drop", self.room);
         assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
     }
 }

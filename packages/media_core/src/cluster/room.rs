@@ -160,7 +160,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.metadata.is_empty() && self.media_track.is_empty() && self.audio_mixer.is_empty()
+        self.metadata.is_empty() && self.media_track.is_empty() && self.audio_mixer.is_empty() && self.datachannel.is_empty()
     }
 
     fn on_sdn_event(&mut self, now: Instant, userdata: RoomUserData, event: FeaturesEvent) {
@@ -191,6 +191,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             ClusterEndpointControl::Leave => {
                 self.audio_mixer.input(&mut self.switcher).on_leave(now, endpoint);
                 self.metadata.input(&mut self.switcher).on_leave(endpoint);
+                self.datachannel.input(&mut self.switcher).on_leave(endpoint);
             }
             ClusterEndpointControl::SubscribePeer(target) => {
                 self.metadata.input(&mut self.switcher).on_subscribe_peer(endpoint, target);
@@ -206,7 +207,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             ClusterEndpointControl::SubscribeChannel(key) => self.datachannel.input(&mut self.switcher).on_channel_subscribe(endpoint, &key),
             ClusterEndpointControl::PublishChannel(key, peer, message) => {
                 let data_packet = DataChannelPacket { from: peer, data: message };
-                self.datachannel.input(&mut self.switcher).on_channel_data(endpoint, &key, data_packet);
+                self.datachannel.input(&mut self.switcher).on_channel_data(&key, data_packet);
             }
             ClusterEndpointControl::UnsubscribeChannel(key) => self.datachannel.input(&mut self.switcher).on_channel_unsubscribe(endpoint, &key),
         }
@@ -260,6 +261,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Drop for ClusterRoom<Endpoint> 
         assert!(self.audio_mixer.is_empty(), "Audio mixer not empty");
         assert!(self.media_track.is_empty(), "Media track not empty");
         assert!(self.metadata.is_empty(), "Metadata not empty");
+        assert!(self.datachannel.is_empty(), "Data channel not empty");
     }
 }
 

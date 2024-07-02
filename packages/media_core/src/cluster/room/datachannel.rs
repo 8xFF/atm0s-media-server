@@ -57,8 +57,8 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannel<Endpoint> {
         }
     }
 
-    pub fn on_channel_data(&mut self, endpoint: Endpoint, key: &str, data: DataChannelPacket) {
-        self.publisher.input(&mut self.switcher).on_channel_data(endpoint, key, data);
+    pub fn on_channel_data(&mut self, key: &str, data: DataChannelPacket) {
+        self.publisher.input(&mut self.switcher).on_channel_data(key, data);
     }
 
     pub fn on_channel_subscribe(&mut self, endpoint: Endpoint, key: &str) {
@@ -67,6 +67,10 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannel<Endpoint> {
 
     pub fn on_channel_unsubscribe(&mut self, endpoint: Endpoint, key: &str) {
         self.subscriber.input(&mut self.switcher).on_channel_unsubscribe(endpoint, key);
+    }
+
+    pub fn on_leave(&mut self, endpoint: Endpoint) {
+        self.subscriber.input(&mut self.switcher).on_leave(endpoint);
     }
 }
 
@@ -78,6 +82,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Publisher => {
                     if let Some(out) = self.publisher.pop_output((), &mut self.switcher) {
+                        log::info!("[ClusterRoomDataChannel] poped Output publisher {:?}", out);
                         if let Output::OnResourceEmpty = out {
                             if self.is_empty() {
                                 return Some(Output::OnResourceEmpty);
@@ -89,6 +94,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
                 }
                 TaskType::Subscriber => {
                     if let Some(out) = self.subscriber.pop_output((), &mut self.switcher) {
+                        log::info!("[ClusterRoomDataChannel] poped Output Subscriber {:?}", out);
                         if let Output::OnResourceEmpty = out {
                             if self.is_empty() {
                                 return Some(Output::OnResourceEmpty);

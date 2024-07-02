@@ -8,7 +8,7 @@ use crate::endpoint::PeerId;
 pub struct DataChannelPacket {
     pub from: PeerId,
     #[derivative(Debug = "ignore")]
-    pub data: String,
+    pub data: Vec<u8>,
 }
 impl DataChannelPacket {
     pub fn serialize(&self) -> Vec<u8> {
