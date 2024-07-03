@@ -191,6 +191,7 @@ enum TaskType {
     Internal = 1,
 }
 
+#[derive(Debug)]
 pub struct EndpointCfg {
     pub max_egress_bitrate: u64,
     pub max_ingress_bitrate: u64,

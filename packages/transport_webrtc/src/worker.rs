@@ -91,9 +91,9 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
             },
         };
         let (tran, ufrag, sdp) = TransportWebrtc::new(remote, variant, offer, self.dtls_cert.clone(), self.addrs.clone(), self.ice_lite)?;
+        log::info!("[TransportWebrtc] create endpoint with config {:?}", cfg);
         let endpoint = Endpoint::new(session_id, cfg, tran);
         let index = self.endpoints.add_task(endpoint);
-        log::info!("[TransportWebrtc] create endpoint {index}");
         self.shared_port.add_ufrag(ufrag, index);
         Ok((self.ice_lite, sdp, index))
     }

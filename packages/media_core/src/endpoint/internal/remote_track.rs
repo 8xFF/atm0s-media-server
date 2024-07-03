@@ -158,6 +158,10 @@ impl EndpointRemoteTrack {
                     media.layers = self.last_layers.clone();
                 }
 
+                if self.record {
+                    self.queue.push_back(Output::RecordEvent(now, SessionRecordEvent::TrackMedia(self.id, media.clone())));
+                }
+
                 let room = return_if_none!(self.room.as_ref());
                 self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Media(media)));
             }

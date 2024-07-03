@@ -110,10 +110,12 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
         while let Some((from, ts, req_id, event)) = connector_storage_rx.recv().await {
             match connector_storage.on_event(from, ts, event).await {
                 Some(res) => {
-                    connector_handler_control_tx.send(handler_service::Control::Res(from, req_id, res)).await;
+                    if let Err(e) = connector_handler_control_tx.send(handler_service::Control::Res(from, req_id, res)).await {
+                        log::error!("[Connector] send control to service error {:?}", e);
+                    }
                 }
                 None => {
-                    connector_handler_control_tx
+                    if let Err(e) = connector_handler_control_tx
                         .send(handler_service::Control::Res(
                             from,
                             req_id,
@@ -122,7 +124,10 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
                                 message: "STORAGE_ERROR".to_string(),
                             }),
                         ))
-                        .await;
+                        .await
+                    {
+                        log::error!("[Connector] send control to service error {:?}", e);
+                    }
                 }
             }
         }

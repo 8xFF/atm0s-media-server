@@ -2158,6 +2158,7 @@ dependencies = [
 name = "media-server-record"
 version = "0.1.0"
 dependencies = [
+ "log",
  "media-server-protocol",
 ]
 
