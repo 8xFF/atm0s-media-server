@@ -49,7 +49,7 @@ pub struct Args {
 pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
-    let mut connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri).await);
+    let connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri).await);
 
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");

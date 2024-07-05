@@ -11,7 +11,7 @@ use super::vsocket::VirtualUdpSocket;
 
 #[derive(Debug)]
 pub struct NetworkPkt {
-    pub local_port: u16,
+    pub _local_port: u16,
     pub remote: NodeId,
     pub remote_port: u16,
     pub data: Buffer,
@@ -77,7 +77,7 @@ impl VirtualNetwork {
                 let event = event?;
                 match event {
                     socket::Event::RecvFrom(local_port, remote, remote_port, data, meta) => {
-                        let pkt = NetworkPkt { data, local_port, remote, remote_port, meta };
+                        let pkt = NetworkPkt { data, _local_port: local_port, remote, remote_port, meta };
                         if let Some(socket_tx) = self.sockets.get(&local_port) {
                             if let Err(e) = socket_tx.try_send(pkt) {
                                 log::error!("Send to socket {} error {:?}", local_port, e);

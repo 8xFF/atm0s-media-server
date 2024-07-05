@@ -6,7 +6,6 @@ use media_server_gateway::NodeMetrics;
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, UserData, SC, SE, TC, TW};
 use media_server_secure::MediaEdgeSecure;
-use rand::random;
 use sans_io_runtime::{BusChannelControl, BusControl, BusEvent, WorkerInner, WorkerInnerInput, WorkerInnerOutput};
 
 use crate::NodeConfig;
@@ -58,7 +57,9 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
         let worker = MediaServerWorker::new(
             index,
             cfg.node.node_id,
-            random(),
+            // random(),
+            // NOTE: Not sure if session was supposed to e used here instead of random(); Input Required.
+            cfg.session,
             &cfg.node.secret,
             cfg.controller,
             cfg.node.udp_port,
