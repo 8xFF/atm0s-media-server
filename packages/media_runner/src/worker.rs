@@ -454,7 +454,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     match self
                         .media_webrtc
                         .input(&mut self.switcher)
-                        .spawn(ip, session_id, VariantParams::Webrtc(user_agent, req.clone(), self.secure.clone()), &req.sdp)
+                        .spawn(ip, session_id, VariantParams::Webrtc(user_agent, Box::new(req.clone()), self.secure.clone()), &req.sdp)
                     {
                         Ok((ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
                             req_id,
@@ -481,7 +481,10 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     log::info!("on rpc request {req_id}, webrtc::RpcReq::RestartIce");
                     self.media_webrtc.input(&mut self.switcher).on_event(
                         now,
-                        GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, user_agent, req)),
+                        GroupInput::Ext(
+                            conn.into(),
+                            transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, user_agent, Box::new(req)),
+                        ),
                     );
                 }
                 webrtc::RpcReq::Delete(_) => todo!(),

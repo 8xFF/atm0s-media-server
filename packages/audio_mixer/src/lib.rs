@@ -132,7 +132,7 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
         for (i, slot) in self.outputs.iter().enumerate() {
             if let Some(OutputSlotState { audio_level, source }) = slot {
                 if let Some((_, _, lowest_slot_audio_level)) = &mut lowest {
-                    if *audio_level < *lowest_slot_audio_level || (*audio_level == *lowest_slot_audio_level) {
+                    if *audio_level <= *lowest_slot_audio_level {
                         lowest = Some((i, source.clone(), *audio_level));
                     }
                 } else {

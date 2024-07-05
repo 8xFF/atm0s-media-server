@@ -35,7 +35,7 @@ pub fn rewrite_rtp(payload: &mut [u8], svc: &Vp9Svc) {
     }
 }
 
-#[allow(unused)]
+#[allow(unused, clippy::enum_variant_names)]
 enum PacketError {
     ErrShortPacket,
     ErrTooManySpatialLayers,
@@ -90,9 +90,9 @@ struct Vp9Header {
     pub g: bool,
     /// N_G indicates the number of pictures in a Picture Group (PG)
     pub ng: u8,
-    ///
+    /// Width
     pub width: Vec<u16>,
-    ///
+    /// Height
     pub height: Vec<u16>,
     /// Temporal layer ID of pictures in a Picture Group
     pub pgtid: Vec<u8>,

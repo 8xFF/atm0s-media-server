@@ -151,7 +151,7 @@ impl Storage {
             ClusterNodeInfo::Console(generic) => {
                 let zone_id = node & 0xFF_FF_FF_00;
                 log::info!("Zone {zone_id} on console ping, zones {}", self.zones.len());
-                let zone = self.zones.entry(zone_id).or_insert_with(Default::default);
+                let zone = self.zones.entry(zone_id).or_default();
                 zone.consoles.insert(
                     node,
                     ConsoleContainer {
@@ -165,7 +165,7 @@ impl Storage {
             ClusterNodeInfo::Gateway(generic, info) => {
                 let zone_id = node & 0xFF_FF_FF_00;
                 log::info!("Zone {zone_id} on gateway ping");
-                let zone = self.zones.entry(zone_id).or_insert_with(Default::default);
+                let zone = self.zones.entry(zone_id).or_default();
                 zone.lat = info.lat;
                 zone.lon = info.lon;
                 zone.gateways.insert(
@@ -181,7 +181,7 @@ impl Storage {
             ClusterNodeInfo::Media(generic, info) => {
                 let zone_id = node & 0xFF_FF_FF_00;
                 log::info!("Zone {zone_id} on media ping");
-                let zone = self.zones.entry(zone_id).or_insert_with(Default::default);
+                let zone = self.zones.entry(zone_id).or_default();
                 zone.medias.insert(
                     node,
                     MediaContainer {
@@ -195,7 +195,7 @@ impl Storage {
             ClusterNodeInfo::Connector(generic) => {
                 let zone_id = node & 0xFF_FF_FF_00;
                 log::info!("Zone {zone_id} on connector ping, zones {}", self.zones.len());
-                let zone = self.zones.entry(zone_id).or_insert_with(Default::default);
+                let zone = self.zones.entry(zone_id).or_default();
                 zone.connectors.insert(
                     node,
                     ConnectorContainer {

@@ -28,5 +28,5 @@ struct ConsoleAuthorization(());
 
 async fn api_checker(req: &Request, api_key: ApiKey) -> Option<()> {
     let data = req.data::<ConsoleApisCtx>()?;
-    data.secure.validate_token(&api_key.key).then(|| ())
+    data.secure.validate_token(&api_key.key).then_some(())
 }

@@ -132,13 +132,13 @@ impl EndpointRemoteTrack {
                 //TODO clear self.last_layer if switched to new track
                 if media.layers.is_some() {
                     log::debug!("[EndpointRemoteTrack] on layers info {:?}", media.layers);
-                    self.last_layers = media.layers.clone();
+                    self.last_layers.clone_from(&media.layers);
                 }
 
                 // We restore last_layer if key frame not contain for allow consumers fast switching
                 if media.meta.is_video_key() && media.layers.is_none() && self.last_layers.is_some() {
                     log::debug!("[EndpointRemoteTrack] set layers info to key-frame {:?}", media.layers);
-                    media.layers = self.last_layers.clone();
+                    media.layers.clone_from(&self.last_layers);
                 }
 
                 let room = return_if_none!(self.room.as_ref());

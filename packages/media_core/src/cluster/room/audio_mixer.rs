@@ -53,6 +53,8 @@ pub enum Output<Endpoint> {
     OnResourceEmpty,
 }
 
+type AudioMixerManuals<T> = TaskSwitcherBranch<TaskGroup<manual::Input, Output<T>, ManualMixer<T>, 4>, (usize, Output<T>)>;
+
 pub struct AudioMixer<Endpoint: Clone> {
     room: ClusterRoomHash,
     mix_channel_id: ChannelId,
@@ -64,7 +66,7 @@ pub struct AudioMixer<Endpoint: Clone> {
     subscriber1: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint, 1>, Output<Endpoint>>,
     subscriber2: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint, 2>, Output<Endpoint>>,
     subscriber3: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint, 3>, Output<Endpoint>>,
-    manuals: TaskSwitcherBranch<TaskGroup<manual::Input, Output<Endpoint>, ManualMixer<Endpoint>, 4>, (usize, Output<Endpoint>)>,
+    manuals: AudioMixerManuals<Endpoint>,
     switcher: TaskSwitcher,
     last_tick: Instant,
 }
