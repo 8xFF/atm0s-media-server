@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut};
+use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut, TimePivot, TimeTicker};
 use clap::Parser;
 use media_server_gateway::ServiceKind;
 use media_server_protocol::{
@@ -62,6 +62,18 @@ pub struct Args {
     /// Max ccu per core
     #[arg(env, long, default_value_t = 200)]
     ccu_per_core: u32,
+
+    /// Record cache
+    #[arg(env, long, default_value = "./record_cache/")]
+    record_cache: String,
+
+    /// Record memory max size in bytes
+    #[arg(env, long, default_value_t = 100_000_000)]
+    record_mem_max_size: usize,
+
+    /// Record upload workers
+    #[arg(env, long, default_value_t = 5)]
+    record_upload_worker: usize,
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -146,11 +158,17 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let mut node_metrics_collector = NodeMetricsCollector::default();
 
     // Collect record packets into chunks and upload to service
-    let mut record_service = MediaRecordService::new();
+    let mut record_service = MediaRecordService::new(args.record_upload_worker, &args.record_cache, args.record_mem_max_size);
+    let timer = TimePivot::build();
+    let mut ticker = TimeTicker::build(1000);
 
     loop {
         if controller.process().is_none() {
             break;
+        }
+
+        if ticker.tick(Instant::now()) {
+            record_service.on_tick(timer.timestamp_ms(Instant::now()));
         }
 
         // Pop from metric collector and pass to Gateway agent service
@@ -161,7 +179,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             );
         }
         // Pop control and event from record storage
-        while let Some(out) = record_service.pop_output(Instant::now()) {
+        while let Some(out) = record_service.pop_output() {
             match out {
                 media_server_record::Output::Stats(_) => {
                     //TODO
@@ -221,7 +239,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                     match event {
                         media_server_connector::agent_service::Event::Response(res) => match (userdata, res) {
                             (UserData::Record(upload_id), connector_response::Response::Record(res)) => {
-                                record_service.on_input(Instant::now(), media_server_record::Input::UploadResponse(upload_id, res));
+                                record_service.on_input(timer.timestamp_ms(Instant::now()), media_server_record::Input::UploadResponse(upload_id, res));
                             }
                             _ => {}
                         },
@@ -231,7 +249,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                     }
                 }
                 ExtOut::Record(session, ts, event) => {
-                    record_service.on_input(Instant::now(), media_server_record::Input::Event(session, ts, event));
+                    record_service.on_input(timer.timestamp_ms(Instant::now()), media_server_record::Input::Event(session, timer.timestamp_ms(ts), event));
                 }
                 _ => {}
             }

@@ -246,6 +246,11 @@ impl EndpointInternal {
                     now,
                     peer_event::Event::Disconnected(peer_event::Disconnected { duration_ms: 0, reason: 0 }), //TODO provide correct reason
                 ));
+                if self.cfg.record {
+                    if self.cfg.record {
+                        self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::Disconnected));
+                    }
+                }
                 self.leave_room(now);
                 self.queue.push_back(InternalOutput::Destroy);
             }

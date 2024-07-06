@@ -6,3 +6,10 @@ edition = "2021"
 [dependencies]
 media-server-protocol = { path = "../protocol" }
 log = { workspace = true }
+tokio = { version = "1", features = ["sync", "fs"] }
+rand = { workspace = true }
+reqwest = { version = "0.12", features = ["stream"] }
+tokio-util = "0.7.11"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
