@@ -394,9 +394,11 @@ pub struct RecordReq {
     pub peer: ::prost::alloc::string::String,
     #[prost(uint64, tag = "3")]
     pub session: u64,
-    #[prost(uint64, tag = "4")]
-    pub from_ts: u64,
+    #[prost(uint32, tag = "4")]
+    pub index: u32,
     #[prost(uint64, tag = "5")]
+    pub from_ts: u64,
+    #[prost(uint64, tag = "6")]
     pub to_ts: u64,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

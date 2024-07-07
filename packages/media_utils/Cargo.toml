@@ -9,3 +9,6 @@ edition = "2021"
 smallmap = { workspace = true }
 sorted-vec = "0.8"
 log = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+uriparse = "0.6.4"
+serde-querystring = "0.2.1"

@@ -11,6 +11,7 @@ use crate::storage::{memory::MemoryFile, RecordFile};
 const MAX_FILE_LEN_MS: u64 = 60_000;
 
 struct RoomState {
+    index: u32,
     room: RoomId,
     peer: PeerId,
     queue: Option<Vec<SessionRecordRow>>,
@@ -42,20 +43,25 @@ impl SessionRecord {
 
         match &event {
             SessionRecordEvent::JoinRoom(room, peer) => {
+                log::info!("[SessionRecord] {} join room {}/{}", self.session, room.0, peer.0);
                 self.state = Some(RoomState {
+                    index: 0,
                     room: room.clone(),
                     peer: peer.clone(),
                     queue: Some(vec![SessionRecordRow { ts: event_ts, event }]),
                 });
                 None
             }
-            SessionRecordEvent::LeaveRoom => self.pop_file(now_ms, true),
+            SessionRecordEvent::LeaveRoom => {
+                log::info!("[SessionRecord] {} leave room", self.session);
+                self.pop_file(now_ms, true)
+            }
             SessionRecordEvent::Disconnected => {
                 self.closed = true;
                 self.pop_file(now_ms, true)
             }
             _ => {
-                let state = self.state.as_mut().expect("Should have state");
+                let state = self.state.as_mut()?;
                 if let Some(queue) = &mut state.queue {
                     queue.push(SessionRecordRow { ts: event_ts, event });
                 } else {
@@ -88,11 +94,14 @@ impl SessionRecord {
             buf[0..4].copy_from_slice(&(len as u32).to_be_bytes());
             file.write(&buf[0..len]).expect("should write");
         }
+        let index = state.index;
+        state.index += 1;
         Some((
             RecordReq {
                 room: state.room.0.clone(),
                 peer: state.peer.0.clone(),
                 session: self.session,
+                index,
                 from_ts,
                 to_ts,
             },
@@ -100,3 +109,5 @@ impl SessionRecord {
         ))
     }
 }
+
+//TODO: test with session record for ensuring split 1 minute chunks

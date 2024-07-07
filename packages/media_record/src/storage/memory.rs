@@ -8,7 +8,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use super::{FileId, RecordFile, Storage};
 
 pub struct MemoryFile {
-    chunks: VecDeque<Vec<u8>>,
+    chunks: VecDeque<(usize, Vec<u8>)>,
     id: FileId,
     len: usize,
     start_ts: Option<u64>,
@@ -61,7 +61,7 @@ impl RecordFile for MemoryFile {
 
 impl Write for MemoryFile {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.chunks.push_back(buf.to_vec());
+        self.chunks.push_back((0, buf.to_vec()));
         self.len += buf.len();
         Ok(buf.len())
     }
@@ -76,9 +76,14 @@ impl Write for MemoryFile {
 impl AsyncRead for MemoryFile {
     fn poll_read(mut self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> std::task::Poll<std::io::Result<()>> {
         //TODO can pop multi times
-        if let Some(first) = self.chunks.pop_front() {
-            self.len -= first.len();
-            buf.put_slice(&first);
+        if let Some((used_len, data)) = self.chunks.front_mut() {
+            let read_len = buf.remaining().min(data.len() - *used_len);
+            buf.put_slice(&data[*used_len..(*used_len + read_len)]);
+            *used_len += read_len;
+            if *used_len == data.len() {
+                self.chunks.pop_front();
+            }
+            self.len -= read_len;
             std::task::Poll::Ready(Ok(()))
         } else {
             std::task::Poll::Ready(Ok(()))
@@ -88,7 +93,7 @@ impl AsyncRead for MemoryFile {
 
 impl AsyncWrite for MemoryFile {
     fn poll_write(mut self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>, buf: &[u8]) -> std::task::Poll<std::io::Result<usize>> {
-        self.chunks.push_back(buf.to_vec());
+        self.chunks.push_back((0, buf.to_vec()));
         self.len += buf.len();
         std::task::Poll::Ready(Ok(buf.len()))
     }

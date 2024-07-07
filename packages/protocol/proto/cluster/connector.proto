@@ -163,8 +163,9 @@ message RecordReq {
     string room = 1;
     string peer = 2;
     uint64 session = 3;
-    uint64 from_ts = 4;
-    uint64 to_ts = 5;
+    uint32 index = 4;
+    uint64 from_ts = 5;
+    uint64 to_ts = 6;
 }
 
 message RecordRes {

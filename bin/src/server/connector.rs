@@ -44,12 +44,16 @@ pub struct Args {
     /// DB Uri
     #[arg(env, long, default_value = "sqlite://connector.db?mode=rwc")]
     db_uri: String,
+
+    /// S3 Uri
+    #[arg(env, long, default_value = "http://user:pass@localhost:9000")]
+    s3_uri: String,
 }
 
 pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
-    let connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri).await);
+    let connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri, &args.s3_uri).await);
 
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");

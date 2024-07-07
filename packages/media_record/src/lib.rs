@@ -43,8 +43,8 @@ pub struct MediaRecordService {
 impl MediaRecordService {
     pub fn new(workers: usize, path: &str, max_mem_size: usize) -> Self {
         let (mut worker, worker_tx) = UploadWorker::new(path, max_mem_size);
-        for _ in 0..workers {
-            worker.start_child_worker();
+        for i in 0..workers {
+            worker.start_child_worker(i);
         }
 
         tokio::spawn(async move {
@@ -77,6 +77,7 @@ impl MediaRecordService {
         match event {
             Input::Event(session, ts, event) => self.on_record_event(now, session, ts, event),
             Input::UploadResponse(req_id, res) => {
+                log::info!("[MediaWorkerService] received res for req {req_id}");
                 if let Some(file_id) = self.chunk_map.remove(&req_id) {
                     if let Err(e) = self.worker_tx.try_send(worker::Input::UploadLink(file_id, res.s3_uri)) {
                         log::error!("[MediaWorkerService] send record link to record controller worker error {e}");
@@ -102,6 +103,7 @@ impl MediaRecordService {
     fn process_chunk(req_seed: &mut u64, req: RecordReq, file: MemoryFile, queue: &mut VecDeque<Output>, chunk_map: &mut HashMap<u64, FileId>, worker_tx: &Sender<worker::Input>) {
         let req_id = *req_seed;
         *req_seed += 1;
+        log::info!("[MediaWorkerService] request upload uri with req_id {req_id}");
         queue.push_back(Output::UploadRequest(req_id, req));
         chunk_map.insert(req_id, file.id());
         if let Err(e) = worker_tx.try_send(worker::Input::RecordChunk(file)) {
