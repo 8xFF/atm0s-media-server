@@ -13,13 +13,14 @@ mod session;
 mod storage;
 mod worker;
 
+//TODO: generate MediaRecordStats
 pub struct MediaRecordStats {
-    pending_chunks: usize,
-    pending_bytes: usize,
-    uploading_chunks: usize,
-    uploading_bytes: usize,
-    uploaded_chunks: usize,
-    uploaded_bytes: usize,
+    pub pending_chunks: usize,
+    pub pending_bytes: usize,
+    pub uploading_chunks: usize,
+    pub uploading_bytes: usize,
+    pub uploaded_chunks: usize,
+    pub uploaded_bytes: usize,
 }
 
 pub enum Input {
