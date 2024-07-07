@@ -8,6 +8,9 @@ use media_server_protocol::protobuf::cluster_connector::MediaConnectorServiceCli
 use media_server_protocol::rpc::quinn::{QuinnClient, QuinnStream};
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use media_server_secure::{MediaEdgeSecure, MediaGatewaySecure};
+#[cfg(feature = "embed_static")]
+use utils::EmbeddedFilesEndpoint;
+#[cfg(not(feature = "embed_static"))]
 use poem::endpoint::StaticFilesEndpoint;
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 use poem_openapi::types::{ToJSON, Type};
@@ -20,6 +23,16 @@ mod api_console;
 mod api_media;
 mod api_token;
 mod utils;
+
+#[cfg(feature = "embed_static")]
+#[derive(rust_embed::RustEmbed)]
+#[folder = "public/media"]
+pub struct PublicMediaFiles;
+
+#[cfg(feature = "embed_static")]
+#[derive(rust_embed::RustEmbed)]
+#[folder = "public/console"]
+pub struct PublicConsoleFiles;
 
 #[derive(Debug, Default, Object)]
 pub struct Response<T: ParseFromJSON + ToJSON + Type + Send + Sync> {
@@ -68,9 +81,13 @@ pub async fn run_console_http_server(
 
     let ctx = api_console::ConsoleApisCtx { secure, storage, connector };
 
+    #[cfg(not(feature = "embed_static"))]
+    let console_panel = StaticFilesEndpoint::new("./public/console/").index_file("index.html");
+    #[cfg(feature = "embed_static")]
+    let console_panel = EmbeddedFilesEndpoint::<PublicConsoleFiles>::new();
+
     let route = Route::new()
-        //TODO build UI and embed to here
-        .nest("/", StaticFilesEndpoint::new("./public").index_file("index.html"))
+        .nest("/", console_panel)
         //user
         .nest("/api/user/", user_service.data(ctx.clone()))
         .nest("/api/user/ui", user_ui)
@@ -102,8 +119,14 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     let media_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis::<ES>::new(), "Media Gateway APIs", env!("CARGO_PKG_VERSION")).server("/media/");
     let media_ui = media_service.swagger_ui();
     let media_spec = media_service.spec();
+
+    #[cfg(not(feature = "embed_static"))]
+    let samples = StaticFilesEndpoint::new("./public/media/").index_file("index.html");
+    #[cfg(feature = "embed_static")]
+    let samples = EmbeddedFilesEndpoint::<PublicMediaFiles>::new();
+
     let route = Route::new()
-        .nest("/samples", StaticFilesEndpoint::new("./public").index_file("index.html"))
+        .nest("/samples", samples)
         .nest("/token/", token_service.data(api_token::TokenServerCtx { secure: gateway_secure }))
         .nest("/token/ui", token_ui)
         .at("/token/spec", poem::endpoint::make_sync(move |_| token_spec.clone()))
@@ -137,8 +160,14 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
     let media_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis::<ES>::new(), "Media Gateway APIs", env!("CARGO_PKG_VERSION")).server("/media/");
     let media_ui = media_service.swagger_ui();
     let media_spec = media_service.spec();
+
+    #[cfg(not(feature = "embed_static"))]
+    let samples = StaticFilesEndpoint::new("./public/media/").index_file("index.html");
+    #[cfg(feature = "embed_static")]
+    let samples = EmbeddedFilesEndpoint::<PublicMediaFiles>::new();
+
     let route = route
-        .nest("/samples", StaticFilesEndpoint::new("./public").index_file("index.html"))
+        .nest("/samples", samples)
         .nest("/", media_service.data(api_media::MediaServerCtx { sender, secure: edge_secure }))
         .nest("/ui", media_ui)
         .at("/spec", poem::endpoint::make_sync(move |_| media_spec.clone()))

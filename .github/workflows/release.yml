@@ -23,8 +23,45 @@ env:
   OPENSSL_STATIC: true
 
 jobs:
+  build-console:
+    name: build-frontend
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_URL: /api/
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          version: 8
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build dashboard
+        run: |
+          VERSION=$(cat bin/CONSOLE_FRONTEND)
+          git clone https://github.com/8xFF/atm0s-media-server-console.git
+          cd atm0s-media-server-console
+          git checkout $VERSION
+          pnpm install
+          cd apps/console
+          pnpm build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-frontend
+          path: atm0s-media-server-console/apps/console/out
+
   build-release:
     name: build-release
+    needs: build-console
     runs-on: ${{ matrix.os }}
     env:
       RUST_BACKTRACE: 1
@@ -153,6 +190,11 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: console-frontend
+          path: bin/public/console
+
       - name: Patch some libs
         run: |
           mv ./.cargo/config.toml.release-build .cargo/config.toml
@@ -162,7 +204,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }}
+          args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }} --features embed_static
 
       - name: Rename file
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
