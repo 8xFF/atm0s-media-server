@@ -57,8 +57,6 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
         let worker = MediaServerWorker::new(
             index,
             cfg.node.node_id,
-            // random(),
-            // NOTE: Not sure if session was supposed to e used here instead of random(); Input Required.
             cfg.session,
             &cfg.node.secret,
             cfg.controller,
