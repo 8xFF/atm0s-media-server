@@ -42,10 +42,11 @@ mod webrtc;
 mod whep;
 mod whip;
 
+#[allow(clippy::large_enum_variant)]
 pub enum VariantParams<ES> {
     Whip(RoomId, PeerId),
     Whep(RoomId, PeerId),
-    Webrtc(String, Box<ConnectRequest>, Arc<ES>),
+    Webrtc(String, ConnectRequest, Arc<ES>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -55,9 +56,10 @@ pub enum Variant {
     Webrtc,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
-    RestartIce(u64, Variant, IpAddr, String, Box<ConnectRequest>),
+    RestartIce(u64, Variant, IpAddr, String, ConnectRequest),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -144,7 +146,7 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
                 //we need to start sctp as client side for handling restart-ice in new server
                 //if not, datachannel will not connect successful after reconnect to new server
                 rtc.direct_api().start_sctp(true);
-                Box::new(webrtc::TransportWebrtcSdk::new(*req, secure, remote))
+                Box::new(webrtc::TransportWebrtcSdk::new(req, secure, remote))
             }
         };
 
