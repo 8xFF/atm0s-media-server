@@ -9,9 +9,14 @@ use storage::{memory::MemoryFile, FileId, RecordFile};
 use tokio::sync::mpsc::Sender;
 use worker::UploadWorker;
 
+mod compose;
+mod file_record;
 mod session;
 mod storage;
 mod worker;
+
+pub use file_record::SessionReader;
+pub use compose::ComposeSessionWebm;
 
 //TODO: generate MediaRecordStats
 pub struct MediaRecordStats {

@@ -134,9 +134,9 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
 
         let mut rtc = rtc_config.build();
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
-            VariantParams::Whip(room, peer, record) => Box::new(whip::TransportWebrtcWhip::new(room, peer, remote)),
+            VariantParams::Whip(room, peer, _record) => Box::new(whip::TransportWebrtcWhip::new(room, peer, remote)),
             VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer, remote)),
-            VariantParams::Webrtc(_user_agent, req, record, secure) => {
+            VariantParams::Webrtc(_user_agent, req, _record, secure) => {
                 rtc.direct_api().create_data_channel(ChannelConfig {
                     label: "data".to_string(),
                     negotiated: Some(1000),

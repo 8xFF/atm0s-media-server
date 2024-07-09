@@ -1,12 +1,10 @@
-use std::io::{Read, Write};
-
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
     protobuf::cluster_connector::RecordReq,
     record::{SessionRecordEvent, SessionRecordRow},
 };
 
-use crate::storage::{memory::MemoryFile, RecordFile};
+use crate::{file_record::RecordChunkWriter, storage::memory::MemoryFile};
 
 const MAX_FILE_LEN_MS: u64 = 60_000;
 
@@ -85,14 +83,10 @@ impl SessionRecord {
         }
 
         let queue = state.queue.take()?;
-        let mut file = MemoryFile::default();
-        file.set_start_ts(from_ts);
-        file.set_end_ts(to_ts);
-        let mut buf = [0; 1500];
-        for mut row in queue {
-            let len = row.read(&mut buf[4..]).expect("should read");
-            buf[0..4].copy_from_slice(&(len as u32).to_be_bytes());
-            file.write(&buf[0..len]).expect("should write");
+        let mut chunk = RecordChunkWriter::new(&state.room.0, &state.peer.0, self.session, from_ts, to_ts);
+
+        for row in queue {
+            chunk.push(row);
         }
         let index = state.index;
         state.index += 1;
@@ -105,7 +99,7 @@ impl SessionRecord {
                 from_ts,
                 to_ts,
             },
-            file,
+            chunk.take(),
         ))
     }
 }
