@@ -148,6 +148,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         ));
         let gateway = Arc::new(GatewayAgentServiceBuilder::new(media.max_live));
         let connector = Arc::new(ConnectorAgentServiceBuilder::new());
+        let history = Arc::new(DataWorkerHistory::default());
 
         let sdn_config = SdnConfig {
             node_id,
@@ -158,6 +159,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     handshake_builder: Arc::new(HandshakeBuilderXDA),
                     random: Box::new(OsRng),
                     services: vec![visualization.clone(), discovery.clone(), gateway.clone(), connector.clone()],
+                    history: history.clone(),
                 })
             } else {
                 None
@@ -166,7 +168,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             data: DataPlaneCfg {
                 worker_id: 0,
                 services: vec![visualization, discovery, gateway],
-                history: Arc::new(DataWorkerHistory::default()),
+                history,
             },
         };
 
