@@ -22,7 +22,7 @@ impl AsyncRead for BodyWrap {
                 buf.put_slice(&tmp_buf[0..size]);
                 std::task::Poll::Ready(Ok(()))
             }
-            std::task::Poll::Ready(Err(e)) => std::task::Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, ""))),
+            std::task::Poll::Ready(Err(e)) => std::task::Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, e.to_string()))),
             std::task::Poll::Pending => std::task::Poll::Pending,
         }
     }
@@ -41,21 +41,33 @@ async fn read_util_full<R: AsyncRead + Unpin>(source: &mut R, buf: &mut [u8]) ->
 pub struct RecordChunkReader<R> {
     source: R,
     buf: [u8; 1500],
-    header: SessionRecordHeader,
+    header: Option<SessionRecordHeader>,
 }
 
 impl<R: AsyncRead + Unpin> RecordChunkReader<R> {
-    pub async fn new(mut source: R) -> std::io::Result<Self> {
-        let header_len = source.read_u32().await?;
+    pub async fn new(source: R) -> std::io::Result<Self> {
+        Ok(Self { source, buf: [0; 1500], header: None })
+    }
+
+    pub async fn connect(&mut self) -> std::io::Result<()> {
+        let header_len = self.source.read_u32().await?;
         log::info!("header len {header_len}");
-        let mut buf = [0; 1500];
-        read_util_full(&mut source, &mut buf[0..header_len as usize]).await?;
-        let header = SessionRecordHeader::read_from(&buf[0..header_len as usize])?;
-        Ok(Self { source, buf, header })
+        read_util_full(&mut self.source, &mut self.buf[0..header_len as usize]).await?;
+        let header = SessionRecordHeader::read_from(&self.buf[0..header_len as usize])?;
+        self.header = Some(header);
+        Ok(())
     }
 
     pub async fn pop(&mut self) -> std::io::Result<Option<SessionRecordRow>> {
-        let chunk_len = self.source.read_u32().await?;
+        let chunk_len = match self.source.read_u32().await {
+            Ok(len) => len,
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::UnexpectedEof {
+                    return Ok(None);
+                }
+                return Err(err);
+            }
+        };
         log::debug!("chunk len {chunk_len}");
         read_util_full(&mut self.source, &mut self.buf[0..chunk_len as usize]).await?;
         let event = SessionRecordRow::read_from(&self.buf[0..chunk_len as usize])?;

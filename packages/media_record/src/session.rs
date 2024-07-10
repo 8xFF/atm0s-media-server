@@ -4,7 +4,7 @@ use media_server_protocol::{
     record::{SessionRecordEvent, SessionRecordRow},
 };
 
-use crate::{file_record::RecordChunkWriter, storage::memory::MemoryFile};
+use crate::{raw_record::RecordChunkWriter, storage::memory::MemoryFile};
 
 const MAX_FILE_LEN_MS: u64 = 60_000;
 
