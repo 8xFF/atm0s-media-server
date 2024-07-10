@@ -42,7 +42,7 @@ impl SessionReader {
         let res = reqwest::get(files.sign(Duration::from_secs(3600)))
             .await
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        let text = res.text().await.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, ""))?;
+        let text = res.text().await.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         let parsed = ListObjectsV2::parse_response(&text).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         self.files = parsed.contents.into_iter().map(|f| f.key).collect::<Vec<_>>();
         self.files.sort();

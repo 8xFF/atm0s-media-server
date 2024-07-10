@@ -243,7 +243,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                             }
                             _ => {}
                         },
-                        media_server_connector::agent_service::Event::Stats { queue, inflight, acked } => {
+                        media_server_connector::agent_service::Event::Stats { queue: _, inflight: _, acked: _ } => {
                             //TODO
                         }
                     }
