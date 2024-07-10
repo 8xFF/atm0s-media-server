@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct WhipToken {
     pub room: String,
     pub peer: String,
+    pub record: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -16,4 +17,5 @@ pub struct WhepToken {
 pub struct WebrtcToken {
     pub room: Option<String>,
     pub peer: Option<String>,
+    pub record: bool,
 }

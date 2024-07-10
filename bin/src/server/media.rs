@@ -2,15 +2,24 @@ use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr, SocketAddrV4},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut};
+use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut, TimePivot, TimeTicker};
 use clap::Parser;
 use media_server_gateway::ServiceKind;
-use media_server_protocol::{gateway::GATEWAY_RPC_PORT, protobuf::cluster_gateway::MediaEdgeServiceServer, rpc::quinn::QuinnServer};
-use media_server_runner::MediaConfig;
+use media_server_protocol::{
+    gateway::GATEWAY_RPC_PORT,
+    protobuf::{
+        cluster_connector::{connector_request, connector_response},
+        cluster_gateway::MediaEdgeServiceServer,
+    },
+    rpc::quinn::QuinnServer,
+};
+use media_server_record::MediaRecordService;
+use media_server_runner::{MediaConfig, UserData, SE};
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
+use media_server_utils::now_ms;
 use rand::random;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sans_io_runtime::{backend::PollingBackend, Controller};
@@ -53,6 +62,18 @@ pub struct Args {
     /// Max ccu per core
     #[arg(env, long, default_value_t = 200)]
     ccu_per_core: u32,
+
+    /// Record cache
+    #[arg(env, long, default_value = "./record_cache/")]
+    record_cache: String,
+
+    /// Record memory max size in bytes
+    #[arg(env, long, default_value_t = 100_000_000)]
+    record_mem_max_size: usize,
+
+    /// Record upload workers
+    #[arg(env, long, default_value_t = 5)]
+    record_upload_worker: usize,
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -136,9 +157,18 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     // for routing to best media-node
     let mut node_metrics_collector = NodeMetricsCollector::default();
 
+    // Collect record packets into chunks and upload to service
+    let mut record_service = MediaRecordService::new(args.record_upload_worker, &args.record_cache, args.record_mem_max_size);
+    let timer = TimePivot::build();
+    let mut ticker = TimeTicker::build(1000);
+
     loop {
         if controller.process().is_none() {
             break;
+        }
+
+        if ticker.tick(Instant::now()) {
+            record_service.on_tick(timer.timestamp_ms(Instant::now()));
         }
 
         // Pop from metric collector and pass to Gateway agent service
@@ -148,6 +178,22 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                 ExtIn::NodeStats(metrics),
             );
         }
+        // Pop control and event from record storage
+        while let Some(out) = record_service.pop_output() {
+            match out {
+                media_server_record::Output::Stats(_) => {
+                    //TODO
+                }
+                media_server_record::Output::UploadRequest(upload_id, req) => {
+                    controller.send_to_best(ExtIn::Sdn(SdnExtIn::ServicesControl(
+                        media_server_connector::AGENT_SERVICE_ID.into(),
+                        UserData::Record(upload_id),
+                        media_server_connector::agent_service::Control::Request(now_ms(), connector_request::Request::Record(req)).into(),
+                    )));
+                }
+            }
+        }
+
         while let Ok(control) = vnet_rx.try_recv() {
             controller.send_to_best(ExtIn::Sdn(SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, control.into())));
         }
@@ -188,6 +234,22 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                     if let Err(e) = vnet_tx.try_send(event) {
                         log::error!("[MediaEdge] forward Sdn SocketEvent error {:?}", e);
                     }
+                }
+                ExtOut::Sdn(SdnExtOut::ServicesEvent(_service, userdata, SE::Connector(event))) => {
+                    match event {
+                        media_server_connector::agent_service::Event::Response(res) => match (userdata, res) {
+                            (UserData::Record(upload_id), connector_response::Response::Record(res)) => {
+                                record_service.on_input(timer.timestamp_ms(Instant::now()), media_server_record::Input::UploadResponse(upload_id, res));
+                            }
+                            _ => {}
+                        },
+                        media_server_connector::agent_service::Event::Stats { queue, inflight, acked } => {
+                            //TODO
+                        }
+                    }
+                }
+                ExtOut::Record(session, ts, event) => {
+                    record_service.on_input(timer.timestamp_ms(Instant::now()), media_server_record::Input::Event(session, timer.timestamp_ms(ts), event));
                 }
                 _ => {}
             }

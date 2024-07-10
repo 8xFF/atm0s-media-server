@@ -1,5 +1,5 @@
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_connector::connector_request;
+use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response};
 use serde_json::Value;
 
 pub mod agent_service;
@@ -64,7 +64,7 @@ pub struct EventInfo {
 }
 
 pub trait Storage {
-    fn on_event(&self, from: NodeId, ts: u64, req_id: u64, event: connector_request::Event) -> impl std::future::Future<Output = Option<()>> + Send;
+    fn on_event(&self, from: NodeId, ts: u64, req: connector_request::Request) -> impl std::future::Future<Output = Option<connector_response::Response>> + Send;
 }
 
 pub trait Querier {

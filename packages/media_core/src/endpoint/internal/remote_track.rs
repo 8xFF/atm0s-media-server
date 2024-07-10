@@ -6,7 +6,8 @@ use media_server_protocol::{
     endpoint::{BitrateControlMode, TrackMeta, TrackName, TrackPriority},
     media::{MediaKind, MediaLayersBitrate},
     protobuf::{cluster_connector::peer_event, shared::Kind},
-    transport::RpcError,
+    record::SessionRecordEvent,
+    transport::{RemoteTrackId, RpcError},
 };
 use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
@@ -33,6 +34,7 @@ pub enum Output {
     Event(EndpointRemoteTrackEvent),
     Cluster(ClusterRoomHash, ClusterRemoteTrackControl),
     PeerEvent(Instant, peer_event::Event),
+    RecordEvent(Instant, SessionRecordEvent),
     RpcRes(EndpointReqId, EndpointRemoteTrackRes),
     Started(MediaKind, TrackPriority),
     Update(MediaKind, TrackPriority),
@@ -40,6 +42,7 @@ pub enum Output {
 }
 
 pub struct EndpointRemoteTrack {
+    id: RemoteTrackId,
     meta: TrackMeta,
     room: Option<ClusterRoomHash>,
     name: Option<TrackName>,
@@ -48,12 +51,14 @@ pub struct EndpointRemoteTrack {
     /// This is for storing current stream layers, everytime key-frame arrived we will set this if it not set
     last_layers: Option<MediaLayersBitrate>,
     cluster_bitrate_limit: Option<(u64, u64)>,
+    record: bool,
 }
 
 impl EndpointRemoteTrack {
-    pub fn new(room: Option<ClusterRoomHash>, meta: TrackMeta) -> Self {
+    pub fn new(room: Option<ClusterRoomHash>, id: RemoteTrackId, meta: TrackMeta, record: bool) -> Self {
         log::info!("[EndpointRemoteTrack] created with room {:?} meta {:?}", room, meta);
         Self {
+            id,
             meta,
             room,
             name: None,
@@ -61,6 +66,7 @@ impl EndpointRemoteTrack {
             allocate_bitrate: None,
             last_layers: None,
             cluster_bitrate_limit: None,
+            record,
         }
     }
 
@@ -71,6 +77,10 @@ impl EndpointRemoteTrack {
         let name = return_if_none!(self.name.clone());
         log::info!("[EndpointRemoteTrack] started as name {name} after join room");
         self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Started(name.clone(), self.meta.clone())));
+        if self.record {
+            self.queue
+                .push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStarted(self.id, name.clone(), self.meta.clone())));
+        }
         self.queue.push_back(Output::PeerEvent(
             now,
             peer_event::Event::RemoteTrackStarted(peer_event::RemoteTrackStarted {
@@ -86,6 +96,9 @@ impl EndpointRemoteTrack {
         let name = return_if_none!(self.name.clone());
         log::info!("[EndpointRemoteTrack] stopped as name {name} after leave room");
         self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Ended(name.clone(), self.meta.clone())));
+        if self.record {
+            self.queue.push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStopped(self.id)));
+        }
         self.queue.push_back(Output::PeerEvent(
             now,
             peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
@@ -118,6 +131,10 @@ impl EndpointRemoteTrack {
                 self.queue
                     .push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name.clone()), self.meta.clone())));
                 self.queue.push_back(Output::Started(self.meta.kind, priority));
+                if self.record {
+                    self.queue
+                        .push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStarted(self.id, name.clone().into(), self.meta.clone())));
+                }
                 self.queue.push_back(Output::PeerEvent(
                     now,
                     peer_event::Event::RemoteTrackStarted(peer_event::RemoteTrackStarted {
@@ -141,6 +158,10 @@ impl EndpointRemoteTrack {
                     media.layers.clone_from(&self.last_layers);
                 }
 
+                if self.record {
+                    self.queue.push_back(Output::RecordEvent(now, SessionRecordEvent::TrackMedia(self.id, media.clone())));
+                }
+
                 let room = return_if_none!(self.room.as_ref());
                 self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Media(media)));
             }
@@ -150,6 +171,9 @@ impl EndpointRemoteTrack {
                 log::info!("[EndpointRemoteTrack] stopped with name {name} in room {room}");
                 self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Ended(name.clone(), self.meta.clone())));
                 self.queue.push_back(Output::Stopped(self.meta.kind));
+                if self.record {
+                    self.queue.push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStopped(self.id)));
+                }
                 self.queue.push_back(Output::PeerEvent(
                     now,
                     peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
