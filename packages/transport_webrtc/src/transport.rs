@@ -42,6 +42,7 @@ mod webrtc;
 mod whep;
 mod whip;
 
+#[allow(clippy::large_enum_variant)]
 pub enum VariantParams<ES> {
     Whip(RoomId, PeerId),
     Whep(RoomId, PeerId),
@@ -55,6 +56,7 @@ pub enum Variant {
     Webrtc,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
     RestartIce(u64, Variant, IpAddr, String, ConnectRequest),

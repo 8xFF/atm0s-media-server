@@ -181,6 +181,7 @@ impl Apis {
     }
 
     /// get events
+    #[allow(clippy::too_many_arguments)]
     #[oai(path = "/:node/log/events", method = "get")]
     async fn events(
         &self,

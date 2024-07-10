@@ -52,9 +52,9 @@ impl<Endpoint: Clone> ManualMixer<Endpoint> {
 
     fn attach(&mut self, _now: Instant, source: TrackSource) {
         let channel_id = id_generator::gen_channel_id(self.room, &source.peer, &source.track);
-        if !self.sources.contains_key(&channel_id) {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.sources.entry(channel_id) {
             log::info!("[ClusterManualMixer] add source {:?} => sub {channel_id}", source);
-            self.sources.insert(channel_id, source);
+            e.insert(source);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto)));
         }
     }
@@ -85,7 +85,7 @@ impl<Endpoint: Clone> ManualMixer<Endpoint> {
 
     fn detach(&mut self, _now: Instant, source: TrackSource) {
         let channel_id = id_generator::gen_channel_id(self.room, &source.peer, &source.track);
-        if let Some(_) = self.sources.remove(&channel_id) {
+        if self.sources.remove(&channel_id).is_some() {
             log::info!("[ClusterManualMixer] remove source {:?} => unsub {channel_id}", source);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)));
         }
@@ -124,7 +124,7 @@ impl<Endpoint: Clone> Task<Input, Output<Endpoint>> for ManualMixer<Endpoint> {
             Input::LeaveRoom => {
                 // We need manual release sources because it is from client request,
                 // we cannot ensure client will release it before it disconnect.
-                let sources = std::mem::replace(&mut self.sources, Default::default());
+                let sources = std::mem::take(&mut self.sources);
                 for (channel_id, source) in sources {
                     log::info!("[ClusterManualMixer] remove source {:?} on queue => unsub {channel_id}", source);
                     self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)));

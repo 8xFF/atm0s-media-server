@@ -121,6 +121,7 @@ impl MigrationTrait for Migration {
 enum Room {
     Table,
     Id,
+    #[allow(clippy::enum_variant_names)]
     Room,
     CreatedAt,
 }
@@ -130,6 +131,7 @@ enum Peer {
     Table,
     Id,
     Room,
+    #[allow(clippy::enum_variant_names)]
     Peer,
     CreatedAt,
 }
@@ -165,6 +167,7 @@ enum Event {
     NodeTs,
     Session,
     CreatedAt,
+    #[allow(clippy::enum_variant_names)]
     Event,
     Meta,
 }

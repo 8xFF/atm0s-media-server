@@ -33,6 +33,12 @@ pub struct ConnectorAgentService<UserData, SC, SE, TC, TW> {
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
+impl<UserData, SC, SE, TC, TW> Default for ConnectorAgentService<UserData, SC, SE, TC, TW> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<UserData, SC, SE, TC, TW> ConnectorAgentService<UserData, SC, SE, TC, TW> {
     pub fn new() -> Self {
         Self {
@@ -157,6 +163,12 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
 
 pub struct ConnectorAgentServiceBuilder<UserData, SC, SE, TC, TW> {
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
+}
+
+impl<UserData, SC, SE, TC, TW> Default for ConnectorAgentServiceBuilder<UserData, SC, SE, TC, TW> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<UserData, SC, SE, TC, TW> ConnectorAgentServiceBuilder<UserData, SC, SE, TC, TW> {

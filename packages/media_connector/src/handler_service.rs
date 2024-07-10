@@ -37,6 +37,12 @@ pub struct ConnectorHandlerService<UserData, SC, SE, TC, TW> {
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
+impl<UserData, SC, SE, TC, TW> Default for ConnectorHandlerService<UserData, SC, SE, TC, TW> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<UserData, SC, SE, TC, TW> ConnectorHandlerService<UserData, SC, SE, TC, TW> {
     pub fn new() -> Self {
         Self {
@@ -150,6 +156,12 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
 
 pub struct ConnectorHandlerServiceBuilder<UserData, SC, SE, TC, TW> {
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
+}
+
+impl<UserData, SC, SE, TC, TW> Default for ConnectorHandlerServiceBuilder<UserData, SC, SE, TC, TW> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<UserData, SC, SE, TC, TW> ConnectorHandlerServiceBuilder<UserData, SC, SE, TC, TW> {

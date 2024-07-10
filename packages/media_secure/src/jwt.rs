@@ -2,8 +2,8 @@ use crate::{MediaConsoleSecure, MediaEdgeSecure, MediaGatewaySecure};
 use jwt_simple::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 
-const CONN_ID_TYPE: &'static str = "conn";
-const CONSOLE_SESSION_TYPE: &'static str = "console_session";
+const CONN_ID_TYPE: &str = "conn";
+const CONSOLE_SESSION_TYPE: &str = "console_session";
 
 pub struct MediaEdgeSecureJwt {
     key: HS256Key,
