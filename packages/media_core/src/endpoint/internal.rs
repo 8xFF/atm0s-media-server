@@ -43,10 +43,12 @@ pub enum InternalOutput {
     Destroy,
 }
 
+type EndpointInternalWaitJoin = Option<(EndpointReqId, RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>)>;
+
 pub struct EndpointInternal {
     cfg: EndpointCfg,
     state: Option<(Instant, TransportState)>,
-    wait_join: Option<(EndpointReqId, RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>)>,
+    wait_join: EndpointInternalWaitJoin,
     joined: Option<(ClusterRoomHash, RoomId, PeerId, Option<AudioMixerMode>)>,
     local_tracks_id: Small2dMap<LocalTrackId, usize>,
     remote_tracks_id: Small2dMap<RemoteTrackId, usize>,

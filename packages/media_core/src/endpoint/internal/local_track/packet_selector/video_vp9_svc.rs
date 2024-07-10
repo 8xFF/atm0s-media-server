@@ -13,7 +13,7 @@
 //! - K-SVC: we need key-frame for up and down layer
 //! - Full-SVCL we only need key-frame for up, and only end-frame flag for down layer
 
-use std::collections::VecDeque;
+use std::{cmp::Ordering, collections::VecDeque};
 
 use media_server_protocol::media::{MediaLayerSelection, MediaLayersBitrate, MediaMeta, MediaPacket};
 use media_server_utils::SeqRewrite;
@@ -86,62 +86,69 @@ impl Selector {
         if let MediaMeta::Vp9 { key, profile: _, svc: Some(svc) } = &mut pkt.meta {
             match (&mut self.current, &self.target) {
                 (Some(current), Some(target)) => {
-                    //need switch to temporal layer only
-                    if target.spatial == current.spatial {
-                        //change temporal
-                        if target.temporal > current.temporal {
-                            //up temporal => need wait switching_point and pre frame is end
-                            if svc.spatial == current.spatial && svc.temporal > current.temporal && svc.switching_point && self.pre_end_frame {
-                                log::info!("[Vp9SvcSelector] up temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
-                                current.temporal = target.temporal;
+                    match target.spatial.cmp(&current.spatial) {
+                        Ordering::Equal => {
+                            // change temporal
+                            match target.temporal.cmp(&current.temporal) {
+                                Ordering::Greater => {
+                                    // up temporal => need wait switching_point and pre frame is end
+                                    if svc.spatial == current.spatial && svc.temporal > current.temporal && svc.switching_point && self.pre_end_frame {
+                                        log::info!("[Vp9SvcSelector] up temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
+                                        current.temporal = target.temporal;
+                                    }
+                                }
+                                Ordering::Less => {
+                                    // down temporal => need wait end_frame
+                                    if self.pre_end_frame {
+                                        log::info!("[Vp9SvcSelector] down temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
+                                        current.temporal = target.temporal;
+                                    }
+                                }
+                                Ordering::Equal => {}
                             }
-                        } else if target.temporal < current.temporal {
-                            //down temporal => need wait end_frame
-                            if self.pre_end_frame {
-                                log::info!("[Vp9SvcSelector] down temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
+                        }
+                        Ordering::Less => {
+                            // down spatial => need wait key-frame
+                            // first we always down temporal for trying to reduce bandwidth
+                            if current.temporal != 0 && self.pre_end_frame {
+                                log::info!("[Vp9SvcSelector] down spatial then down temporal from {} => 0", current.temporal);
+                                current.temporal = 0;
+                            }
+                            // In K-SVC we must wait for a keyframe.
+                            // In full SVC we do not need a keyframe.
+                            if (self.k_svc && *key) || (!self.k_svc && self.pre_end_frame) {
+                                log::info!("[Vp9SvcSelector] down {},{} => {},{} with key", current.spatial, current.temporal, target.spatial, target.temporal);
+                                // with other spatial we have difference tl0xidx and pic_id offset
+                                // therefore we need reinit both tl0idx and pic_id
+                                ctx.vp9_ctx.pic_id_rewrite.reinit();
+                                ctx.seq_rewrite.reinit();
+                                ctx.ts_rewrite.reinit();
+                                current.spatial = target.spatial;
                                 current.temporal = target.temporal;
+                            } else if self.k_svc {
+                                self.queue.push_back(Action::RequestKeyFrame);
                             }
                         }
-                    } else if target.spatial < current.spatial {
-                        // down spatial => need wait key-frame
-                        // first we allway down temporal for trying reduce bandwidth
-                        if current.temporal != 0 && self.pre_end_frame {
-                            log::info!("[Vp9SvcSelector] down spatial then down temporal from {} => 0", current.temporal);
-                            current.temporal = 0;
-                        }
-                        // In K-SVC we must wait for a keyframe.
-                        // In full SVC we do not need a keyframe.
-                        if (self.k_svc && *key) || (!self.k_svc && self.pre_end_frame) {
-                            log::info!("[Vp9SvcSelector] down {},{} => {},{} with key", current.spatial, current.temporal, target.spatial, target.temporal);
-                            // with other spatial we have difference tl0xidx and pic_id offset
-                            // therefore we need reinit both tl0idx and pic_id
-                            ctx.vp9_ctx.pic_id_rewrite.reinit();
-                            ctx.seq_rewrite.reinit();
-                            ctx.ts_rewrite.reinit();
-                            current.spatial = target.spatial;
-                            current.temporal = target.temporal;
-                        } else if self.k_svc {
-                            self.queue.push_back(Action::RequestKeyFrame);
-                        }
-                    } else if target.spatial > current.spatial {
-                        // up spatial => need wait key-frame
-                        // first we try to up temporal for trying increase bandwidth
-                        if svc.spatial == current.spatial && svc.temporal > current.temporal && current.temporal != 2 && svc.switching_point && self.pre_end_frame {
-                            log::info!("[Vp9SvcSelector] up spatial then up temporal from {} => 2 before key arrived", current.temporal);
-                            current.temporal = 2;
-                        }
+                        Ordering::Greater => {
+                            // up spatial => need wait key-frame
+                            // first we try to up temporal for trying to increase bandwidth
+                            if svc.spatial == current.spatial && svc.temporal > current.temporal && current.temporal != 2 && svc.switching_point && self.pre_end_frame {
+                                log::info!("[Vp9SvcSelector] up spatial then up temporal from {} => 2 before key arrived", current.temporal);
+                                current.temporal = 2;
+                            }
 
-                        if *key {
-                            log::info!("[Vp9SvcSelector] up {},{} => {},{} with key-frame", current.spatial, current.temporal, target.spatial, target.temporal);
-                            // with other spatial we have difference tl0xidx and pic_id offset
-                            // therefore we need reinit both tl0idx and pic_id
-                            ctx.vp9_ctx.pic_id_rewrite.reinit();
-                            ctx.seq_rewrite.reinit();
-                            ctx.ts_rewrite.reinit();
-                            current.spatial = target.spatial;
-                            current.temporal = target.temporal;
-                        } else {
-                            self.queue.push_back(Action::RequestKeyFrame);
+                            if *key {
+                                log::info!("[Vp9SvcSelector] up {},{} => {},{} with key-frame", current.spatial, current.temporal, target.spatial, target.temporal);
+                                // with other spatial we have difference tl0xidx and pic_id offset
+                                // therefore we need reinit both tl0idx and pic_id
+                                ctx.vp9_ctx.pic_id_rewrite.reinit();
+                                ctx.seq_rewrite.reinit();
+                                ctx.ts_rewrite.reinit();
+                                current.spatial = target.spatial;
+                                current.temporal = target.temporal;
+                            } else {
+                                self.queue.push_back(Action::RequestKeyFrame);
+                            }
                         }
                     }
                 }
@@ -163,7 +170,7 @@ impl Selector {
                     }
                 }
                 (None, None) => {
-                    //reject
+                    // reject
                 }
             }
 

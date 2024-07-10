@@ -46,7 +46,7 @@ pub struct Args {
     db_uri: String,
 
     /// S3 Uri
-    #[arg(env, long, default_value = "http://user:pass@localhost:9000")]
+    #[arg(env, long, default_value = "http://user:pass@localhost:9000/bucket/path/?path_style=true")]
     s3_uri: String,
 }
 

@@ -175,7 +175,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         if let Some(metrics) = node_metrics_collector.pop_measure() {
             controller.send_to(
                 0, //because sdn controller allway is run inside worker 0
-                ExtIn::NodeStats(metrics).into(),
+                ExtIn::NodeStats(metrics),
             );
         }
         // Pop control and event from record storage

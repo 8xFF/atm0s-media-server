@@ -132,7 +132,9 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
         for (i, slot) in self.outputs.iter().enumerate() {
             if let Some(OutputSlotState { audio_level, source }) = slot {
                 if let Some((_, _, lowest_slot_audio_level)) = &mut lowest {
-                    if *audio_level < *lowest_slot_audio_level || (*audio_level == *lowest_slot_audio_level) {
+                    // TODO: We need to process some case we have same audio_level. Just check with smaller only:
+                    // https://github.com/8xFF/atm0s-media-server/pull/328#discussion_r1667336073
+                    if *audio_level <= *lowest_slot_audio_level {
                         lowest = Some((i, source.clone(), *audio_level));
                     }
                 } else {

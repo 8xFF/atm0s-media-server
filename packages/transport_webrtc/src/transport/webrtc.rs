@@ -98,17 +98,14 @@ impl<ES> TransportWebrtcSdk<ES> {
                 join: Some((j.room.into(), j.peer.into(), j.metadata, j.publish.unwrap_or_default().into(), j.subscribe.unwrap_or_default().into())),
                 state: State::New,
                 audio_mixer: j.features.and_then(|f| {
-                    f.mixer.and_then(|m| {
-                        Some(AudioMixerConfig {
-                            mode: m.mode().into(),
-                            outputs: m
-                                .outputs
-                                .iter()
-                                .map(|r| local_tracks.iter().find(|l| l.name() == r.as_str()).map(|l| l.id()))
-                                .flatten()
-                                .collect::<Vec<_>>(),
-                            sources: m.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
-                        })
+                    f.mixer.map(|m| AudioMixerConfig {
+                        mode: m.mode().into(),
+                        outputs: m
+                            .outputs
+                            .iter()
+                            .filter_map(|r| local_tracks.iter().find(|l| l.name() == r.as_str()).map(|l| l.id()))
+                            .collect::<Vec<_>>(),
+                        sources: m.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
                     })
                 }),
                 local_tracks,
@@ -616,14 +613,13 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                 Some(protobuf::session::request::Request::Room(_room)) => {
                     todo!()
                 }
-                Some(protobuf::session::request::Request::Features(features_req)) => match features_req.request {
-                    Some(protobuf::features::request::Request::Mixer(mixer_req)) => {
+                Some(protobuf::session::request::Request::Features(features_req)) => {
+                    if let Some(protobuf::features::request::Request::Mixer(mixer_req)) = features_req.request {
                         if let Some(mixer_req) = mixer_req.request {
                             self.on_mixer_req(req.req_id, mixer_req);
                         }
                     }
-                    None => {}
-                },
+                }
                 None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
             },
         }
@@ -641,12 +637,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                 if let Some(token) = self.secure.decode_obj::<WebrtcToken>("webrtc", &req.token) {
                     if token.room == Some(info.room.clone()) && token.peer == Some(info.peer.clone()) {
                         let mixer_cfg = info.features.and_then(|f| {
-                            f.mixer.and_then(|m| {
-                                Some(AudioMixerConfig {
-                                    mode: m.mode().into(),
-                                    outputs: m.outputs.iter().map(|r| self.local_track_by_name(r.as_str()).map(|l| l.id())).flatten().collect::<Vec<_>>(),
-                                    sources: m.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
-                                })
+                            f.mixer.map(|m| AudioMixerConfig {
+                                mode: m.mode().into(),
+                                outputs: m.outputs.iter().filter_map(|r| self.local_track_by_name(r.as_str()).map(|l| l.id())).collect::<Vec<_>>(),
+                                sources: m.sources.into_iter().map(|s| s.into()).collect::<Vec<_>>(),
                             })
                         });
                         self.queue.push_back(build_req(EndpointReq::JoinRoom(
