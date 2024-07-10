@@ -188,7 +188,9 @@ jobs:
 
       - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
+        run: |
+          sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
+          sudo ln -s /bin/g++ /bin/musl-g++
 
       - uses: actions/download-artifact@v4
         with:
