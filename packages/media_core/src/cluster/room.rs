@@ -204,12 +204,12 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             }
             ClusterEndpointControl::RemoteTrack(track, control) => self.on_control_remote_track(now, endpoint, track, control),
             ClusterEndpointControl::LocalTrack(track, control) => self.on_control_local_track(now, endpoint, track, control),
-            ClusterEndpointControl::SubscribeChannel(key) => self.datachannel.input(&mut self.switcher).on_channel_subscribe(endpoint, &key),
+            ClusterEndpointControl::SubscribeVirtualChannel(key) => self.datachannel.input(&mut self.switcher).on_channel_subscribe(endpoint, &key),
             ClusterEndpointControl::PublishChannel(key, peer, message) => {
                 let data_packet = DataChannelPacket { from: peer, data: message };
                 self.datachannel.input(&mut self.switcher).on_channel_data(&key, data_packet);
             }
-            ClusterEndpointControl::UnsubscribeChannel(key) => self.datachannel.input(&mut self.switcher).on_channel_unsubscribe(endpoint, &key),
+            ClusterEndpointControl::UnsubscribeVirtualChannel(key) => self.datachannel.input(&mut self.switcher).on_channel_unsubscribe(endpoint, &key),
         }
     }
 }

@@ -4,7 +4,7 @@ use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId};
 use media_server_protocol::datachannel::DataChannelPacket;
 use sans_io_runtime::TaskSwitcherChild;
 
-use crate::cluster::{id_generator, ClusterRoomHash};
+use crate::cluster::ClusterRoomHash;
 
 use super::Output;
 
@@ -22,11 +22,20 @@ impl<Endpoint: Hash + Eq + Copy + Debug> DataChannelPublisher<Endpoint> {
         self.queue.is_empty()
     }
 
-    pub fn on_channel_data(&mut self, key: &str, data: DataChannelPacket) {
-        log::trace!("[ClusterRoomDataChannel {}/Publishers] publish virtual datachannel", self.room);
+    pub fn on_channel_data(&mut self, channel_id: ChannelId, data: DataChannelPacket) {
+        log::info!("[ClusterRoomDataChannel {}/Publishers] publish virtual datachannel", self.room);
         let data = data.serialize();
-        let channel_id: ChannelId = id_generator::gen_datachannel_id(self.room, key.to_string());
         self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubData(data))))
+    }
+
+    pub fn on_channel_create(&mut self, channel_id: ChannelId) {
+        log::info!("[ClusterRoomDataChannel {}/Publishers] publish start virtual datachannel", self.room);
+        self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStart)))
+    }
+
+    pub fn on_channel_close(&mut self, channel_id: ChannelId) {
+        log::info!("[ClusterRoomDataChannel {}/Publishers] publish stop virtual datachannel", self.room);
+        self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)))
     }
 }
 

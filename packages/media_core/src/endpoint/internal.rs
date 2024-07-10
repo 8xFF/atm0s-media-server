@@ -188,7 +188,7 @@ impl EndpointInternal {
             EndpointReq::SubscribeChannel(key) => {
                 if let Some((room, _, _, _)) = &self.joined {
                     self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::SubscribeChannel(Ok(()))));
-                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::SubscribeChannel(key)));
+                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::SubscribeVirtualChannel(key)));
                 } else {
                     self.queue
                         .push_back(InternalOutput::RpcRes(req_id, EndpointRes::SubscribeChannel(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))));
@@ -197,7 +197,7 @@ impl EndpointInternal {
             EndpointReq::UnsubscribeChannel(key) => {
                 if let Some((room, _, _, _)) = &self.joined {
                     self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::UnsubscribeChannel(Ok(()))));
-                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::UnsubscribeChannel(key)));
+                    self.queue.push_back(InternalOutput::Cluster(*room, ClusterEndpointControl::UnsubscribeVirtualChannel(key)));
                 } else {
                     self.queue
                         .push_back(InternalOutput::RpcRes(req_id, EndpointRes::UnsubscribeChannel(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))));
@@ -376,7 +376,7 @@ impl EndpointInternal {
             },
             ClusterEndpointEvent::RemoteTrack(track, event) => self.on_cluster_remote_track(now, track, event),
             ClusterEndpointEvent::LocalTrack(track, event) => self.on_cluster_local_track(now, track, event),
-            ClusterEndpointEvent::ChannelMessage(key, from, message) => self.queue.push_back(InternalOutput::Event(EndpointEvent::ChannelMessage(key, from, message))),
+            ClusterEndpointEvent::VirtualChannelMessage(key, from, message) => self.queue.push_back(InternalOutput::Event(EndpointEvent::ChannelMessage(key, from, message))),
         }
     }
 
