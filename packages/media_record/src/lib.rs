@@ -9,12 +9,14 @@ use storage::{memory::MemoryFile, FileId, RecordFile};
 use tokio::sync::mpsc::Sender;
 use worker::UploadWorker;
 
+#[cfg(feature="convert_webm")]
 mod media;
 mod raw_record;
 mod session;
 mod storage;
 mod worker;
 
+#[cfg(feature="convert_webm")]
 pub use media::*;
 pub use raw_record::*;
 

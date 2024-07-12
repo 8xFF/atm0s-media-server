@@ -22,7 +22,7 @@ media-server-secure = { path = "../packages/media_secure" }
 media-server-runner = { path = "../packages/media_runner", optional = true }
 media-server-gateway = { path = "../packages/media_gateway", optional = true }
 media-server-connector = { path = "../packages/media_connector", optional = true }
-media-server-record = { path = "../packages/media_record", optional = true }
+media-server-record = { path = "../packages/media_record", default-features=false, optional = true }
 media-server-utils = { path = "../packages/media_utils", optional = true }
 local-ip-address = "0.6"
 serde = { version = "1.0", features = ["derive"] }
