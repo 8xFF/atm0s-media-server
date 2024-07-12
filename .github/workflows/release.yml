@@ -103,7 +103,6 @@ jobs:
             target: aarch64-unknown-linux-gnu
             extension: ""
             cross: true
-            build_record_tool: true
           - build: linux musl aarch64
             os: ubuntu-latest
             rust: stable
