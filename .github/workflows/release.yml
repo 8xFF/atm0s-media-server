@@ -15,7 +15,6 @@ concurrency:
 
 env:
   APP_NAME: atm0s-media-server
-  RECORD_TOOL: atm0s-media-record
   ARTIFACT_DIR: release-builds
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -219,7 +218,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --verbose --release --package ${{ env.RECORD_CONVERT }} --target ${{ matrix.target }} --bin convert_webm
+          args: --verbose --release --package media-server-record --target ${{ matrix.target }} --bin convert_webm
 
       - name: Rename server
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
