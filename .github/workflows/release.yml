@@ -226,7 +226,7 @@ jobs:
           mv ./target/${{ matrix.target }}/release/${{ env.APP_NAME }}${{ matrix.extension }} ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
 
       - name: Rename record
-        if: matrix.build_record_tool && ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
+        if: ${{ matrix.build_record_tool && matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
         run: |
           mv ./target/${{ matrix.target }}/release/convert_webm${{ matrix.extension }} convert_webm-${{ matrix.target }}${{ matrix.extension }}
 
