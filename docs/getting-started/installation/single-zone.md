@@ -7,7 +7,7 @@ Limitations: maximum 256 nodes in the same zone.
 
 The cluster has the following nodes:
 
-- Console node: manage panel and act as a seed node for bootstraping other nodes
+- Console node: manage panel and act as a seed node for bootstrapping other nodes
 - Gateway nodes: route signaling request into correct media node
 - Media server nodes: handling media transport like WebRTC, RTP, RTMP ...
 - Connector node: logging, hooks, record uri signer
@@ -80,7 +80,7 @@ docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:ma
     gateway
 ```
 
-After gateway nodes started, it will print out the node addess like: `10@/ip4/127.0.0.1/udp/10010` and `11@/ip4/127.0.0.1/udp/10011`, the adress is used as a seed address for media and connector nodes
+After gateway nodes started, it will print out the node address like: `10@/ip4/127.0.0.1/udp/10010` and `11@/ip4/127.0.0.1/udp/10011`, the address is used as a seed address for media and connector nodes
 
 After started gateway node also expose openapi ui for better integrating:
 
