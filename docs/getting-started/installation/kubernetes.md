@@ -1,4 +1,4 @@
-# Kubernetes
+# Kubernetes (outdate, update needed)
 
 You can install into kubernetes cluster by Helm chart
 

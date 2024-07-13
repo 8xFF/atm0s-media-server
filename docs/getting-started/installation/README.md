@@ -1,6 +1,6 @@
 # Installation
 
-To install, you can either:
+Atm0s-media-server is built into a single executable file, it can be get by some ways:
 
 - Install from Docker
 
