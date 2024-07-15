@@ -1,8 +1,10 @@
+use std::{collections::HashMap, io::Write};
+
 use clap::Parser;
 use media_server_record::{RoomReader, SessionMediaWriter};
 use media_server_utils::CustomUri;
 use rusty_s3::{Bucket, Credentials, UrlStyle};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::channel;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -37,6 +39,33 @@ fn convert_s3_uri(uri: &str) -> (Bucket, Credentials, String) {
     (s3, credentials, s3_sub_folder)
 }
 
+#[derive(Serialize)]
+struct TrackTimeline {
+    path: String,
+    start: u64,
+    end: Option<u64>,
+}
+
+#[derive(Default, Serialize)]
+struct TrackSummary {
+    timeline: Vec<TrackTimeline>,
+}
+
+#[derive(Default, Serialize)]
+struct SessionSummary {
+    track: HashMap<String, TrackSummary>,
+}
+
+#[derive(Default, Serialize)]
+struct PeerSummary {
+    sessions: HashMap<u64, SessionSummary>,
+}
+
+#[derive(Default, Serialize)]
+struct RecordSummary {
+    peers: HashMap<String, PeerSummary>,
+}
+
 #[tokio::main]
 async fn main() {
     if std::env::var_os("RUST_LOG").is_none() {
@@ -49,6 +78,7 @@ async fn main() {
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
     let (s3, credentials, s3_sub_folder) = convert_s3_uri(&args.uri);
 
+    let mut record_summary = RecordSummary { peers: HashMap::new() };
     let room_reader = RoomReader::new(s3, credentials, &s3_sub_folder);
     let peers = room_reader.peers().await.unwrap();
     //we use channel to wait all sessions
@@ -68,17 +98,43 @@ async fn main() {
                 session.connect().await.expect("Should connect session record folder");
                 while let Some(row) = session.recv().await {
                     log::debug!("push session {session_id} pkt {}", row.ts);
-                    media.push(row);
+                    if let Some(event) = media.push(row) {
+                        tx.send((peer_id.clone(), session_id, event)).await.expect("Should send to main");
+                    }
                 }
-
-                tx.send(session.path()).await.expect("Should send to main");
                 log::info!("end session {session_id} loop");
             });
         }
     }
     drop(tx);
 
-    while let Some(session) = rx.recv().await {
-        log::info!("done {session}");
+    while let Some((peer_id, session_id, event)) = rx.recv().await {
+        let peer = record_summary.peers.entry(peer_id).or_default();
+        let session = peer.sessions.entry(session_id).or_default();
+        match event {
+            media_server_record::Event::TrackStart(name, ts, path) => {
+                let track = session.track.entry(name.0).or_default();
+                track.timeline.push(TrackTimeline { path, start: ts, end: None });
+            }
+            media_server_record::Event::TrackStop(name, ts) => {
+                if let Some(track) = session.track.get_mut(&name.0) {
+                    if let Some(timeline) = track.timeline.last_mut() {
+                        if timeline.end.is_none() {
+                            timeline.end = Some(ts);
+                        } else {
+                            log::warn!("timeline end not empty");
+                        }
+                    } else {
+                        log::warn!("track stop but timeline not found");
+                    }
+                } else {
+                    log::warn!("track stop but track not found");
+                }
+            }
+        }
     }
+
+    let summary_json = serde_json::to_string(&record_summary).expect("Should convert to json");
+    let mut summary_fs = std::fs::File::create("./meta.json").expect("Should create file");
+    summary_fs.write_all(summary_json.as_bytes()).expect("Should write meta to file");
 }

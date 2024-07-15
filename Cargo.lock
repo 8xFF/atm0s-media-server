@@ -2953,6 +2953,7 @@ dependencies = [
  "rtp",
  "rusty-s3",
  "serde",
+ "serde_json",
  "surf",
  "tokio",
  "tokio-util",

@@ -217,7 +217,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --verbose --release --package media-server-record --target ${{ matrix.target }} --bin convert_webm
+          args: --verbose --release --package media-server-record --target ${{ matrix.target }} --bin convert_record
 
       - name: Rename server
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
@@ -227,7 +227,7 @@ jobs:
       - name: Rename record
         if: ${{ matrix.build_record_tool && matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
         run: |
-          mv ./target/${{ matrix.target }}/release/convert_webm${{ matrix.extension }} convert_webm-${{ matrix.target }}${{ matrix.extension }}
+          mv ./target/${{ matrix.target }}/release/convert_record${{ matrix.extension }} convert_record-${{ matrix.target }}${{ matrix.extension }}
 
       - name: Upload Artifact to Summary
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
@@ -252,8 +252,8 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: convert_webm-${{ matrix.target }}${{ matrix.extension }}
-          asset_name: convert_webm-${{ matrix.target }}${{ matrix.extension }}
+          file: convert_record-${{ matrix.target }}${{ matrix.extension }}
+          asset_name: convert_record-${{ matrix.target }}${{ matrix.extension }}
           tag: ${{ github.ref }}
           overwrite: true
 
