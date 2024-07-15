@@ -97,6 +97,14 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         });
     }
 
+    //Running ng controller for Voip
+    let req_tx3 = req_tx.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::ng_controller::run_ng_controller_server(22222, req_tx3).await {
+            log::error!("NgController Error: {}", e);
+        }
+    });
+
     let node_id = node.node_id;
     let node_session = random();
 

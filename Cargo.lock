@@ -418,6 +418,7 @@ dependencies = [
 name = "atm0s-media-server"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "atm0s-sdn",
  "clap",
  "convert-enum",
@@ -445,6 +446,7 @@ dependencies = [
  "rustls 0.23.11",
  "sans-io-runtime",
  "serde",
+ "serde_bencode",
  "sysinfo",
  "tokio",
  "tracing-subscriber",
@@ -2975,6 +2977,7 @@ dependencies = [
  "num_enum",
  "rand 0.8.5",
  "sans-io-runtime",
+ "transport-rtp",
  "transport-webrtc",
 ]
 
@@ -5066,6 +5069,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_bencode"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a70dfc7b7438b99896e7f8992363ab8e2c4ba26aa5ec675d32d1c3c2c33d413e"
+dependencies = [
+ "serde",
+ "serde_bytes",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "387cc504cb06bb40a96c8e04e951fe01854cf6bc921053c954e4a606d9675c6a"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.204"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6147,6 +6169,17 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "transport-rtp"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "media-server-core",
+ "media-server-protocol",
+ "media-server-secure",
+ "sans-io-runtime",
 ]
 
 [[package]]

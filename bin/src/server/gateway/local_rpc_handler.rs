@@ -133,6 +133,11 @@ impl MediaLocalRpcHandler {
                     RpcRes::Webrtc(webrtc::RpcRes::RestartIce(Err(RpcError::new2(MediaServerError::NotImplemented))))
                 }
             },
+            RpcReq::Rtp(_) => {
+                //TODO implement rtp
+                // RpcRes::Rtp(Err(RpcError::new2(MediaServerError::NotImplemented)))
+                todo!()
+            }
         }
     }
 

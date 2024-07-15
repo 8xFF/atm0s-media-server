@@ -1,0 +1,11 @@
+[package]
+name = "transport-rtp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = { workspace = true }
+sans-io-runtime = { workspace = true, default-features = false }
+media-server-secure = { path = "../../media_secure" }
+media-server-core = { path = "../../media_core" }
+media-server-protocol = { path = "../../protocol" }

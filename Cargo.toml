@@ -9,7 +9,7 @@ members = [
     "packages/transport_webrtc",
     "packages/media_secure",
     "packages/media_gateway",
-    "packages/audio_mixer", "packages/media_connector", "packages/media_record",
+    "packages/audio_mixer", "packages/media_connector", "packages/media_record", "packages/rtp_engine/transport_rtp",
 ]
 
 [workspace.dependencies]

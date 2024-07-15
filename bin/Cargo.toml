@@ -26,6 +26,7 @@ media-server-record = { path = "../packages/media_record", default-features=fals
 media-server-utils = { path = "../packages/media_utils", optional = true }
 local-ip-address = "0.6"
 serde = { version = "1.0", features = ["derive"] }
+serde_bencode = { version = "0.2.4" }
 quinn = { version = "0.11", optional = true }
 rustls = { version = "0.23", optional = true }
 convert-enum = { workspace = true }
@@ -36,6 +37,8 @@ maxminddb = { version = "0.24", optional = true }
 sysinfo = { version = "0.30", optional = true }
 hex = { version = "0.4", optional = true }
 mime_guess = { version = "2.0", optional = true }
+async-trait = { version = "0.1.81" }
+
 
 [features]
 default = ["console", "gateway", "media", "connector", "cert_utils"]
