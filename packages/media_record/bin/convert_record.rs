@@ -1,10 +1,17 @@
-use std::{collections::HashMap, io::Write};
+//!
+//! Convert record util dowload all raw record chunks and convert to some independent track video files.
+//! The file is created at local at first then upload to s3, after upload to s3 successfuly, it will be removed in local.
+//! TODO: avoid using local file, may be we have way to do-it in-memory buffer then upload in-air to s3.
+//!
+
+use std::{collections::HashMap, time::Duration};
 
 use clap::Parser;
 use media_server_record::{RoomReader, SessionMediaWriter};
 use media_server_utils::CustomUri;
-use rusty_s3::{Bucket, Credentials, UrlStyle};
+use rusty_s3::{Bucket, Credentials, S3Action, UrlStyle};
 use serde::{Deserialize, Serialize};
+use surf::Body;
 use tokio::sync::mpsc::channel;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -21,7 +28,11 @@ struct S3Options {
 struct Args {
     /// Http port
     #[arg(env, long)]
-    uri: String,
+    in_uri: String,
+
+    /// Http port
+    #[arg(env, long)]
+    out_uri: String,
 }
 
 fn convert_s3_uri(uri: &str) -> (Bucket, Credentials, String) {
@@ -76,7 +87,7 @@ async fn main() {
     }
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-    let (s3, credentials, s3_sub_folder) = convert_s3_uri(&args.uri);
+    let (s3, credentials, s3_sub_folder) = convert_s3_uri(&args.in_uri);
 
     let mut record_summary = RecordSummary { peers: HashMap::new() };
     let room_reader = RoomReader::new(s3, credentials, &s3_sub_folder);
@@ -134,7 +145,32 @@ async fn main() {
         }
     }
 
+    let (s3, credentials, s3_sub_folder) = convert_s3_uri(&args.out_uri);
+    let out_folder = std::path::Path::new(&s3_sub_folder);
+
     let summary_json = serde_json::to_string(&record_summary).expect("Should convert to json");
-    let mut summary_fs = std::fs::File::create("./meta.json").expect("Should create file");
-    summary_fs.write_all(summary_json.as_bytes()).expect("Should write meta to file");
+    let summary_path = out_folder.join("summary.json");
+    let summary_key = summary_path.to_str().expect("Should convert");
+    let summary_put_obj = s3.put_object(Some(&credentials), summary_key);
+    let summary_put_url = summary_put_obj.sign(Duration::from_secs(3600));
+    surf::put(summary_put_url).body(Body::from_string(summary_json)).await.expect("Should upload summary to s3");
+
+    for (_, peer) in record_summary.peers {
+        for (_, session) in peer.sessions {
+            for (_, track) in session.track {
+                for timeline in track.timeline {
+                    let path = out_folder.join(&timeline.path);
+                    let key = path.to_str().expect("Should convert");
+                    let put_obj = s3.put_object(Some(&credentials), key);
+                    let put_url = put_obj.sign(Duration::from_secs(3600));
+                    surf::put(put_url)
+                        .body(Body::from_file(&timeline.path).await.expect("Should open file"))
+                        .await
+                        .expect("Should upload to s3");
+                    //remove file after upload success
+                    tokio::fs::remove_file(&timeline.path).await.expect("Should remove file after upload");
+                }
+            }
+        }
+    }
 }
