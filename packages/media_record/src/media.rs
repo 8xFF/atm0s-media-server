@@ -43,7 +43,7 @@ impl SessionMediaWriter {
         }
         let index = self.writers.len();
         let path = format!("{}{}-{}.webm", self.path, index, ts);
-        let writer = VpxWriter::new(File::create(&path).expect("Should open file"), ts);
+        let writer = VpxWriter::new(File::create(path).expect("Should open file"), ts);
         self.writers.push(WriterContainer {
             writer,
             audio_inuse: false,
@@ -61,6 +61,9 @@ impl SessionMediaWriter {
                 log::info!("track {:?} stopped", id);
             }
             SessionRecordEvent::TrackMedia(id, media) => {
+                // We allow clippy::map_entry because the suggestion provided by clippy has a bug:
+                // cannot borrow `*self` as mutable more than once at a time
+                #[allow(clippy::map_entry)]
                 if !self.tracks.contains_key(&id) {
                     let writer = self.get_free_writer_for(event.ts, media.meta.is_audio());
                     if media.meta.is_audio() {
