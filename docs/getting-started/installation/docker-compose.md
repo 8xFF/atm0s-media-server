@@ -1,4 +1,4 @@
-# Docker-compose
+# Docker-compose (outdate, update needed)
 
 We can use `docker-compose` to deploy atm0s-media-server.
 

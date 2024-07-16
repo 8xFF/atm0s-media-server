@@ -222,6 +222,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                 },
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
                     media_server_connector::agent_service::Event::Stats { queue: _, inflight: _, acked: _ } => {}
+                    media_server_connector::agent_service::Event::Response(_) => {}
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {
                     if let Err(e) = vnet_tx.try_send(event) {

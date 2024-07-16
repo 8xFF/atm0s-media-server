@@ -69,7 +69,10 @@ impl GatewayStore {
         match ping.origin {
             Origin::Media(_) => match (node_usage, webrtc_usage, ping.webrtc) {
                 (Some(_node), Some(webrtc), Some(stats)) => self.webrtc.on_node_ping(now, from, webrtc, stats),
-                _ => self.webrtc.remove_node(from),
+                e => {
+                    log::warn!("[GatewayStore] remove node because usage too high {:?}", e);
+                    self.webrtc.remove_node(from);
+                }
             },
             Origin::Gateway(gateway) => {
                 if gateway.zone == self.zone {

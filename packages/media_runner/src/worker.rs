@@ -16,6 +16,7 @@ use media_server_protocol::{
         cluster_connector::{connector_request, PeerEvent},
         gateway::{ConnectResponse, RemoteIceResponse},
     },
+    record::SessionRecordEvent,
     transport::{
         webrtc,
         whep::{self, WhepConnectRes, WhepDeleteRes, WhepRemoteIceRes},
@@ -54,6 +55,7 @@ pub enum Owner {
 pub enum UserData {
     Cluster,
     Room(cluster::RoomUserData),
+    Record(u64),
 }
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
 pub enum SC {
@@ -84,6 +86,7 @@ pub enum Output {
     ExtSdn(SdnExtOut<UserData, SE>),
     Net(Owner, BackendOutgoing),
     Bus(SdnWorkerBusEvent<UserData, SC, SE, TC, TW>),
+    Record(u64, Instant, SessionRecordEvent),
     Continue,
 }
 
@@ -145,6 +148,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         ));
         let gateway = Arc::new(GatewayAgentServiceBuilder::new(media.max_live));
         let connector = Arc::new(ConnectorAgentServiceBuilder::new());
+        let history = Arc::new(DataWorkerHistory::default());
 
         let sdn_config = SdnConfig {
             node_id,
@@ -155,6 +159,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     handshake_builder: Arc::new(HandshakeBuilderXDA),
                     random: Box::new(OsRng),
                     services: vec![visualization.clone(), discovery.clone(), gateway.clone(), connector.clone()],
+                    history: history.clone(),
                 })
             } else {
                 None
@@ -163,7 +168,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             data: DataPlaneCfg {
                 worker_id: 0,
                 services: vec![visualization, discovery, gateway],
-                history: Arc::new(DataWorkerHistory::default()),
+                history,
             },
         };
 
@@ -318,6 +323,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     self.media_cluster.input(&mut self.switcher).on_sdn_event(now, room, event);
                     Output::Continue
                 }
+                SdnExtOut::FeaturesEvent(UserData::Record(..), ..) => Output::Continue,
                 SdnExtOut::ServicesEvent(..) => Output::Continue,
             },
             SdnWorkerOutput::Net(out) => match out {
@@ -367,11 +373,12 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
                         media_server_connector::AGENT_SERVICE_ID.into(),
                         UserData::Cluster,
-                        media_server_connector::agent_service::Control::Fire(self.timer.timestamp_ms(ts), connector_request::Event::Peer(PeerEvent { session_id, event: Some(event) })).into(),
+                        media_server_connector::agent_service::Control::Request(self.timer.timestamp_ms(ts), connector_request::Request::Peer(PeerEvent { session_id, event: Some(event) })).into(),
                     )),
                 );
                 Output::Continue
             }
+            transport_webrtc::GroupOutput::RecordEvent(_, session_id, ts, event) => Output::Record(session_id, ts, event),
             transport_webrtc::GroupOutput::Ext(session, ext) => match ext {
                 transport_webrtc::ExtOut::RemoteIce(req_id, variant, res) => match variant {
                     transport_webrtc::Variant::Whip => Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::RemoteIce(res.map(|_| WhipRemoteIceRes {})))),
@@ -403,14 +410,16 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         log::info!("[MediaServerWorker] incoming rpc req {req_id}");
         match req {
             RpcReq::Whip(req) => match req {
-                whip::RpcReq::Connect(req) => match self
-                    .media_webrtc
-                    .input(&mut self.switcher)
-                    .spawn(req.ip, req.session_id, transport_webrtc::VariantParams::Whip(req.room, req.peer), &req.sdp)
-                {
-                    Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
-                    Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
-                },
+                whip::RpcReq::Connect(req) => {
+                    match self
+                        .media_webrtc
+                        .input(&mut self.switcher)
+                        .spawn(req.ip, req.session_id, transport_webrtc::VariantParams::Whip(req.room, req.peer, req.record), &req.sdp)
+                    {
+                        Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
+                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
+                    }
+                }
                 whip::RpcReq::RemoteIce(req) => {
                     log::info!("on rpc request {req_id}, whip::RpcReq::RemoteIce");
                     self.media_webrtc.input(&mut self.switcher).on_event(
@@ -450,11 +459,11 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 }
             },
             RpcReq::Webrtc(req) => match req {
-                webrtc::RpcReq::Connect(session_id, ip, user_agent, req) => {
+                webrtc::RpcReq::Connect(session_id, ip, user_agent, req, record) => {
                     match self
                         .media_webrtc
                         .input(&mut self.switcher)
-                        .spawn(ip, session_id, VariantParams::Webrtc(user_agent, req.clone(), self.secure.clone()), &req.sdp)
+                        .spawn(ip, session_id, VariantParams::Webrtc(user_agent, req.clone(), record, self.secure.clone()), &req.sdp)
                     {
                         Ok((ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
                             req_id,
@@ -477,11 +486,11 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Webrtc, ice.candidates)),
                     );
                 }
-                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req) => {
+                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req, record) => {
                     log::info!("on rpc request {req_id}, webrtc::RpcReq::RestartIce");
                     self.media_webrtc.input(&mut self.switcher).on_event(
                         now,
-                        GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, user_agent, req)),
+                        GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, user_agent, req, record)),
                     );
                 }
                 webrtc::RpcReq::Delete(_) => todo!(),

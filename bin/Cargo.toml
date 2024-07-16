@@ -22,6 +22,7 @@ media-server-secure = { path = "../packages/media_secure" }
 media-server-runner = { path = "../packages/media_runner", optional = true }
 media-server-gateway = { path = "../packages/media_gateway", optional = true }
 media-server-connector = { path = "../packages/media_connector", optional = true }
+media-server-record = { path = "../packages/media_record", default-features=false, optional = true }
 media-server-utils = { path = "../packages/media_utils", optional = true }
 local-ip-address = "0.6"
 serde = { version = "1.0", features = ["derive"] }
@@ -39,7 +40,7 @@ mime_guess = { version = "2.0", optional = true }
 [features]
 default = ["console", "gateway", "media", "connector", "cert_utils"]
 gateway = ["media-server-gateway", "media-server-connector", "quinn_vnet", "node_metrics", "maxminddb", "rust-embed"]
-media = ["media-server-runner", "quinn_vnet", "node_metrics"]
+media = ["media-server-runner", "media-server-record", "quinn_vnet", "node_metrics"]
 console = []
 connector = ["quinn_vnet", "media-server-connector", "media-server-utils"]
 cert_utils = ["rcgen", "rustls"]
