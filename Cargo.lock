@@ -4724,7 +4724,7 @@ dependencies = [
 [[package]]
 name = "rusty-s3"
 version = "0.5.0"
-source = "git+https://github.com/giangndm/rusty-s3.git?branch=main#d56dfb3eb48765716b99a908dbf52231842df24a"
+source = "git+https://github.com/giangndm/rusty-s3.git?branch=main#cc9ecec126930d362dbe17be4900595d8dbce81f"
 dependencies = [
  "base64 0.21.7",
  "hmac 0.12.1",
