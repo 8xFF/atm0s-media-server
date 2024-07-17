@@ -92,7 +92,7 @@ impl Storage<HybridFile> for HybridStorage {
         match file {
             HybridFile::Mem(file) => {
                 if self.mem.can_push(file.len()) {
-                    log::warn!("[HybridStorage] push {:?} to memory", file_id);
+                    log::info!("[HybridStorage] push {:?} to memory", file_id);
                     self.mem.push(file).await;
                 } else {
                     if self.disk.can_push(file.len()) {
