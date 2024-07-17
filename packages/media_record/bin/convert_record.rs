@@ -1,6 +1,6 @@
 //!
-//! Convert record util dowload all raw record chunks and convert to some independent track video files.
-//! The file is created at local at first then upload to s3, after upload to s3 successfuly, it will be removed in local.
+//! Convert record util download all raw record chunks and convert to some independent track video files.
+//! The file is created at local at first then upload to s3, after upload to s3 successfully, it will be removed in local.
 //! TODO: avoid using local file, may be we have way to do-it in-memory buffer then upload in-air to s3.
 //!
 
