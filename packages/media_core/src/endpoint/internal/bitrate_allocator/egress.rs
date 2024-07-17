@@ -143,7 +143,7 @@ mod test {
         allocator.set_video_track(1.into(), 3.into());
 
         allocator.on_tick();
-        assert_eq!(allocator.pop_output(), Some(Output::Track(0.into(), Action::SetBitrate(DEFAULT_BITRATE_BPS * 1 / 4))));
+        assert_eq!(allocator.pop_output(), Some(Output::Track(0.into(), Action::SetBitrate(DEFAULT_BITRATE_BPS / 4))));
         assert_eq!(allocator.pop_output(), Some(Output::Track(1.into(), Action::SetBitrate(DEFAULT_BITRATE_BPS * 3 / 4))));
         assert_eq!(allocator.pop_output(), Some(Output::BweConfig(DEFAULT_BITRATE_BPS, DEFAULT_BITRATE_BPS * 6 / 5)));
         assert_eq!(allocator.pop_output(), None);

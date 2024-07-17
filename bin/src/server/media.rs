@@ -237,12 +237,11 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                 }
                 ExtOut::Sdn(SdnExtOut::ServicesEvent(_service, userdata, SE::Connector(event))) => {
                     match event {
-                        media_server_connector::agent_service::Event::Response(res) => match (userdata, res) {
-                            (UserData::Record(upload_id), connector_response::Response::Record(res)) => {
+                        media_server_connector::agent_service::Event::Response(res) => {
+                            if let (UserData::Record(upload_id), connector_response::Response::Record(res)) = (userdata, res) {
                                 record_service.on_input(timer.timestamp_ms(Instant::now()), media_server_record::Input::UploadResponse(upload_id, res));
                             }
-                            _ => {}
-                        },
+                        }
                         media_server_connector::agent_service::Event::Stats { queue: _, inflight: _, acked: _ } => {
                             //TODO
                         }

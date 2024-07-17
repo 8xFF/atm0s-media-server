@@ -26,7 +26,7 @@ impl<W: Write + Seek> VpxWriter<W> {
             self.audio = Some(self.webm.add_audio_track(48000, 2, None, AudioCodecId::Opus));
         }
         let audio = self.audio.as_mut().expect("Should have audio");
-        audio.add_frame(&pkt.data, delta_ts * 1000_000, true);
+        audio.add_frame(&pkt.data, delta_ts * 1_000_000, true);
     }
 
     pub fn push_vpx(&mut self, pkt_ms: u64, pkt: MediaPacket) {
@@ -43,7 +43,7 @@ impl<W: Write + Seek> VpxWriter<W> {
 
         let (video, demuxer) = self.video.as_mut().expect("Should have video");
         if let Some((key, data)) = demuxer.push(pkt) {
-            video.add_frame(&data, delta_ts * 1000_000, key);
+            video.add_frame(&data, delta_ts * 1_000_000, key);
         }
     }
 }

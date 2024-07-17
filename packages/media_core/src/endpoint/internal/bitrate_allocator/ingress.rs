@@ -90,7 +90,7 @@ mod test {
         allocator.set_video_track(1.into(), 3.into());
 
         allocator.on_tick();
-        assert_eq!(allocator.pop_output(), Some((0.into(), Action::SetBitrate(TEST_BITRATE * 1 / 4))));
+        assert_eq!(allocator.pop_output(), Some((0.into(), Action::SetBitrate(TEST_BITRATE / 4))));
         assert_eq!(allocator.pop_output(), Some((1.into(), Action::SetBitrate(TEST_BITRATE * 3 / 4))));
     }
 }

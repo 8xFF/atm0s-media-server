@@ -198,8 +198,8 @@ mod test {
     fn zero_greater_than_65000() {
         const MAX: u64 = u16::MAX as u64 + 1;
         let rw = SeqRewrite::<MAX, 1000>::default();
-        assert_eq!(rw.is_seq_higher_than(0, 65000), true);
-        assert_eq!(rw.is_seq_lower_than(0, 65000), false);
+        assert!(rw.is_seq_higher_than(0, 65000));
+        assert!(!rw.is_seq_lower_than(0, 65000));
     }
 
     #[test]
