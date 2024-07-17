@@ -26,13 +26,17 @@ struct S3Options {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Http port
+    /// S3 Source
     #[arg(env, long)]
-    in_uri: String,
+    in_s3: String,
 
-    /// Http port
+    /// S3 Dest
     #[arg(env, long)]
-    out_uri: String,
+    out_s3: Option<String>,
+
+    /// Folder Dest
+    #[arg(env, long)]
+    out_path: Option<String>,
 }
 
 fn convert_s3_uri(uri: &str) -> (Bucket, Credentials, String) {
@@ -87,8 +91,11 @@ async fn main() {
     }
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-    let (s3, credentials, s3_sub_folder) = convert_s3_uri(&args.in_uri);
+    let (s3, credentials, s3_sub_folder) = convert_s3_uri(&args.in_s3);
 
+    let temp_folder_str = args.out_path.unwrap_or_default();
+    let temp_folder = std::path::Path::new(&temp_folder_str);
+    std::fs::create_dir_all(temp_folder).expect("Should create output folder");
     let mut record_summary = RecordSummary { peers: HashMap::new() };
     let room_reader = RoomReader::new(s3, credentials, &s3_sub_folder);
     let peers = room_reader.peers().await.unwrap();
@@ -101,11 +108,12 @@ async fn main() {
         for mut session in sessions {
             let peer_id = peer_id.clone();
             let session_id = session.id();
+            let session_folder = temp_folder.join(format!("{}-{}-", peer_id, session_id));
             log::info!("got session {session_id}");
             let tx = tx.clone();
             tokio::spawn(async move {
                 log::info!("start session {session_id} loop");
-                let mut media = SessionMediaWriter::new(&format!("{}-{}-", peer_id, session_id));
+                let mut media = SessionMediaWriter::new(session_folder.to_str().expect("Should convert path to str"));
                 session.connect().await.expect("Should connect session record folder");
                 while let Some(row) = session.recv().await {
                     log::debug!("push session {session_id} pkt {}", row.ts);
@@ -145,32 +153,38 @@ async fn main() {
         }
     }
 
-    let (s3, credentials, s3_sub_folder) = convert_s3_uri(&args.out_uri);
-    let out_folder = std::path::Path::new(&s3_sub_folder);
-
     let summary_json = serde_json::to_string(&record_summary).expect("Should convert to json");
-    let summary_path = out_folder.join("summary.json");
-    let summary_key = summary_path.to_str().expect("Should convert");
-    let summary_put_obj = s3.put_object(Some(&credentials), summary_key);
-    let summary_put_url = summary_put_obj.sign(Duration::from_secs(3600));
-    surf::put(summary_put_url).body(Body::from_string(summary_json)).await.expect("Should upload summary to s3");
 
-    for (_, peer) in record_summary.peers {
-        for (_, session) in peer.sessions {
-            for (_, track) in session.track {
-                for timeline in track.timeline {
-                    let path = out_folder.join(&timeline.path);
-                    let key = path.to_str().expect("Should convert");
-                    let put_obj = s3.put_object(Some(&credentials), key);
-                    let put_url = put_obj.sign(Duration::from_secs(3600));
-                    surf::put(put_url)
-                        .body(Body::from_file(&timeline.path).await.expect("Should open file"))
-                        .await
-                        .expect("Should upload to s3");
-                    //remove file after upload success
-                    tokio::fs::remove_file(&timeline.path).await.expect("Should remove file after upload");
+    if let Some(out_s3) = args.out_s3 {
+        let (s3, credentials, s3_sub_folder) = convert_s3_uri(&out_s3);
+        let out_folder = std::path::Path::new(&s3_sub_folder);
+
+        let summary_path = out_folder.join("summary.json");
+        let summary_key = summary_path.to_str().expect("Should convert");
+        let summary_put_obj = s3.put_object(Some(&credentials), summary_key);
+        let summary_put_url = summary_put_obj.sign(Duration::from_secs(3600));
+        surf::put(summary_put_url).body(Body::from_string(summary_json)).await.expect("Should upload summary to s3");
+
+        for (_, peer) in record_summary.peers {
+            for (_, session) in peer.sessions {
+                for (_, track) in session.track {
+                    for timeline in track.timeline {
+                        let path = out_folder.join(&timeline.path);
+                        let key = path.to_str().expect("Should convert");
+                        let put_obj = s3.put_object(Some(&credentials), key);
+                        let put_url = put_obj.sign(Duration::from_secs(3600));
+                        surf::put(put_url)
+                            .body(Body::from_file(&timeline.path).await.expect("Should open file"))
+                            .await
+                            .expect("Should upload to s3");
+                        //remove file after upload success
+                        tokio::fs::remove_file(&timeline.path).await.expect("Should remove file after upload");
+                    }
                 }
             }
         }
+    } else {
+        let summary_out = temp_folder.join("summary.json");
+        std::fs::write(summary_out.to_str().expect("Should convert path to str"), &summary_json).expect("Should write summary.json file");
     }
 }
