@@ -4,7 +4,10 @@ use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, peer_event, PeerRes, RecordRes};
 use media_server_utils::{now_ms, CustomUri};
 use s3_presign::{Credentials, Presigner};
-use sea_orm::{sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
+use sea_orm::{
+    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, ModelTrait, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait, Set,
+};
 use sea_orm_migration::MigratorTrait;
 use serde::Deserialize;
 
@@ -431,12 +434,24 @@ impl Storage for ConnectorStorage {
     }
 }
 
+#[derive(FromQueryResult)]
+struct RoomInfoAndPeersCount {
+    pub id: i32,
+    pub room: String,
+    pub created_at: i64,
+    pub peers: i32,
+}
+
 impl Querier for ConnectorStorage {
     async fn rooms(&self, page: usize, count: usize) -> Option<Vec<RoomInfo>> {
         let rooms = entity::room::Entity::find()
+            .column_as(entity::peer::Column::Id.count(), "peers")
+            .join_rev(JoinType::LeftJoin, entity::peer::Relation::Room.def())
+            .group_by(entity::room::Column::Id)
             .order_by(entity::room::Column::CreatedAt, sea_orm::Order::Desc)
             .limit(count as u64)
             .offset((page * count) as u64)
+            .into_model::<RoomInfoAndPeersCount>()
             .all(&self.db)
             .await
             .ok()?
@@ -445,7 +460,7 @@ impl Querier for ConnectorStorage {
                 id: r.id,
                 room: r.room,
                 created_at: r.created_at as u64,
-                peers: 0, //TODO count peers
+                peers: r.peers as usize,
             })
             .collect::<Vec<_>>();
         Some(rooms)

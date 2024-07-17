@@ -2884,6 +2884,7 @@ dependencies = [
  "s3-presign",
  "sea-orm",
  "sea-orm-migration",
+ "sea-query",
  "serde",
  "serde_json",
  "tokio",
