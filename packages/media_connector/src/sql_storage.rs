@@ -481,6 +481,7 @@ impl Querier for ConnectorStorage {
                         peer_id: s.peer,
                         peer: r.peer.clone(),
                         session: s.session as u64,
+                        created_at: s.created_at as u64,
                         joined_at: s.joined_at as u64,
                         leaved_at: s.leaved_at.map(|l| l as u64),
                     })
@@ -514,13 +515,13 @@ impl Querier for ConnectorStorage {
                         peer_id: s.peer,
                         peer: "_".to_string(), //TODO get peer
                         session: s.session as u64,
+                        created_at: s.created_at as u64,
                         joined_at: s.joined_at as u64,
                         leaved_at: s.leaved_at.map(|l| l as u64),
                     })
                     .collect::<Vec<_>>(),
             })
             .collect::<Vec<_>>();
-        log::info!("{:?}", sessions);
         Some(sessions)
     }
 

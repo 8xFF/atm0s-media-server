@@ -28,6 +28,7 @@ pub struct PeerSession {
     pub peer_id: i32,
     pub peer: String,
     pub session: u64,
+    pub created_at: u64,
     pub joined_at: u64,
     pub leaved_at: Option<u64>,
 }

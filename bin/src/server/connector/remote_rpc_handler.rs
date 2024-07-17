@@ -46,7 +46,7 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
                         peer_id: p.peer_id,
                         peer: p.peer,
                         session: p.session,
-                        created_at: p.session,
+                        created_at: p.created_at,
                         joined_at: p.joined_at,
                         leaved_at: p.leaved_at,
                     })
@@ -76,7 +76,7 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
                         peer_id: p.peer_id,
                         peer: p.peer,
                         session: p.session,
-                        created_at: p.session,
+                        created_at: p.created_at,
                         joined_at: p.joined_at,
                         leaved_at: p.leaved_at,
                     })
