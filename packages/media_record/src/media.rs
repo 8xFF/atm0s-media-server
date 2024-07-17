@@ -50,6 +50,11 @@ impl SessionMediaWriter {
                 Some(Event::TrackStop(name, event.ts))
             }
             SessionRecordEvent::TrackMedia(id, media) => {
+                // We allow clippy::map_entry because the suggestion provided by clippy has a bug:
+                // cannot borrow `*self` as mutable more than once at a time
+                // There is a open Issue on the Rust Clippy GitHub Repo:
+                // https://github.com/rust-lang/rust-clippy/issues/11976
+                #[allow(clippy::map_entry)]
                 let out = if !self.tracks_writer.contains_key(&id) {
                     if let Some((name, _meta)) = self.tracks_meta.get(&id) {
                         let (file_path, writer): (String, Box<dyn TrackWriter + Send>) = match &media.meta {

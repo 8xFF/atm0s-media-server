@@ -40,7 +40,7 @@ impl<W: Write + Seek> TrackWriter for VpxWriter<W> {
                 }
             }
             let audio = self.audio.as_mut().expect("Should have audio");
-            audio.add_frame(&pkt.data, delta_ts * 1000_000, true);
+            audio.add_frame(&pkt.data, delta_ts * 1_000_000, true);
         } else {
             if self.video.is_none() {
                 let codec = match &pkt.meta {
@@ -59,7 +59,7 @@ impl<W: Write + Seek> TrackWriter for VpxWriter<W> {
 
             let (video, demuxer) = self.video.as_mut().expect("Should have video");
             if let Some((key, data)) = demuxer.push(pkt) {
-                video.add_frame(&data, delta_ts * 1000_000, key);
+                video.add_frame(&data, delta_ts * 1_000_000, key);
             }
         }
     }

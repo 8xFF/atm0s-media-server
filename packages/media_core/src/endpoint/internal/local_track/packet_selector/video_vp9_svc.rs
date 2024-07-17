@@ -302,7 +302,7 @@ mod tests {
     fn test(bitrate: u64, layers: &[[u16; 3]], steps: Vec<Step>) {
         let mut ctx = VideoSelectorCtx::new(MediaKind::Video);
         ctx.seq_rewrite.reinit();
-        let mut selector = Selector::new(false, bitrate * 1000, layers_bitrate(&layers), (2, 2));
+        let mut selector = Selector::new(false, bitrate * 1000, layers_bitrate(layers), (2, 2));
         selector.on_init(&mut ctx, 0);
 
         for step in steps {
