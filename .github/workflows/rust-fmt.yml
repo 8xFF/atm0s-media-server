@@ -31,4 +31,3 @@ jobs:
       
       - name: cargo fmt
         run: cargo fmt --all -- --check
-        continue-on-error: true
