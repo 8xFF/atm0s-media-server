@@ -99,7 +99,6 @@ pub fn parse_rtp(packet: &[u8], rid: Option<u8>) -> Option<MediaMeta> {
     }
 }
 
-#[allow(unused_assignments)]
 pub fn rewrite_rtp(payload: &mut [u8], sim: &Vp8Sim) {
     let mut payload_index = 0;
 
