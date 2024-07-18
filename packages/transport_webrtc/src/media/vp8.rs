@@ -129,6 +129,7 @@ pub fn rewrite_rtp(payload: &mut [u8], sim: &Vp8Sim) {
         }
     }
 
+    #[allow(unused_assignments)]
     if l == 1 {
         payload[payload_index] = sim.tl0_pic_idx.unwrap_or(0);
         payload_index += 1;
