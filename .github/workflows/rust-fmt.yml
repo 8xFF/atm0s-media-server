@@ -29,14 +29,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Configure cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-${{ hashFiles('**/Cargo.toml') }}
-
       - name: cargo fmt
         run: cargo fmt --all -- --check
         continue-on-error: true

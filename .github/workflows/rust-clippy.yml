@@ -37,14 +37,6 @@ jobs:
       # Install protobuf-compiler (protoc)
       - name: Install Protobuf Compiler
         run: sudo apt-get install -y protobuf-compiler
-        
-      - name: Configure cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install required cargo
         run: cargo install clippy-sarif sarif-fmt
