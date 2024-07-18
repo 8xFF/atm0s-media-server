@@ -18,6 +18,14 @@ on:
   schedule:
     - cron: '29 19 * * 2'
 
+concurrency:
+  # One build per PR, branch or tag
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   rust-clippy-analyze:
     name: Run rust-clippy analyzing
@@ -30,13 +38,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af #@v1
+      - name: Configure cache
+        uses: actions/cache@v3
         with:
-          profile: minimal
-          toolchain: stable
-          components: clippy
-          override: true
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+        continue-on-error: true
 
       - name: Install required cargo
         run: cargo install clippy-sarif sarif-fmt
@@ -45,7 +57,8 @@ jobs:
         run:
           cargo clippy
           --all-features
-          --message-format=json | clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
+          --message-format=json 
+          --all-targets -- -D warnings | clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
         continue-on-error: true
 
       - name: Upload analysis results to GitHub
