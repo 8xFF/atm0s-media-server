@@ -33,10 +33,22 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      # Install protobuf-compiler (protoc)
-      - name: Install Protobuf Compiler
-        run: sudo apt-get install -y protobuf-compiler
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "25.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}     
 
       - name: Install required cargo
         run: cargo install clippy-sarif sarif-fmt

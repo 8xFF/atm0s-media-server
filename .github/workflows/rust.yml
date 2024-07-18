@@ -25,8 +25,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt install -y libsoxr-dev libopus-dev libssl-dev libfdk-aac-dev
-      - name: Install Rust
-        run: rustup update stable
+
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
