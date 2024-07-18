@@ -28,37 +28,30 @@ jobs:
         uses: actions/checkout@v4
 
       - uses: actions/cache@v3
+        id: cache-cargo
         with:
           path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
           version: "25.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Run rust-clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Install required cargo
         run: cargo install clippy-sarif sarif-fmt
 
-      - name: Run rust-clippy
-        run: |
-          set -o pipefail
-          cargo clippy --all-targets --all-features --message-format=json |
-          clippy-sarif > rust-clippy-results.sarif
-          CLIPPY_EXIT_STATUS=${PIPESTATUS[0]}
-          if [ "$CLIPPY_EXIT_STATUS" -ne 0 ]; then
-            echo "Clippy found issues."
-            exit $CLIPPY_EXIT_STATUS
-          fi
-
-      - name: Format SARIF file
-        run: sarif-fmt rust-clippy-results.sarif
+      - name: Run rust-sarif
+        run: cargo clippy --all-features --message-format=json | 
+          clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
 
       - name: Upload analysis results to GitHub
         uses: github/codeql-action/upload-sarif@v3
