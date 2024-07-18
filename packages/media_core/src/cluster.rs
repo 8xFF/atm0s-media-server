@@ -33,7 +33,7 @@ pub struct ClusterRoomHash(pub u64);
 
 impl From<&RoomId> for ClusterRoomHash {
     fn from(room: &RoomId) -> Self {
-        let mut hash = std::hash::DefaultHasher::new();
+    let mut hash = std::hash::DefaultHasher::new();
         room.as_ref().hash(&mut hash);
         Self(hash.finish())
     }
