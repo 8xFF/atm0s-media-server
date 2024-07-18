@@ -18,8 +18,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  rust-clippy-analyze:
-    name: Run rust-clippy analyzing
+  rust-fmt-analyze:
+    name: Run rust-fmt analyzing
     runs-on: ubuntu-latest
     permissions:
       contents: read
