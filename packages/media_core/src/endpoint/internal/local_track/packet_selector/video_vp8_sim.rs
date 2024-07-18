@@ -254,6 +254,7 @@ mod tests {
         res
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn video_pkt(seq: u16, ts: u32, key: bool, layers: Option<&[[u16; 3]]>, spatial: u8, temporal: u8, layer_sync: bool, tl0idx: u8, pic_id: u16) -> MediaPacket {
         MediaPacket {
             ts,
