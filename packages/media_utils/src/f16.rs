@@ -32,7 +32,7 @@ pub struct F16i(i16);
 
 impl From<F16i> for f32 {
     fn from(val: F16i) -> Self {
-         val.0 as f32 / 100.0
+        val.0 as f32 / 100.0
     }
 }
 

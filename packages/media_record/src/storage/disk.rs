@@ -154,8 +154,8 @@ mod test {
         let storage = DiskStorage::new("/tmp/");
 
         let mut mem_file = MemoryFile::default();
-        mem_file.write(&[1, 2, 3, 4]).await.expect("should write");
-        mem_file.write(&[5, 6, 7, 8, 9]).await.expect("should write");
+        mem_file.write_all(&[1, 2, 3, 4]).await.expect("should write");
+        mem_file.write_all(&[5, 6, 7, 8, 9]).await.expect("should write");
 
         let mut file = storage.copy_from_mem(mem_file).await.expect("Should create file");
 
