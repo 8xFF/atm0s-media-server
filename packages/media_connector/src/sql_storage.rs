@@ -1,12 +1,15 @@
-use std::time::Duration;
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, peer_event, PeerRes, RecordRes};
 use media_server_utils::{now_ms, CustomUri};
 use s3_presign::{Credentials, Presigner};
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, ModelTrait, QueryFilter, QueryOrder, QuerySelect,
-    RelationTrait, Set,
+    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityOrSelect, EntityTrait, FromQueryResult, JoinType, ModelTrait, QueryFilter, QueryOrder,
+    QuerySelect, RelationTrait, Set,
 };
 use sea_orm_migration::MigratorTrait;
 use serde::Deserialize;
@@ -481,30 +484,43 @@ impl Querier for ConnectorStorage {
             .find_with_related(entity::peer_session::Entity)
             .all(&self.db)
             .await
-            .unwrap()
+            .ok()?
             .into_iter()
-            .map(|(r, sessions)| PeerInfo {
-                id: r.id,
-                room_id: r.room,
-                room: "".to_string(), //TODO get room
-                peer: r.peer.clone(),
-                created_at: r.created_at as u64,
-                sessions: sessions
-                    .into_iter()
-                    .map(|s| PeerSession {
-                        id: s.id,
-                        peer_id: s.peer,
-                        peer: r.peer.clone(),
-                        session: s.session as u64,
-                        created_at: s.created_at as u64,
-                        joined_at: s.joined_at as u64,
-                        leaved_at: s.leaved_at.map(|l| l as u64),
-                    })
-                    .collect::<Vec<_>>(),
-            })
             .collect::<Vec<_>>();
 
-        Some(peers)
+        // TODO optimize this sub queries
+        // should combine into single query but it not allowed by sea-orm with multiple find_with_related
+        let room_ids = peers.iter().map(|(p, _)| p.room).collect::<Vec<_>>();
+        let rooms = entity::room::Entity::find().filter(entity::room::Column::Id.is_in(room_ids)).all(&self.db).await.ok()?;
+        let mut rooms_map = HashMap::new();
+        for room in rooms {
+            rooms_map.insert(room.id, room);
+        }
+
+        Some(
+            peers
+                .into_iter()
+                .map(|(peer, sessions)| PeerInfo {
+                    id: peer.id,
+                    room_id: peer.room,
+                    room: rooms_map.get(&peer.room).map(|r| r.room.clone()).unwrap_or("".to_string()),
+                    peer: peer.peer.clone(),
+                    created_at: peer.created_at as u64,
+                    sessions: sessions
+                        .into_iter()
+                        .map(|s| PeerSession {
+                            id: s.id,
+                            peer_id: s.peer,
+                            peer: peer.peer.clone(),
+                            session: s.session as u64,
+                            created_at: s.created_at as u64,
+                            joined_at: s.joined_at as u64,
+                            leaved_at: s.leaved_at.map(|l| l as u64),
+                        })
+                        .collect::<Vec<_>>(),
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
     async fn sessions(&self, page: usize, count: usize) -> Option<Vec<SessionInfo>> {
@@ -515,29 +531,41 @@ impl Querier for ConnectorStorage {
             .find_with_related(entity::peer_session::Entity)
             .all(&self.db)
             .await
-            .ok()?
-            .into_iter()
-            .map(|(r, peers)| SessionInfo {
-                id: r.id as u64,
-                created_at: r.created_at as u64,
-                ip: r.ip,
-                user_agent: r.user_agent,
-                sdk: r.sdk,
-                peers: peers
-                    .into_iter()
-                    .map(|s| PeerSession {
-                        id: s.id,
-                        peer_id: s.peer,
-                        peer: "_".to_string(), //TODO get peer
-                        session: s.session as u64,
-                        created_at: s.created_at as u64,
-                        joined_at: s.joined_at as u64,
-                        leaved_at: s.leaved_at.map(|l| l as u64),
-                    })
-                    .collect::<Vec<_>>(),
-            })
-            .collect::<Vec<_>>();
-        Some(sessions)
+            .ok()?;
+
+        // TODO optimize this sub queries
+        // should combine into single query but it not allowed by sea-orm with multiple find_with_related
+        let peers_id = sessions.iter().map(|(_, peers)| peers.iter().map(|p| p.peer)).flatten().collect::<Vec<_>>();
+        let peers = entity::peer::Entity::find().filter(entity::peer::Column::Id.is_in(peers_id)).all(&self.db).await.ok()?;
+        let mut peers_map = HashMap::new();
+        for peer in peers {
+            peers_map.insert(peer.id, peer);
+        }
+
+        Some(
+            sessions
+                .into_iter()
+                .map(|(r, peers)| SessionInfo {
+                    id: r.id as u64,
+                    created_at: r.created_at as u64,
+                    ip: r.ip,
+                    user_agent: r.user_agent,
+                    sdk: r.sdk,
+                    peers: peers
+                        .into_iter()
+                        .map(|s| PeerSession {
+                            id: s.id,
+                            peer_id: s.peer,
+                            peer: peers_map.get(&s.peer).map(|p| p.peer.clone()).unwrap_or("_".to_string()),
+                            session: s.session as u64,
+                            created_at: s.created_at as u64,
+                            joined_at: s.joined_at as u64,
+                            leaved_at: s.leaved_at.map(|l| l as u64),
+                        })
+                        .collect::<Vec<_>>(),
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
     async fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> Option<Vec<EventInfo>> {
