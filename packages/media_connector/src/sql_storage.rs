@@ -1,15 +1,12 @@
-use std::{
-    collections::{HashMap, HashSet},
-    time::Duration,
-};
+use std::{collections::HashMap, time::Duration};
 
 use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, peer_event, PeerRes, RecordRes};
 use media_server_utils::{now_ms, CustomUri};
 use s3_presign::{Credentials, Presigner};
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityOrSelect, EntityTrait, FromQueryResult, JoinType, ModelTrait, QueryFilter, QueryOrder,
-    QuerySelect, RelationTrait, Set,
+    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
+    Set,
 };
 use sea_orm_migration::MigratorTrait;
 use serde::Deserialize;
@@ -535,7 +532,7 @@ impl Querier for ConnectorStorage {
 
         // TODO optimize this sub queries
         // should combine into single query but it not allowed by sea-orm with multiple find_with_related
-        let peers_id = sessions.iter().map(|(_, peers)| peers.iter().map(|p| p.peer)).flatten().collect::<Vec<_>>();
+        let peers_id = sessions.iter().flat_map(|(_, peers)| peers.iter().map(|p| p.peer)).collect::<Vec<_>>();
         let peers = entity::peer::Entity::find().filter(entity::peer::Column::Id.is_in(peers_id)).all(&self.db).await.ok()?;
         let mut peers_map = HashMap::new();
         for peer in peers {
