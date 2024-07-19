@@ -3750,9 +3750,9 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 
 [[package]]
 name = "poem"
-version = "3.0.1"
+version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e88b6912ed1e8833d7c22c9c986c517f4518d7d37e3c04566d917c789aaea591"
+checksum = "14c2c9ce82b482f5d7b0db655b104fc80fc0d7de9fc099e9f4a40a96faaef6f1"
 dependencies = [
  "bytes 1.6.1",
  "chrono",
@@ -3772,7 +3772,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "poem-derive",
- "quick-xml 0.31.0",
+ "quick-xml 0.32.0",
  "regex",
  "rfc7239",
  "serde",
@@ -3793,9 +3793,9 @@ dependencies = [
 
 [[package]]
 name = "poem-derive"
-version = "3.0.0"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2b961d58a6c53380c20236394381d9292fda03577f902b158f1638932964dcf"
+checksum = "adec62bf9b9483848bc0b46c7911a23a47885b83c20ac9a71d700e349e172aaa"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -3805,9 +3805,9 @@ dependencies = [
 
 [[package]]
 name = "poem-openapi"
-version = "5.0.2"
+version = "5.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6445b50be2e26f142d4e554d15773fc1e7510b994083c9625a65eba0d3f4287"
+checksum = "a6f4ac688d8b83fbbc8de929dee207d345600a6b3af315927e92dba26a023103"
 dependencies = [
  "base64 0.22.1",
  "bytes 1.6.1",
@@ -3818,7 +3818,7 @@ dependencies = [
  "num-traits",
  "poem",
  "poem-openapi-derive",
- "quick-xml 0.31.0",
+ "quick-xml 0.32.0",
  "regex",
  "serde",
  "serde_json",
@@ -3830,9 +3830,9 @@ dependencies = [
 
 [[package]]
 name = "poem-openapi-derive"
-version = "5.0.2"
+version = "5.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e890165626ff447a1ff3d6f2293e6ccacbf7fcbdd4c94086aa548de655735b03"
+checksum = "0812a8f13ac63020d1274d80ea2229e858ed0118a2d9537744465995e0913375"
 dependencies = [
  "darling",
  "http 1.1.0",
@@ -4105,9 +4105,9 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.31.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1004a344b30a54e2ee58d66a71b32d2db2feb0a31f9a2d302bf0536f15de2a33"
+checksum = "1d3a6e5838b60e0e8fa7a43f22ade549a37d61f8bdbe636d0d7816191de969c2"
 dependencies = [
  "memchr",
  "serde",
