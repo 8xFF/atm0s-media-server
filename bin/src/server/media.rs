@@ -118,6 +118,14 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         }
     });
 
+    let ip_lookup_res = public_ip_address::perform_lookup(None).await.unwrap();
+    let public_ip = ip_lookup_res.ip;
+    let rtp_addrs = (30000..30005)
+        .collect::<Vec<u16>>()
+        .into_iter()
+        .map(|port| SocketAddr::new(IpAddr::V4([0, 0, 0, 0].into()), port))
+        .collect::<Vec<_>>();
+
     println!("Running media server with addrs: {:?}, ice-lite: {}", webrtc_addrs, args.ice_lite);
     let mut controller = Controller::<_, _, _, _, _, 128>::default();
     for i in 0..workers {
@@ -126,7 +134,9 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             node: node.clone(),
             session: node_session,
             media: MediaConfig {
+                public_ip: public_ip.clone(),
                 webrtc_addrs: webrtc_addrs.clone(),
+                rpt_addrs: rtp_addrs.clone(),
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
                 max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core)]),

@@ -1,13 +1,15 @@
-use super::{ConnLayer, RpcResult};
+use std::net::IpAddr;
 
-pub type CallId = String;
-pub type LegId = String;
+use crate::endpoint::{PeerId, RoomId};
+
+use super::{ConnLayer, RpcResult};
 
 #[derive(Debug, Clone)]
 pub struct RtpConnectRequest {
-    pub call_id: CallId,
-    pub leg_id: LegId,
+    pub call_id: RoomId,
+    pub leg_id: PeerId,
     pub sdp: String,
+    pub session_id: u64,
 }
 
 #[derive(Debug, Clone)]

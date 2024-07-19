@@ -1,4 +1,9 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+    time::Instant,
+};
 
 use atm0s_sdn::{
     generate_node_addr,
@@ -38,8 +43,10 @@ use transport_webrtc::{GroupInput, MediaWorkerWebrtc, VariantParams, WebrtcSessi
 const FEEDBACK_GATEWAY_AGENT_INTERVAL: u64 = 1000; //only feedback every second
 
 pub struct MediaConfig<ES> {
+    pub public_ip: IpAddr,
     pub ice_lite: bool,
     pub webrtc_addrs: Vec<SocketAddr>,
+    pub rpt_addrs: Vec<SocketAddr>,
     pub secure: Arc<ES>,
     pub max_live: HashMap<ServiceKind, u32>,
 }
@@ -50,6 +57,7 @@ pub type SdnConfig = SdnWorkerCfg<UserData, SC, SE, TC, TW>;
 pub enum Owner {
     Sdn,
     MediaWebrtc,
+    RtpEngine,
 }
 
 //for sdn
@@ -183,7 +191,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn_config), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
             media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.ice_lite, media.secure.clone()), TaskType::MediaWebrtc),
-            media_rtp: TaskSwitcherBranch::new(MediaRtpWorker::new(media.secure), TaskType::MediaRtp),
+            media_rtp: TaskSwitcherBranch::new(MediaRtpWorker::new(media.rpt_addrs, media.secure, media.public_ip.clone()), TaskType::MediaRtp),
             media_max_live,
             switcher: TaskSwitcher::new(4),
             queue: DynamicDeque::from([Output::Net(Owner::Sdn, BackendOutgoing::UdpListen { addr: sdn_udp_addr, reuse: true })]),
@@ -275,6 +283,9 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 }
                 Owner::MediaWebrtc => {
                     self.media_webrtc.input(&mut self.switcher).on_event(now, transport_webrtc::GroupInput::Net(event));
+                }
+                Owner::RtpEngine => {
+                    self.media_rtp.input(&mut self.switcher).on_event(now, transport_rtp::RtpGroupIn::Net(event));
                 }
             },
             Input::Bus(event) => {
@@ -422,6 +433,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 RtpExtOut::Pong(id, res) => Output::ExtRpc(id, RpcRes::Rtp(RtpRes::Ping(res))),
                 _ => Output::Continue,
             },
+            transport_rtp::RtpGroupOut::Net(net) => Output::Net(Owner::RtpEngine, net),
             _ => Output::Continue,
         }
     }
@@ -523,6 +535,19 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     self.media_rtp
                         .input(&mut self.switcher)
                         .on_event(now, transport_rtp::RtpGroupIn::Ext(transport_rtp::RtpExtIn::Ping(req_id)));
+                }
+                RtpReq::Connect(req) => {
+                    log::info!("[MediaServerWorker] on rpc request {req_id}, RtpReq::Connect");
+                    match self
+                        .media_rtp
+                        .input(&mut self.switcher)
+                        .spawn(req.session_id, transport_rtp::VariantParams::Rtp(req.call_id, req.leg_id), &req.sdp)
+                    {
+                        Ok(res) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Rtp(RtpRes::Connect(Ok(res))))),
+                        Err(e) => {
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Rtp(RtpRes::Connect(Err(e)))));
+                        }
+                    }
                 }
                 _ => todo!(),
             },

@@ -1,9 +1,13 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+};
 
 use media_server_protocol::{
-    endpoint::ClusterConnId,
+    cluster::gen_cluster_session_id,
+    endpoint::{ClusterConnId, PeerId, RoomId},
     transport::{
-        rtp_engine::{self, RtpReq},
+        rtp_engine::{self, RtpConnectRequest, RtpReq},
         RpcReq, RpcRes,
     },
 };
@@ -17,7 +21,6 @@ use super::{
 };
 
 pub enum NgControlMsg {
-    Request(NgRequest),
     Response(NgResponse),
 }
 
@@ -48,13 +51,10 @@ impl NgControllerServer {
             tokio::select! {
                 Some((req, addr)) = self.transport.recv() => {
                     self.request_mapper.insert(req.id.clone(), addr);
-                    tx.send(NgControlMsg::Request(req)).await.unwrap();
+                    self.handle_request(req, addr.ip(), tx.clone());
                 }
                 Some(msg) = rx.recv() => {
                     match msg {
-                        NgControlMsg::Request(req) => {
-                            self.handle_request(req, tx.clone());
-                        }
                         NgControlMsg::Response(res) => {
                             if let Some(addr) = self.request_mapper.remove(&res.id) {
                                 self.transport.send(res, addr).await;
@@ -71,12 +71,12 @@ impl NgControllerServer {
 }
 
 impl NgControllerServer {
-    fn handle_request(&self, req: NgRequest, intenal_sender: Sender<NgControlMsg>) {
+    fn handle_request(&self, req: NgRequest, remote_ip: IpAddr, intenal_sender: Sender<NgControlMsg>) {
         let id = req.id.clone();
         let rpc_sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>> = self.rpc_sender.clone();
         tokio::spawn(async move {
             log::info!("[NgControllerServer] Received request: {:?}", req);
-            let rpc_req = ng_cmd_to_rpc(req.command);
+            let rpc_req = ng_cmd_to_rpc(req.command, remote_ip);
             let res = match rpc_req {
                 Some(req) => {
                     let (rpc, answer) = Rpc::new(req);
@@ -111,9 +111,27 @@ impl NgControllerServer {
     }
 }
 
-fn ng_cmd_to_rpc(req: NgCommand) -> Option<RpcReq<ClusterConnId>> {
+fn ng_cmd_to_rpc(req: NgCommand, remote_ip: IpAddr) -> Option<RpcReq<ClusterConnId>> {
     match req {
         NgCommand::Ping {} => Some(RpcReq::Rtp(RtpReq::Ping)),
+        NgCommand::Offer { sdp, call_id, from_tag, .. } => {
+            let session_id = gen_cluster_session_id();
+            Some(RpcReq::Rtp(RtpReq::Connect(RtpConnectRequest {
+                call_id: RoomId(call_id),
+                leg_id: PeerId(from_tag),
+                sdp,
+                session_id: session_id,
+            })))
+        }
+        NgCommand::Answer { sdp, call_id, to_tag, .. } => {
+            let session_id = gen_cluster_session_id();
+            Some(RpcReq::Rtp(RtpReq::Connect(RtpConnectRequest {
+                call_id: RoomId(call_id),
+                leg_id: PeerId(to_tag),
+                sdp,
+                session_id: session_id,
+            })))
+        }
         _ => None,
     }
 }
@@ -121,6 +139,16 @@ fn ng_cmd_to_rpc(req: NgCommand) -> Option<RpcReq<ClusterConnId>> {
 fn rpc_result_to_ng_res(res: RpcRes<ClusterConnId>) -> Option<NgCmdResult> {
     match res {
         RpcRes::Rtp(rtp_engine::RtpRes::Ping(Ok(res))) => Some(NgCmdResult::Pong { result: res }),
+        RpcRes::Rtp(rtp_engine::RtpRes::Connect(res)) => match res {
+            Ok((_conn, sdp)) => Some(NgCmdResult::Answer {
+                result: "ok".to_string(),
+                sdp: Some(sdp),
+            }),
+            Err(e) => Some(NgCmdResult::Error {
+                result: "error".to_string(),
+                error_reason: e.message.to_string(),
+            }),
+        },
         _ => None,
     }
 }

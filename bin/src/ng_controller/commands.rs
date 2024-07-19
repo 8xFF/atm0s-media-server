@@ -64,10 +64,6 @@ pub enum NgCmdResult {
     Pong {
         result: String,
     },
-    Offer {
-        result: String,
-        sdp: Option<String>,
-    },
     Answer {
         result: String,
         sdp: Option<String>,
