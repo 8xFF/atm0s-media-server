@@ -430,6 +430,10 @@ pub mod get_rooms {
         pub id: i32,
         #[prost(string, tag = "2")]
         pub room: ::prost::alloc::string::String,
+        #[prost(uint64, tag = "3")]
+        pub created_at: u64,
+        #[prost(uint32, tag = "4")]
+        pub peers: u32,
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]

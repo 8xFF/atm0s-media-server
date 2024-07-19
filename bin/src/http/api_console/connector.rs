@@ -15,6 +15,8 @@ use poem_openapi::{
 pub struct RoomInfo {
     pub id: i32,
     pub room: String,
+    pub created_at: u64,
+    pub peers: usize,
 }
 
 #[derive(poem_openapi::Object)]
@@ -73,7 +75,17 @@ impl Apis {
             Some(res) => Json(Response {
                 status: true,
                 error: None,
-                data: Some(res.rooms.into_iter().map(|e| RoomInfo { id: e.id, room: e.room }).collect::<Vec<_>>()),
+                data: Some(
+                    res.rooms
+                        .into_iter()
+                        .map(|e| RoomInfo {
+                            id: e.id,
+                            room: e.room,
+                            created_at: e.created_at,
+                            peers: e.peers as usize,
+                        })
+                        .collect::<Vec<_>>(),
+                ),
             }),
             None => Json(Response {
                 status: false,

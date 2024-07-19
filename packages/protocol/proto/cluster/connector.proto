@@ -181,6 +181,8 @@ message GetRooms {
     message RoomInfo {
         int32 id = 1;
         string room = 2;
+        uint64 created_at = 3;
+        uint32 peers = 4;
     }
 
     repeated RoomInfo rooms = 1;

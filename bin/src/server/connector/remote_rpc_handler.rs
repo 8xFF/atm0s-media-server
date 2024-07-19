@@ -21,7 +21,12 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
             .rooms(req.page as usize, req.limit as usize)
             .await?
             .into_iter()
-            .map(|e| RoomInfo { id: e.id, room: e.room })
+            .map(|e| RoomInfo {
+                id: e.id,
+                room: e.room,
+                created_at: e.created_at,
+                peers: e.peers as u32,
+            })
             .collect::<Vec<_>>();
         Some(GetRooms { rooms })
     }
