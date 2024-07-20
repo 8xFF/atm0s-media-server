@@ -4,15 +4,17 @@ use std::{
     time::Instant,
 };
 
-use media_server_core::transport::{Transport, TransportOutput};
+use media_server_core::transport::{Transport, TransportInput, TransportOutput};
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
     transport::RpcResult,
 };
 use media_server_secure::MediaEdgeSecure;
-use sans_io_runtime::{collections::DynamicDeque, TaskSwitcherChild};
+use rtp::RtpInternal;
+use sans_io_runtime::{backend::BackendIncoming, collections::DynamicDeque, Buffer, TaskSwitcherChild};
 
 use crate::sdp::answer_sdp;
+mod rtp;
 
 pub enum RtpExtIn {
     Ping(u64),
@@ -29,33 +31,69 @@ pub enum VariantParams {
     Rtp(RoomId, PeerId),
 }
 
+pub struct InternalNetInput {
+    from: SocketAddr,
+    destination: SocketAddr,
+    data: Buffer,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum InternalOutput {
+    TransportOutput(TransportOutput<RtpExtOut>),
+}
+
+trait TransportRtpInternal {
+    fn on_tick(&mut self, now: Instant);
+    fn handle_input(&mut self, input: InternalNetInput);
+    fn pop_output(&mut self, now: Instant) -> Option<InternalOutput>;
+}
+
 pub struct TransportRtp<ES> {
     next_tick: Option<Instant>,
     queue: DynamicDeque<TransportOutput<RtpExtOut>, 4>,
+    internal: Box<dyn TransportRtpInternal>,
     _tmp: PhantomData<ES>,
 }
 
 impl<ES: 'static + MediaEdgeSecure> TransportRtp<ES> {
     pub fn new(params: VariantParams, offer: &str, local_ip: IpAddr, port: u16) -> RpcResult<(Self, SocketAddr, String)> {
         match answer_sdp(offer, local_ip, port) {
-            Ok((sdp, remote_ep)) => Ok((
-                Self {
-                    next_tick: None,
-                    queue: Default::default(),
-                    _tmp: Default::default(),
-                },
-                remote_ep,
-                sdp,
-            )),
+            Ok((sdp, remote_ep)) => {
+                let internal = match params {
+                    VariantParams::Rtp(room, peer) => RtpInternal::new(remote_ep.ip(), room, peer),
+                };
+                Ok((
+                    Self {
+                        next_tick: None,
+                        queue: Default::default(),
+                        internal: Box::new(internal),
+                        _tmp: Default::default(),
+                    },
+                    remote_ep,
+                    sdp,
+                ))
+            }
             Err(err) => Err(err),
         }
     }
 }
 
 impl<ES: 'static + MediaEdgeSecure> Transport<RtpExtIn, RtpExtOut> for TransportRtp<ES> {
-    fn on_tick(&mut self, now: Instant) {}
+    fn on_tick(&mut self, now: Instant) {
+        self.internal.on_tick(now);
+    }
 
-    fn on_input(&mut self, now: Instant, input: media_server_core::transport::TransportInput<RtpExtIn>) {}
+    fn on_input(&mut self, now: Instant, input: media_server_core::transport::TransportInput<RtpExtIn>) {
+        match input {
+            TransportInput::Net(net) => match net {
+                BackendIncoming::UdpPacket { slot, from, data } => {
+                    log::trace!("[TransportWebrtc] recv udp from {}, len {}", from, data.len());
+                }
+                _ => panic!("unexpected input"),
+            },
+            _ => {}
+        }
+    }
 }
 
 impl<ES: 'static + MediaEdgeSecure> TaskSwitcherChild<TransportOutput<RtpExtOut>> for TransportRtp<ES> {
