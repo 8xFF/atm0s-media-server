@@ -1,17 +1,22 @@
 use std::{
+    io,
     marker::PhantomData,
     net::{IpAddr, SocketAddr},
+    ops::Deref,
     time::Instant,
 };
 
-use media_server_core::transport::{Transport, TransportInput, TransportOutput};
+use media_server_core::{
+    endpoint::EndpointEvent,
+    transport::{Transport, TransportInput, TransportOutput},
+};
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
     transport::RpcResult,
 };
 use media_server_secure::MediaEdgeSecure;
 use rtp::RtpInternal;
-use sans_io_runtime::{backend::BackendIncoming, collections::DynamicDeque, Buffer, TaskSwitcherChild};
+use sans_io_runtime::{backend::BackendIncoming, collections::DynamicDeque, return_if_none, return_if_some, Buffer, TaskSwitcherChild};
 
 use crate::sdp::answer_sdp;
 mod rtp;
@@ -31,20 +36,22 @@ pub enum VariantParams {
     Rtp(RoomId, PeerId),
 }
 
-pub struct InternalNetInput {
+pub struct InternalNetInput<'a> {
     from: SocketAddr,
     destination: SocketAddr,
-    data: Buffer,
+    data: &'a [u8],
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum InternalOutput {
+    SendData(Vec<u8>),
     TransportOutput(TransportOutput<RtpExtOut>),
 }
 
 trait TransportRtpInternal {
     fn on_tick(&mut self, now: Instant);
-    fn handle_input(&mut self, input: InternalNetInput);
+    fn on_endpoint_event(&mut self, now: Instant, event: EndpointEvent);
+    fn handle_input(&mut self, input: InternalNetInput) -> Result<(), io::Error>;
     fn pop_output(&mut self, now: Instant) -> Option<InternalOutput>;
 }
 
@@ -76,6 +83,17 @@ impl<ES: 'static + MediaEdgeSecure> TransportRtp<ES> {
             Err(err) => Err(err),
         }
     }
+
+    fn process_internal_output(&mut self, now: Instant, out: InternalOutput) {
+        match out {
+            InternalOutput::SendData(data) => {
+                log::trace!("[TransportWebrtc] send data, len {}", data.len());
+            }
+            InternalOutput::TransportOutput(out) => {
+                self.queue.push_back(out);
+            }
+        }
+    }
 }
 
 impl<ES: 'static + MediaEdgeSecure> Transport<RtpExtIn, RtpExtOut> for TransportRtp<ES> {
@@ -88,9 +106,19 @@ impl<ES: 'static + MediaEdgeSecure> Transport<RtpExtIn, RtpExtOut> for Transport
             TransportInput::Net(net) => match net {
                 BackendIncoming::UdpPacket { slot, from, data } => {
                     log::trace!("[TransportWebrtc] recv udp from {}, len {}", from, data.len());
+                    if let Err(err) = self.internal.handle_input(InternalNetInput {
+                        from,
+                        destination: SocketAddr::from(([0, 0, 0, 0], 8080)),
+                        data: data.deref(),
+                    }) {
+                        log::error!("[TransportWebrtc] error handling input {:?}", err);
+                    }
                 }
                 _ => panic!("unexpected input"),
             },
+            TransportInput::Endpoint(ev) => {
+                self.internal.on_endpoint_event(now, ev);
+            }
             _ => {}
         }
     }
@@ -100,6 +128,12 @@ impl<ES: 'static + MediaEdgeSecure> TaskSwitcherChild<TransportOutput<RtpExtOut>
     type Time = Instant;
 
     fn pop_output(&mut self, now: Self::Time) -> Option<TransportOutput<RtpExtOut>> {
+        return_if_some!(self.queue.pop_front());
+        while let Some(out) = self.internal.pop_output(now) {
+            self.process_internal_output(now, out);
+            return_if_some!(self.queue.pop_front());
+        }
+
         self.queue.pop_front()
     }
 }

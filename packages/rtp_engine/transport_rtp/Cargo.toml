@@ -14,3 +14,7 @@ media-server-core = { path = "../../media_core" }
 media-server-protocol = { path = "../../protocol" }
 media-server-utils = { path = "../../media_utils" }
 sdp = { version = "0.6.2" }
+rtp = { version = "0.11.0" }
+webrtc-util = { version = "0.9.0", default-features = false, features = [
+    "marshal",
+] }

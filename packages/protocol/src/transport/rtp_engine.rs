@@ -1,5 +1,3 @@
-use std::net::IpAddr;
-
 use crate::endpoint::{PeerId, RoomId};
 
 use super::{ConnLayer, RpcResult};

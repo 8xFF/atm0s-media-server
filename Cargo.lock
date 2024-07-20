@@ -6278,9 +6278,11 @@ dependencies = [
  "media-server-secure",
  "media-server-utils",
  "num_enum",
+ "rtp",
  "sans-io-runtime",
  "sdp",
  "smallmap",
+ "webrtc-util",
 ]
 
 [[package]]

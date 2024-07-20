@@ -71,7 +71,7 @@ impl NgControllerServer {
 }
 
 impl NgControllerServer {
-    fn handle_request(&self, req: NgRequest, remote_ip: IpAddr, intenal_sender: Sender<NgControlMsg>) {
+    fn handle_request(&self, req: NgRequest, remote_ip: IpAddr, internal_sender: Sender<NgControlMsg>) {
         let id = req.id.clone();
         let rpc_sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>> = self.rpc_sender.clone();
         tokio::spawn(async move {
@@ -106,7 +106,7 @@ impl NgControllerServer {
                     },
                 },
             };
-            intenal_sender.send(NgControlMsg::Response(res)).await.unwrap();
+            internal_sender.send(NgControlMsg::Response(res)).await.unwrap();
         });
     }
 }
