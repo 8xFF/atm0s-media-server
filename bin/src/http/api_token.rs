@@ -24,7 +24,7 @@ struct WhipTokenReq {
     room: String,
     peer: String,
     ttl: u64,
-    record: bool,
+    record: Option<bool>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -49,7 +49,7 @@ struct WebrtcTokenReq {
     room: Option<String>,
     peer: Option<String>,
     ttl: u64,
-    record: bool,
+    record: Option<bool>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -80,7 +80,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                         WhipToken {
                             room: body.room,
                             peer: body.peer,
-                            record: body.record,
+                            record: body.record.unwrap_or(false),
                         },
                         body.ttl,
                     ),
@@ -129,7 +129,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                         WebrtcToken {
                             room: body.room,
                             peer: body.peer,
-                            record: body.record,
+                            record: body.record.unwrap_or(false),
                         },
                         body.ttl,
                     ),
