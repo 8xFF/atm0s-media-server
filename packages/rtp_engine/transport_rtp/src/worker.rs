@@ -35,6 +35,7 @@ pub enum RtpGroupOut {
 pub struct MediaRtpWorker<ES: 'static + MediaEdgeSecure> {
     available_slots: VecDeque<usize>,
     addr_slots: Small2dMap<SocketAddr, usize>,
+    task_slots: Small2dMap<usize, usize>,
     queue: VecDeque<RtpGroupOut>,
     endpoints: TaskGroup<EndpointInput<RtpExtIn>, EndpointOutput<RtpExtOut>, Endpoint<TransportRtp<ES>, RtpExtIn, RtpExtOut>, 16>,
     public_ip: IpAddr,
@@ -47,6 +48,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaRtpWorker<ES> {
             public_ip,
             available_slots: VecDeque::default(),
             addr_slots: Small2dMap::default(),
+            task_slots: Small2dMap::default(),
             queue: VecDeque::from(addr.iter().map(|addr| RtpGroupOut::Net(BackendOutgoing::UdpListen { addr: *addr, reuse: false })).collect::<Vec<_>>()),
             endpoints: TaskGroup::default(),
             secure,
@@ -70,6 +72,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaRtpWorker<ES> {
             trans,
         );
         let idx = self.endpoints.add_task(ep);
+        self.task_slots.insert(slot, idx);
         Ok((idx, sdp))
     }
 
@@ -97,6 +100,12 @@ impl<ES: MediaEdgeSecure> MediaRtpWorker<ES> {
                 self.available_slots.push_back(slot);
                 self.addr_slots.insert(addr, slot);
             }
+            RtpGroupIn::Net(BackendIncoming::UdpPacket { slot, from, data }) => match self.task_slots.get1(&slot) {
+                Some(idx) => {
+                    self.endpoints.on_event(now, *idx, EndpointInput::Net(BackendIncoming::UdpPacket { slot, from, data }));
+                }
+                None => {}
+            },
             RtpGroupIn::Ext(ext) => match ext {
                 RtpExtIn::Ping(id) => {
                     self.queue.push_back(RtpGroupOut::Ext(RtpExtOut::Pong(id, Result::Ok("pong".to_string()))));

@@ -18,7 +18,7 @@ use media_server_secure::MediaEdgeSecure;
 use rtp::RtpInternal;
 use sans_io_runtime::{backend::BackendIncoming, collections::DynamicDeque, return_if_none, return_if_some, Buffer, TaskSwitcherChild};
 
-use crate::sdp::answer_sdp;
+use crate::sdp::RtpConfig;
 mod rtp;
 
 pub enum RtpExtIn {
@@ -64,7 +64,14 @@ pub struct TransportRtp<ES> {
 
 impl<ES: 'static + MediaEdgeSecure> TransportRtp<ES> {
     pub fn new(params: VariantParams, offer: &str, local_ip: IpAddr, port: u16) -> RpcResult<(Self, SocketAddr, String)> {
-        match answer_sdp(offer, local_ip, port) {
+        let rtp_config = RtpConfig::new()
+            .enable_g722(true)
+            .enable_gsm(true)
+            .enable_opus(true)
+            .enable_pcma(true)
+            .enable_pcmu(true)
+            .enable_telecom_event(true);
+        match rtp_config.answer(offer, local_ip, port) {
             Ok((sdp, remote_ep)) => {
                 let internal = match params {
                     VariantParams::Rtp(room, peer) => RtpInternal::new(remote_ep.ip(), room, peer),
@@ -87,7 +94,7 @@ impl<ES: 'static + MediaEdgeSecure> TransportRtp<ES> {
     fn process_internal_output(&mut self, now: Instant, out: InternalOutput) {
         match out {
             InternalOutput::SendData(data) => {
-                log::trace!("[TransportWebrtc] send data, len {}", data.len());
+                log::trace!("[TransportRtp] send data, len {}", data.len());
             }
             InternalOutput::TransportOutput(out) => {
                 self.queue.push_back(out);
@@ -105,19 +112,22 @@ impl<ES: 'static + MediaEdgeSecure> Transport<RtpExtIn, RtpExtOut> for Transport
         match input {
             TransportInput::Net(net) => match net {
                 BackendIncoming::UdpPacket { slot, from, data } => {
-                    log::trace!("[TransportWebrtc] recv udp from {}, len {}", from, data.len());
+                    log::trace!("[TransportRtp] recv udp from {}, len {}", from, data.len());
                     if let Err(err) = self.internal.handle_input(InternalNetInput {
                         from,
                         destination: SocketAddr::from(([0, 0, 0, 0], 8080)),
                         data: data.deref(),
                     }) {
-                        log::error!("[TransportWebrtc] error handling input {:?}", err);
+                        log::error!("[TransportRtp] error handling input {:?}", err);
                     }
                 }
                 _ => panic!("unexpected input"),
             },
             TransportInput::Endpoint(ev) => {
                 self.internal.on_endpoint_event(now, ev);
+            }
+            TransportInput::Close => {
+                log::info!("[TransportRtp] close");
             }
             _ => {}
         }
