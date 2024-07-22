@@ -7,5 +7,6 @@ cargo run -- \
     --sdn-port 11002 \
     --sdn-zone 256 \
     --seeds 256@/ip4/127.0.0.1/udp/11000 \
+    --workers 2 \
     media \
         --enable-token-api

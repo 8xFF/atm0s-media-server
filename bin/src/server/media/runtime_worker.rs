@@ -15,7 +15,8 @@ use crate::NodeConfig;
 
 #[derive(Debug, Clone)]
 pub enum ExtIn {
-    Sdn(SdnExtIn<UserData, SC>),
+    /// ext, send controller or worker, true is controller
+    Sdn(SdnExtIn<UserData, SC>, bool),
     Rpc(u64, RpcReq<usize>),
     NodeStats(NodeMetrics),
 }
@@ -130,7 +131,7 @@ impl<ES: MediaEdgeSecure> MediaRuntimeWorker<ES> {
             },
             Input::Ext(ext) => match ext {
                 ExtIn::Rpc(req_id, ext) => WorkerInput::ExtRpc(req_id, ext),
-                ExtIn::Sdn(ext) => WorkerInput::ExtSdn(ext),
+                ExtIn::Sdn(ext, is_controller) => WorkerInput::ExtSdn(ext, is_controller),
                 ExtIn::NodeStats(metrics) => WorkerInput::NodeStats(metrics),
             },
             Input::Net(owner, event) => WorkerInput::Net(owner, event),

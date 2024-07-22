@@ -7,6 +7,7 @@ cargo run -- \
     --sdn-zone 256 \
     --sdn-port 11000 \
     --seeds 0@/ip4/127.0.0.1/udp/10000 \
+    --workers 2 \
     gateway \
         --lat 20 \
         --lon 30 \
