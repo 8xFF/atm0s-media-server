@@ -350,12 +350,19 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             },
             SdnWorkerOutput::Net(out) => match out {
                 NetOutput::UdpPacket(pair, data) => {
-                    let slot = self.sdn_backend_addrs.get(&pair.local).expect("Should have slot");
-                    Output::Net(Owner::Sdn, BackendOutgoing::UdpPacket { slot: *slot, to: pair.remote, data })
+                    if let Some(slot) = self.sdn_backend_addrs.get(&pair.local) {
+                        Output::Net(Owner::Sdn, BackendOutgoing::UdpPacket { slot: *slot, to: pair.remote, data })
+                    } else {
+                        Output::Continue
+                    }
                 }
                 NetOutput::UdpPackets(pairs, data) => {
                     let to = pairs.into_iter().filter_map(|p| self.sdn_backend_addrs.get(&p.local).map(|s| (*s, p.remote))).collect::<Vec<_>>();
-                    Output::Net(Owner::Sdn, BackendOutgoing::UdpPackets2 { to, data })
+                    if to.is_empty() {
+                        Output::Continue
+                    } else {
+                        Output::Net(Owner::Sdn, BackendOutgoing::UdpPackets2 { to, data })
+                    }
                 }
             },
             SdnWorkerOutput::Bus(event) => Output::Bus(event),
