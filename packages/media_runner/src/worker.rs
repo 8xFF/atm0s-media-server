@@ -280,11 +280,13 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                                 .input(&mut self.switcher)
                                 .on_event(now_ms, SdnWorkerInput::Net(NetInput::UdpPacket(NetPair::new(*local, from), data)));
                         }
-                        BackendIncoming::UdpListenResult { bind: _, result } => {
+                        BackendIncoming::UdpListenResult { bind, result } => {
                             if let Ok((addr, slot)) = result {
                                 log::info!("[MediaServerWorker] sdn listen success on {addr}, slot {slot}");
                                 self.sdn_backend_addrs.insert(addr, slot);
                                 self.sdn_backend_slots.insert(slot, addr);
+                            } else {
+                                log::warn!("[MediaServerWorker] sdn listen error on {bind}");
                             }
                         }
                     }
