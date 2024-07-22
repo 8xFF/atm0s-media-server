@@ -2,6 +2,11 @@ syntax = "proto3";
 
 package shared;
 
+message Pagination {
+    uint32 total = 1;
+    uint32 current = 2;
+}
+
 message Error {
     uint32 code = 1;
     string message = 2;

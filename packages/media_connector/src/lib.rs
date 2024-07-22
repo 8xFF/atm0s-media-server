@@ -15,6 +15,13 @@ pub const HANDLER_SERVICE_ID: u8 = 104;
 pub const HANDLER_SERVICE_NAME: &str = "connector-handler";
 
 #[derive(Debug)]
+pub struct PagingResponse<T> {
+    pub data: Vec<T>,
+    pub total: usize,
+    pub current: usize,
+}
+
+#[derive(Debug)]
 pub struct RoomInfo {
     pub id: i32,
     pub room: String,
@@ -69,8 +76,8 @@ pub trait Storage {
 }
 
 pub trait Querier {
-    fn rooms(&self, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<RoomInfo>>> + Send;
-    fn peers(&self, room: Option<i32>, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<PeerInfo>>> + Send;
-    fn sessions(&self, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<SessionInfo>>> + Send;
-    fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> impl std::future::Future<Output = Option<Vec<EventInfo>>> + Send;
+    fn rooms(&self, page: usize, count: usize) -> impl std::future::Future<Output = Option<PagingResponse<RoomInfo>>> + Send;
+    fn peers(&self, room: Option<i32>, page: usize, count: usize) -> impl std::future::Future<Output = Option<PagingResponse<PeerInfo>>> + Send;
+    fn sessions(&self, page: usize, count: usize) -> impl std::future::Future<Output = Option<PagingResponse<SessionInfo>>> + Send;
+    fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> impl std::future::Future<Output = Option<PagingResponse<EventInfo>>> + Send;
 }

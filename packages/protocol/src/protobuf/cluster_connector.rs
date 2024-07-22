@@ -420,6 +420,8 @@ pub struct GetParams {
 pub struct GetRooms {
     #[prost(message, repeated, tag = "1")]
     pub rooms: ::prost::alloc::vec::Vec<get_rooms::RoomInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<super::shared::Pagination>,
 }
 /// Nested message and enum types in `GetRooms`.
 pub mod get_rooms {
@@ -469,6 +471,8 @@ pub struct PeerSession {
 pub struct GetPeers {
     #[prost(message, repeated, tag = "1")]
     pub peers: ::prost::alloc::vec::Vec<get_peers::PeerInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<super::shared::Pagination>,
 }
 /// Nested message and enum types in `GetPeers`.
 pub mod get_peers {
@@ -494,6 +498,8 @@ pub mod get_peers {
 pub struct GetSessions {
     #[prost(message, repeated, tag = "1")]
     pub sessions: ::prost::alloc::vec::Vec<get_sessions::SessionInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<super::shared::Pagination>,
 }
 /// Nested message and enum types in `GetSessions`.
 pub mod get_sessions {
@@ -533,6 +539,8 @@ pub struct GetEventParams {
 pub struct GetEvents {
     #[prost(message, repeated, tag = "1")]
     pub events: ::prost::alloc::vec::Vec<get_events::EventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<super::shared::Pagination>,
 }
 /// Nested message and enum types in `GetEvents`.
 pub mod get_events {

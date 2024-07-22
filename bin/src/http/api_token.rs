@@ -85,13 +85,13 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                         body.ttl,
                     ),
                 }),
-                error: None,
+                ..Default::default()
             }))
         } else {
             Ok(Json(Response {
                 status: false,
                 error: Some("APP_TOKEN_INVALID".to_string()),
-                data: None,
+                ..Default::default()
             }))
         }
     }
@@ -106,13 +106,13 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                 data: Some(WhepTokenRes {
                     token: ctx.secure.encode_obj("whep", WhepToken { room: body.room, peer: body.peer }, body.ttl),
                 }),
-                error: None,
+                ..Default::default()
             })
         } else {
             Json(Response {
                 status: false,
                 error: Some("APP_TOKEN_INVALID".to_string()),
-                data: None,
+                ..Default::default()
             })
         }
     }
@@ -134,13 +134,13 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                         body.ttl,
                     ),
                 }),
-                error: None,
+                ..Default::default()
             })
         } else {
             Json(Response {
                 status: false,
                 error: Some("APP_TOKEN_INVALID".to_string()),
-                data: None,
+                ..Default::default()
             })
         }
     }

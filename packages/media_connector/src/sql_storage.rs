@@ -5,13 +5,13 @@ use media_server_protocol::protobuf::cluster_connector::{connector_request, conn
 use media_server_utils::{now_ms, CustomUri};
 use s3_presign::{Credentials, Presigner};
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
-    Set,
+    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait, Set,
 };
 use sea_orm_migration::MigratorTrait;
 use serde::Deserialize;
 
-use crate::{EventInfo, PeerInfo, PeerSession, Querier, RoomInfo, SessionInfo, Storage};
+use crate::{EventInfo, PagingResponse, PeerInfo, PeerSession, Querier, RoomInfo, SessionInfo, Storage};
 
 mod entity;
 mod migration;
@@ -443,14 +443,14 @@ struct RoomInfoAndPeersCount {
 }
 
 impl Querier for ConnectorStorage {
-    async fn rooms(&self, page: usize, count: usize) -> Option<Vec<RoomInfo>> {
+    async fn rooms(&self, page: usize, limit: usize) -> Option<PagingResponse<RoomInfo>> {
         let rooms = entity::room::Entity::find()
             .column_as(entity::peer::Column::Id.count(), "peers")
             .join_rev(JoinType::LeftJoin, entity::peer::Relation::Room.def())
             .group_by(entity::room::Column::Id)
             .order_by(entity::room::Column::CreatedAt, sea_orm::Order::Desc)
-            .limit(count as u64)
-            .offset((page * count) as u64)
+            .limit(limit as u64)
+            .offset((page * limit) as u64)
             .into_model::<RoomInfoAndPeersCount>()
             .all(&self.db)
             .await
@@ -463,10 +463,15 @@ impl Querier for ConnectorStorage {
                 peers: r.peers as usize,
             })
             .collect::<Vec<_>>();
-        Some(rooms)
+        let total = entity::room::Entity::find().count(&self.db).await.ok()?;
+        Some(PagingResponse {
+            data: rooms,
+            current: page,
+            total: calc_page_num(total as usize, limit),
+        })
     }
 
-    async fn peers(&self, room: Option<i32>, page: usize, count: usize) -> Option<Vec<PeerInfo>> {
+    async fn peers(&self, room: Option<i32>, page: usize, limit: usize) -> Option<PagingResponse<PeerInfo>> {
         let peers = entity::peer::Entity::find();
         let peers = if let Some(room) = room {
             peers.filter(entity::peer::Column::Room.eq(room))
@@ -474,11 +479,13 @@ impl Querier for ConnectorStorage {
             peers
         };
 
+        let total = peers.clone().count(&self.db).await.ok()?;
         let peers = peers
             .order_by(entity::peer::Column::CreatedAt, sea_orm::Order::Desc)
-            .limit(count as u64)
-            .offset((page * count) as u64)
-            .find_with_related(entity::peer_session::Entity)
+            .find_with_related(entity::room::Entity)
+            .group_by(entity::peer::Column::Id)
+            .limit(limit as u64)
+            .offset((page * limit) as u64)
             .all(&self.db)
             .await
             .ok()?
@@ -487,24 +494,31 @@ impl Querier for ConnectorStorage {
 
         // TODO optimize this sub queries
         // should combine into single query but it not allowed by sea-orm with multiple find_with_related
-        let room_ids = peers.iter().map(|(p, _)| p.room).collect::<Vec<_>>();
-        let rooms = entity::room::Entity::find().filter(entity::room::Column::Id.is_in(room_ids)).all(&self.db).await.ok()?;
-        let mut rooms_map = HashMap::new();
-        for room in rooms {
-            rooms_map.insert(room.id, room);
+        let peer_ids = peers.iter().map(|(p, _)| p.id).collect::<Vec<_>>();
+        let peer_sessions = entity::peer_session::Entity::find()
+            .filter(entity::peer_session::Column::Peer.is_in(peer_ids))
+            .all(&self.db)
+            .await
+            .ok()?;
+        let mut peers_sessions_map = HashMap::new();
+        for peer_session in peer_sessions {
+            let entry = peers_sessions_map.entry(peer_session.peer).or_insert(vec![]);
+            entry.push(peer_session);
         }
 
-        Some(
-            peers
+        Some(PagingResponse {
+            data: peers
                 .into_iter()
-                .map(|(peer, sessions)| PeerInfo {
+                .map(|(peer, room)| PeerInfo {
                     id: peer.id,
                     room_id: peer.room,
-                    room: rooms_map.get(&peer.room).map(|r| r.room.clone()).unwrap_or("".to_string()),
+                    room: room.first().map(|r| r.room.clone()).unwrap_or("".to_string()),
                     peer: peer.peer.clone(),
                     created_at: peer.created_at as u64,
-                    sessions: sessions
+                    sessions: peers_sessions_map
+                        .remove(&peer.id)
                         .into_iter()
+                        .flatten()
                         .map(|s| PeerSession {
                             id: s.id,
                             peer_id: s.peer,
@@ -517,18 +531,21 @@ impl Querier for ConnectorStorage {
                         .collect::<Vec<_>>(),
                 })
                 .collect::<Vec<_>>(),
-        )
+            current: page,
+            total: calc_page_num(total as usize, limit),
+        })
     }
 
-    async fn sessions(&self, page: usize, count: usize) -> Option<Vec<SessionInfo>> {
+    async fn sessions(&self, page: usize, limit: usize) -> Option<PagingResponse<SessionInfo>> {
         let sessions = entity::session::Entity::find()
             .order_by(entity::session::Column::CreatedAt, sea_orm::Order::Desc)
-            .limit(count as u64)
-            .offset((page * count) as u64)
+            .limit(limit as u64)
+            .offset((page * limit) as u64)
             .find_with_related(entity::peer_session::Entity)
             .all(&self.db)
             .await
             .ok()?;
+        let total = entity::session::Entity::find().count(&self.db).await.ok()?;
 
         // TODO optimize this sub queries
         // should combine into single query but it not allowed by sea-orm with multiple find_with_related
@@ -539,8 +556,8 @@ impl Querier for ConnectorStorage {
             peers_map.insert(peer.id, peer);
         }
 
-        Some(
-            sessions
+        Some(PagingResponse {
+            data: sessions
                 .into_iter()
                 .map(|(r, peers)| SessionInfo {
                     id: r.id as u64,
@@ -562,10 +579,12 @@ impl Querier for ConnectorStorage {
                         .collect::<Vec<_>>(),
                 })
                 .collect::<Vec<_>>(),
-        )
+            current: page,
+            total: calc_page_num(total as usize, limit),
+        })
     }
 
-    async fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> Option<Vec<EventInfo>> {
+    async fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, limit: usize) -> Option<PagingResponse<EventInfo>> {
         let events = entity::event::Entity::find();
         let events = if let Some(session) = session {
             events.filter(entity::event::Column::Session.eq(session as i64))
@@ -585,10 +604,11 @@ impl Querier for ConnectorStorage {
             events
         };
 
+        let total = events.clone().count(&self.db).await.ok()?;
         let events = events
             .order_by(entity::event::Column::CreatedAt, sea_orm::Order::Desc)
-            .limit(count as u64)
-            .offset((page * count) as u64)
+            .limit(limit as u64)
+            .offset((page * limit) as u64)
             .all(&self.db)
             .await
             .unwrap()
@@ -603,7 +623,19 @@ impl Querier for ConnectorStorage {
                 meta: r.meta,
             })
             .collect::<Vec<_>>();
-        Some(events)
+        Some(PagingResponse {
+            data: events,
+            current: page,
+            total: calc_page_num(total as usize, limit),
+        })
+    }
+}
+
+fn calc_page_num(elms: usize, page_size: usize) -> usize {
+    if elms == 0 {
+        0
+    } else {
+        1 + (elms - 1) / page_size
     }
 }
 
@@ -617,7 +649,7 @@ mod tests {
 
     use crate::{Querier, Storage};
 
-    use super::ConnectorStorage;
+    use super::{calc_page_num, ConnectorStorage};
 
     #[tokio::test]
     async fn test_event() {
@@ -638,9 +670,20 @@ mod tests {
             .await
             .expect("Should process event");
 
-        assert_eq!(storage.sessions(0, 2).await.expect("Should got sessions").len(), 1);
-        assert_eq!(storage.events(None, None, None, 0, 2).await.expect("Should got events").len(), 1);
-        assert_eq!(storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events").len(), 1);
+        let sessions = storage.sessions(0, 2).await.expect("Should got sessions");
+        assert_eq!(sessions.data.len(), 1);
+        assert_eq!(sessions.total, 1);
+        assert_eq!(sessions.current, 0);
+
+        let events = storage.events(None, None, None, 0, 2).await.expect("Should got events");
+        assert_eq!(events.data.len(), 1);
+        assert_eq!(events.total, 1);
+        assert_eq!(events.current, 0);
+
+        let session_events = storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events");
+        assert_eq!(session_events.data.len(), 1);
+        assert_eq!(session_events.total, 1);
+        assert_eq!(session_events.current, 0);
     }
 
     #[tokio::test]
@@ -662,9 +705,20 @@ mod tests {
             .await
             .expect("Should process event");
 
-        assert_eq!(storage.sessions(0, 2).await.expect("Should got sessions").len(), 1);
-        assert_eq!(storage.events(None, None, None, 0, 2).await.expect("Should got events").len(), 1);
-        assert_eq!(storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events").len(), 1);
+        let sessions = storage.sessions(0, 2).await.expect("Should got sessions");
+        assert_eq!(sessions.data.len(), 1);
+        assert_eq!(sessions.total, 1);
+        assert_eq!(sessions.current, 0);
+
+        let events = storage.events(None, None, None, 0, 2).await.expect("Should got events");
+        assert_eq!(events.data.len(), 1);
+        assert_eq!(events.total, 1);
+        assert_eq!(events.current, 0);
+
+        let session_events = storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events");
+        assert_eq!(session_events.data.len(), 1);
+        assert_eq!(session_events.total, 1);
+        assert_eq!(session_events.current, 0);
 
         storage
             .on_event(
@@ -681,7 +735,10 @@ mod tests {
             .await
             .expect("Should process event");
 
-        assert_eq!(storage.rooms(0, 2).await.expect("Should got rooms").len(), 0);
+        let rooms = storage.rooms(0, 2).await.expect("Should got rooms");
+        assert_eq!(rooms.data.len(), 0);
+        assert_eq!(rooms.total, 0);
+        assert_eq!(rooms.current, 0);
 
         storage
             .on_event(
@@ -698,9 +755,24 @@ mod tests {
             .await
             .expect("Should process event");
 
-        assert_eq!(storage.rooms(0, 2).await.expect("Should got rooms").len(), 1);
-        assert_eq!(storage.peers(None, 0, 2).await.expect("Should got rooms").len(), 1);
+        let rooms = storage.rooms(0, 2).await.expect("Should got rooms");
+        assert_eq!(rooms.data.len(), 1);
+        assert_eq!(rooms.total, 1);
+        assert_eq!(rooms.current, 0);
+
+        let peers = storage.peers(None, 0, 2).await.expect("Should got peers");
+        assert_eq!(peers.data.len(), 1);
+        assert_eq!(peers.total, 1);
+        assert_eq!(peers.current, 0);
     }
 
     //TODO: test with record link generate
+
+    #[test]
+    fn test_calc_page_num() {
+        assert_eq!(calc_page_num(0, 100), 0);
+        assert_eq!(calc_page_num(1, 100), 1);
+        assert_eq!(calc_page_num(99, 100), 1);
+        assert_eq!(calc_page_num(100, 100), 1);
+    }
 }

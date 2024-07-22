@@ -13,8 +13,8 @@ impl Apis {
     async fn zones(&self, _auth: ConsoleAuthorization, Data(ctx): Data<&ConsoleApisCtx>) -> Json<Response<Vec<Zone>>> {
         Json(Response {
             status: true,
-            error: None,
             data: Some(ctx.storage.zones()),
+            ..Default::default()
         })
     }
 
@@ -24,14 +24,14 @@ impl Apis {
         if let Some(zone) = ctx.storage.zone(zone_id.0) {
             Json(Response {
                 status: true,
-                error: None,
                 data: Some(zone),
+                ..Default::default()
             })
         } else {
             Json(Response {
-                status: true,
+                status: false,
                 error: Some("ZONE_NOT_FOUND".to_string()),
-                data: None,
+                ..Default::default()
             })
         }
     }

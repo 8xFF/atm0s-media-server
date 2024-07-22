@@ -23,14 +23,14 @@ impl Apis {
         if ctx.secure.validate_secert(&body.secret) {
             Json(Response {
                 status: true,
-                error: None,
                 data: Some(UserLoginRes { token: ctx.secure.generate_token() }),
+                ..Default::default()
             })
         } else {
             Json(Response {
                 status: false,
                 error: Some("WRONG_SECRET".to_string()),
-                data: None,
+                ..Default::default()
             })
         }
     }
