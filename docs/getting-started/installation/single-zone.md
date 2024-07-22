@@ -65,7 +65,7 @@ docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:ma
     --sdn-port 10010 \
     --sdn-zone 0 \
     --http-port 3000 \
-    --seed 0@/ip4/192.168.1.10/udp/10010 \
+    --seed 0@/ip4/127.0.0.1/udp/10000 \
     gateway
 ```
 
@@ -76,7 +76,7 @@ docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:ma
     --sdn-port 10011 \
     --sdn-zone 0 \
     --http-port 3001 \
-    --seed 0@/ip4/192.168.1.10/udp/10011 \
+    --seed 0@/ip4/127.0.0.1/udp/10000 \
     gateway
 ```
 
