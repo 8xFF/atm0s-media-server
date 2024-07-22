@@ -59,7 +59,7 @@ The console node also have simple UI at `http://IP:8080`, you can login with abo
 Gateway node will expose at least 1 tcp port and 1 udp port
 
 ```
-docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+docker run -d --name gateway1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
     --node-id 10 \
     --sdn-port 10010 \
@@ -70,7 +70,7 @@ docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:ma
 ```
 
 ```
-docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+docker run -d --name gateway2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
     --node-id 11 \
     --sdn-port 10011 \
@@ -87,13 +87,13 @@ After started gateway node also expose openapi ui for better integrating:
 ## Deploy some connector nodes
 
 We need separated connector node which take care store logging data and response signed s3 uri for storing record file.
-In default it will store data inside a sqlite file. For config other you can provide db-uri like `protocol://username:password@host/database`, with protocol is: `sqlite`, `mysql`, `postgres`
+In default it will store data inside a sqlite file. For connecting to other database, you can provide db-uri like `protocol://username:password@host/database`, with protocol is: `sqlite`, `mysql`, `postgres`
 
 ```bash
-docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+docker run -d --name main-connector --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
-    --node-id 30 \
-    --sdn-port 10030 \
+    --node-id 20 \
+    --sdn-port 10020 \
     --sdn-zone 0 \
     --seed 10@/ip4/127.0.0.1/udp/10010 \
     --seed 11@/ip4/127.0.0.1/udp/10011 \
@@ -104,12 +104,11 @@ docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:ma
 ## Deploy some media nodes
 
 ```bash
-docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+docker run -d --name media1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
-    --node-id 11 \
-    --sdn-port 10011 \
+    --node-id 100 \
+    --sdn-port 10100 \
     --sdn-zone 0 \
-    --http-port 3001 \
     --seed 10@/ip4/127.0.0.1/udp/10010 \
     --seed 11@/ip4/127.0.0.1/udp/10011 \
     media \
@@ -117,12 +116,11 @@ docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:ma
 ```
 
 ```bash
-docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+docker run -d --name media2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
-    --node-id 12 \
-    --sdn-port 10011 \
+    --node-id 101 \
+    --sdn-port 10101 \
     --sdn-zone 0 \
-    --http-port 3001 \
     --seed 10@/ip4/127.0.0.1/udp/10010 \
     --seed 11@/ip4/127.0.0.1/udp/10011 \
     media \
