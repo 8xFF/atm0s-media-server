@@ -6,6 +6,7 @@ use atm0s_sdn::{
     services::{manual_discovery, visualization},
     ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, NetInput, NetOutput, NodeAddr, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot,
 };
+use atm0s_sdn_network::data_plane::NetPair;
 use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
 use media_server_core::cluster::{self, MediaCluster};
 use media_server_gateway::{agent_service::GatewayAgentServiceBuilder, NodeMetrics, ServiceKind, AGENT_SERVICE_ID};
@@ -107,8 +108,9 @@ enum MediaClusterEndpoint {
 pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
     worker: u16,
     sdn_addr: NodeAddr,
-    sdn_slot: usize,
     sdn_worker: TaskSwitcherBranch<SdnWorker<UserData, SC, SE, TC, TW>, SdnWorkerOutput<UserData, SC, SE, TC, TW>>,
+    sdn_backend_addrs: HashMap<SocketAddr, usize>,
+    sdn_backend_slots: HashMap<usize, SocketAddr>,
     media_cluster: TaskSwitcherBranch<MediaCluster<MediaClusterEndpoint>, cluster::Output<MediaClusterEndpoint>>,
     media_webrtc: TaskSwitcherBranch<MediaWorkerWebrtc<ES>, transport_webrtc::GroupOutput>,
     media_max_live: u32,
@@ -121,15 +123,23 @@ pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
 
 impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(worker: u16, node_id: u32, session: u64, secret: &str, controller: bool, sdn_udp: u16, sdn_custom_addrs: Vec<SocketAddr>, sdn_zone: u32, media: MediaConfig<ES>) -> Self {
+    pub fn new(
+        worker: u16,
+        node_id: u32,
+        session: u64,
+        secret: &str,
+        controller: bool,
+        sdn_bind_addrs: Vec<SocketAddr>,
+        sdn_custom_addrs: Vec<SocketAddr>,
+        sdn_zone: u32,
+        media: MediaConfig<ES>,
+    ) -> Self {
         let secure = media.secure.clone(); //TODO why need this?
-        let sdn_udp_addr = SocketAddr::from(([0, 0, 0, 0], sdn_udp));
-
         let mut media_max_live = 0;
         for (_, max) in media.max_live.iter() {
             media_max_live += *max;
         }
-        let node_addr = generate_node_addr(node_id, sdn_udp, sdn_custom_addrs);
+        let node_addr = generate_node_addr(node_id, &sdn_bind_addrs, sdn_custom_addrs);
         let node_info = ClusterNodeInfo::Media(
             ClusterNodeGenericInfo {
                 addr: node_addr.to_string(),
@@ -155,6 +165,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             controller: if controller {
                 Some(ControllerPlaneCfg {
                     session,
+                    bind_addrs: sdn_bind_addrs.clone(),
                     authorization: Arc::new(StaticKeyAuthorization::new(secret)),
                     handshake_builder: Arc::new(HandshakeBuilderXDA),
                     random: Box::new(OsRng),
@@ -172,19 +183,25 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             },
         };
 
+        let mut queue = DynamicDeque::default();
+        for addr in sdn_bind_addrs {
+            queue.push_back(Output::Net(Owner::Sdn, BackendOutgoing::UdpListen { addr, reuse: true }));
+        }
+
         Self {
             worker,
             sdn_addr: node_addr,
-            sdn_slot: 1, //TODO dont use this hack, must to wait to bind success to network
             sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn_config), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
             media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.ice_lite, media.secure), TaskType::MediaWebrtc),
             media_max_live,
             switcher: TaskSwitcher::new(3),
-            queue: DynamicDeque::from([Output::Net(Owner::Sdn, BackendOutgoing::UdpListen { addr: sdn_udp_addr, reuse: true })]),
+            queue,
             timer: TimePivot::build(),
             last_feedback_gateway_agent: 0,
             secure,
+            sdn_backend_addrs: Default::default(),
+            sdn_backend_slots: Default::default(),
         }
     }
 
@@ -257,13 +274,18 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 Owner::Sdn => {
                     let now_ms = self.timer.timestamp_ms(now);
                     match event {
-                        BackendIncoming::UdpPacket { slot: _, from, data } => {
-                            self.sdn_worker.input(&mut self.switcher).on_event(now_ms, SdnWorkerInput::Net(NetInput::UdpPacket(from, data)));
+                        BackendIncoming::UdpPacket { slot, from, data } => {
+                            let local = self.sdn_backend_slots.get(&slot).expect("Should have local addr");
+                            self.sdn_worker
+                                .input(&mut self.switcher)
+                                .on_event(now_ms, SdnWorkerInput::Net(NetInput::UdpPacket(NetPair::new(*local, from), data)));
                         }
                         BackendIncoming::UdpListenResult { bind: _, result } => {
-                            let (addr, slot) = result.expect("Should listen ok");
-                            log::info!("[MediaServerWorker] sdn listen success on {addr}, slot {slot}");
-                            self.sdn_slot = slot;
+                            if let Ok((addr, slot)) = result {
+                                log::info!("[MediaServerWorker] sdn listen success on {addr}, slot {slot}");
+                                self.sdn_backend_addrs.insert(addr, slot);
+                                self.sdn_backend_slots.insert(slot, addr);
+                            }
                         }
                     }
                 }
@@ -327,8 +349,14 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 SdnExtOut::ServicesEvent(..) => Output::Continue,
             },
             SdnWorkerOutput::Net(out) => match out {
-                NetOutput::UdpPacket(to, data) => Output::Net(Owner::Sdn, BackendOutgoing::UdpPacket { slot: self.sdn_slot, to, data }),
-                NetOutput::UdpPackets(to, data) => Output::Net(Owner::Sdn, BackendOutgoing::UdpPackets { slot: self.sdn_slot, to, data }),
+                NetOutput::UdpPacket(pair, data) => {
+                    let slot = self.sdn_backend_addrs.get(&pair.local).expect("Should have slot");
+                    Output::Net(Owner::Sdn, BackendOutgoing::UdpPacket { slot: *slot, to: pair.remote, data })
+                }
+                NetOutput::UdpPackets(pairs, data) => {
+                    let to = pairs.into_iter().filter_map(|p| self.sdn_backend_addrs.get(&p.local).map(|s| (*s, p.remote))).collect::<Vec<_>>();
+                    Output::Net(Owner::Sdn, BackendOutgoing::UdpPackets2 { to, data })
+                }
             },
             SdnWorkerOutput::Bus(event) => Output::Bus(event),
             SdnWorkerOutput::ShutdownResponse => Output::Continue,

@@ -18,6 +18,7 @@ media-server-core = { path = "../media_core" }
 
 sans-io-runtime = { workspace = true, default-features = false }
 atm0s-sdn = { workspace = true }
+atm0s-sdn-network = "0.5"
 transport-webrtc = { path = "../transport_webrtc", optional = true }
 
 [features]
