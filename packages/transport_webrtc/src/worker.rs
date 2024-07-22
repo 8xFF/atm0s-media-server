@@ -51,6 +51,7 @@ pub enum GroupOutput {
 #[allow(clippy::type_complexity)]
 pub struct MediaWorkerWebrtc<ES: 'static + MediaEdgeSecure> {
     ice_lite: bool,
+    addrs_alt: Vec<SocketAddr>,
     shared_port: SharedUdpPort<usize>,
     dtls_cert: DtlsCert,
     endpoints: TaskGroup<EndpointInput<ExtIn>, EndpointOutput<ExtOut>, Endpoint<TransportWebrtc<ES>, ExtIn, ExtOut>, 16>,
@@ -60,9 +61,10 @@ pub struct MediaWorkerWebrtc<ES: 'static + MediaEdgeSecure> {
 }
 
 impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
-    pub fn new(addrs: Vec<SocketAddr>, ice_lite: bool, secure: Arc<ES>) -> Self {
+    pub fn new(addrs: Vec<SocketAddr>, addrs_alt: Vec<SocketAddr>, ice_lite: bool, secure: Arc<ES>) -> Self {
         Self {
             ice_lite,
+            addrs_alt,
             shared_port: SharedUdpPort::default(),
             dtls_cert: DtlsCert::new_openssl(),
             endpoints: TaskGroup::default(),
@@ -90,7 +92,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                 record: *record,
             },
         };
-        let (tran, ufrag, sdp) = TransportWebrtc::new(remote, variant, offer, self.dtls_cert.clone(), self.addrs.clone(), self.ice_lite)?;
+        let (tran, ufrag, sdp) = TransportWebrtc::new(remote, variant, offer, self.dtls_cert.clone(), &self.addrs, &self.addrs_alt, self.ice_lite)?;
         log::info!("[TransportWebrtc] create endpoint with config {:?}", cfg);
         let endpoint = Endpoint::new(session_id, cfg, tran);
         let index = self.endpoints.add_task(endpoint);
@@ -127,10 +129,13 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
 
     pub fn on_event(&mut self, now: Instant, input: GroupInput) {
         match input {
-            GroupInput::Net(BackendIncoming::UdpListenResult { bind: _, result }) => {
-                let (addr, slot) = result.expect("Should listen ok");
-                log::info!("[MediaWorkerWebrtc] UdpListenResult {addr}, slot {slot}");
-                self.addrs.push((addr, slot));
+            GroupInput::Net(BackendIncoming::UdpListenResult { bind, result }) => {
+                if let Ok((addr, slot)) = result {
+                    log::info!("[MediaWorkerWebrtc] successul bind udp port {addr}, slot {slot}");
+                    self.addrs.push((addr, slot));
+                } else {
+                    log::warn!("[MediaWorkerWebrtc] unsuccessul bind {bind}");
+                }
             }
             GroupInput::Net(BackendIncoming::UdpPacket { slot, from, data }) => {
                 let index = return_if_none!(self.shared_port.map_remote(from, &data));

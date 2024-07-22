@@ -45,6 +45,7 @@ docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:ma
     --sdn-port 10000 \
     --sdn-zone 0 \
     --http-port 8080 \
+    --enable-private-ip \
     console
 ```
 
@@ -65,6 +66,7 @@ docker run -d --name gateway1 --net=host ghcr.io/8xff/atm0s-media-gateway:master
     --sdn-port 10010 \
     --sdn-zone 0 \
     --http-port 3000 \
+    --enable-private-ip \
     --seed 0@/ip4/127.0.0.1/udp/10000 \
     gateway
 ```
@@ -76,6 +78,7 @@ docker run -d --name gateway2 --net=host ghcr.io/8xff/atm0s-media-gateway:master
     --sdn-port 10011 \
     --sdn-zone 0 \
     --http-port 3001 \
+    --enable-private-ip \
     --seed 0@/ip4/127.0.0.1/udp/10000 \
     gateway
 ```
@@ -95,6 +98,7 @@ docker run -d --name main-connector --net=host ghcr.io/8xff/atm0s-media-gateway:
     --node-id 20 \
     --sdn-port 10020 \
     --sdn-zone 0 \
+    --enable-private-ip \
     --seed 10@/ip4/127.0.0.1/udp/10010 \
     --seed 11@/ip4/127.0.0.1/udp/10011 \
     connector \
@@ -109,6 +113,7 @@ docker run -d --name media1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --node-id 100 \
     --sdn-port 10100 \
     --sdn-zone 0 \
+    --enable-private-ip \
     --seed 10@/ip4/127.0.0.1/udp/10010 \
     --seed 11@/ip4/127.0.0.1/udp/10011 \
     media \
@@ -121,6 +126,7 @@ docker run -d --name media2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --node-id 101 \
     --sdn-port 10101 \
     --sdn-zone 0 \
+    --enable-private-ip \
     --seed 10@/ip4/127.0.0.1/udp/10010 \
     --seed 11@/ip4/127.0.0.1/udp/10011 \
     media \

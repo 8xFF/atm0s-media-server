@@ -115,7 +115,15 @@ pub struct TransportWebrtc<ES> {
 }
 
 impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
-    pub fn new(remote: IpAddr, variant: VariantParams<ES>, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>, rtc_ice_lite: bool) -> RpcResult<(Self, String, String)> {
+    pub fn new(
+        remote: IpAddr,
+        variant: VariantParams<ES>,
+        offer: &str,
+        dtls_cert: DtlsCert,
+        local_addrs: &[(SocketAddr, usize)],
+        addrs_alt: &[SocketAddr],
+        rtc_ice_lite: bool,
+    ) -> RpcResult<(Self, String, String)> {
         let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::InvalidSdp))?;
         let rtc_config = Rtc::builder()
             .set_rtp_mode(true)
@@ -154,8 +162,11 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
         rtc.direct_api().enable_twcc_feedback();
         let mut ports = Small2dMap::default();
         for (local_addr, slot) in local_addrs {
-            ports.insert(local_addr, slot);
-            rtc.add_local_candidate(Candidate::host(local_addr, Protocol::Udp).expect("Should add local candidate"));
+            ports.insert(*local_addr, *slot);
+            rtc.add_local_candidate(Candidate::host(*local_addr, Protocol::Udp).expect("Should add local candidate"));
+        }
+        for addr in addrs_alt {
+            rtc.add_local_candidate(Candidate::host(*addr, Protocol::Udp).expect("Should add local candidate"));
         }
         let answer = rtc.sdp_api().accept_offer(offer).map_err(|_e| RpcError::new2(WebrtcError::InternalServerError))?;
         let mut local_convert = LocalMediaConvert::default();

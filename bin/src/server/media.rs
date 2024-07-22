@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    net::{IpAddr, SocketAddr, SocketAddrV4},
+    net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -47,17 +47,10 @@ pub struct Args {
     #[arg(env, long)]
     ice_lite: bool,
 
-    /// Binding port
-    #[arg(env, long, default_value_t = 0)]
-    media_port: u16,
-
-    /// Allow private ip
-    #[arg(env, long, default_value_t = false)]
-    allow_private_ip: bool,
-
-    /// Custom binding address for WebRTC UDP
-    #[arg(env, long)]
-    custom_ips: Vec<IpAddr>,
+    /// Seed port for binding media UDP socket. It will increase by one for each worker.
+    /// Default: worker0: 20000, worker1: 20001, worker2: 20002, ...
+    #[arg(env, long, default_value_t = 20000)]
+    webrtc_port_seed: u16,
 
     /// Max ccu per core
     #[arg(env, long, default_value_t = 200)]
@@ -100,25 +93,21 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let node_id = node.node_id;
     let node_session = random();
 
-    let mut webrtc_addrs = args.custom_ips.into_iter().map(|ip| SocketAddr::new(ip, args.media_port)).collect::<Vec<_>>();
-    local_ip_address::local_ip().into_iter().for_each(|ip| {
-        if let IpAddr::V4(ip) = ip {
-            if !ip.is_private() || args.allow_private_ip {
-                println!("Detect local ip: {ip}");
-                webrtc_addrs.push(SocketAddr::V4(SocketAddrV4::new(ip, 0)));
-            }
-        }
-    });
-
-    println!("Running media server with addrs: {:?}, ice-lite: {}", webrtc_addrs, args.ice_lite);
     let mut controller = Controller::<_, _, _, _, _, 128>::default();
     for i in 0..workers {
+        let webrtc_port = args.webrtc_port_seed + i as u16;
+        let webrtc_addrs = node.bind_addrs.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
+        let webrtc_addrs_alt = node.bind_addrs_alt.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
+
+        println!("Running media server worker {i} with addrs: {:?}, ice-lite: {}", webrtc_addrs, args.ice_lite);
+
         let cfg = runtime_worker::ICfg {
             controller: i == 0,
             node: node.clone(),
             session: node_session,
             media: MediaConfig {
-                webrtc_addrs: webrtc_addrs.clone(),
+                webrtc_addrs,
+                webrtc_addrs_alt,
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
                 max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core)]),
