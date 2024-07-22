@@ -21,6 +21,10 @@ struct Args {
     #[arg(env, long, default_value_t = 0)]
     sdn_port: u16,
 
+    /// Sdn enable ipv6
+    #[arg(env, long)]
+    sdn_enable_ipv6: bool,
+
     /// Custom Sdn addr
     #[arg(env, long)]
     sdn_custom_addrs: Vec<SocketAddr>,
@@ -62,11 +66,23 @@ async fn main() {
 
     let http_port = args.http_port;
     let workers = args.workers;
+    let bind_addrs = local_ip_address::list_afinet_netifas()
+        .expect("Should have list interfaces")
+        .into_iter()
+        .filter(|(_, ip)| {
+            if ip.is_unspecified() || ip.is_multicast() || (ip.is_ipv6() && !args.sdn_enable_ipv6) {
+                false
+            } else {
+                std::net::UdpSocket::bind(SocketAddr::new(*ip, 0)).is_ok()
+            }
+        })
+        .map(|(_name, ip)| SocketAddr::new(ip, args.sdn_port))
+        .collect::<Vec<_>>();
     let node = NodeConfig {
         node_id: args.node_id,
         secret: args.secret,
         seeds: args.seeds,
-        udp_port: args.sdn_port,
+        bind_addrs,
         zone: args.sdn_zone,
         custom_addrs: args.sdn_custom_addrs,
     };

@@ -64,7 +64,7 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
             cfg.session,
             &cfg.node.secret,
             cfg.controller,
-            cfg.node.udp_port,
+            cfg.node.bind_addrs,
             cfg.node.custom_addrs,
             cfg.node.zone,
             cfg.media,

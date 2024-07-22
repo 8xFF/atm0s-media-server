@@ -95,7 +95,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     let node_id = node.node_id;
 
-    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, node.udp_port, node.custom_addrs);
+    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, &node.bind_addrs, node.custom_addrs);
     let node_addr = builder.node_addr();
     let node_info = ClusterNodeInfo::Gateway(
         ClusterNodeGenericInfo {

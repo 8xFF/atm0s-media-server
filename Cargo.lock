@@ -452,15 +452,15 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.1.10"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a#1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b95dae8a1c71d28f90b1c891eddf9d80a84249ae16f557a36e1e690c2d83ab6"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
  "atm0s-sdn-router",
  "bincode",
  "convert-enum",
- "local-ip-address",
  "log",
  "num_enum",
  "parking_lot",
@@ -472,8 +472,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-identity"
-version = "0.2.0"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a#1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ec96b78570f6f704f7b7074f2c496604c2729044d5374441fee7cf202ee7633"
 dependencies = [
  "multiaddr",
  "rand 0.8.5",
@@ -482,8 +483,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-network"
-version = "0.3.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a#1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f890567c3ee41e7748ddee4ab6c8edd7c1fbdc93fde5d322187eeb00673dfe0b"
 dependencies = [
  "aes-gcm 0.10.3",
  "atm0s-sdn-identity",
@@ -509,8 +511,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-router"
-version = "0.1.4"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a#1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b88e27523f92b50bd5c827281b52ef73cd8497c5df6c7bc95a167e503f28d60"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -521,8 +524,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-utils"
-version = "0.1.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?rev=1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a#1c82b687763e4abfb2f9fdbd39eb00ea7497bb1a"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "437f8450fd7095986c5bce4abd7ad03e95f1651a214b8727976363c86d6b9cc9"
 dependencies = [
  "log",
  "serde",
@@ -2966,6 +2970,7 @@ name = "media-server-runner"
 version = "0.1.0"
 dependencies = [
  "atm0s-sdn",
+ "atm0s-sdn-network",
  "convert-enum",
  "log",
  "media-server-connector",
@@ -4770,8 +4775,9 @@ dependencies = [
 
 [[package]]
 name = "sans-io-runtime"
-version = "0.1.0"
-source = "git+https://github.com/giangndm/sans-io-runtime.git?rev=c781cef12b2a435b5e31a6ede69d301a23719452#c781cef12b2a435b5e31a6ede69d301a23719452"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd3778b0f45136dc7e535d3385f9b762123d3b9133aedb714cc0c0bfd203f373"
 dependencies = [
  "convert-enum",
  "derive_more",
@@ -5125,18 +5131,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha-1"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5058ada175748e33390e40e872bd0fe59a19f265d0158daa551c5a88a76009c"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "digest 0.10.7",
- "sha1-asm",
-]
-
-[[package]]
 name = "sha1"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5154,6 +5148,7 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest 0.10.7",
+ "sha1-asm",
 ]
 
 [[package]]
@@ -5638,8 +5633,9 @@ checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
 
 [[package]]
 name = "str0m"
-version = "0.5.1"
-source = "git+https://github.com/algesten/str0m.git?rev=d826257b06ac4a5562301eaa1fbac4ab3a6c04a2#d826257b06ac4a5562301eaa1fbac4ab3a6c04a2"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e087cdda4c753989f13cbbfa16fce96a7c7d0ab1a8b349ca91980d7bea736e04"
 dependencies = [
  "combine",
  "crc",
@@ -5650,7 +5646,7 @@ dependencies = [
  "openssl-sys",
  "sctp-proto",
  "serde",
- "sha-1",
+ "sha1 0.10.6",
  "thiserror",
  "tracing",
 ]
