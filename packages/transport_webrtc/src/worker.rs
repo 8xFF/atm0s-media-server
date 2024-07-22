@@ -131,10 +131,10 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
         match input {
             GroupInput::Net(BackendIncoming::UdpListenResult { bind, result }) => {
                 if let Ok((addr, slot)) = result {
-                    log::info!("[MediaWorkerWebrtc] successul bind udp port {addr}, slot {slot}");
+                    log::info!("[MediaWorkerWebrtc] successful bind udp port {addr}, slot {slot}");
                     self.addrs.push((addr, slot));
                 } else {
-                    log::warn!("[MediaWorkerWebrtc] unsuccessul bind {bind}");
+                    log::warn!("[MediaWorkerWebrtc] unsuccessful bind {bind}");
                 }
             }
             GroupInput::Net(BackendIncoming::UdpPacket { slot, from, data }) => {
