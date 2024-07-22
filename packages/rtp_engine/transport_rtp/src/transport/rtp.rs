@@ -6,13 +6,12 @@ use media_server_core::{
 };
 use media_server_protocol::{
     endpoint::{BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority, TrackSource},
-    media::{MediaKind, MediaPacket, MediaScaling},
-    protobuf::cluster_connector::peer_event::LocalTrack,
+    media::{MediaKind, MediaScaling},
 };
 use rtp::packet::Packet;
 use webrtc_util::Unmarshal;
 
-use crate::packets::MultiplexKind;
+use crate::{media::MediaConverter, packets::MultiplexKind, sdp::RtpCodecConfig};
 
 use super::{InternalNetInput, InternalOutput, TransportRtpInternal};
 
@@ -33,6 +32,7 @@ pub struct RtpInternal {
     peer: PeerId,
     subscribed: SubscribeStreams,
     queue: VecDeque<InternalOutput>,
+    media_convert: MediaConverter,
 }
 
 impl RtpInternal {
@@ -42,6 +42,7 @@ impl RtpInternal {
             room: room.clone(),
             peer: peer.clone(),
             subscribed: SubscribeStreams::default(),
+            media_convert: MediaConverter::default(),
             queue: VecDeque::from(vec![
                 InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(),
@@ -75,6 +76,10 @@ impl RtpInternal {
 impl RtpInternal {}
 
 impl TransportRtpInternal for RtpInternal {
+    fn on_codec_config(&mut self, cfg: &RtpCodecConfig) {
+        self.media_convert.set_config(cfg);
+    }
+
     fn on_tick(&mut self, _now: Instant) {}
 
     fn on_endpoint_event(&mut self, _now: Instant, event: media_server_core::endpoint::EndpointEvent) {
@@ -101,6 +106,13 @@ impl TransportRtpInternal for RtpInternal {
                 match rtp_packet {
                     Ok(packet) => {
                         log::trace!("[RtpTransportInternal] got a rtp packet {:?}", packet.header);
+                        let pkt = self.media_convert.convert(packet);
+                        if let Some(pkt) = pkt {
+                            self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+                                AUDIO_REMOVE_TRACK,
+                                RemoteTrackEvent::Media(pkt),
+                            ))));
+                        }
                         Ok(())
                     }
                     Err(e) => {

@@ -18,7 +18,7 @@ use media_server_secure::MediaEdgeSecure;
 use rtp::RtpInternal;
 use sans_io_runtime::{backend::BackendIncoming, collections::DynamicDeque, return_if_none, return_if_some, Buffer, TaskSwitcherChild};
 
-use crate::sdp::RtpConfig;
+use crate::sdp::{RtpCodecConfig, RtpConfig};
 mod rtp;
 
 pub enum RtpExtIn {
@@ -49,6 +49,7 @@ enum InternalOutput {
 }
 
 trait TransportRtpInternal {
+    fn on_codec_config(&mut self, cfg: &RtpCodecConfig);
     fn on_tick(&mut self, now: Instant);
     fn on_endpoint_event(&mut self, now: Instant, event: EndpointEvent);
     fn handle_input(&mut self, input: InternalNetInput) -> Result<(), io::Error>;
@@ -73,9 +74,10 @@ impl<ES: 'static + MediaEdgeSecure> TransportRtp<ES> {
             .enable_telecom_event(true);
         match rtp_config.answer(offer, local_ip, port) {
             Ok((sdp, remote_ep)) => {
-                let internal = match params {
+                let mut internal = match params {
                     VariantParams::Rtp(room, peer) => RtpInternal::new(remote_ep.ip(), room, peer),
                 };
+                internal.on_codec_config(&rtp_config.get_config());
                 Ok((
                     Self {
                         next_tick: None,

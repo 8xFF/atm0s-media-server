@@ -1,8 +1,8 @@
-mod data;
+pub mod data;
 
 use std::net::{IpAddr, SocketAddr};
 
-use data::{Codec, CodecSpec, FormatParams, PayloadParams};
+pub use data::{Codec, CodecSpec, FormatParams, PayloadParams};
 use media_server_protocol::transport::{RpcError, RpcResult};
 use sdp::{
     description::{
@@ -17,7 +17,7 @@ use crate::RtpEngineError;
 
 #[derive(Debug, Clone, Default)]
 pub struct RtpCodecConfig {
-    params: Vec<PayloadParams>,
+    pub params: Vec<PayloadParams>,
 }
 
 impl RtpCodecConfig {
