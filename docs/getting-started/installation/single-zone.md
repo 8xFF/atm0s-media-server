@@ -67,7 +67,7 @@ docker run -d --name gateway1 --net=host ghcr.io/8xff/atm0s-media-gateway:master
     --sdn-zone 0 \
     --http-port 3000 \
     --enable-private-ip \
-    --seed 0@/ip4/127.0.0.1/udp/10000 \
+    --seeds 0@/ip4/127.0.0.1/udp/10000 \
     gateway
 ```
 
@@ -79,7 +79,7 @@ docker run -d --name gateway2 --net=host ghcr.io/8xff/atm0s-media-gateway:master
     --sdn-zone 0 \
     --http-port 3001 \
     --enable-private-ip \
-    --seed 0@/ip4/127.0.0.1/udp/10000 \
+    --seeds 0@/ip4/127.0.0.1/udp/10000 \
     gateway
 ```
 
@@ -99,8 +99,8 @@ docker run -d --name main-connector --net=host ghcr.io/8xff/atm0s-media-gateway:
     --sdn-port 10020 \
     --sdn-zone 0 \
     --enable-private-ip \
-    --seed 10@/ip4/127.0.0.1/udp/10010 \
-    --seed 11@/ip4/127.0.0.1/udp/10011 \
+    --seeds 10@/ip4/127.0.0.1/udp/10010 \
+    --seeds 11@/ip4/127.0.0.1/udp/10011 \
     connector \
         --s3-uri "http://minioadmin:minioadmin@127.0.0.1:9000/record"
 ```
@@ -114,8 +114,8 @@ docker run -d --name media1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --sdn-port 10100 \
     --sdn-zone 0 \
     --enable-private-ip \
-    --seed 10@/ip4/127.0.0.1/udp/10010 \
-    --seed 11@/ip4/127.0.0.1/udp/10011 \
+    --seeds 10@/ip4/127.0.0.1/udp/10010 \
+    --seeds 11@/ip4/127.0.0.1/udp/10011 \
     media \
         --allow-private-ip
 ```
@@ -127,8 +127,8 @@ docker run -d --name media2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --sdn-port 10101 \
     --sdn-zone 0 \
     --enable-private-ip \
-    --seed 10@/ip4/127.0.0.1/udp/10010 \
-    --seed 11@/ip4/127.0.0.1/udp/10011 \
+    --seeds 10@/ip4/127.0.0.1/udp/10010 \
+    --seeds 11@/ip4/127.0.0.1/udp/10011 \
     media \
         --allow-private-ip
 ```
