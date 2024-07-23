@@ -17,5 +17,5 @@ pub struct NodeConfig {
     pub seeds: Vec<NodeAddr>,
     pub bind_addrs: Vec<SocketAddr>,
     pub zone: u32,
-    pub custom_addrs: Vec<SocketAddr>,
+    pub bind_addrs_alt: Vec<SocketAddr>,
 }

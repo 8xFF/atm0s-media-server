@@ -39,6 +39,7 @@ const FEEDBACK_GATEWAY_AGENT_INTERVAL: u64 = 1000; //only feedback every second
 pub struct MediaConfig<ES> {
     pub ice_lite: bool,
     pub webrtc_addrs: Vec<SocketAddr>,
+    pub webrtc_addrs_alt: Vec<SocketAddr>,
     pub secure: Arc<ES>,
     pub max_live: HashMap<ServiceKind, u32>,
 }
@@ -77,7 +78,8 @@ pub type TW = ();
 pub enum Input {
     NodeStats(NodeMetrics),
     ExtRpc(u64, RpcReq<usize>),
-    ExtSdn(SdnExtIn<UserData, SC>),
+    /// ext, is_controller
+    ExtSdn(SdnExtIn<UserData, SC>, bool),
     Net(Owner, BackendIncoming),
     Bus(SdnWorkerBusEvent<UserData, SC, SE, TC, TW>),
 }
@@ -193,7 +195,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             sdn_addr: node_addr,
             sdn_worker: TaskSwitcherBranch::new(SdnWorker::new(sdn_config), TaskType::Sdn),
             media_cluster: TaskSwitcherBranch::default(TaskType::MediaCluster),
-            media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.ice_lite, media.secure), TaskType::MediaWebrtc),
+            media_webrtc: TaskSwitcherBranch::new(MediaWorkerWebrtc::new(media.webrtc_addrs, media.webrtc_addrs_alt, media.ice_lite, media.secure), TaskType::MediaWebrtc),
             media_max_live,
             switcher: TaskSwitcher::new(3),
             queue,
@@ -222,7 +224,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             let webrtc_live = self.media_webrtc.tasks() as u32;
             self.sdn_worker.input(s).on_event(
                 now_ms,
-                SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
+                SdnWorkerInput::ExtWorker(SdnExtIn::ServicesControl(
                     AGENT_SERVICE_ID.into(),
                     UserData::Cluster,
                     media_server_gateway::agent_service::Control::WorkerUsage(ServiceKind::Webrtc, self.worker, webrtc_live).into(),
@@ -238,7 +240,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 // we send info to visualization for console UI
                 self.sdn_worker.input(&mut self.switcher).on_event(
                     now_ms,
-                    SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
+                    SdnWorkerInput::ExtWorker(SdnExtIn::ServicesControl(
                         visualization::SERVICE_ID.into(),
                         UserData::Cluster,
                         visualization::Control::UpdateInfo(ClusterNodeInfo::Media(
@@ -258,7 +260,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 );
                 self.sdn_worker.input(&mut self.switcher).on_event(
                     now_ms,
-                    SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
+                    SdnWorkerInput::ExtWorker(SdnExtIn::ServicesControl(
                         AGENT_SERVICE_ID.into(),
                         UserData::Cluster,
                         media_server_gateway::agent_service::Control::NodeStats(metrics).into(),
@@ -266,9 +268,13 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 );
             }
             Input::ExtRpc(req_id, req) => self.process_rpc(now, req_id, req),
-            Input::ExtSdn(ext) => {
+            Input::ExtSdn(ext, is_controller) => {
                 let now_ms = self.timer.timestamp_ms(now);
-                self.sdn_worker.input(&mut self.switcher).on_event(now_ms, SdnWorkerInput::Ext(ext));
+                if is_controller {
+                    self.sdn_worker.input(&mut self.switcher).on_event(now_ms, SdnWorkerInput::Ext(ext));
+                } else {
+                    self.sdn_worker.input(&mut self.switcher).on_event(now_ms, SdnWorkerInput::ExtWorker(ext));
+                }
             }
             Input::Net(owner, event) => match owner {
                 Owner::Sdn => {
@@ -280,11 +286,13 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                                 .input(&mut self.switcher)
                                 .on_event(now_ms, SdnWorkerInput::Net(NetInput::UdpPacket(NetPair::new(*local, from), data)));
                         }
-                        BackendIncoming::UdpListenResult { bind: _, result } => {
+                        BackendIncoming::UdpListenResult { bind, result } => {
                             if let Ok((addr, slot)) = result {
                                 log::info!("[MediaServerWorker] sdn listen success on {addr}, slot {slot}");
                                 self.sdn_backend_addrs.insert(addr, slot);
                                 self.sdn_backend_slots.insert(slot, addr);
+                            } else {
+                                log::warn!("[MediaServerWorker] sdn listen error on {bind}");
                             }
                         }
                     }
@@ -350,12 +358,19 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             },
             SdnWorkerOutput::Net(out) => match out {
                 NetOutput::UdpPacket(pair, data) => {
-                    let slot = self.sdn_backend_addrs.get(&pair.local).expect("Should have slot");
-                    Output::Net(Owner::Sdn, BackendOutgoing::UdpPacket { slot: *slot, to: pair.remote, data })
+                    if let Some(slot) = self.sdn_backend_addrs.get(&pair.local) {
+                        Output::Net(Owner::Sdn, BackendOutgoing::UdpPacket { slot: *slot, to: pair.remote, data })
+                    } else {
+                        Output::Continue
+                    }
                 }
                 NetOutput::UdpPackets(pairs, data) => {
                     let to = pairs.into_iter().filter_map(|p| self.sdn_backend_addrs.get(&p.local).map(|s| (*s, p.remote))).collect::<Vec<_>>();
-                    Output::Net(Owner::Sdn, BackendOutgoing::UdpPackets2 { to, data })
+                    if to.is_empty() {
+                        Output::Continue
+                    } else {
+                        Output::Net(Owner::Sdn, BackendOutgoing::UdpPackets2 { to, data })
+                    }
                 }
             },
             SdnWorkerOutput::Bus(event) => Output::Bus(event),
@@ -398,7 +413,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 let now_ms = self.timer.timestamp_ms(now);
                 self.sdn_worker.input(&mut self.switcher).on_event(
                     now_ms,
-                    SdnWorkerInput::Ext(SdnExtIn::ServicesControl(
+                    SdnWorkerInput::ExtWorker(SdnExtIn::ServicesControl(
                         media_server_connector::AGENT_SERVICE_ID.into(),
                         UserData::Cluster,
                         media_server_connector::agent_service::Control::Request(self.timer.timestamp_ms(ts), connector_request::Request::Peer(PeerEvent { session_id, event: Some(event) })).into(),
