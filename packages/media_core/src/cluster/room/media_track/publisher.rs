@@ -109,9 +109,10 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
     pub fn on_track_unpublish(&mut self, endpoint: Endpoint, track: RemoteTrackId) {
         let (peer, name, channel_id) = return_if_none!(self.tracks.remove(&(endpoint, track)));
         let sources = self.tracks_source.get_mut(&channel_id).expect("Should have track_source");
-        sources.remove(&(endpoint, track));
+        let removed = sources.remove(&(endpoint, track));
+        assert!(removed, "Should remove source child on unpublish");
         if sources.is_empty() {
-            self.tracks_source.remove(&channel_id);
+            self.tracks_source.remove(&channel_id).expect("Should remove source channel on unpublish");
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)));
         }
 
