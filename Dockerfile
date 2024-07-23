@@ -16,6 +16,9 @@ RUN case $TARGETPLATFORM in \
 
 FROM ubuntu:22.04
 
+# install wget & curl
+RUN apt update && apt install -y wget curl && apt clean && rm -rf /var/lib/apt/lists/*
+
 COPY maxminddb-data /maxminddb-data
 COPY --from=base /atm0s-media-server /atm0s-media-server
 
