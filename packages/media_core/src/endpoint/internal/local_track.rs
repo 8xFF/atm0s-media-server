@@ -307,7 +307,7 @@ impl TaskSwitcherChild<Output> for EndpointLocalTrack {
 
 impl Drop for EndpointLocalTrack {
     fn drop(&mut self) {
-        assert_eq!(self.queue.len(), 0);
+        assert_eq!(self.queue.len(), 0, "local track queue should empty on drop");
     }
 }
 
