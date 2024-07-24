@@ -13,6 +13,7 @@ use sans_io_runtime::{BusChannelControl, BusControl, BusEvent, WorkerInner, Work
 
 use crate::NodeConfig;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum ExtIn {
     /// ext, send controller or worker, true is controller

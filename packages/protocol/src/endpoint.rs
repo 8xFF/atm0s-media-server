@@ -222,6 +222,7 @@ pub struct PeerHashCode(pub u64);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerMeta {
     pub metadata: Option<String>,
+    pub userdata: Option<String>, //userdata is fixed data extracted from token
 }
 
 ///

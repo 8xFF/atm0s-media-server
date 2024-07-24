@@ -15,6 +15,7 @@ pub struct WhepConnectReq {
     pub peer: PeerId,
     pub ip: IpAddr,
     pub user_agent: String,
+    pub userdata: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +103,7 @@ impl TryFrom<protobuf::cluster_gateway::WhepConnectRequest> for WhepConnectReq {
             peer: value.peer.into(),
             ip: value.ip.parse().map_err(|_| ())?,
             user_agent: value.user_agent,
+            userdata: value.userdata,
         })
     }
 }
@@ -115,6 +117,7 @@ impl From<WhepConnectReq> for protobuf::cluster_gateway::WhepConnectRequest {
             sdp: val.sdp,
             room: val.room.0,
             peer: val.peer.0,
+            userdata: val.userdata,
         }
     }
 }
