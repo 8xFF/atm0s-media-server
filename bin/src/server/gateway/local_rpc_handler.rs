@@ -335,6 +335,7 @@ impl MediaLocalRpcHandler {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn webrtc_restart_ice(
         &self,
         conn_part: Option<(NodeId, u64)>,

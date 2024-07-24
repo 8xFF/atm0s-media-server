@@ -30,6 +30,7 @@ use crate::{
 
 group_owner_type!(WebrtcSession);
 
+#[allow(clippy::large_enum_variant)]
 pub enum GroupInput {
     Net(BackendIncoming),
     Cluster(WebrtcSession, ClusterEndpointEvent),
