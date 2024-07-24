@@ -30,7 +30,7 @@ impl GatewayStore {
     pub fn new(zone: u32, location: Location, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
         Self {
             node: NodeMetrics::default(),
-            webrtc: ServiceStore::new(ServiceKind::Webrtc, location.clone()),
+            webrtc: ServiceStore::new(ServiceKind::Webrtc, location),
             zone,
             location,
             output: None,
@@ -53,7 +53,7 @@ impl GatewayStore {
             disk: self.node.disk,
             origin: Origin::Gateway(GatewayOrigin {
                 zone: self.zone,
-                location: Some(self.location.clone()),
+                location: Some(self.location),
             }),
             webrtc: self.webrtc.local_stats(),
         };
@@ -89,7 +89,7 @@ impl GatewayStore {
 
     pub fn best_for(&self, kind: ServiceKind, location: Option<Location>) -> Option<u32> {
         let node = match kind {
-            ServiceKind::Webrtc => self.webrtc.best_for(location.clone()),
+            ServiceKind::Webrtc => self.webrtc.best_for(location),
         };
         log::debug!("[GatewayStore] query best {:?} for {:?} got {:?}", kind, location, node);
         node

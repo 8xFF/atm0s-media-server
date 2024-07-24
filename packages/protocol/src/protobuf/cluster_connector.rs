@@ -71,7 +71,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct RouteSuccess {
         #[prost(uint32, tag = "1")]
         pub after_ms: u32,
@@ -80,7 +80,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct RouteError {
         #[prost(uint32, tag = "1")]
         pub after_ms: u32,
@@ -143,7 +143,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct ConnectError {
         #[prost(uint32, tag = "1")]
         pub after_ms: u32,
@@ -217,7 +217,7 @@ pub mod peer_event {
         pub remote_ip: ::prost::alloc::string::String,
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct Stats {
         #[prost(uint64, tag = "1")]
         pub sent_bytes: u64,
@@ -242,7 +242,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct Disconnected {
         #[prost(uint32, tag = "1")]
         pub duration_ms: u32,
@@ -314,7 +314,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct LocalTrack {
         #[prost(int32, tag = "1")]
         pub track: i32,
@@ -383,7 +383,7 @@ pub mod peer_event {
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct PeerRes {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -408,7 +408,7 @@ pub struct RecordRes {
     pub s3_uri: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetParams {
     #[prost(uint32, tag = "1")]
     pub page: u32,
@@ -439,7 +439,7 @@ pub mod get_rooms {
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetPeerParams {
     #[prost(int32, optional, tag = "1")]
     pub room: ::core::option::Option<i32>,
@@ -521,7 +521,7 @@ pub mod get_sessions {
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetEventParams {
     #[prost(uint64, optional, tag = "1")]
     pub session: ::core::option::Option<u64>,
