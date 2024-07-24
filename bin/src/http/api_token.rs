@@ -25,6 +25,7 @@ struct WhipTokenReq {
     peer: String,
     ttl: u64,
     record: Option<bool>,
+    userdata: Option<String>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -37,6 +38,7 @@ struct WhepTokenReq {
     room: String,
     peer: Option<String>,
     ttl: u64,
+    userdata: Option<String>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -50,6 +52,7 @@ struct WebrtcTokenReq {
     peer: Option<String>,
     ttl: u64,
     record: Option<bool>,
+    userdata: Option<String>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -81,6 +84,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                             room: body.room,
                             peer: body.peer,
                             record: body.record.unwrap_or(false),
+                            userdata: body.userdata,
                         },
                         body.ttl,
                     ),
@@ -104,7 +108,15 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
             Json(Response {
                 status: true,
                 data: Some(WhepTokenRes {
-                    token: ctx.secure.encode_obj("whep", WhepToken { room: body.room, peer: body.peer }, body.ttl),
+                    token: ctx.secure.encode_obj(
+                        "whep",
+                        WhepToken {
+                            room: body.room,
+                            peer: body.peer,
+                            userdata: body.userdata,
+                        },
+                        body.ttl,
+                    ),
                 }),
                 ..Default::default()
             })
@@ -130,6 +142,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                             room: body.room,
                             peer: body.peer,
                             record: body.record.unwrap_or(false),
+                            userdata: body.userdata,
                         },
                         body.ttl,
                     ),

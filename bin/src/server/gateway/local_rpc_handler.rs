@@ -123,10 +123,12 @@ impl MediaLocalRpcHandler {
                 whep::RpcReq::Delete(param) => RpcRes::Whep(whep::RpcRes::Delete(self.whep_delete(conn_part, param).await)),
             },
             RpcReq::Webrtc(param) => match param {
-                webrtc::RpcReq::Connect(session_id, ip, user_agent, param, record) => RpcRes::Webrtc(webrtc::RpcRes::Connect(self.webrtc_connect(session_id, ip, user_agent, param, record).await)),
+                webrtc::RpcReq::Connect(session_id, ip, user_agent, param, userdata, record) => {
+                    RpcRes::Webrtc(webrtc::RpcRes::Connect(self.webrtc_connect(session_id, ip, user_agent, param, userdata, record).await))
+                }
                 webrtc::RpcReq::RemoteIce(conn, param) => RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(self.webrtc_remote_ice(conn_part, conn, param).await)),
-                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req, record) => {
-                    RpcRes::Webrtc(webrtc::RpcRes::RestartIce(self.webrtc_restart_ice(conn_part, conn, ip, user_agent, req, record).await))
+                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req, userdata, record) => {
+                    RpcRes::Webrtc(webrtc::RpcRes::RestartIce(self.webrtc_restart_ice(conn_part, conn, ip, user_agent, req, userdata, record).await))
                 }
                 webrtc::RpcReq::Delete(_) => {
                     //TODO implement delete webrtc conn
@@ -274,7 +276,7 @@ impl MediaLocalRpcHandler {
     Webrtc part
     */
 
-    async fn webrtc_connect(&self, session_id: u64, ip: IpAddr, user_agent: String, req: ConnectRequest, record: bool) -> RpcResult<(ClusterConnId, ConnectResponse)> {
+    async fn webrtc_connect(&self, session_id: u64, ip: IpAddr, user_agent: String, req: ConnectRequest, userdata: Option<String>, record: bool) -> RpcResult<(ClusterConnId, ConnectResponse)> {
         let started_at = now_ms();
         self.feedback_route_begin(session_id, ip).await;
 
@@ -287,6 +289,7 @@ impl MediaLocalRpcHandler {
                 ip: ip.to_string(),
                 req: Some(req),
                 record,
+                userdata,
             };
             let res = self.client.webrtc_connect(sock_addr, rpc_req).await;
             log::info!("[Gateway] response from node {node_id} => {:?}", res);
@@ -339,6 +342,7 @@ impl MediaLocalRpcHandler {
         ip: IpAddr,
         user_agent: String,
         req: ConnectRequest,
+        userdata: Option<String>,
         record: bool,
     ) -> RpcResult<(ClusterConnId, ConnectResponse)> {
         //TODO how to handle media-node down?
@@ -349,6 +353,7 @@ impl MediaLocalRpcHandler {
                 user_agent,
                 req: Some(req),
                 record,
+                userdata,
             };
             log::info!("[Gateway] selected node {node}");
             let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);

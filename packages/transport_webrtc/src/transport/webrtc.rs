@@ -74,6 +74,7 @@ enum TransportWebrtcError {
 
 pub struct TransportWebrtcSdk<ES> {
     remote: IpAddr,
+    userdata: Option<String>,
     join: Option<(RoomId, PeerId, Option<String>, RoomInfoPublish, RoomInfoSubscribe)>,
     state: State,
     queue: DynamicDeque<InternalOutput, 4>,
@@ -88,13 +89,14 @@ pub struct TransportWebrtcSdk<ES> {
 }
 
 impl<ES> TransportWebrtcSdk<ES> {
-    pub fn new(req: ConnectRequest, secure: Arc<ES>, remote: IpAddr) -> Self {
+    pub fn new(req: ConnectRequest, userdata: Option<String>, secure: Arc<ES>, remote: IpAddr) -> Self {
         let tracks = req.tracks.unwrap_or_default();
         let local_tracks: Vec<LocalTrack> = tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect();
         let remote_tracks: Vec<RemoteTrack> = tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect();
         if let Some(j) = req.join {
             Self {
                 remote,
+                userdata,
                 join: Some((j.room.into(), j.peer.into(), j.metadata, j.publish.unwrap_or_default().into(), j.subscribe.unwrap_or_default().into())),
                 state: State::New,
                 audio_mixer: j.features.and_then(|f| {
@@ -120,6 +122,7 @@ impl<ES> TransportWebrtcSdk<ES> {
         } else {
             Self {
                 remote,
+                userdata,
                 join: None,
                 state: State::New,
                 local_tracks,
@@ -241,6 +244,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     event: Some(ProtoRoomEvent2::PeerJoined(PeerJoined {
                         peer: peer.0,
                         metadata: meta.metadata,
+                        userdata: meta.userdata,
                     })),
                 }));
             }
@@ -430,7 +434,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                         EndpointReq::JoinRoom(
                             room.clone(),
                             peer.clone(),
-                            PeerMeta { metadata: metadata.clone() },
+                            PeerMeta {
+                                metadata: metadata.clone(),
+                                userdata: self.userdata.clone(),
+                            },
                             publish.clone(),
                             subscribe.clone(),
                             self.audio_mixer.take(),
@@ -633,7 +640,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
         match req {
             protobuf::session::request::session::Request::Join(req) => {
                 let info = req.info.unwrap_or_default();
-                let meta = PeerMeta { metadata: info.metadata };
+                let meta = PeerMeta {
+                    metadata: info.metadata,
+                    userdata: self.userdata.clone(),
+                };
                 if let Some(token) = self.secure.decode_obj::<WebrtcToken>("webrtc", &req.token) {
                     if token.room == Some(info.room.clone()) && token.peer == Some(info.peer.clone()) {
                         let mixer_cfg = info.features.and_then(|f| {
@@ -838,7 +848,7 @@ mod tests {
         let now = Instant::now();
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
-        let mut transport = TransportWebrtcSdk::new(req, secure_jwt.clone(), ip);
+        let mut transport = TransportWebrtcSdk::new(req, Some("userdata".to_string()), secure_jwt.clone(), ip);
         assert_eq!(transport.pop_output(now), None);
 
         transport.on_tick(now);
@@ -860,7 +870,8 @@ mod tests {
                     "room".to_string().into(),
                     "peer".to_string().into(),
                     PeerMeta {
-                        metadata: Some("metadata".to_string())
+                        metadata: Some("metadata".to_string()),
+                        userdata: Some("userdata".to_string())
                     },
                     RoomInfoPublish { peer: true, tracks: true },
                     RoomInfoSubscribe { peers: true, tracks: true },
@@ -881,7 +892,7 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let gateway_jwt = MediaGatewaySecureJwt::from(b"1234".as_slice());
         let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
-        let mut transport = TransportWebrtcSdk::new(req, secure_jwt.clone(), ip);
+        let mut transport = TransportWebrtcSdk::new(req, Some("userdata".to_string()), secure_jwt.clone(), ip);
         assert_eq!(transport.pop_output(now), None);
 
         transport.on_tick(now);
@@ -903,6 +914,7 @@ mod tests {
                 room: Some("demo".to_string()),
                 peer: Some("peer1".to_string()),
                 record: false,
+                userdata: Some("userdata".to_string()),
             },
             10000,
         );
@@ -933,7 +945,10 @@ mod tests {
                 EndpointReq::JoinRoom(
                     "demo".to_string().into(),
                     "peer1".to_string().into(),
-                    PeerMeta { metadata: None },
+                    PeerMeta {
+                        metadata: None,
+                        userdata: Some("userdata".to_string())
+                    },
                     RoomInfoPublish { peer: false, tracks: false },
                     RoomInfoSubscribe { peers: false, tracks: false },
                     None,

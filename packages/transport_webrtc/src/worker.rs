@@ -76,17 +76,17 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
 
     pub fn spawn(&mut self, remote: IpAddr, session_id: u64, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
         let cfg = match &variant {
-            VariantParams::Whip(_, _, record) => EndpointCfg {
+            VariantParams::Whip(_, _, _, record) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: *record,
             },
-            VariantParams::Whep(_, _) => EndpointCfg {
+            VariantParams::Whep(_, _, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: false,
             },
-            VariantParams::Webrtc(_, _, record, _) => EndpointCfg {
+            VariantParams::Webrtc(_, _, _, record, _) => EndpointCfg {
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: *record,
@@ -154,10 +154,10 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                             self.queue
                                 .push_back(GroupOutput::Ext(owner, ExtOut::RemoteIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
                         }
-                        ExtIn::RestartIce(req_id, variant, remote, useragent, req, record) => {
+                        ExtIn::RestartIce(req_id, variant, remote, useragent, req, userdata, record) => {
                             let sdp = req.sdp.clone();
                             let session_id = gen_cluster_session_id(); //TODO need to reuse old session_id
-                            if let Ok((ice_lite, sdp, index)) = self.spawn(remote, session_id, VariantParams::Webrtc(useragent, req, record, self.secure.clone()), &sdp) {
+                            if let Ok((ice_lite, sdp, index)) = self.spawn(remote, session_id, VariantParams::Webrtc(useragent, req, userdata, record, self.secure.clone()), &sdp) {
                                 self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));
                             } else {
                                 self.queue

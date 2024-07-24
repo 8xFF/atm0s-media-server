@@ -48,6 +48,7 @@ pub struct TransportWebrtcWhip {
     remote: IpAddr,
     room: RoomId,
     peer: PeerId,
+    userdata: Option<String>,
     state: State,
     audio_mid: Option<Mid>,
     ///mid and simulcast flag
@@ -57,11 +58,12 @@ pub struct TransportWebrtcWhip {
 }
 
 impl TransportWebrtcWhip {
-    pub fn new(room: RoomId, peer: PeerId, remote: IpAddr) -> Self {
+    pub fn new(room: RoomId, peer: PeerId, userdata: Option<String>, remote: IpAddr) -> Self {
         Self {
             remote,
             room,
             peer,
+            userdata,
             state: State::New,
             audio_mid: None,
             video_mid: None,
@@ -153,7 +155,10 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
                     EndpointReq::JoinRoom(
                         self.room.clone(),
                         self.peer.clone(),
-                        PeerMeta { metadata: None },
+                        PeerMeta {
+                            metadata: None,
+                            userdata: self.userdata.clone(),
+                        },
                         RoomInfoPublish { peer: true, tracks: true },
                         RoomInfoSubscribe { peers: false, tracks: false },
                         None,
