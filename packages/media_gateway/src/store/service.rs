@@ -137,7 +137,7 @@ impl ServiceStore {
     }
 
     pub fn best_for(&self, location: Option<Location>) -> Option<u32> {
-        let location = location.unwrap_or_else(|| self.location.clone());
+        let location = location.unwrap_or(self.location);
         let mut min_dis = distance(&self.location, &location);
         let mut min_node = self.local_sources.first().map(|s| s.node);
 
