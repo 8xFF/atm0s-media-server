@@ -170,7 +170,6 @@ impl EndpointRemoteTrack {
                 let room = return_if_none!(self.room.as_ref());
                 log::info!("[EndpointRemoteTrack] stopped with name {name} in room {room}");
                 self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Ended(name.clone(), self.meta.clone())));
-                self.queue.push_back(Output::Stopped(self.meta.kind));
                 if self.record {
                     self.queue.push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStopped(self.id)));
                 }
@@ -181,6 +180,8 @@ impl EndpointRemoteTrack {
                         kind: Kind::from(self.meta.kind) as i32,
                     }),
                 ));
+                // We must send Stopped at last, if not we missed some event
+                self.queue.push_back(Output::Stopped(self.meta.kind));
             }
         }
     }
