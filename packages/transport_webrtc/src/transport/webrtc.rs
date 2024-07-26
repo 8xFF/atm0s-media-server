@@ -453,9 +453,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 log::info!("[TransportWebrtcSdk] channel closed, leave room {:?}", self.join);
                 self.state = State::Disconnected;
                 self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(
-                        TransportError::Timeout,
-                    ))))));
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
             }
             Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
             Str0mEvent::MediaAdded(media) => self.on_str0m_media_added(now, media),
@@ -686,11 +684,16 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                 }
                 self.queue.push_back(InternalOutput::RpcReq(req_id, InternalRpcReq::SetRemoteSdp(req.sdp)));
             }
-            protobuf::session::request::session::Request::Disconnect(_) => {
+            protobuf::session::request::session::Request::Disconnect(_req) => {
                 log::info!("[TransportWebrtcSdk] switched to disconnected with close action from client");
-                self.state = State::Disconnected;
                 self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+                self.send_rpc_res(
+                    req_id,
+                    protobuf::session::response::Response::Session(protobuf::session::response::Session {
+                        response: Some(protobuf::session::response::session::Response::Disconnect(protobuf::session::response::session::Disconnect {})),
+                    }),
+                );
             }
         }
     }

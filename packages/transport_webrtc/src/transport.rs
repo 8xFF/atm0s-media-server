@@ -332,7 +332,6 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
             },
             TransportInput::SystemClose => {
                 log::info!("[TransportWebrtc] system close request");
-                self.rtc.disconnect();
                 self.internal.close(now);
             }
         }
