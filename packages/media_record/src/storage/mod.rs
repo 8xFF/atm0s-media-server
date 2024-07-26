@@ -92,24 +92,22 @@ impl Storage<HybridFile> for HybridStorage {
         match file {
             HybridFile::Mem(file) => {
                 if self.mem.can_push(file.len()) {
-                    log::warn!("[HybridStorage] push {:?} to memory", file_id);
+                    log::info!("[HybridStorage] push {:?} to memory", file_id);
                     self.mem.push(file).await;
-                } else {
-                    if self.disk.can_push(file.len()) {
-                        log::warn!("[HybridStorage] memory storage full => fallback to disk with file {:?}", file_id);
-                        match self.disk.copy_from_mem(file).await {
-                            Ok(file) => {
-                                log::warn!("[HybridStorage] pushing {:?} to disk", file_id);
-                                self.disk.push(file).await;
-                                log::warn!("[HybridStorage] pushed {:?} to disk", file_id);
-                            }
-                            Err(err) => {
-                                log::error!("[HybridStorage] memory storage full but fallback {:?} to disk error {:?}", file_id, err);
-                            }
+                } else if self.disk.can_push(file.len()) {
+                    log::warn!("[HybridStorage] memory storage full => fallback to disk with file {:?}", file_id);
+                    match self.disk.copy_from_mem(file).await {
+                        Ok(file) => {
+                            log::warn!("[HybridStorage] pushing {:?} to disk", file_id);
+                            self.disk.push(file).await;
+                            log::warn!("[HybridStorage] pushed {:?} to disk", file_id);
                         }
-                    } else {
-                        log::warn!("[HybridStorage] memory storage and disk full, {:?} reject", file_id);
+                        Err(err) => {
+                            log::error!("[HybridStorage] memory storage full but fallback {:?} to disk error {:?}", file_id, err);
+                        }
                     }
+                } else {
+                    log::warn!("[HybridStorage] memory storage and disk full, {:?} reject", file_id);
                 }
             }
             HybridFile::Disk(file) => {

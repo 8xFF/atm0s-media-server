@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use atm0s_media_server::{server, NodeConfig};
 use atm0s_sdn::{NodeAddr, NodeId};
@@ -21,10 +21,6 @@ struct Args {
     #[arg(env, long, default_value_t = 0)]
     sdn_port: u16,
 
-    /// Custom Sdn addr
-    #[arg(env, long)]
-    sdn_custom_addrs: Vec<SocketAddr>,
-
     /// Sdn Zone, which is 32bit number with last 8bit is 0
     #[arg(env, long, default_value_t = 0)]
     sdn_zone: u32,
@@ -32,6 +28,22 @@ struct Args {
     /// Current Node ID
     #[arg(env, long, default_value_t = 1)]
     node_id: NodeId,
+
+    /// Setting the single node IP option will disable the autodetect IP addresses logic
+    #[arg(env, long)]
+    node_ip: Option<IpAddr>,
+
+    /// Some alternative node IPs, which are useful with some cloud providers behind NAT, like AWS or GCP ...
+    #[arg(env, long)]
+    node_ip_alt: Vec<IpAddr>,
+
+    /// Enable private ip
+    #[arg(env, long)]
+    enable_private_ip: bool,
+
+    /// Enable ipv6
+    #[arg(env, long)]
+    enable_ipv6: bool,
 
     /// Cluster Secret Key
     #[arg(env, long, default_value = "insecure")]
@@ -62,14 +74,32 @@ async fn main() {
 
     let http_port = args.http_port;
     let workers = args.workers;
+    let bind_addrs = if let Some(ip) = args.node_ip {
+        vec![SocketAddr::new(ip, args.sdn_port)]
+    } else {
+        local_ip_address::list_afinet_netifas()
+            .expect("Should have list interfaces")
+            .into_iter()
+            .filter(|(_, ip)| {
+                let allow = match ip {
+                    IpAddr::V4(ipv4) => !ipv4.is_private() || args.enable_private_ip,
+                    IpAddr::V6(ipv6) => !ipv6.is_unspecified() && !ipv6.is_multicast() && (!ipv6.is_loopback() || args.enable_private_ip) && args.enable_ipv6,
+                };
+                allow && std::net::UdpSocket::bind(SocketAddr::new(*ip, 0)).is_ok()
+            })
+            .map(|(_name, ip)| SocketAddr::new(ip, args.sdn_port))
+            .collect::<Vec<_>>()
+    };
     let node = NodeConfig {
         node_id: args.node_id,
         secret: args.secret,
         seeds: args.seeds,
-        udp_port: args.sdn_port,
+        bind_addrs,
         zone: args.sdn_zone,
-        custom_addrs: args.sdn_custom_addrs,
+        bind_addrs_alt: args.node_ip_alt.into_iter().map(|ip| SocketAddr::new(ip, args.sdn_port)).collect::<Vec<_>>(),
     };
+
+    log::info!("Bind addrs {:?}, bind addrs alt {:?}", node.bind_addrs, node.bind_addrs_alt);
 
     let local = tokio::task::LocalSet::new();
     local

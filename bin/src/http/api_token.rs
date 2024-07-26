@@ -24,7 +24,8 @@ struct WhipTokenReq {
     room: String,
     peer: String,
     ttl: u64,
-    record: bool,
+    record: Option<bool>,
+    extra_data: Option<String>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -37,6 +38,7 @@ struct WhepTokenReq {
     room: String,
     peer: Option<String>,
     ttl: u64,
+    extra_data: Option<String>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -49,7 +51,8 @@ struct WebrtcTokenReq {
     room: Option<String>,
     peer: Option<String>,
     ttl: u64,
-    record: bool,
+    record: Option<bool>,
+    extra_data: Option<String>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -80,18 +83,19 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                         WhipToken {
                             room: body.room,
                             peer: body.peer,
-                            record: body.record,
+                            record: body.record.unwrap_or(false),
+                            extra_data: body.extra_data,
                         },
                         body.ttl,
                     ),
                 }),
-                error: None,
+                ..Default::default()
             }))
         } else {
             Ok(Json(Response {
                 status: false,
                 error: Some("APP_TOKEN_INVALID".to_string()),
-                data: None,
+                ..Default::default()
             }))
         }
     }
@@ -104,15 +108,23 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
             Json(Response {
                 status: true,
                 data: Some(WhepTokenRes {
-                    token: ctx.secure.encode_obj("whep", WhepToken { room: body.room, peer: body.peer }, body.ttl),
+                    token: ctx.secure.encode_obj(
+                        "whep",
+                        WhepToken {
+                            room: body.room,
+                            peer: body.peer,
+                            extra_data: body.extra_data,
+                        },
+                        body.ttl,
+                    ),
                 }),
-                error: None,
+                ..Default::default()
             })
         } else {
             Json(Response {
                 status: false,
                 error: Some("APP_TOKEN_INVALID".to_string()),
-                data: None,
+                ..Default::default()
             })
         }
     }
@@ -129,18 +141,19 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                         WebrtcToken {
                             room: body.room,
                             peer: body.peer,
-                            record: body.record,
+                            record: body.record.unwrap_or(false),
+                            extra_data: body.extra_data,
                         },
                         body.ttl,
                     ),
                 }),
-                error: None,
+                ..Default::default()
             })
         } else {
             Json(Response {
                 status: false,
                 error: Some("APP_TOKEN_INVALID".to_string()),
-                data: None,
+                ..Default::default()
             })
         }
     }

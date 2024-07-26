@@ -13,7 +13,13 @@ prost = { workspace = true }
 lru = "0.12"
 async-trait = "0.1"
 sea-orm-migration = "0.12"
-sea-orm = { version = "0.12", features = ["sqlx-sqlite", "runtime-tokio-rustls"] }
+sea-orm = { version = "0.12", features = [
+    "sqlx-sqlite",
+    "sqlx-postgres",
+    "sqlx-mysql",
+    "runtime-tokio-rustls",
+] }
+sea-query = "0.30.7"
 serde_json = "1.0"
 s3-presign = "0.0.2"
 

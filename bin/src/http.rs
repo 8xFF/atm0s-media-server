@@ -8,8 +8,6 @@ use media_server_protocol::protobuf::cluster_connector::MediaConnectorServiceCli
 use media_server_protocol::rpc::quinn::{QuinnClient, QuinnStream};
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use media_server_secure::{MediaEdgeSecure, MediaGatewaySecure};
-#[cfg(feature = "embed_static")]
-use utils::EmbeddedFilesEndpoint;
 #[cfg(not(feature = "embed_static"))]
 use poem::endpoint::StaticFilesEndpoint;
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
@@ -17,6 +15,8 @@ use poem_openapi::types::{ToJSON, Type};
 use poem_openapi::OpenApiService;
 use poem_openapi::{types::ParseFromJSON, Object};
 use tokio::sync::mpsc::Sender;
+#[cfg(feature = "embed_static")]
+use utils::EmbeddedFilesEndpoint;
 
 mod api_connector;
 mod api_console;
@@ -35,12 +35,31 @@ pub struct PublicMediaFiles;
 pub struct PublicConsoleFiles;
 
 #[derive(Debug, Default, Object)]
+pub struct Pagination {
+    pub total: usize,
+    pub current: usize,
+}
+
+#[derive(Debug, Object)]
 pub struct Response<T: ParseFromJSON + ToJSON + Type + Send + Sync> {
     pub status: bool,
     #[oai(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     #[oai(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
+    #[oai(skip_serializing_if = "Option::is_none")]
+    pub pagination: Option<Pagination>,
+}
+
+impl<T: ParseFromJSON + ToJSON + Type + Send + Sync> Default for Response<T> {
+    fn default() -> Self {
+        Self {
+            status: false,
+            error: None,
+            data: None,
+            pagination: None,
+        }
+    }
 }
 
 pub struct Rpc<Req, Res> {

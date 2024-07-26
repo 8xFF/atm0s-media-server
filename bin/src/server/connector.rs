@@ -62,7 +62,7 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
 
     let node_id = node.node_id;
 
-    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, node.udp_port, node.custom_addrs);
+    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, &node.bind_addrs, node.bind_addrs_alt);
     let node_addr = builder.node_addr();
     let node_info = ClusterNodeInfo::Connector(ClusterNodeGenericInfo {
         addr: node_addr.to_string(),

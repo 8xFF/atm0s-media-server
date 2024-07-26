@@ -17,27 +17,21 @@ use crate::http::Rpc;
 
 use super::{
     commands::{NgCmdResult, NgCommand, NgRequest, NgResponse},
-    transport::{NgTransport, NgTransportType},
+    transport::NgTransport,
 };
 
 pub enum NgControlMsg {
     Response(NgResponse),
 }
 
-pub struct NgControllerServerConfig {
-    pub port: u16,
-    pub transport: NgTransportType,
-}
-
-pub struct NgControllerServer {
-    transport: Box<dyn NgTransport>,
+pub struct NgControllerServer<T> {
+    transport: T,
     rpc_sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
     request_mapper: HashMap<String, SocketAddr>,
 }
 
-impl NgControllerServer {
-    pub async fn new(config: NgControllerServerConfig, tx: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>) -> Self {
-        let transport = super::transport::new_transport(config.transport, config.port).await;
+impl<T: NgTransport> NgControllerServer<T> {
+    pub async fn new(transport: T, tx: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>) -> Self {
         Self {
             transport,
             rpc_sender: tx,
@@ -70,7 +64,7 @@ impl NgControllerServer {
     }
 }
 
-impl NgControllerServer {
+impl<T: NgTransport> NgControllerServer<T> {
     fn handle_request(&self, req: NgRequest, remote_ip: IpAddr, internal_sender: Sender<NgControlMsg>) {
         let id = req.id.clone();
         let rpc_sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>> = self.rpc_sender.clone();

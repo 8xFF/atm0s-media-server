@@ -49,7 +49,7 @@ impl RtpInternal {
                     EndpointReq::JoinRoom(
                         room.clone(),
                         peer.clone(),
-                        PeerMeta { metadata: None },
+                        PeerMeta { metadata: None, extra_data: None },
                         RoomInfoPublish { peer: true, tracks: true },
                         RoomInfoSubscribe { peers: false, tracks: false },
                         None,

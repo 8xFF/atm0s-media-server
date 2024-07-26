@@ -1,5 +1,0 @@
-dist
-**/*.min.js
-node_modules/
-lib
-!src/lib

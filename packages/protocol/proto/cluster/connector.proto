@@ -181,9 +181,12 @@ message GetRooms {
     message RoomInfo {
         int32 id = 1;
         string room = 2;
+        uint64 created_at = 3;
+        uint32 peers = 4;
     }
 
     repeated RoomInfo rooms = 1;
+    shared.Pagination pagination = 2;
 }
 
 message GetPeerParams {
@@ -213,6 +216,7 @@ message GetPeers {
     }
 
     repeated PeerInfo peers = 1;
+    shared.Pagination pagination = 2;
 }
 
 message GetSessions {
@@ -226,6 +230,7 @@ message GetSessions {
     }
 
     repeated SessionInfo sessions = 1;
+    shared.Pagination pagination = 2;
 }
 
 message GetEventParams {
@@ -248,6 +253,7 @@ message GetEvents {
     }
 
     repeated EventInfo events = 1;
+    shared.Pagination pagination = 2;
 }
 
 service MediaConnector {

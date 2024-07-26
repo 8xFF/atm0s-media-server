@@ -71,7 +71,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct RouteSuccess {
         #[prost(uint32, tag = "1")]
         pub after_ms: u32,
@@ -80,7 +80,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct RouteError {
         #[prost(uint32, tag = "1")]
         pub after_ms: u32,
@@ -143,7 +143,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct ConnectError {
         #[prost(uint32, tag = "1")]
         pub after_ms: u32,
@@ -217,7 +217,7 @@ pub mod peer_event {
         pub remote_ip: ::prost::alloc::string::String,
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct Stats {
         #[prost(uint64, tag = "1")]
         pub sent_bytes: u64,
@@ -242,7 +242,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct Disconnected {
         #[prost(uint32, tag = "1")]
         pub duration_ms: u32,
@@ -314,7 +314,7 @@ pub mod peer_event {
     }
     #[derive(serde::Serialize)]
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
     pub struct LocalTrack {
         #[prost(int32, tag = "1")]
         pub track: i32,
@@ -383,7 +383,7 @@ pub mod peer_event {
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct PeerRes {}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -408,7 +408,7 @@ pub struct RecordRes {
     pub s3_uri: ::prost::alloc::string::String,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetParams {
     #[prost(uint32, tag = "1")]
     pub page: u32,
@@ -420,6 +420,8 @@ pub struct GetParams {
 pub struct GetRooms {
     #[prost(message, repeated, tag = "1")]
     pub rooms: ::prost::alloc::vec::Vec<get_rooms::RoomInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<super::shared::Pagination>,
 }
 /// Nested message and enum types in `GetRooms`.
 pub mod get_rooms {
@@ -430,10 +432,14 @@ pub mod get_rooms {
         pub id: i32,
         #[prost(string, tag = "2")]
         pub room: ::prost::alloc::string::String,
+        #[prost(uint64, tag = "3")]
+        pub created_at: u64,
+        #[prost(uint32, tag = "4")]
+        pub peers: u32,
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetPeerParams {
     #[prost(int32, optional, tag = "1")]
     pub room: ::core::option::Option<i32>,
@@ -465,6 +471,8 @@ pub struct PeerSession {
 pub struct GetPeers {
     #[prost(message, repeated, tag = "1")]
     pub peers: ::prost::alloc::vec::Vec<get_peers::PeerInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<super::shared::Pagination>,
 }
 /// Nested message and enum types in `GetPeers`.
 pub mod get_peers {
@@ -490,6 +498,8 @@ pub mod get_peers {
 pub struct GetSessions {
     #[prost(message, repeated, tag = "1")]
     pub sessions: ::prost::alloc::vec::Vec<get_sessions::SessionInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<super::shared::Pagination>,
 }
 /// Nested message and enum types in `GetSessions`.
 pub mod get_sessions {
@@ -511,7 +521,7 @@ pub mod get_sessions {
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetEventParams {
     #[prost(uint64, optional, tag = "1")]
     pub session: ::core::option::Option<u64>,
@@ -529,6 +539,8 @@ pub struct GetEventParams {
 pub struct GetEvents {
     #[prost(message, repeated, tag = "1")]
     pub events: ::prost::alloc::vec::Vec<get_events::EventInfo>,
+    #[prost(message, optional, tag = "2")]
+    pub pagination: ::core::option::Option<super::shared::Pagination>,
 }
 /// Nested message and enum types in `GetEvents`.
 pub mod get_events {

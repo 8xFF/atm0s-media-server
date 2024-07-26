@@ -33,23 +33,23 @@ pub enum RtpGroupOut {
 }
 
 pub struct MediaRtpWorker<ES: 'static + MediaEdgeSecure> {
+    public_ip: IpAddr,
     available_slots: VecDeque<usize>,
     addr_slots: Small2dMap<SocketAddr, usize>,
     task_slots: Small2dMap<usize, usize>,
     queue: VecDeque<RtpGroupOut>,
     endpoints: TaskGroup<EndpointInput<RtpExtIn>, EndpointOutput<RtpExtOut>, Endpoint<TransportRtp<ES>, RtpExtIn, RtpExtOut>, 16>,
-    public_ip: IpAddr,
     secure: Arc<ES>,
 }
 
 impl<ES: 'static + MediaEdgeSecure> MediaRtpWorker<ES> {
-    pub fn new(addr: Vec<SocketAddr>, secure: Arc<ES>, public_ip: IpAddr) -> Self {
+    pub fn new(addrs: Vec<SocketAddr>, addrs_alt: Vec<SocketAddr>, secure: Arc<ES>) -> Self {
         Self {
-            public_ip,
+            public_ip: addrs[0].ip(),
             available_slots: VecDeque::default(),
             addr_slots: Small2dMap::default(),
             task_slots: Small2dMap::default(),
-            queue: VecDeque::from(addr.iter().map(|addr| RtpGroupOut::Net(BackendOutgoing::UdpListen { addr: *addr, reuse: false })).collect::<Vec<_>>()),
+            queue: VecDeque::from(addrs.iter().map(|addr| RtpGroupOut::Net(BackendOutgoing::UdpListen { addr: *addr, reuse: false })).collect::<Vec<_>>()),
             endpoints: TaskGroup::default(),
             secure,
         }

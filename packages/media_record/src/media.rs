@@ -1,6 +1,8 @@
 use std::{collections::HashMap, fs::File};
 
 use media_server_protocol::{
+    endpoint::{TrackMeta, TrackName},
+    media::MediaPacket,
     record::{SessionRecordEvent, SessionRecordRow},
     transport::RemoteTrackId,
 };
@@ -9,20 +11,19 @@ use vpx_writer::VpxWriter;
 mod vpx_demuxer;
 mod vpx_writer;
 
-struct TrackWriter {
-    writer: usize,
+trait TrackWriter {
+    fn push_media(&mut self, pkt_ms: u64, pkt: MediaPacket);
 }
 
-struct WriterContainer {
-    writer: VpxWriter<File>,
-    audio_inuse: bool,
-    video_inuse: bool,
+pub enum Event {
+    TrackStart(TrackName, u64, String),
+    TrackStop(TrackName, u64),
 }
 
 pub struct SessionMediaWriter {
     path: String,
-    writers: Vec<WriterContainer>,
-    tracks: HashMap<RemoteTrackId, TrackWriter>,
+    tracks_meta: HashMap<RemoteTrackId, (TrackName, TrackMeta)>,
+    tracks_writer: HashMap<RemoteTrackId, Box<dyn TrackWriter + Send>>,
 }
 
 impl SessionMediaWriter {
@@ -30,55 +31,65 @@ impl SessionMediaWriter {
         log::info!("new session media writer {path}");
         Self {
             path: path.to_string(),
-            writers: vec![],
-            tracks: HashMap::new(),
+            tracks_meta: HashMap::new(),
+            tracks_writer: HashMap::new(),
         }
     }
 
-    fn get_free_writer_for(&mut self, ts: u64, is_audio: bool) -> usize {
-        for (index, writer) in self.writers.iter().enumerate() {
-            if (is_audio && !writer.audio_inuse) || (!is_audio && !writer.video_inuse) {
-                return index;
-            }
-        }
-        let index = self.writers.len();
-        let path = format!("{}{}-{}.webm", self.path, index, ts);
-        let writer = VpxWriter::new(File::create(&path).expect("Should open file"), ts);
-        self.writers.push(WriterContainer {
-            writer,
-            audio_inuse: false,
-            video_inuse: false,
-        });
-        index
-    }
-
-    pub fn push(&mut self, event: SessionRecordRow) {
+    pub fn push(&mut self, event: SessionRecordRow) -> Option<Event> {
         match event.event {
             SessionRecordEvent::TrackStarted(id, name, meta) => {
                 log::info!("track {:?} started, name {name} meta {:?}", id, meta);
+                self.tracks_meta.insert(id, (name, meta));
+                None
             }
             SessionRecordEvent::TrackStopped(id) => {
                 log::info!("track {:?} stopped", id);
+                let (name, _) = self.tracks_meta.remove(&id)?;
+                self.tracks_writer.remove(&id)?;
+                Some(Event::TrackStop(name, event.ts))
             }
             SessionRecordEvent::TrackMedia(id, media) => {
-                if !self.tracks.contains_key(&id) {
-                    let writer = self.get_free_writer_for(event.ts, media.meta.is_audio());
-                    if media.meta.is_audio() {
-                        self.writers[writer].audio_inuse = true;
+                // We allow clippy::map_entry because the suggestion provided by clippy has a bug:
+                // cannot borrow `*self` as mutable more than once at a time
+                // There is a open Issue on the Rust Clippy GitHub Repo:
+                // https://github.com/rust-lang/rust-clippy/issues/11976
+                #[allow(clippy::map_entry)]
+                let out = if !self.tracks_writer.contains_key(&id) {
+                    if let Some((name, _meta)) = self.tracks_meta.get(&id) {
+                        let (file_path, writer): (String, Box<dyn TrackWriter + Send>) = match &media.meta {
+                            media_server_protocol::media::MediaMeta::Opus { .. } => {
+                                let file_path = format!("{}-opus-{}-{}.webm", self.path, name.0, event.ts);
+                                let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
+                                (file_path, writer)
+                            }
+                            media_server_protocol::media::MediaMeta::H264 { .. } => todo!(),
+                            media_server_protocol::media::MediaMeta::Vp8 { .. } => {
+                                let file_path = format!("{}-vp8-{}-{}.webm", self.path, name.0, event.ts);
+                                let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
+                                (file_path, writer)
+                            }
+                            media_server_protocol::media::MediaMeta::Vp9 { .. } => {
+                                let file_path = format!("{}-vp9-{}-{}.webm", self.path, name.0, event.ts);
+                                let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
+                                (file_path, writer)
+                            }
+                        };
+                        log::info!("create writer for track {name}");
+                        self.tracks_writer.insert(id, writer);
+                        Some(Event::TrackStart(name.clone(), event.ts, file_path))
                     } else {
-                        self.writers[writer].video_inuse = true;
+                        log::warn!("missing track info for pkt  form track {:?}", id);
+                        return None;
                     }
-                    log::info!("write track {:?} to writer {writer}", id);
-                    self.tracks.insert(id, TrackWriter { writer });
-                }
-                let track = self.tracks.get_mut(&id).expect("Should have track here");
-                if media.meta.is_audio() {
-                    self.writers[track.writer].writer.push_opus(event.ts, media);
                 } else {
-                    self.writers[track.writer].writer.push_vpx(event.ts, media);
-                }
+                    None
+                };
+                let writer = self.tracks_writer.get_mut(&id).expect("Should have track here");
+                writer.push_media(event.ts, media);
+                out
             }
-            _ => {}
+            _ => None,
         }
     }
 }

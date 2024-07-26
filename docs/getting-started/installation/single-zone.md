@@ -7,8 +7,10 @@ Limitations: maximum 256 nodes in the same zone.
 
 The cluster has the following nodes:
 
-- Gateway nodes
-- Media server nodes (WebRTC, SIP or RTMP depending on your needs)
+- Console node: manage panel and act as a seed node for bootstrapping other nodes
+- Gateway nodes: route signaling request into correct media node
+- Media server nodes: handling media transport like WebRTC, RTP, RTMP ...
+- Connector node: logging, hooks, record uri signer
 
 In this mode, the gateway will route requests to the best node based on the load, and some users in the same room may be routed to different media server nodes.
 
@@ -27,145 +29,109 @@ Example we have a node index rules like:
 
 | Node type | Index range  |
 | --------- | ------------ |
-| Gateway   | [0; 10)      |
-| SIP       | [10; 60)     |
-| RTMP      | [60; 90)     |
-| Connector | [90; 100)    |
-| WebRTC    | [100 to 255] |
+| Console   | [0; 10)      |
+| Gateway   | [10; 20)     |
+| Connector | [20; 30)     |
+| Media     | [100 to 255] |
+
+## Deploy a console nodes
+
+Console node will expose at least 1 tcp port and 1 udp port
+
+```
+docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+    --secret secr3t \
+    --node-id 0 \
+    --sdn-port 10000 \
+    --sdn-zone 0 \
+    --http-port 8080 \
+    --enable-private-ip \
+    console
+```
+
+After node 0 started it will print out the node address like `0@/ip4/127.0.0.1/udp/10000`, you can use it as a seed node for other nodes.
+The console node also have simple UI at `http://IP:8080`, you can login with above secret: `secr3t`
+
+![alt text](console_screen.png)
+![alt text](console_screen2.png)
 
 ## Deploy some gateway nodes
 
-First pick index for your gateway nodes, for example 1 to 10 is for gateway nodes.
+Gateway node will expose at least 1 tcp port and 1 udp port
 
-Node1:
-
-```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --http-port=8080 \
-    --sdn-port=10010 \
-    --zone-index=1 \
-    --secret=insecure \
+```
+docker run -d --name gateway1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+    --secret secr3t \
+    --node-id 10 \
+    --sdn-port 10010 \
+    --sdn-zone 0 \
+    --http-port 3000 \
+    --enable-private-ip \
+    --seeds 0@/ip4/127.0.0.1/udp/10000 \
     gateway
 ```
 
-After node1 started it will print out the node address like `10@/ip4/192.168.1.10/udp/10010/ip4/192.168.1.10/tcp/10010`, you can use it as a seed node for other nodes.
-
-```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --http-port=8080 \
-    --zone-index=2 \
-    --secret=insecure \
-    --seeds FIRST_GATEWAY_ADDR \
+```
+docker run -d --name gateway2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+    --secret secr3t \
+    --node-id 11 \
+    --sdn-port 10011 \
+    --sdn-zone 0 \
+    --http-port 3001 \
+    --enable-private-ip \
+    --seeds 0@/ip4/127.0.0.1/udp/10000 \
     gateway
 ```
 
-## Deploy some media webrtc nodes
+After gateway nodes started, it will print out the node address like: `10@/ip4/127.0.0.1/udp/10010` and `11@/ip4/127.0.0.1/udp/10011`, the address is used as a seed address for media and connector nodes
 
-If you need WebRTC, Whip or Whep you need deploy some webrtc nodes, select index for your webrtc nodes, for example 100 to 255 is for webrtc nodes.
-
-WebRTC 1:
-
-```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --zone-index=100 \
-    --secret=insecure \
-    --seeds FIRST_GATEWAY_ADDR \
-    webrtc
-```
-
-WebRTC 2:
-
-```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --zone-index=101 \
-    --secret=insecure \
-    --seeds FIRST_GATEWAY_ADDR \
-    webrtc
-```
-
-## Deploy some media sip nodes
-
-If you need SIP, you need deploy some sip nodes, select index for your sip nodes, for example 10 to 60 is for sip nodes.
-
-SIP 1:
-
-```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --zone-index=10 \
-    --secret=insecure \
-    --seeds FIRST_GATEWAY_ADDR \
-    sip \
-    --addr SERVER_IP:5060
-```
-
-SIP 1:
-
-```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --zone-index=11 \
-    --secret=insecure \
-    --seeds FIRST_GATEWAY_ADDR \
-    sip \
-    --addr SERVER_IP:5060
-```
-
-## Deploy some media rtmp nodes
-
-If you need RTMP, you need deploy some rtmp nodes, select index for your rtmp nodes, for example 60 to 100 is for rtmp nodes.
-
-Rtmp 1:
-
-```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --zone-index=60 \
-    --secret=insecure \
-    --seeds FIRST_GATEWAY_ADDR \
-    sip \
-    --addr SERVER_IP:5060
-```
-
-Rtmp 2:
-
-```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --zone-index=60 \
-    --secret=insecure \
-    --seeds FIRST_GATEWAY_ADDR \
-    sip \
-    --addr SERVER_IP:5060
-```
+After started gateway node also expose openapi ui for better integrating:
 
 ## Deploy some connector nodes
 
-If you need RTMP, you need deploy some rtmp nodes, select index for your rtmp nodes, for example 60 to 100 is for rtmp nodes.
-
-Connector 1:
+We need separated connector node which take care store logging data and response signed s3 uri for storing record file.
+In default it will store data inside a sqlite file. For connecting to other database, you can provide db-uri like `protocol://username:password@host/database`, with protocol is: `sqlite`, `mysql`, `postgres`
 
 ```bash
-docker run -d --name atm0s-media-gateway-1 \
-    --net=host ghcr.io/8xff/atm0s-media-gateway:master \
-    --zone-index=60 \
-    --secret=insecure \
-    --seeds FIRST_GATEWAY_ADDR \
+docker run -d --name main-connector --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+    --secret secr3t \
+    --node-id 20 \
+    --sdn-port 10020 \
+    --sdn-zone 0 \
+    --enable-private-ip \
+    --seeds 10@/ip4/127.0.0.1/udp/10010 \
+    --seeds 11@/ip4/127.0.0.1/udp/10011 \
     connector \
-    --mq-uri nats://NATS_IP:4222
+        --s3-uri "http://minioadmin:minioadmin@127.0.0.1:9000/record"
 ```
 
-## Monitoring
+## Deploy some media nodes
 
-Each cluster nodes will expose a dashboard and prometheus metrics, you can use it to monitor your cluster.
+```bash
+docker run -d --name media1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+    --secret secr3t \
+    --node-id 100 \
+    --sdn-port 10100 \
+    --sdn-zone 0 \
+    --enable-private-ip \
+    --seeds 10@/ip4/127.0.0.1/udp/10010 \
+    --seeds 11@/ip4/127.0.0.1/udp/10011 \
+    media \
+        --allow-private-ip
+```
 
-Example bellow is gateway node dashboard: `gateway_url/dashboard/`
-
-![Monitoring](../../imgs/demo-monitor.png)
+```bash
+docker run -d --name media2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
+    --secret secr3t \
+    --node-id 101 \
+    --sdn-port 10101 \
+    --sdn-zone 0 \
+    --enable-private-ip \
+    --seeds 10@/ip4/127.0.0.1/udp/10010 \
+    --seeds 11@/ip4/127.0.0.1/udp/10011 \
+    media \
+        --allow-private-ip
+```
 
 ## Testing your cluster
 

@@ -28,6 +28,7 @@ fn main() -> Result<()> {
         .type_attribute("cluster_connector.PeerEvent.LocalTrack", "#[derive(serde::Serialize)]")
         .type_attribute("cluster_connector.PeerEvent.LocalTrackAttach", "#[derive(serde::Serialize)]")
         .type_attribute("cluster_connector.PeerEvent.LocalTrackDetach", "#[derive(serde::Serialize)]")
+        .protoc_arg("--experimental_allow_proto3_optional")
         .compile_protos(
             &[
                 "./proto/shared.proto",

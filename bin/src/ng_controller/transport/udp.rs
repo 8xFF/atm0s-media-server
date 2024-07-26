@@ -18,7 +18,6 @@ impl NgUdpTransport {
     }
 }
 
-#[async_trait::async_trait]
 impl NgTransport for NgUdpTransport {
     async fn send(&self, res: NgResponse, addr: SocketAddr) {
         let data = res.to_str();

@@ -268,6 +268,7 @@ mod tests {
         res
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn video_pkt(seq: u16, ts: u32, key: bool, layers: Option<&[[u16; 3]]>, spatial: u8, temporal: u8, switching_point: bool, end_frame: bool, pic_id: u16) -> MediaPacket {
         MediaPacket {
             ts,
@@ -302,7 +303,7 @@ mod tests {
     fn test(bitrate: u64, layers: &[[u16; 3]], steps: Vec<Step>) {
         let mut ctx = VideoSelectorCtx::new(MediaKind::Video);
         ctx.seq_rewrite.reinit();
-        let mut selector = Selector::new(false, bitrate * 1000, layers_bitrate(&layers), (2, 2));
+        let mut selector = Selector::new(false, bitrate * 1000, layers_bitrate(layers), (2, 2));
         selector.on_init(&mut ctx, 0);
 
         for step in steps {

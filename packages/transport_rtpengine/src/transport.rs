@@ -128,7 +128,7 @@ impl<ES: 'static + MediaEdgeSecure> Transport<RtpExtIn, RtpExtOut> for Transport
             TransportInput::Endpoint(ev) => {
                 self.internal.on_endpoint_event(now, ev);
             }
-            TransportInput::Close => {
+            TransportInput::SystemClose => {
                 log::info!("[TransportRtp] close");
             }
             _ => {}

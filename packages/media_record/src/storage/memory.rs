@@ -159,8 +159,8 @@ mod test {
         use std::io::Write;
 
         let mut file = MemoryFile::default();
-        file.write(&[1, 2, 3, 4]).expect("should write");
-        file.write(&[5, 6, 7, 8, 9]).expect("should write");
+        file.write_all(&[1, 2, 3, 4]).expect("should write");
+        file.write_all(&[5, 6, 7, 8, 9]).expect("should write");
 
         let mut buf = [0; 10];
         let len = file.read(&mut buf).await.unwrap();
@@ -177,8 +177,8 @@ mod test {
         use tokio::io::AsyncWriteExt;
 
         let mut file = MemoryFile::default();
-        file.write(&[1, 2, 3, 4]).await.expect("should write");
-        file.write(&[5, 6, 7, 8, 9]).await.expect("should write");
+        file.write_all(&[1, 2, 3, 4]).await.expect("should write");
+        file.write_all(&[5, 6, 7, 8, 9]).await.expect("should write");
 
         let mut buf = [0; 10];
         let len = file.read(&mut buf).await.unwrap();

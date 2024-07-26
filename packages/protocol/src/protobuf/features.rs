@@ -21,7 +21,7 @@ pub mod request {
     }
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct Response {
     #[prost(oneof = "response::Response", tags = "1")]
     pub response: ::core::option::Option<response::Response>,
@@ -29,7 +29,7 @@ pub struct Response {
 /// Nested message and enum types in `Response`.
 pub mod response {
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
     pub enum Response {
         #[prost(message, tag = "1")]
         Mixer(super::mixer::Response),

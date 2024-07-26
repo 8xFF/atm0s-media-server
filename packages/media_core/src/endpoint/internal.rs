@@ -244,16 +244,14 @@ impl EndpointInternal {
             }
             TransportState::Disconnected(err) => {
                 log::info!("[EndpointInternal] disconnected {:?}", err);
+                self.leave_room(now);
                 self.queue.push_back(InternalOutput::PeerEvent(
                     now,
                     peer_event::Event::Disconnected(peer_event::Disconnected { duration_ms: 0, reason: 0 }), //TODO provide correct reason
                 ));
                 if self.cfg.record {
-                    if self.cfg.record {
-                        self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::Disconnected));
-                    }
+                    self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::Disconnected));
                 }
-                self.leave_room(now);
                 self.queue.push_back(InternalOutput::Destroy);
             }
         }
@@ -476,6 +474,12 @@ impl EndpointInternal {
     }
 }
 
+impl Drop for EndpointInternal {
+    fn drop(&mut self) {
+        assert_eq!(self.queue.len(), 0, "endpoint internal queue should empty on drop");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -483,14 +487,17 @@ mod tests {
         time::Instant,
     };
 
-    use media_server_protocol::endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe};
     use media_server_protocol::protobuf::cluster_connector::peer_event;
+    use media_server_protocol::{
+        endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta},
+        protobuf::shared::Kind,
+    };
     use sans_io_runtime::TaskSwitcherChild;
 
     use crate::{
-        cluster::{ClusterEndpointControl, ClusterRoomHash},
+        cluster::{ClusterEndpointControl, ClusterRemoteTrackControl, ClusterRoomHash},
         endpoint::{internal::InternalOutput, EndpointCfg, EndpointReq, EndpointRes},
-        transport::{TransportEvent, TransportState},
+        transport::{RemoteTrackEvent, TransportEvent, TransportState},
     };
 
     use super::EndpointInternal;
@@ -526,7 +533,7 @@ mod tests {
 
         let room: RoomId = "room".into();
         let peer: PeerId = "peer".into();
-        let meta = PeerMeta { metadata: None };
+        let meta = PeerMeta { metadata: None, extra_data: None };
         let publish = RoomInfoPublish { peer: true, tracks: true };
         let subscribe = RoomInfoSubscribe { peers: true, tracks: true };
         internal.on_transport_rpc(now, 0.into(), EndpointReq::JoinRoom(room.clone(), peer.clone(), meta.clone(), publish.clone(), subscribe.clone(), None));
@@ -544,6 +551,60 @@ mod tests {
                     room: room.0.clone(),
                     peer: peer.0.clone(),
                 })
+            ))
+        );
+        assert_eq!(internal.pop_output(now), None);
+
+        //now start a remote track
+        let remote_track_id = 0.into();
+        let remote_track_meta = TrackMeta::default_audio();
+        internal.on_transport_event(
+            now,
+            TransportEvent::RemoteTrack(
+                remote_track_id,
+                RemoteTrackEvent::Started {
+                    name: "audio_main".into(),
+                    priority: 100.into(),
+                    meta: remote_track_meta.clone(),
+                },
+            ),
+        );
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::Cluster(
+                room_hash,
+                ClusterEndpointControl::RemoteTrack(remote_track_id, ClusterRemoteTrackControl::Started("audio_main".into(), remote_track_meta.clone()))
+            ))
+        );
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::RemoteTrackStarted(peer_event::RemoteTrackStarted {
+                    track: "audio_main".to_string(),
+                    kind: Kind::from(remote_track_meta.kind) as i32,
+                }),
+            ))
+        );
+        assert_eq!(internal.pop_output(now), None);
+
+        //now stop remote track
+        internal.on_transport_event(now, TransportEvent::RemoteTrack(remote_track_id, RemoteTrackEvent::Ended));
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::Cluster(
+                room_hash,
+                ClusterEndpointControl::RemoteTrack(remote_track_id, ClusterRemoteTrackControl::Ended("audio_main".into(), remote_track_meta.clone()))
+            ))
+        );
+        assert_eq!(
+            internal.pop_output(now),
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
+                    track: "audio_main".to_string(),
+                    kind: Kind::from(remote_track_meta.kind) as i32,
+                }),
             ))
         );
         assert_eq!(internal.pop_output(now), None);
@@ -597,7 +658,7 @@ mod tests {
         let room1: RoomId = "room1".into();
         let room1_hash = ClusterRoomHash::from(&room1);
         let peer: PeerId = "peer".into();
-        let meta = PeerMeta { metadata: None };
+        let meta = PeerMeta { metadata: None, extra_data: None };
         let publish = RoomInfoPublish { peer: true, tracks: true };
         let subscribe = RoomInfoSubscribe { peers: true, tracks: true };
         internal.on_transport_rpc(
@@ -673,6 +734,7 @@ mod tests {
     //TODO single local track, join leave room
     //TODO multi local tracks, join leave room
     //TODO single remote track, join leave room
+
     //TODO multi remote tracks, join leave room
     //TODO both local and remote tracks, join leave room
     //TODO test local and remote stopped must clear resource

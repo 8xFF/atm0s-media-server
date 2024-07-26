@@ -16,7 +16,7 @@ pub struct NodeConfig {
     pub node_id: NodeId,
     pub secret: String,
     pub seeds: Vec<NodeAddr>,
-    pub udp_port: u16,
+    pub bind_addrs: Vec<SocketAddr>,
     pub zone: u32,
-    pub custom_addrs: Vec<SocketAddr>,
+    pub bind_addrs_alt: Vec<SocketAddr>,
 }

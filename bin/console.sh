@@ -5,4 +5,6 @@ cargo run -- \
     --node-id 0 \
     --sdn-port 10000 \
     --sdn-zone 0 \
+    --enable-private-ip \
+    --workers 2 \
     console
