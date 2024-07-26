@@ -93,7 +93,7 @@ pub struct WhipConnectRequest {
     #[prost(bool, tag = "7")]
     pub record: bool,
     #[prost(string, optional, tag = "8")]
-    pub userdata: ::core::option::Option<::prost::alloc::string::String>,
+    pub extra_data: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -146,7 +146,7 @@ pub struct WhepConnectRequest {
     #[prost(uint64, tag = "6")]
     pub session_id: u64,
     #[prost(string, optional, tag = "8")]
-    pub userdata: ::core::option::Option<::prost::alloc::string::String>,
+    pub extra_data: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -197,7 +197,7 @@ pub struct WebrtcConnectRequest {
     #[prost(bool, tag = "5")]
     pub record: bool,
     #[prost(string, optional, tag = "8")]
-    pub userdata: ::core::option::Option<::prost::alloc::string::String>,
+    pub extra_data: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -233,7 +233,7 @@ pub struct WebrtcRestartIceRequest {
     #[prost(bool, tag = "5")]
     pub record: bool,
     #[prost(string, optional, tag = "8")]
-    pub userdata: ::core::option::Option<::prost::alloc::string::String>,
+    pub extra_data: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

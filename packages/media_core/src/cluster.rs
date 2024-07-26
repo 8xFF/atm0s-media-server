@@ -201,7 +201,7 @@ mod tests {
         let room_peers_map = id_generator::peers_map(userdata.0);
         let peer = PeerId("peer1".to_string());
         let peer_key = id_generator::peers_key(&peer);
-        let peer_info = PeerInfo::new(peer.clone(), PeerMeta { metadata: None, userdata: None });
+        let peer_info = PeerInfo::new(peer.clone(), PeerMeta { metadata: None, extra_data: None });
 
         let now = Instant::now();
         // Not join room with scope (peer true, track false) should Set and Sub

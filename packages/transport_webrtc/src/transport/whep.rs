@@ -52,7 +52,7 @@ pub struct TransportWebrtcWhep {
     remote: IpAddr,
     room: RoomId,
     peer: PeerId,
-    userdata: Option<String>,
+    extra_data: Option<String>,
     state: State,
     audio_mid: Option<Mid>,
     video_mid: Option<Mid>,
@@ -64,12 +64,12 @@ pub struct TransportWebrtcWhep {
 }
 
 impl TransportWebrtcWhep {
-    pub fn new(room: RoomId, peer: PeerId, userdata: Option<String>, remote: IpAddr) -> Self {
+    pub fn new(room: RoomId, peer: PeerId, extra_data: Option<String>, remote: IpAddr) -> Self {
         Self {
             remote,
             room,
             peer,
-            userdata,
+            extra_data,
             state: State::New,
             audio_mid: None,
             video_mid: None,
@@ -178,7 +178,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                         self.peer.clone(),
                         PeerMeta {
                             metadata: None,
-                            userdata: self.userdata.clone(),
+                            extra_data: self.extra_data.clone(),
                         },
                         RoomInfoPublish { peer: false, tracks: false },
                         RoomInfoSubscribe { peers: false, tracks: true },

@@ -408,7 +408,7 @@ pub mod server_event {
             #[prost(string, optional, tag = "2")]
             pub metadata: ::core::option::Option<::prost::alloc::string::String>,
             #[prost(string, optional, tag = "3")]
-            pub userdata: ::core::option::Option<::prost::alloc::string::String>,
+            pub extra_data: ::core::option::Option<::prost::alloc::string::String>,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, PartialEq, ::prost::Message)]

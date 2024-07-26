@@ -270,7 +270,7 @@ mod tests {
                 endpoint,
                 ClusterEndpointControl::Join(
                     peer.clone(),
-                    PeerMeta { metadata: None, userdata: None },
+                    PeerMeta { metadata: None, extra_data: None },
                     RoomInfoPublish { peer: false, tracks: false },
                     RoomInfoSubscribe { peers: true, tracks: true },
                     Some(AudioMixerConfig {

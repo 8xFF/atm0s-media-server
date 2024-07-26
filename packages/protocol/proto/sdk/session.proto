@@ -233,7 +233,7 @@ message ServerEvent {
         message PeerJoined {
             string peer = 1;
             optional string metadata = 2;
-            optional string userdata = 3;
+            optional string extra_data = 3;
         }
 
         message PeerUpdated {

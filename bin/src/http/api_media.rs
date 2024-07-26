@@ -71,7 +71,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
             peer: token.peer.into(),
             user_agent,
             record: token.record,
-            userdata: token.userdata,
+            extra_data: token.extra_data,
         })));
         ctx.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -168,7 +168,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
             room: token.room.into(),
             peer: token.peer.unwrap_or_else(|| format!("whep-{}", (random::<u64>()))).into(),
             user_agent,
-            userdata: token.userdata,
+            extra_data: token.extra_data,
         })));
         ctx.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -267,7 +267,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
                 return Err(poem::Error::from_string("Wrong peer".to_string(), StatusCode::FORBIDDEN));
             }
         }
-        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::Connect(session_id, ip_addr, user_agent, connect.0, token.userdata, token.record)));
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::Connect(session_id, ip_addr, user_agent, connect.0, token.extra_data, token.record)));
         ctx.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         match res {
@@ -336,7 +336,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
             }
         }
         log::info!("[MediaAPIs] restart_ice webrtc, ip {}, user_agent {}, conn {}, request {:?}", ip_addr, user_agent, conn_id.0, connect);
-        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(conn_id2, ip_addr, user_agent, connect.0, token.userdata, token.record)));
+        let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(conn_id2, ip_addr, user_agent, connect.0, token.extra_data, token.record)));
         ctx.sender.send(req).await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let res = rx.await.map_err(|_e| poem::Error::from_status(StatusCode::INTERNAL_SERVER_ERROR))?;
         match res {
