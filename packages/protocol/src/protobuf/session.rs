@@ -111,9 +111,13 @@ pub mod request {
         #[derive(Clone, PartialEq, ::prost::Message)]
         pub struct Attach {
             #[prost(message, optional, tag = "1")]
-            pub source: ::core::option::Option<super::super::super::shared::sender::Source>,
+            pub source: ::core::option::Option<
+                super::super::super::shared::sender::Source,
+            >,
             #[prost(message, optional, tag = "2")]
-            pub config: ::core::option::Option<super::super::super::shared::sender::Config>,
+            pub config: ::core::option::Option<
+                super::super::super::shared::sender::Config,
+            >,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, Copy, PartialEq, ::prost::Message)]
@@ -143,9 +147,13 @@ pub mod request {
         #[derive(Clone, PartialEq, ::prost::Message)]
         pub struct Attach {
             #[prost(message, optional, tag = "1")]
-            pub source: ::core::option::Option<super::super::super::shared::receiver::Source>,
+            pub source: ::core::option::Option<
+                super::super::super::shared::receiver::Source,
+            >,
             #[prost(message, optional, tag = "2")]
-            pub config: ::core::option::Option<super::super::super::shared::receiver::Config>,
+            pub config: ::core::option::Option<
+                super::super::super::shared::receiver::Config,
+            >,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, Copy, PartialEq, ::prost::Message)]
@@ -480,7 +488,10 @@ pub mod server_event {
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, Copy, PartialEq, ::prost::Message)]
         pub struct State {
-            #[prost(enumeration = "super::super::super::shared::sender::Status", tag = "1")]
+            #[prost(
+                enumeration = "super::super::super::shared::sender::Status",
+                tag = "1"
+            )]
             pub status: i32,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
@@ -503,7 +514,10 @@ pub mod server_event {
         #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Clone, Copy, PartialEq, ::prost::Message)]
         pub struct State {
-            #[prost(enumeration = "super::super::super::shared::receiver::Status", tag = "1")]
+            #[prost(
+                enumeration = "super::super::super::shared::receiver::Status",
+                tag = "1"
+            )]
             pub status: i32,
         }
         #[allow(clippy::derive_partial_eq_without_eq)]

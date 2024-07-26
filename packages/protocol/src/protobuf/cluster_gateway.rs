@@ -243,21 +243,62 @@ pub struct WebrtcRestartIceResponse {
 }
 #[allow(async_fn_in_trait)]
 pub trait MediaEdgeServiceHandler<CTX> {
-    async fn whip_connect(&self, ctx: &CTX, req: WhipConnectRequest) -> Option<WhipConnectResponse>;
-    async fn whip_remote_ice(&self, ctx: &CTX, req: WhipRemoteIceRequest) -> Option<WhipRemoteIceResponse>;
-    async fn whip_close(&self, ctx: &CTX, req: WhipCloseRequest) -> Option<WhipCloseResponse>;
-    async fn whep_connect(&self, ctx: &CTX, req: WhepConnectRequest) -> Option<WhepConnectResponse>;
-    async fn whep_remote_ice(&self, ctx: &CTX, req: WhepRemoteIceRequest) -> Option<WhepRemoteIceResponse>;
-    async fn whep_close(&self, ctx: &CTX, req: WhepCloseRequest) -> Option<WhepCloseResponse>;
-    async fn webrtc_connect(&self, ctx: &CTX, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse>;
-    async fn webrtc_remote_ice(&self, ctx: &CTX, req: WebrtcRemoteIceRequest) -> Option<WebrtcRemoteIceResponse>;
-    async fn webrtc_restart_ice(&self, ctx: &CTX, req: WebrtcRestartIceRequest) -> Option<WebrtcRestartIceResponse>;
+    async fn whip_connect(
+        &self,
+        ctx: &CTX,
+        req: WhipConnectRequest,
+    ) -> Option<WhipConnectResponse>;
+    async fn whip_remote_ice(
+        &self,
+        ctx: &CTX,
+        req: WhipRemoteIceRequest,
+    ) -> Option<WhipRemoteIceResponse>;
+    async fn whip_close(
+        &self,
+        ctx: &CTX,
+        req: WhipCloseRequest,
+    ) -> Option<WhipCloseResponse>;
+    async fn whep_connect(
+        &self,
+        ctx: &CTX,
+        req: WhepConnectRequest,
+    ) -> Option<WhepConnectResponse>;
+    async fn whep_remote_ice(
+        &self,
+        ctx: &CTX,
+        req: WhepRemoteIceRequest,
+    ) -> Option<WhepRemoteIceResponse>;
+    async fn whep_close(
+        &self,
+        ctx: &CTX,
+        req: WhepCloseRequest,
+    ) -> Option<WhepCloseResponse>;
+    async fn webrtc_connect(
+        &self,
+        ctx: &CTX,
+        req: WebrtcConnectRequest,
+    ) -> Option<WebrtcConnectResponse>;
+    async fn webrtc_remote_ice(
+        &self,
+        ctx: &CTX,
+        req: WebrtcRemoteIceRequest,
+    ) -> Option<WebrtcRemoteIceResponse>;
+    async fn webrtc_restart_ice(
+        &self,
+        ctx: &CTX,
+        req: WebrtcRestartIceRequest,
+    ) -> Option<WebrtcRestartIceResponse>;
 }
-pub struct MediaEdgeServiceClient<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> {
+pub struct MediaEdgeServiceClient<
+    D,
+    C: crate::rpc::RpcClient<D, S>,
+    S: crate::rpc::RpcStream,
+> {
     client: C,
     _tmp: std::marker::PhantomData<(D, S)>,
 }
-impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> Clone for MediaEdgeServiceClient<D, C, S> {
+impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> Clone
+for MediaEdgeServiceClient<D, C, S> {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
@@ -265,11 +306,22 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> Clone for Medi
         }
     }
 }
-impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServiceClient<D, C, S> {
+impl<
+    D,
+    C: crate::rpc::RpcClient<D, S>,
+    S: crate::rpc::RpcStream,
+> MediaEdgeServiceClient<D, C, S> {
     pub fn new(client: C) -> Self {
-        Self { client, _tmp: Default::default() }
+        Self {
+            client,
+            _tmp: Default::default(),
+        }
     }
-    pub async fn whip_connect(&self, dest: D, req: WhipConnectRequest) -> Option<WhipConnectResponse> {
+    pub async fn whip_connect(
+        &self,
+        dest: D,
+        req: WhipConnectRequest,
+    ) -> Option<WhipConnectResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whip_connect.service").await?;
         let out_buf = req.encode_to_vec();
@@ -277,7 +329,11 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         let in_buf = stream.read().await?;
         WhipConnectResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn whip_remote_ice(&self, dest: D, req: WhipRemoteIceRequest) -> Option<WhipRemoteIceResponse> {
+    pub async fn whip_remote_ice(
+        &self,
+        dest: D,
+        req: WhipRemoteIceRequest,
+    ) -> Option<WhipRemoteIceResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whip_remote_ice.service").await?;
         let out_buf = req.encode_to_vec();
@@ -285,7 +341,11 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         let in_buf = stream.read().await?;
         WhipRemoteIceResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn whip_close(&self, dest: D, req: WhipCloseRequest) -> Option<WhipCloseResponse> {
+    pub async fn whip_close(
+        &self,
+        dest: D,
+        req: WhipCloseRequest,
+    ) -> Option<WhipCloseResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whip_close.service").await?;
         let out_buf = req.encode_to_vec();
@@ -293,7 +353,11 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         let in_buf = stream.read().await?;
         WhipCloseResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn whep_connect(&self, dest: D, req: WhepConnectRequest) -> Option<WhepConnectResponse> {
+    pub async fn whep_connect(
+        &self,
+        dest: D,
+        req: WhepConnectRequest,
+    ) -> Option<WhepConnectResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whep_connect.service").await?;
         let out_buf = req.encode_to_vec();
@@ -301,7 +365,11 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         let in_buf = stream.read().await?;
         WhepConnectResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn whep_remote_ice(&self, dest: D, req: WhepRemoteIceRequest) -> Option<WhepRemoteIceResponse> {
+    pub async fn whep_remote_ice(
+        &self,
+        dest: D,
+        req: WhepRemoteIceRequest,
+    ) -> Option<WhepRemoteIceResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whep_remote_ice.service").await?;
         let out_buf = req.encode_to_vec();
@@ -309,7 +377,11 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         let in_buf = stream.read().await?;
         WhepRemoteIceResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn whep_close(&self, dest: D, req: WhepCloseRequest) -> Option<WhepCloseResponse> {
+    pub async fn whep_close(
+        &self,
+        dest: D,
+        req: WhepCloseRequest,
+    ) -> Option<WhepCloseResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whep_close.service").await?;
         let out_buf = req.encode_to_vec();
@@ -317,7 +389,11 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         let in_buf = stream.read().await?;
         WhepCloseResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn webrtc_connect(&self, dest: D, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
+    pub async fn webrtc_connect(
+        &self,
+        dest: D,
+        req: WebrtcConnectRequest,
+    ) -> Option<WebrtcConnectResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "webrtc_connect.service").await?;
         let out_buf = req.encode_to_vec();
@@ -325,7 +401,11 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         let in_buf = stream.read().await?;
         WebrtcConnectResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn webrtc_remote_ice(&self, dest: D, req: WebrtcRemoteIceRequest) -> Option<WebrtcRemoteIceResponse> {
+    pub async fn webrtc_remote_ice(
+        &self,
+        dest: D,
+        req: WebrtcRemoteIceRequest,
+    ) -> Option<WebrtcRemoteIceResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "webrtc_remote_ice.service").await?;
         let out_buf = req.encode_to_vec();
@@ -333,7 +413,11 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         let in_buf = stream.read().await?;
         WebrtcRemoteIceResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn webrtc_restart_ice(&self, dest: D, req: WebrtcRestartIceRequest) -> Option<WebrtcRestartIceResponse> {
+    pub async fn webrtc_restart_ice(
+        &self,
+        dest: D,
+        req: WebrtcRestartIceRequest,
+    ) -> Option<WebrtcRestartIceResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "webrtc_restart_ice.service").await?;
         let out_buf = req.encode_to_vec();
@@ -342,13 +426,23 @@ impl<D, C: crate::rpc::RpcClient<D, S>, S: crate::rpc::RpcStream> MediaEdgeServi
         WebrtcRestartIceResponse::decode(in_buf.as_slice()).ok()
     }
 }
-pub struct MediaEdgeServiceServer<CTX, H: MediaEdgeServiceHandler<CTX>, Sr: crate::rpc::RpcServer<S>, S: crate::rpc::RpcStream> {
+pub struct MediaEdgeServiceServer<
+    CTX,
+    H: MediaEdgeServiceHandler<CTX>,
+    Sr: crate::rpc::RpcServer<S>,
+    S: crate::rpc::RpcStream,
+> {
     ctx: std::sync::Arc<CTX>,
     handler: std::sync::Arc<H>,
     server: Sr,
     _tmp: std::marker::PhantomData<S>,
 }
-impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate::rpc::RpcServer<S>, S: 'static + crate::rpc::RpcStream> MediaEdgeServiceServer<CTX, H, Sr, S> {
+impl<
+    CTX: 'static + Clone,
+    H: 'static + MediaEdgeServiceHandler<CTX>,
+    Sr: crate::rpc::RpcServer<S>,
+    S: 'static + crate::rpc::RpcStream,
+> MediaEdgeServiceServer<CTX, H, Sr, S> {
     pub fn new(server: Sr, ctx: CTX, handler: H) -> Self {
         Self {
             ctx: std::sync::Arc::new(ctx),
@@ -374,7 +468,9 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "whip_connect.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WhipConnectRequest::decode(in_buf.as_slice()) {
+                            if let Ok(req) = WhipConnectRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
                                 if let Some(res) = handler.whip_connect(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
@@ -387,8 +483,11 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "whip_remote_ice.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WhipRemoteIceRequest::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.whip_remote_ice(&ctx, req).await {
+                            if let Ok(req) = WhipRemoteIceRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler.whip_remote_ice(&ctx, req).await
+                                {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -400,7 +499,9 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "whip_close.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WhipCloseRequest::decode(in_buf.as_slice()) {
+                            if let Ok(req) = WhipCloseRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
                                 if let Some(res) = handler.whip_close(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
@@ -413,7 +514,9 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "whep_connect.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WhepConnectRequest::decode(in_buf.as_slice()) {
+                            if let Ok(req) = WhepConnectRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
                                 if let Some(res) = handler.whep_connect(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
@@ -426,8 +529,11 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "whep_remote_ice.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WhepRemoteIceRequest::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.whep_remote_ice(&ctx, req).await {
+                            if let Ok(req) = WhepRemoteIceRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler.whep_remote_ice(&ctx, req).await
+                                {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -439,7 +545,9 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "whep_close.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WhepCloseRequest::decode(in_buf.as_slice()) {
+                            if let Ok(req) = WhepCloseRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
                                 if let Some(res) = handler.whep_close(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
@@ -452,7 +560,9 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "webrtc_connect.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WebrtcConnectRequest::decode(in_buf.as_slice()) {
+                            if let Ok(req) = WebrtcConnectRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
                                 if let Some(res) = handler.webrtc_connect(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
@@ -465,8 +575,13 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "webrtc_remote_ice.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WebrtcRemoteIceRequest::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.webrtc_remote_ice(&ctx, req).await {
+                            if let Ok(req) = WebrtcRemoteIceRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler
+                                    .webrtc_remote_ice(&ctx, req)
+                                    .await
+                                {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -478,8 +593,13 @@ impl<CTX: 'static + Clone, H: 'static + MediaEdgeServiceHandler<CTX>, Sr: crate:
                 "webrtc_restart_ice.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = WebrtcRestartIceRequest::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.webrtc_restart_ice(&ctx, req).await {
+                            if let Ok(req) = WebrtcRestartIceRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler
+                                    .webrtc_restart_ice(&ctx, req)
+                                    .await
+                                {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
