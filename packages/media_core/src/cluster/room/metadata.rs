@@ -381,7 +381,7 @@ mod tests {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         let endpoint = 1;
         room_meta.on_join(
             endpoint,
@@ -408,7 +408,7 @@ mod tests {
         let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
         let peer_key = id_generator::peers_key(&peer_id);
         let endpoint = 1;
@@ -464,14 +464,14 @@ mod tests {
 
         let peer2: PeerId = "peer2".to_string().into();
         let peer2_key = id_generator::peers_key(&peer2);
-        let peer2_info = PeerInfo::new(peer2, PeerMeta { metadata: None, userdata: None });
+        let peer2_info = PeerInfo::new(peer2, PeerMeta { metadata: None, extra_data: None });
 
         room_meta.on_kv_event(peers_map, MapEvent::OnSet(peer2_key, 0, peer2_info.serialize()));
         assert_eq!(room_meta.pop_output(()), None);
 
         let endpoint = 1;
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -500,7 +500,7 @@ mod tests {
         let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
         let peer_key = id_generator::peers_key(&peer_id);
         let endpoint = 1;
@@ -569,7 +569,7 @@ mod tests {
 
         let endpoint = 1;
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -601,7 +601,7 @@ mod tests {
         let tracks_map = id_generator::tracks_map(room);
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         let peer_info = PeerInfo::new(peer_id.clone(), peer_meta.clone());
         let peer_key = id_generator::peers_key(&peer_id);
         let endpoint = 1;
@@ -643,7 +643,7 @@ mod tests {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         let endpoint = 1;
         room_meta.on_join(
             endpoint,
@@ -702,7 +702,7 @@ mod tests {
 
         let endpoint = 1;
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -748,7 +748,7 @@ mod tests {
 
         let endpoint = 1;
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -783,7 +783,7 @@ mod tests {
 
         let endpoint = 1;
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         room_meta.on_join(
             endpoint,
             peer_id.clone(),
@@ -823,7 +823,7 @@ mod tests {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
         let peer_id: PeerId = "peer1".to_string().into();
-        let peer_meta = PeerMeta { metadata: None, userdata: None };
+        let peer_meta = PeerMeta { metadata: None, extra_data: None };
         let endpoint = 1;
         room_meta.on_join(
             endpoint,

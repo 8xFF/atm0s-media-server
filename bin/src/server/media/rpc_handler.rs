@@ -127,7 +127,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
             req.ip.parse().ok()?,
             req.user_agent,
             req.req?,
-            req.userdata,
+            req.extra_data,
             req.record,
         )));
         ctx.req_tx.send(req).await.ok()?;
@@ -159,7 +159,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
             req.ip.parse().ok()?,
             req.user_agent,
             req.req?,
-            req.userdata,
+            req.extra_data,
             req.record,
         )));
         ctx.req_tx.send(req).await.ok()?;

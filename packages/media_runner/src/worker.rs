@@ -457,7 +457,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     match self
                         .media_webrtc
                         .input(&mut self.switcher)
-                        .spawn(req.ip, req.session_id, transport_webrtc::VariantParams::Whip(req.room, req.peer, req.userdata, req.record), &req.sdp)
+                        .spawn(req.ip, req.session_id, transport_webrtc::VariantParams::Whip(req.room, req.peer, req.extra_data, req.record), &req.sdp)
                     {
                         Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
                         Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
@@ -482,7 +482,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     match self
                         .media_webrtc
                         .input(&mut self.switcher)
-                        .spawn(req.ip, req.session_id, transport_webrtc::VariantParams::Whep(req.room, peer_id.into(), req.userdata), &req.sdp)
+                        .spawn(req.ip, req.session_id, transport_webrtc::VariantParams::Whep(req.room, peer_id.into(), req.extra_data), &req.sdp)
                     {
                         Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp }))))),
                         Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Err(e))))),
@@ -502,11 +502,11 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 }
             },
             RpcReq::Webrtc(req) => match req {
-                webrtc::RpcReq::Connect(session_id, ip, user_agent, req, userdata, record) => {
+                webrtc::RpcReq::Connect(session_id, ip, user_agent, req, extra_data, record) => {
                     match self
                         .media_webrtc
                         .input(&mut self.switcher)
-                        .spawn(ip, session_id, VariantParams::Webrtc(user_agent, req.clone(), userdata, record, self.secure.clone()), &req.sdp)
+                        .spawn(ip, session_id, VariantParams::Webrtc(user_agent, req.clone(), extra_data, record, self.secure.clone()), &req.sdp)
                     {
                         Ok((ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
                             req_id,
@@ -529,13 +529,13 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::RemoteIce(req_id, transport_webrtc::Variant::Webrtc, ice.candidates)),
                     );
                 }
-                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req, userdata, record) => {
+                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req, extra_data, record) => {
                     log::info!("on rpc request {req_id}, webrtc::RpcReq::RestartIce");
                     self.media_webrtc.input(&mut self.switcher).on_event(
                         now,
                         GroupInput::Ext(
                             conn.into(),
-                            transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, user_agent, req, userdata, record),
+                            transport_webrtc::ExtIn::RestartIce(req_id, transport_webrtc::Variant::Webrtc, ip, user_agent, req, extra_data, record),
                         ),
                     );
                 }

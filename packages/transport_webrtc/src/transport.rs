@@ -59,7 +59,7 @@ pub enum Variant {
 #[allow(clippy::large_enum_variant)]
 pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
-    /// Last option<string>, bool is userdata and record flag
+    /// Last option<string>, bool is extra_data and record flag
     RestartIce(u64, Variant, IpAddr, String, ConnectRequest, Option<String>, bool),
 }
 
@@ -144,9 +144,9 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
 
         let mut rtc = rtc_config.build();
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
-            VariantParams::Whip(room, peer, userdata, _record) => Box::new(whip::TransportWebrtcWhip::new(room, peer, userdata, remote)),
-            VariantParams::Whep(room, peer, userdata) => Box::new(whep::TransportWebrtcWhep::new(room, peer, userdata, remote)),
-            VariantParams::Webrtc(_user_agent, req, userdata, _record, secure) => {
+            VariantParams::Whip(room, peer, extra_data, _record) => Box::new(whip::TransportWebrtcWhip::new(room, peer, extra_data, remote)),
+            VariantParams::Whep(room, peer, extra_data) => Box::new(whep::TransportWebrtcWhep::new(room, peer, extra_data, remote)),
+            VariantParams::Webrtc(_user_agent, req, extra_data, _record, secure) => {
                 rtc.direct_api().create_data_channel(ChannelConfig {
                     label: "data".to_string(),
                     negotiated: Some(1000),
@@ -155,7 +155,7 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
                 //we need to start sctp as client side for handling restart-ice in new server
                 //if not, datachannel will not connect successful after reconnect to new server
                 rtc.direct_api().start_sctp(true);
-                Box::new(webrtc::TransportWebrtcSdk::new(req, userdata, secure, remote))
+                Box::new(webrtc::TransportWebrtcSdk::new(req, extra_data, secure, remote))
             }
         };
 
@@ -308,7 +308,7 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                     }
                     self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))));
                 }
-                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req, _userdata, _record) => {
+                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req, _extra_data, _record) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_codec_config(self.rtc.codec_config());

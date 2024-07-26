@@ -533,7 +533,7 @@ mod tests {
 
         let room: RoomId = "room".into();
         let peer: PeerId = "peer".into();
-        let meta = PeerMeta { metadata: None, userdata: None };
+        let meta = PeerMeta { metadata: None, extra_data: None };
         let publish = RoomInfoPublish { peer: true, tracks: true };
         let subscribe = RoomInfoSubscribe { peers: true, tracks: true };
         internal.on_transport_rpc(now, 0.into(), EndpointReq::JoinRoom(room.clone(), peer.clone(), meta.clone(), publish.clone(), subscribe.clone(), None));
@@ -658,7 +658,7 @@ mod tests {
         let room1: RoomId = "room1".into();
         let room1_hash = ClusterRoomHash::from(&room1);
         let peer: PeerId = "peer".into();
-        let meta = PeerMeta { metadata: None, userdata: None };
+        let meta = PeerMeta { metadata: None, extra_data: None };
         let publish = RoomInfoPublish { peer: true, tracks: true };
         let subscribe = RoomInfoSubscribe { peers: true, tracks: true };
         internal.on_transport_rpc(
