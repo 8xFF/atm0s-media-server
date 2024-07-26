@@ -21,11 +21,13 @@ use media_server_runner::{MediaConfig, UserData, SE};
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
 use media_server_utils::now_ms;
 use rand::random;
+use rtpengine_ngcontrol::NgUdpTransport;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sans_io_runtime::{backend::PollingBackend, Controller};
 
 use crate::{
     http::run_media_http_server,
+    ng_controller::NgControllerServer,
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_server, VirtualNetwork},
     server::media::runtime_worker::MediaRuntimeWorker,
@@ -52,10 +54,14 @@ pub struct Args {
     #[arg(env, long, default_value_t = 20000)]
     webrtc_port_seed: u16,
 
-    /// Seed port for binding rtpengine UDP socket. It will increase by one for each worker.
+    /// Port for binding rtpengine command UDP socket.
+    #[arg(env, long, default_value_t = 11111)]
+    rtpengine_cmd_port: u16,
+
+    /// Seed port for binding rtpengine rtp UDP socket. It will increase by one for each worker.
     /// Default: worker0: 30000, worker1: 30001, worker2: 30002, ...
     #[arg(env, long, default_value_t = 30000)]
-    rtpengine_port_seed: u16,
+    rtpengine_rtp_port_seed: u16,
 
     /// Max ccu per core
     #[arg(env, long, default_value_t = 200)]
@@ -97,10 +103,12 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
 
     //Running ng controller for Voip
     let req_tx3 = req_tx.clone();
+    let rtpengine_udp = NgUdpTransport::new(args.rtpengine_cmd_port).await;
     tokio::spawn(async move {
-        if let Err(e) = crate::ng_controller::run_ng_controller_server(22222, req_tx3).await {
-            log::error!("NgController Error: {}", e);
-        }
+        log::info!("[MediaServer] start ng_controller task");
+        let mut server = NgControllerServer::new(rtpengine_udp, req_tx3);
+        while let Some(_) = server.recv().await {}
+        log::info!("[MediaServer] stop ng_controller task");
     });
 
     let node_id = node.node_id;
@@ -112,7 +120,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         let webrtc_addrs = node.bind_addrs.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
         let webrtc_addrs_alt = node.bind_addrs_alt.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
 
-        let rtpengine_port = args.rtpengine_port_seed + i as u16;
+        let rtpengine_port = args.rtpengine_rtp_port_seed + i as u16;
         let rtpengine_addrs = node.bind_addrs.iter().map(|addr| SocketAddr::new(addr.ip(), rtpengine_port)).collect::<Vec<_>>();
         let rtpengine_addrs_alt = node.bind_addrs_alt.iter().map(|addr| SocketAddr::new(addr.ip(), rtpengine_port)).collect::<Vec<_>>();
 

@@ -441,11 +441,11 @@ dependencies = [
  "quinn",
  "rand 0.8.5",
  "rcgen",
+ "rtpengine-ngcontrol",
  "rust-embed",
  "rustls 0.23.12",
  "sans-io-runtime",
  "serde",
- "serde_bencode",
  "sysinfo",
  "tokio",
  "tracing-subscriber",
@@ -3000,6 +3000,7 @@ name = "media-server-utils"
 version = "0.1.0"
 dependencies = [
  "log",
+ "pin-project-lite",
  "serde",
  "serde-querystring",
  "smallmap",
@@ -4522,6 +4523,16 @@ dependencies = [
  "serde",
  "thiserror",
  "webrtc-util",
+]
+
+[[package]]
+name = "rtpengine-ngcontrol"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "serde",
+ "serde_bencode",
+ "tokio",
 ]
 
 [[package]]

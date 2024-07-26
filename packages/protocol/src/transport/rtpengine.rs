@@ -1,0 +1,58 @@
+use crate::endpoint::{PeerId, RoomId};
+
+use super::{ConnLayer, RpcResult};
+
+#[derive(Debug, Clone)]
+pub struct RtpConnectRequest {
+    pub call_id: RoomId,
+    pub leg_id: PeerId,
+    pub sdp: String,
+    pub session_id: u64,
+}
+
+#[derive(Debug, Clone)]
+pub enum RpcReq<Conn> {
+    Ping,
+    Connect(RtpConnectRequest),
+    End(Conn, u64),
+}
+
+impl<Conn: ConnLayer> RpcReq<Conn> {
+    pub fn down(self) -> (RpcReq<Conn::Down>, Option<Conn::DownRes>) {
+        match self {
+            RpcReq::Ping => (RpcReq::Ping, None),
+            RpcReq::Connect(conn_req) => (RpcReq::Connect(conn_req.clone()), None),
+            RpcReq::End(conn, call_id) => {
+                let (down, layer) = conn.down();
+                (RpcReq::End(down, call_id), Some(layer))
+            }
+        }
+    }
+
+    pub fn get_down_part(&self) -> Option<Conn::DownRes> {
+        match self {
+            RpcReq::Ping => None,
+            RpcReq::Connect(..) => None,
+            RpcReq::End(conn, ..) => Some(conn.get_down_part()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum RpcRes<Conn> {
+    Ping(RpcResult<String>),
+    Connect(RpcResult<(Conn, String)>),
+    End(RpcResult<()>),
+}
+
+impl<Conn: ConnLayer> RpcRes<Conn> {
+    pub fn up(self, param: Conn::UpParam) -> RpcRes<Conn::Up> {
+        match self {
+            RpcRes::Ping(Ok(res)) => RpcRes::Ping(Ok(res)),
+            RpcRes::Ping(Err(e)) => RpcRes::Ping(Err(e)),
+            RpcRes::Connect(Ok((conn, sdp))) => RpcRes::Connect(Ok((conn.up(param), sdp))),
+            RpcRes::Connect(Err(e)) => RpcRes::Connect(Err(e)),
+            RpcRes::End(res) => RpcRes::End(res),
+        }
+    }
+}

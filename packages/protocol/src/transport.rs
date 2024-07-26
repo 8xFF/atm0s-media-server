@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::protobuf;
 
-pub mod rtp_engine;
+pub mod rtpengine;
 pub mod webrtc;
 pub mod whep;
 pub mod whip;
@@ -46,7 +46,7 @@ pub enum RpcReq<Conn> {
     Whep(whep::RpcReq<Conn>),
     Whip(whip::RpcReq<Conn>),
     Webrtc(webrtc::RpcReq<Conn>),
-    Rtp(rtp_engine::RtpReq<Conn>),
+    RtpEngine(rtpengine::RpcReq<Conn>),
 }
 
 impl<Conn: ConnLayer> RpcReq<Conn> {
@@ -64,9 +64,9 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
                 let (req, layer) = req.down();
                 (RpcReq::Webrtc(req), layer)
             }
-            Self::Rtp(req) => {
+            Self::RtpEngine(req) => {
                 let (req, layer) = req.down();
-                (RpcReq::Rtp(req), layer)
+                (RpcReq::RtpEngine(req), layer)
             }
         }
     }
@@ -76,7 +76,7 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
             Self::Whip(req) => req.get_down_part(),
             Self::Whep(req) => req.get_down_part(),
             Self::Webrtc(req) => req.get_down_part(),
-            Self::Rtp(req) => req.get_down_part(),
+            Self::RtpEngine(req) => req.get_down_part(),
         }
     }
 }
@@ -86,7 +86,7 @@ pub enum RpcRes<Conn> {
     Whep(whep::RpcRes<Conn>),
     Whip(whip::RpcRes<Conn>),
     Webrtc(webrtc::RpcRes<Conn>),
-    Rtp(rtp_engine::RtpRes<Conn>),
+    RtpEngine(rtpengine::RpcRes<Conn>),
 }
 
 impl<Conn: ConnLayer> RpcRes<Conn> {
@@ -95,7 +95,7 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
             Self::Whip(req) => RpcRes::Whip(req.up(param)),
             Self::Whep(req) => RpcRes::Whep(req.up(param)),
             Self::Webrtc(req) => RpcRes::Webrtc(req.up(param)),
-            Self::Rtp(req) => RpcRes::Rtp(req.up(param)),
+            Self::RtpEngine(req) => RpcRes::RtpEngine(req.up(param)),
         }
     }
 }

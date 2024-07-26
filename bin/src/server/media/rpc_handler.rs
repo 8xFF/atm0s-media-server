@@ -20,7 +20,7 @@ use media_server_protocol::{
     },
 };
 
-use crate::http::Rpc;
+use crate::rpc::Rpc;
 
 #[derive(Clone)]
 pub struct Ctx {

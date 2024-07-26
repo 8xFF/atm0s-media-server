@@ -9,6 +9,7 @@ mod ng_controller;
 mod node_metrics;
 #[cfg(feature = "quinn_vnet")]
 mod quinn;
+mod rpc;
 pub mod server;
 
 #[derive(Clone)]
