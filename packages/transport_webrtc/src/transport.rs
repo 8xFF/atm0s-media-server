@@ -61,6 +61,7 @@ pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
     /// Last option<string>, bool is extra_data and record flag
     RestartIce(u64, Variant, IpAddr, String, ConnectRequest, Option<String>, bool),
+    Disconnect(u64, Variant),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -68,6 +69,7 @@ pub enum ExtOut {
     RemoteIce(u64, Variant, RpcResult<u32>),
     /// response is (ice_lite, answer_sdp)
     RestartIce(u64, Variant, RpcResult<(bool, String)>),
+    Disconnect(u64, Variant, RpcResult<()>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -323,10 +325,13 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                             .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::InvalidSdp)))));
                     }
                 }
+                ExtIn::Disconnect(req_id, variant) => {
+                    self.internal.close(now);
+                    self.queue.push_back(TransportOutput::Ext(ExtOut::Disconnect(req_id, variant, Ok(()))));
+                }
             },
-            TransportInput::Close => {
-                log::info!("[TransportWebrtc] close request");
-                self.rtc.disconnect();
+            TransportInput::SystemClose => {
+                log::info!("[TransportWebrtc] system close request");
                 self.internal.close(now);
             }
         }

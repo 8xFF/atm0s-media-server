@@ -171,7 +171,6 @@ pub enum EndpointInput<Ext> {
     Net(BackendIncoming),
     Cluster(ClusterEndpointEvent),
     Ext(Ext),
-    Close,
 }
 
 pub enum EndpointOutput<Ext> {
@@ -238,14 +237,11 @@ where
             EndpointInput::Cluster(event) => {
                 self.internal.input(&mut self.switcher).on_cluster_event(now, event);
             }
-            EndpointInput::Close => {
-                self.transport.input(&mut self.switcher).on_input(now, TransportInput::Close);
-            }
         }
     }
 
     fn on_shutdown(&mut self, now: Instant) {
-        self.transport.input(&mut self.switcher).on_input(now, TransportInput::Close);
+        self.transport.input(&mut self.switcher).on_input(now, TransportInput::SystemClose);
     }
 }
 

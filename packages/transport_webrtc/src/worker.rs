@@ -35,7 +35,6 @@ pub enum GroupInput {
     Net(BackendIncoming),
     Cluster(WebrtcSession, ClusterEndpointEvent),
     Ext(WebrtcSession, ExtIn),
-    Close(WebrtcSession),
 }
 
 #[derive(Debug)]
@@ -165,11 +164,12 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                                     .push_back(GroupOutput::Ext(owner, ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
                             }
                         }
+                        ExtIn::Disconnect(req_id, variant) => {
+                            self.queue
+                                .push_back(GroupOutput::Ext(owner, ExtOut::Disconnect(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
+                        }
                     }
                 }
-            }
-            GroupInput::Close(owner) => {
-                self.endpoints.on_event(now, owner.index(), EndpointInput::Close);
             }
         }
     }
