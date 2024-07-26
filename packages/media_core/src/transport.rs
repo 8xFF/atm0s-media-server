@@ -93,7 +93,7 @@ pub enum TransportInput<Ext> {
     Endpoint(EndpointEvent),
     RpcRes(EndpointReqId, EndpointRes),
     Ext(Ext),
-    Close,
+    SystemClose,
 }
 
 /// This is event from transport, in general is is result of transport protocol
