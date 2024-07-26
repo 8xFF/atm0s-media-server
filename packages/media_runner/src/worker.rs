@@ -441,6 +441,11 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         )
                     }))),
                 ),
+                transport_webrtc::ExtOut::Disconnect(req_id, variant, res) => match variant {
+                    transport_webrtc::Variant::Whip => Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Delete(res.map(|_| WhipDeleteRes {})))),
+                    transport_webrtc::Variant::Whep => Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Delete(res.map(|_| WhepDeleteRes {})))),
+                    transport_webrtc::Variant::Webrtc => Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::Delete(res))),
+                },
             },
             transport_webrtc::GroupOutput::Shutdown(_session) => Output::Continue,
             transport_webrtc::GroupOutput::Continue => Output::Continue,
@@ -454,6 +459,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         match req {
             RpcReq::Whip(req) => match req {
                 whip::RpcReq::Connect(req) => {
+                    log::info!("on rpc request {req_id}, whip::RpcReq::Connect");
                     match self
                         .media_webrtc
                         .input(&mut self.switcher)
@@ -471,13 +477,15 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     );
                 }
                 whip::RpcReq::Delete(req) => {
-                    //TODO check error instead of auto response ok
-                    self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Delete(Ok(WhipDeleteRes {})))));
-                    self.media_webrtc.input(&mut self.switcher).on_event(now, GroupInput::Close(req.conn_id.into()));
+                    log::info!("on rpc request {req_id}, whip::RpcReq::Delete");
+                    self.media_webrtc
+                        .input(&mut self.switcher)
+                        .on_event(now, GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::Disconnect(req_id, transport_webrtc::Variant::Whip)));
                 }
             },
             RpcReq::Whep(req) => match req {
                 whep::RpcReq::Connect(req) => {
+                    log::info!("on rpc request {req_id}, whep::RpcReq::Connect");
                     let peer_id = format!("whep-{}", random::<u64>());
                     match self
                         .media_webrtc
@@ -496,13 +504,15 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     );
                 }
                 whep::RpcReq::Delete(req) => {
-                    //TODO check error instead of auto response ok
-                    self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Delete(Ok(WhepDeleteRes {})))));
-                    self.media_webrtc.input(&mut self.switcher).on_event(now, GroupInput::Close(req.conn_id.into()));
+                    log::info!("on rpc request {req_id}, whep::RpcReq::Delete");
+                    self.media_webrtc
+                        .input(&mut self.switcher)
+                        .on_event(now, GroupInput::Ext(req.conn_id.into(), transport_webrtc::ExtIn::Disconnect(req_id, transport_webrtc::Variant::Whep)));
                 }
             },
             RpcReq::Webrtc(req) => match req {
                 webrtc::RpcReq::Connect(session_id, ip, user_agent, req, userdata, record) => {
+                    log::info!("on rpc request {req_id}, webrtc::RpcReq::Connect");
                     match self
                         .media_webrtc
                         .input(&mut self.switcher)
@@ -539,7 +549,12 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         ),
                     );
                 }
-                webrtc::RpcReq::Delete(_) => todo!(),
+                webrtc::RpcReq::Delete(conn) => {
+                    log::info!("on rpc request {req_id}, webrtc::RpcReq::Delete");
+                    self.media_webrtc
+                        .input(&mut self.switcher)
+                        .on_event(now, GroupInput::Ext(conn.into(), transport_webrtc::ExtIn::Disconnect(req_id, transport_webrtc::Variant::Webrtc)));
+                }
             },
         }
     }
