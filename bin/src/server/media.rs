@@ -55,8 +55,8 @@ pub struct Args {
     webrtc_port_seed: u16,
 
     /// Port for binding rtpengine command UDP socket.
-    #[arg(env, long, default_value_t = 22222)]
-    rtpengine_cmd_port: u16,
+    #[arg(env, long, default_value = "127.0.0.1:22222")]
+    rtpengine_cmd_addr: Option<SocketAddr>,
 
     /// RtpEngine RTP Listen IP
     /// Default: 127.0.0.1
@@ -91,8 +91,8 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let secure2 = args.enable_token_api.then(|| Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes())));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
-    let req_tx2 = req_tx.clone();
     if let Some(http_port) = http_port {
+        let req_tx2 = req_tx.clone();
         let secure = secure.clone();
         tokio::spawn(async move {
             if let Err(e) = run_media_http_server(http_port, req_tx2, secure, secure2).await {
@@ -102,14 +102,17 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     }
 
     //Running ng controller for Voip
-    let req_tx3 = req_tx.clone();
-    let rtpengine_udp = NgUdpTransport::new(args.rtpengine_cmd_port).await;
-    tokio::spawn(async move {
-        log::info!("[MediaServer] start ng_controller task");
-        let mut server = NgControllerServer::new(rtpengine_udp, req_tx3);
-        while server.recv().await.is_some() {}
-        log::info!("[MediaServer] stop ng_controller task");
-    });
+    if let Some(ngproto_addr) = args.rtpengine_cmd_addr {
+        let req_tx3 = req_tx.clone();
+        let rtpengine_udp = NgUdpTransport::new(ngproto_addr).await;
+        let secure2 = secure.clone();
+        tokio::spawn(async move {
+            log::info!("[MediaServer] start ng_controller task");
+            let mut server = NgControllerServer::new(rtpengine_udp, secure2, req_tx3);
+            while server.recv().await.is_some() {}
+            log::info!("[MediaServer] stop ng_controller task");
+        });
+    }
 
     let node_id = node.node_id;
     let node_session = random();

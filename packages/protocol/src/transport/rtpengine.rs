@@ -4,10 +4,12 @@ use super::{ConnLayer, RpcResult};
 
 #[derive(Debug, Clone)]
 pub struct RtpConnectRequest {
-    pub call_id: RoomId,
-    pub leg_id: PeerId,
-    pub sdp: String,
     pub session_id: u64,
+    pub room: RoomId,
+    pub peer: PeerId,
+    pub sdp: String,
+    pub record: bool,
+    pub extra_data: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,16 +39,15 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
 
 #[derive(Debug, Clone)]
 pub enum RpcRes<Conn> {
-    Connect(RpcResult<(PeerId, Conn, String)>),
-    Delete(RpcResult<PeerId>),
+    Connect(RpcResult<(Conn, String)>),
+    Delete(RpcResult<Conn>),
 }
 
 impl<Conn: ConnLayer> RpcRes<Conn> {
     pub fn up(self, param: Conn::UpParam) -> RpcRes<Conn::Up> {
         match self {
-            RpcRes::Connect(Ok((peer_id, conn, sdp))) => RpcRes::Connect(Ok((peer_id, conn.up(param), sdp))),
-            RpcRes::Connect(Err(e)) => RpcRes::Connect(Err(e)),
-            RpcRes::Delete(res) => RpcRes::Delete(res),
+            RpcRes::Connect(res) => RpcRes::Connect(res.map(|(conn, sdp)| (conn.up(param), sdp))),
+            RpcRes::Delete(res) => RpcRes::Delete(res.map(|conn| conn.up(param))),
         }
     }
 }

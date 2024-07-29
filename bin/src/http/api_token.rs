@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use super::{utils::TokenAuthorization, Response};
-use media_server_protocol::tokens::{WebrtcToken, WhepToken, WhipToken};
+use media_server_protocol::tokens::{RtpEngineToken, WebrtcToken, WhepToken, WhipToken, RTPENGINE_TOKEN, WEBRTC_TOKEN, WHEP_TOKEN, WHIP_TOKEN};
 use media_server_secure::MediaGatewaySecure;
 use poem::{web::Data, Result};
 use poem_openapi::{payload::Json, OpenApi};
@@ -60,6 +60,20 @@ struct WebrtcTokenRes {
     token: String,
 }
 
+#[derive(poem_openapi::Object)]
+struct RtpEngineTokenReq {
+    room: String,
+    peer: String,
+    ttl: u64,
+    record: Option<bool>,
+    extra_data: Option<String>,
+}
+
+#[derive(poem_openapi::Object)]
+struct RtpEngineTokenRes {
+    token: String,
+}
+
 pub struct TokenApis<S: MediaGatewaySecure + Send + Sync>(PhantomData<S>);
 
 impl<S: MediaGatewaySecure + Send + Sync> TokenApis<S> {
@@ -79,7 +93,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                 status: true,
                 data: Some(WhipTokenRes {
                     token: ctx.secure.encode_obj(
-                        "whip",
+                        WHIP_TOKEN,
                         WhipToken {
                             room: body.room,
                             peer: body.peer,
@@ -109,7 +123,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                 status: true,
                 data: Some(WhepTokenRes {
                     token: ctx.secure.encode_obj(
-                        "whep",
+                        WHEP_TOKEN,
                         WhepToken {
                             room: body.room,
                             peer: body.peer,
@@ -137,7 +151,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                 status: true,
                 data: Some(WebrtcTokenRes {
                     token: ctx.secure.encode_obj(
-                        "webrtc",
+                        WEBRTC_TOKEN,
                         WebrtcToken {
                             room: body.room,
                             peer: body.peer,
@@ -155,6 +169,36 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                 error: Some("APP_TOKEN_INVALID".to_string()),
                 ..Default::default()
             })
+        }
+    }
+
+    /// create rtpengine session token
+    #[oai(path = "/rtpengine", method = "post")]
+    async fn rtpengine_token(&self, Data(ctx): Data<&TokenServerCtx<S>>, body: Json<RtpEngineTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Result<Json<Response<RtpEngineTokenRes>>> {
+        if ctx.secure.validate_app(&token.token) {
+            let body = body.0;
+            Ok(Json(Response {
+                status: true,
+                data: Some(RtpEngineTokenRes {
+                    token: ctx.secure.encode_obj(
+                        RTPENGINE_TOKEN,
+                        RtpEngineToken {
+                            room: body.room,
+                            peer: body.peer,
+                            record: body.record.unwrap_or(false),
+                            extra_data: body.extra_data,
+                        },
+                        body.ttl,
+                    ),
+                }),
+                ..Default::default()
+            }))
+        } else {
+            Ok(Json(Response {
+                status: false,
+                error: Some("APP_TOKEN_INVALID".to_string()),
+                ..Default::default()
+            }))
         }
     }
 }

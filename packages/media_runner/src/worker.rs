@@ -246,6 +246,16 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     media_server_gateway::agent_service::Control::WorkerUsage(ServiceKind::Webrtc, self.worker, webrtc_live).into(),
                 )),
             );
+
+            let rtpengine_live = self.media_rtpengine.tasks() as u32;
+            self.sdn_worker.input(s).on_event(
+                now_ms,
+                SdnWorkerInput::ExtWorker(SdnExtIn::ServicesControl(
+                    AGENT_SERVICE_ID.into(),
+                    UserData::Cluster,
+                    media_server_gateway::agent_service::Control::WorkerUsage(ServiceKind::RtpEngine, self.worker, rtpengine_live).into(),
+                )),
+            );
         }
     }
 
@@ -484,8 +494,8 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
 
     fn output_rtpengine(&mut self, now: Instant, out: transport_rtpengine::GroupOutput) -> Output {
         match out {
-            transport_rtpengine::GroupOutput::Ext(_session, ext) => match ext {
-                transport_rtpengine::ExtOut::Disconnect(req_id, peer_id) => Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::Delete(Ok(peer_id)))),
+            transport_rtpengine::GroupOutput::Ext(session, ext) => match ext {
+                transport_rtpengine::ExtOut::Disconnect(req_id) => Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::Delete(Ok(session.index())))),
             },
             transport_rtpengine::GroupOutput::Net(child, net) => Output::Net(Owner::RtpEngine(child), net),
             transport_rtpengine::GroupOutput::Cluster(session, room, control) => {
@@ -620,13 +630,12 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             RpcReq::RtpEngine(req) => match req {
                 rtpengine::RpcReq::Connect(conn_req) => {
                     log::info!("[MediaServerWorker] on rpc request {req_id}, rtpengine::RpcReq::Connect");
-                    let peer_id = conn_req.leg_id.clone();
                     match self
                         .media_rtpengine
                         .input(&mut self.switcher)
-                        .spawn(conn_req.call_id, conn_req.leg_id, false, conn_req.session_id, &conn_req.sdp)
+                        .spawn(conn_req.room, conn_req.peer, false, conn_req.session_id, &conn_req.sdp)
                     {
-                        Ok((conn_id, sdp)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Ok((peer_id, conn_id, sdp)))))),
+                        Ok((conn_id, sdp)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Ok((conn_id, sdp)))))),
                         Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Err(e))))),
                     }
                 }

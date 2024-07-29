@@ -17,6 +17,8 @@ pub enum NgCommand {
         from_tag: String,
         #[serde(rename = "ICE")]
         ice: Option<String>,
+        #[serde(rename = "atm0s-token")]
+        atm0s_token: String,
     },
 
     #[serde(rename = "answer")]
@@ -30,6 +32,8 @@ pub enum NgCommand {
         to_tag: String,
         #[serde(rename = "ICE")]
         ice: Option<String>,
+        #[serde(rename = "atm0s-token")]
+        atm0s_token: String,
     },
 
     #[serde(rename = "delete")]
@@ -40,6 +44,8 @@ pub enum NgCommand {
         from_tag: String,
         #[serde(rename = "to-tag")]
         to_tag: Option<String>,
+        #[serde(rename = "conn-id")]
+        conn_id: String,
     },
 }
 
@@ -65,6 +71,7 @@ pub enum NgCmdResult {
     },
     Answer {
         result: String,
+        conn: Option<String>,
         sdp: Option<String>,
     },
     Delete {
@@ -162,12 +169,13 @@ mod test {
 
     #[test]
     fn offer_command() {
-        let input = "d7:call-id24:bvmWdxbe4hkHHHvCl_d-nQ..7:command5:offer8:from-tag8:460d801e3:sdp3:v=0e";
+        let input = "d7:call-id24:bvmWdxbe4hkHHHvCl_d-nQ..7:command5:offer8:from-tag8:460d801e3:sdp3:v=011:atm0s-token5:TOKENe";
         let actual = NgCommand::Offer {
             sdp: "v=0".to_string(),
             call_id: "bvmWdxbe4hkHHHvCl_d-nQ..".to_string(),
             from_tag: "460d801e".to_string(),
             ice: None,
+            atm0s_token: "TOKEN".to_string(),
         };
         let expect: NgCommand = NgCommand::from_str(input).unwrap();
         assert_eq!(expect, actual);

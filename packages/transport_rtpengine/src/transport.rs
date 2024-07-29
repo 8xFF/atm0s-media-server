@@ -31,7 +31,7 @@ pub enum ExtIn {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExtOut {
-    Disconnect(u64, PeerId),
+    Disconnect(u64),
 }
 
 pub struct TransportRtpEngine {
@@ -97,7 +97,7 @@ impl Transport<ExtIn, ExtOut> for TransportRtpEngine {
             TransportInput::Ext(ext) => match ext {
                 ExtIn::Disconnect(req_id) => {
                     log::info!("[TransportRtpEngine] switched to disconnected with close action from client");
-                    self.queue.push_back(TransportOutput::Ext(ExtOut::Disconnect(req_id, self.peer.clone())));
+                    self.queue.push_back(TransportOutput::Ext(ExtOut::Disconnect(req_id)));
                     self.queue.push_back(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None))));
                 }
             },

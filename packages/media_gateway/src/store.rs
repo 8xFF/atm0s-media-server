@@ -20,6 +20,7 @@ pub struct GatewayStore {
     node: NodeMetrics,
     location: Location,
     webrtc: ServiceStore,
+    rtpengine: ServiceStore,
     output: Option<PingEvent>,
     max_cpu: u8,
     max_memory: u8,
@@ -31,6 +32,7 @@ impl GatewayStore {
         Self {
             node: NodeMetrics::default(),
             webrtc: ServiceStore::new(ServiceKind::Webrtc, location),
+            rtpengine: ServiceStore::new(ServiceKind::RtpEngine, location),
             zone,
             location,
             output: None,
@@ -90,6 +92,7 @@ impl GatewayStore {
     pub fn best_for(&self, kind: ServiceKind, location: Option<Location>) -> Option<u32> {
         let node = match kind {
             ServiceKind::Webrtc => self.webrtc.best_for(location),
+            ServiceKind::RtpEngine => self.rtpengine.best_for(location),
         };
         log::debug!("[GatewayStore] query best {:?} for {:?} got {:?}", kind, location, node);
         node
