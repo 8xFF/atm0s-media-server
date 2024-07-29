@@ -3,6 +3,9 @@ use opus_wrap::{Application, Channels};
 use crate::{AudioDecoder, AudioEncodder};
 
 #[allow(unused)]
+#[allow(clippy::redundant_field_names)]
+#[allow(clippy::len_zero)]
+#[allow(clippy::needless_lifetimes)]
 mod opus_wrap;
 
 pub struct OpusDecoder {

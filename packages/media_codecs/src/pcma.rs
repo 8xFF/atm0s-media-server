@@ -109,10 +109,6 @@ fn linear_to_alaw(sample: i16) -> u8 {
     if sign != 0 {
         pcm_value = -pcm_value;
     }
-    // Clip at 15-bits
-    if pcm_value > 0x7fff {
-        pcm_value = 0x7fff;
-    }
     let mut exponent: i16 = 7;
     let mut mask = 0x4000;
     while pcm_value & mask == 0 && exponent > 0 {
