@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -41,20 +43,17 @@ pub enum NgCommand {
     },
 }
 
-impl NgCommand {
-    pub fn from_str(msg: &str) -> Option<NgCommand> {
-        let decoded: Result<NgCommand, _> = serde_bencode::de::from_str(msg); // Adjusted for clarity
-        match decoded {
-            Ok(decoded) => Some(decoded),
-            Err(e) => {
-                println!("Error: {:?}", e);
-                None
-            }
-        }
+impl FromStr for NgCommand {
+    type Err = serde_bencode::Error;
+    fn from_str(msg: &str) -> Result<Self, Self::Err> {
+        serde_bencode::de::from_str(msg)
     }
+}
 
-    pub fn to_str(&self) -> String {
-        serde_bencode::ser::to_string(self).unwrap()
+#[allow(clippy::to_string_trait_impl)]
+impl ToString for NgCommand {
+    fn to_string(&self) -> String {
+        serde_bencode::ser::to_string(self).expect("Should convert NgCommand to string")
     }
 }
 
@@ -78,20 +77,17 @@ pub enum NgCmdResult {
     },
 }
 
-impl NgCmdResult {
-    pub fn from_str(msg: &str) -> Option<NgCmdResult> {
-        let decoded: Result<NgCmdResult, _> = serde_bencode::de::from_str(msg); // Adjusted for clarity
-        match decoded {
-            Ok(decoded) => Some(decoded),
-            Err(e) => {
-                println!("Error: {:?}", e);
-                None
-            }
-        }
+impl FromStr for NgCmdResult {
+    type Err = serde_bencode::Error;
+    fn from_str(msg: &str) -> Result<Self, Self::Err> {
+        serde_bencode::de::from_str(msg)
     }
+}
 
-    pub fn to_str(&self) -> String {
-        serde_bencode::ser::to_string(self).unwrap()
+#[allow(clippy::to_string_trait_impl)]
+impl ToString for NgCmdResult {
+    fn to_string(&self) -> String {
+        serde_bencode::ser::to_string(self).expect("Should convert NgCmdResult to string")
     }
 }
 
@@ -105,17 +101,22 @@ impl NgRequest {
     pub fn answer(&self, result: NgCmdResult) -> NgResponse {
         NgResponse { id: self.id.clone(), result }
     }
+}
 
-    pub fn from_str(packet: &str) -> Option<NgRequest> {
-        let idx = packet.find(" ");
+impl FromStr for NgRequest {
+    type Err = serde_bencode::Error;
+    fn from_str(packet: &str) -> Result<Self, Self::Err> {
+        let idx = packet.find(' ');
         match idx {
             Some(idx) => {
                 let id = packet[..idx].to_string();
                 let body = &packet[idx + 1..];
-                let command = NgCommand::from_str(&body).unwrap();
-                Some(NgRequest { id, command })
+                Ok(NgRequest {
+                    id,
+                    command: NgCommand::from_str(body)?,
+                })
             }
-            None => None,
+            None => Err(serde_bencode::Error::MissingField("idx".to_string())),
         }
     }
 }
@@ -140,6 +141,8 @@ impl NgResponse {
 #[cfg(test)]
 mod test {
 
+    use std::str::FromStr;
+
     use super::{NgCmdResult, NgCommand};
 
     #[test]
@@ -154,7 +157,7 @@ mod test {
     fn pong_result() {
         assert_eq!(NgCmdResult::Pong { result: "pong".to_string() }, NgCmdResult::from_str("d6:result4:ponge").unwrap());
 
-        assert_eq!(NgCmdResult::Pong { result: "pong".to_string() }.to_str(), "d6:result4:ponge".to_string());
+        assert_eq!(NgCmdResult::Pong { result: "pong".to_string() }.to_string(), "d6:result4:ponge".to_string());
     }
 
     #[test]

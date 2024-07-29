@@ -107,7 +107,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     tokio::spawn(async move {
         log::info!("[MediaServer] start ng_controller task");
         let mut server = NgControllerServer::new(rtpengine_udp, req_tx3);
-        while let Some(_) = server.recv().await {}
+        while server.recv().await.is_some() {}
         log::info!("[MediaServer] stop ng_controller task");
     });
 

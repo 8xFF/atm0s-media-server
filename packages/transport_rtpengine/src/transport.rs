@@ -251,12 +251,12 @@ fn pkt_type(value: &[u8]) -> Option<MultiplexKind> {
     let byte0 = value[0];
     let len = value.len();
 
-    if byte0 >= 128 && byte0 < 192 && len > 2 {
+    if (128..192).contains(&byte0) && len > 2 {
         let byte1 = value[1];
         let payload_type = byte1 & 0x7F;
         Some(if payload_type < 64 {
             MultiplexKind::Rtp
-        } else if payload_type >= 64 && payload_type < 96 {
+        } else if (64..96).contains(&payload_type) {
             MultiplexKind::Rtcp
         } else {
             MultiplexKind::Rtp

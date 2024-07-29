@@ -44,7 +44,7 @@ impl<T: NgTransport> NgControllerServer<T> {
                 self.transport.send(req.answer(NgCmdResult::Pong { result: "OK".to_string() }), remote).await;
                 return Some(());
             }
-            NgCommand::Offer { sdp, call_id, from_tag, ice } => {
+            NgCommand::Offer { sdp, call_id, from_tag, .. } => {
                 let session_id = gen_cluster_session_id();
                 rtpengine::RpcReq::Connect(rtpengine::RtpConnectRequest {
                     call_id: RoomId(call_id),
@@ -53,7 +53,7 @@ impl<T: NgTransport> NgControllerServer<T> {
                     session_id,
                 })
             }
-            NgCommand::Answer { sdp, call_id, from_tag, to_tag, ice } => {
+            NgCommand::Answer { sdp, call_id, to_tag, .. } => {
                 let session_id = gen_cluster_session_id();
                 rtpengine::RpcReq::Connect(rtpengine::RtpConnectRequest {
                     call_id: RoomId(call_id),
@@ -64,7 +64,7 @@ impl<T: NgTransport> NgControllerServer<T> {
             }
             NgCommand::Delete { ref from_tag, .. } => {
                 if let Some(conn) = self.history.get(from_tag) {
-                    rtpengine::RpcReq::Delete(conn.clone())
+                    rtpengine::RpcReq::Delete(*conn)
                 } else {
                     self.transport
                         .send(

@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, str::FromStr};
 use tokio::net::UdpSocket;
 
 use crate::commands::{NgRequest, NgResponse};
@@ -35,7 +35,7 @@ impl NgTransport for NgUdpTransport {
                     match std::str::from_utf8(&buf[..size]) {
                         Ok(str) => {
                             log::info!("[NgUdpTransport] recv\n========\n{str}\n==========");
-                            if let Some(req) = NgRequest::from_str(str) {
+                            if let Ok(req) = NgRequest::from_str(str) {
                                 log::info!("[NgUdpTransport] recv req: {req:?}");
                                 break Some((req, addr));
                             }

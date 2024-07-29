@@ -54,7 +54,7 @@ impl MediaWorkerRtpEngine {
     }
 
     pub fn spawn(&mut self, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: &str) -> RpcResult<(usize, String)> {
-        let (tran, answer) = TransportRtpEngine::new(room, peer, self.ip, offer).map_err(|e| RpcError::new(1000 as u32, &e))?;
+        let (tran, answer) = TransportRtpEngine::new(room, peer, self.ip, offer).map_err(|e| RpcError::new(1000_u32, &e))?;
         let cfg = EndpointCfg {
             max_ingress_bitrate: 2_500_000,
             max_egress_bitrate: 2_500_000,
