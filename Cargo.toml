@@ -13,6 +13,7 @@ members = [
     "packages/audio_mixer",
     "packages/media_connector",
     "packages/media_record",
+    "packages/media_codecs",
     "packages/rtpengine_ngcontrol",
 ]
 

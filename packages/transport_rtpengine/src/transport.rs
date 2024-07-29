@@ -4,6 +4,11 @@ use std::{
     time::Instant,
 };
 
+use media_server_codecs::{
+    opus::{OpusDecoder, OpusEncoder},
+    pcma::{PcmaDecoder, PcmaEncoder},
+    AudioTranscoder,
+};
 use media_server_core::{
     endpoint::{EndpointEvent, EndpointLocalTrackConfig, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointReq},
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, Transport, TransportEvent, TransportInput, TransportOutput, TransportState},
@@ -40,6 +45,9 @@ pub struct TransportRtpEngine {
     peer: PeerId,
     udp_slot: Option<usize>,
     queue: DynamicDeque<TransportOutput<ExtOut>, 4>,
+    pcma_to_opus: AudioTranscoder<PcmaDecoder, OpusEncoder>,
+    opus_to_pcma: AudioTranscoder<OpusDecoder, PcmaEncoder>,
+    tmp_buf: [u8; 1500],
 }
 
 impl TransportRtpEngine {
@@ -49,8 +57,9 @@ impl TransportRtpEngine {
         let dest_port = offer.media_descriptions.pop().ok_or("MEDIA_NOT_FOUND".to_string())?.media.port;
         let remote = SocketAddr::new(dest_ip, dest_port);
 
-        let socket = std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).unwrap();
-        let port = socket.local_addr().unwrap().port();
+        let socket = std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).map_err(|e| e.to_string())?;
+        let port = socket.local_addr().map_err(|e| e.to_string())?.port();
+        //TODO adaptive codec type
         let answer = format!(
             "v=0
 o=Z 0 1094063179 IN IP4 {ip}
@@ -78,6 +87,9 @@ a=rtcp-mux
                     }),
                     TransportOutput::Event(TransportEvent::State(TransportState::Connecting(dest_ip))),
                 ]),
+                pcma_to_opus: AudioTranscoder::new(PcmaDecoder::default(), OpusEncoder::default()),
+                opus_to_pcma: AudioTranscoder::new(OpusDecoder::default(), PcmaEncoder::default()),
+                tmp_buf: [0; 1500],
             },
             answer,
         ))
@@ -158,17 +170,22 @@ impl TransportRtpEngine {
                             rtp.timestamp(),
                             rtp.payload().len()
                         );
-                        let media = MediaPacket {
-                            ts: rtp.timestamp(),
-                            seq: rtp.sequence_number().into(),
-                            marker: rtp.mark(),
-                            nackable: false,
-                            layers: None,
-                            meta: MediaMeta::Opus { audio_level: None },
-                            data: rtp.payload().to_vec(),
-                        };
-                        self.queue
-                            .push_back(TransportOutput::Event(TransportEvent::RemoteTrack(REMOTE_AUDIO_TRACK, RemoteTrackEvent::Media(media))));
+                        if rtp.payload_type() == 8 {
+                            //TODO avoid hard-coding
+                            if let Some(size) = self.pcma_to_opus.transcode(rtp.payload(), &mut self.tmp_buf) {
+                                let media = MediaPacket {
+                                    ts: rtp.timestamp(),
+                                    seq: rtp.sequence_number().into(),
+                                    marker: rtp.mark(),
+                                    nackable: false,
+                                    layers: None,
+                                    meta: MediaMeta::Opus { audio_level: None }, //TODO how to get audio level from opus?
+                                    data: self.tmp_buf[..size].to_vec(),
+                                };
+                                self.queue
+                                    .push_back(TransportOutput::Event(TransportEvent::RemoteTrack(REMOTE_AUDIO_TRACK, RemoteTrackEvent::Media(media))));
+                            }
+                        }
                     }
                 }
             }
@@ -211,19 +228,21 @@ impl TransportRtpEngine {
                 EndpointLocalTrackEvent::Media(media) => {
                     let slot = return_if_none!(self.udp_slot);
                     log::debug!("send rtp to {} {} {} len {}", self.remote, media.seq, media.ts, media.data.len());
-                    if let Ok(data) = rtp_rs::RtpPacketBuilder::new()
-                        .marked(media.marker)
-                        .payload_type(8)
-                        .timestamp(media.ts)
-                        .sequence(media.seq.into())
-                        .payload(&media.data)
-                        .build()
-                    {
-                        self.queue.push_back(TransportOutput::Net(BackendOutgoing::UdpPacket {
-                            slot,
-                            to: self.remote,
-                            data: data.into(),
-                        }))
+                    if let Some(size) = self.opus_to_pcma.transcode(&media.data, &mut self.tmp_buf) {
+                        if let Ok(data) = rtp_rs::RtpPacketBuilder::new()
+                            .marked(media.marker)
+                            .payload_type(8) // TODO avoid hard-coding
+                            .timestamp(media.ts)
+                            .sequence(media.seq.into())
+                            .payload(&self.tmp_buf[..size])
+                            .build()
+                        {
+                            self.queue.push_back(TransportOutput::Net(BackendOutgoing::UdpPacket {
+                                slot,
+                                to: self.remote,
+                                data: data.into(),
+                            }))
+                        }
                     }
                 }
                 EndpointLocalTrackEvent::Status(_) => {}

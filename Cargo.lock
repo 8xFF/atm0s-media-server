@@ -2770,6 +2770,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "libsoxr"
+version = "0.2.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a095d9d0be72aec1995f8b157c963ffea4efa6e9deba0bc9930288cd8cd60b15"
+dependencies = [
+ "bitflags 2.6.0",
+ "libc",
+ "libsoxr-sys",
+ "pkg-config",
+]
+
+[[package]]
+name = "libsoxr-sys"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cffdc8b3b64759d2e95e3236fa6bf85fef226bf57023fa9273ec60edea8fbce"
+dependencies = [
+ "pkg-config",
+]
+
+[[package]]
 name = "libsqlite3-sys"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2873,6 +2894,14 @@ checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
  "cfg-if",
  "digest 0.10.7",
+]
+
+[[package]]
+name = "media-server-codecs"
+version = "0.1.0"
+dependencies = [
+ "libsoxr",
+ "opusic-sys",
 ]
 
 [[package]]
@@ -3476,6 +3505,16 @@ dependencies = [
  "openssl-src",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "opusic-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e941266d8dac305d927f680e2a8f62c97c8db3ba64502f7a017e8c44dda38f10"
+dependencies = [
+ "cmake",
+ "libc",
 ]
 
 [[package]]
@@ -6217,6 +6256,7 @@ version = "0.1.0"
 dependencies = [
  "derive_more",
  "log",
+ "media-server-codecs",
  "media-server-core",
  "media-server-protocol",
  "media-server-secure",

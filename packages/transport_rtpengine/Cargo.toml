@@ -13,5 +13,6 @@ media-server-secure = { path = "../media_secure" }
 media-server-core = { path = "../media_core" }
 media-server-protocol = { path = "../protocol" }
 media-server-utils = { path = "../media_utils" }
+media-server-codecs = { path = "../media_codecs", default-features = false, features = ["pcma", "opus"] }
 sdp-rs = "0.2"
 rtp-rs = "0.6"
