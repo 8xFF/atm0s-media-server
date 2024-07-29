@@ -1,6 +1,6 @@
 //!
 //! This module implement decode and encode logic for some codecs
-//! Currently all of codec will asume output raw audio in 48k audio
+//! Currently all of codec will assume output raw audio in 48k audio
 //!
 
 #[cfg(feature = "opus")]

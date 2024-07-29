@@ -65,7 +65,7 @@ pub enum Application {
     LowDelay = 2051,
 }
 
-/// The available channel setings.
+/// The available channel settings.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Channels {
     /// One channel.
@@ -172,7 +172,7 @@ pub enum Bitrate {
 /// determine whether they have a fixed-point or floating-point build at
 /// runtime.
 pub fn version() -> &'static str {
-    // verison string should always be ASCII
+    // version string should always be ASCII
     unsafe { CStr::from_ptr(ffi::opus_get_version_string()) }.to_str().unwrap()
 }
 
@@ -276,7 +276,7 @@ impl Encoder {
         Bandwidth::decode(value, "opus_encoder_ctl(OPUS_GET_BANDWIDTH)")
     }
 
-    /// Get the samping rate the encoder was intialized with.
+    /// Get the samping rate the encoder was initialized with.
     pub fn get_sample_rate(&mut self) -> Result<u32> {
         let mut value: i32 = 0;
         enc_ctl!(self, OPUS_GET_SAMPLE_RATE, &mut value);
@@ -506,7 +506,7 @@ impl Decoder {
         Bandwidth::decode(value, "opus_decoder_ctl(OPUS_GET_BANDWIDTH)")
     }
 
-    /// Get the samping rate the decoder was intialized with.
+    /// Get the samping rate the decoder was initialized with.
     pub fn get_sample_rate(&mut self) -> Result<u32> {
         let mut value: i32 = 0;
         dec_ctl!(self, OPUS_GET_SAMPLE_RATE, &mut value);
