@@ -1,4 +1,7 @@
-use crate::endpoint::{PeerId, RoomId};
+use crate::{
+    endpoint::{PeerId, RoomId},
+    protobuf,
+};
 
 use super::{ConnLayer, RpcResult};
 
@@ -48,6 +51,33 @@ impl<Conn: ConnLayer> RpcRes<Conn> {
         match self {
             RpcRes::Connect(res) => RpcRes::Connect(res.map(|(conn, sdp)| (conn.up(param), sdp))),
             RpcRes::Delete(res) => RpcRes::Delete(res.map(|conn| conn.up(param))),
+        }
+    }
+}
+
+impl TryFrom<protobuf::cluster_gateway::RtpEngineConnectRequest> for RtpConnectRequest {
+    type Error = ();
+    fn try_from(value: protobuf::cluster_gateway::RtpEngineConnectRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            session_id: value.session_id,
+            sdp: value.sdp,
+            room: value.room.into(),
+            peer: value.peer.into(),
+            record: value.record,
+            extra_data: value.extra_data,
+        })
+    }
+}
+
+impl From<RtpConnectRequest> for protobuf::cluster_gateway::RtpEngineConnectRequest {
+    fn from(val: RtpConnectRequest) -> Self {
+        protobuf::cluster_gateway::RtpEngineConnectRequest {
+            session_id: val.session_id,
+            sdp: val.sdp,
+            room: val.room.0,
+            peer: val.peer.0,
+            record: val.record,
+            extra_data: val.extra_data,
         }
     }
 }

@@ -25,6 +25,8 @@ pub struct PingEvent {
     pub disk: u32,
     #[prost(message, optional, tag = "6")]
     pub webrtc: ::core::option::Option<ping_event::ServiceStats>,
+    #[prost(message, optional, tag = "7")]
+    pub rtpengine: ::core::option::Option<ping_event::ServiceStats>,
     #[prost(oneof = "ping_event::Origin", tags = "1, 2")]
     pub origin: ::core::option::Option<ping_event::Origin>,
 }
@@ -241,6 +243,43 @@ pub struct WebrtcRestartIceResponse {
     #[prost(message, optional, tag = "1")]
     pub res: ::core::option::Option<super::gateway::ConnectResponse>,
 }
+/// For RtpEngine
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RtpEngineConnectRequest {
+    #[prost(uint64, tag = "1")]
+    pub session_id: u64,
+    #[prost(string, tag = "2")]
+    pub room: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub peer: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub sdp: ::prost::alloc::string::String,
+    #[prost(bool, tag = "5")]
+    pub record: bool,
+    #[prost(string, optional, tag = "6")]
+    pub extra_data: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RtpEngineConnectResponse {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub sdp: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RtpEngineDeleteRequest {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RtpEngineDeleteResponse {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+}
 #[allow(async_fn_in_trait)]
 pub trait MediaEdgeServiceHandler<CTX> {
     async fn whip_connect(
@@ -288,6 +327,16 @@ pub trait MediaEdgeServiceHandler<CTX> {
         ctx: &CTX,
         req: WebrtcRestartIceRequest,
     ) -> Option<WebrtcRestartIceResponse>;
+    async fn rtp_engine_connect(
+        &self,
+        ctx: &CTX,
+        req: RtpEngineConnectRequest,
+    ) -> Option<RtpEngineConnectResponse>;
+    async fn rtp_engine_delete(
+        &self,
+        ctx: &CTX,
+        req: RtpEngineDeleteRequest,
+    ) -> Option<RtpEngineDeleteResponse>;
 }
 pub struct MediaEdgeServiceClient<
     D,
@@ -424,6 +473,30 @@ impl<
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
         WebrtcRestartIceResponse::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn rtp_engine_connect(
+        &self,
+        dest: D,
+        req: RtpEngineConnectRequest,
+    ) -> Option<RtpEngineConnectResponse> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "rtp_engine_connect.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        RtpEngineConnectResponse::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn rtp_engine_delete(
+        &self,
+        dest: D,
+        req: RtpEngineDeleteRequest,
+    ) -> Option<RtpEngineDeleteResponse> {
+        use prost::Message;
+        let mut stream = self.client.connect(dest, "rtp_engine_delete.service").await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        RtpEngineDeleteResponse::decode(in_buf.as_slice()).ok()
     }
 }
 pub struct MediaEdgeServiceServer<
@@ -598,6 +671,42 @@ impl<
                             ) {
                                 if let Some(res) = handler
                                     .webrtc_restart_ice(&ctx, req)
+                                    .await
+                                {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "rtp_engine_connect.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = RtpEngineConnectRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler
+                                    .rtp_engine_connect(&ctx, req)
+                                    .await
+                                {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "rtp_engine_delete.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = RtpEngineDeleteRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler
+                                    .rtp_engine_delete(&ctx, req)
                                     .await
                                 {
                                     let out_buf = res.encode_to_vec();
