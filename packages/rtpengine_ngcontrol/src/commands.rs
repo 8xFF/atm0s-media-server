@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "command")]
 pub enum NgCommand {
     #[serde(rename = "ping")]
-    Ping {},
+    Ping,
 
     #[serde(rename = "offer")]
     Offer {
@@ -102,6 +102,10 @@ pub struct NgRequest {
 }
 
 impl NgRequest {
+    pub fn answer(&self, result: NgCmdResult) -> NgResponse {
+        NgResponse { id: self.id.clone(), result }
+    }
+
     pub fn from_str(packet: &str) -> Option<NgRequest> {
         let idx = packet.find(" ");
         match idx {
@@ -123,6 +127,10 @@ pub struct NgResponse {
 }
 
 impl NgResponse {
+    pub fn new(id: String, result: NgCmdResult) -> Self {
+        Self { id, result }
+    }
+
     pub fn to_str(&self) -> String {
         let body = serde_bencode::to_string(&self.result).unwrap();
         format!("{} {}", self.id, body)

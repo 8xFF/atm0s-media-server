@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -55,13 +55,13 @@ pub struct Args {
     webrtc_port_seed: u16,
 
     /// Port for binding rtpengine command UDP socket.
-    #[arg(env, long, default_value_t = 11111)]
+    #[arg(env, long, default_value_t = 22222)]
     rtpengine_cmd_port: u16,
 
-    /// Seed port for binding rtpengine rtp UDP socket. It will increase by one for each worker.
-    /// Default: worker0: 30000, worker1: 30001, worker2: 30002, ...
-    #[arg(env, long, default_value_t = 30000)]
-    rtpengine_rtp_port_seed: u16,
+    /// RtpEngine RTP Listen IP
+    /// Default: 127.0.0.1
+    #[arg(env, long, default_value = "127.0.0.1")]
+    rtpengine_rtp_ip: IpAddr,
 
     /// Max ccu per core
     #[arg(env, long, default_value_t = 200)]
@@ -120,10 +120,6 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         let webrtc_addrs = node.bind_addrs.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
         let webrtc_addrs_alt = node.bind_addrs_alt.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
 
-        let rtpengine_port = args.rtpengine_rtp_port_seed + i as u16;
-        let rtpengine_addrs = node.bind_addrs.iter().map(|addr| SocketAddr::new(addr.ip(), rtpengine_port)).collect::<Vec<_>>();
-        let rtpengine_addrs_alt = node.bind_addrs_alt.iter().map(|addr| SocketAddr::new(addr.ip(), rtpengine_port)).collect::<Vec<_>>();
-
         println!("Running media server worker {i} with addrs: {:?}, ice-lite: {}", webrtc_addrs, args.ice_lite);
 
         let cfg = runtime_worker::ICfg {
@@ -133,8 +129,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             media: MediaConfig {
                 webrtc_addrs,
                 webrtc_addrs_alt,
-                rtpengine_addrs,
-                rtpengine_addrs_alt,
+                rtpengine_rtp_ip: args.rtpengine_rtp_ip,
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
                 max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core)]),

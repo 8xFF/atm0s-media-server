@@ -1,89 +1,88 @@
-use std::{
-    collections::VecDeque,
-    net::{IpAddr, SocketAddr},
-    sync::Arc,
-    time::Instant,
-};
+use std::{collections::VecDeque, net::IpAddr, time::Instant};
 
-use media_server_core::endpoint::{Endpoint, EndpointCfg, EndpointInput, EndpointOutput};
-use media_server_protocol::transport::RpcResult;
-use media_server_secure::MediaEdgeSecure;
-use media_server_utils::Small2dMap;
+use media_server_core::{
+    cluster::{ClusterEndpointControl, ClusterEndpointEvent, ClusterRoomHash},
+    endpoint::{Endpoint, EndpointCfg, EndpointInput, EndpointOutput},
+};
+use media_server_protocol::{
+    endpoint::{PeerId, RoomId},
+    protobuf::cluster_connector::peer_event,
+    record::SessionRecordEvent,
+    transport::{RpcError, RpcResult},
+};
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
-    group_owner_type, TaskGroup, TaskSwitcherChild,
+    group_owner_type, return_if_some, TaskGroup, TaskSwitcherChild,
 };
 
-use crate::transport::{RtpExtIn, RtpExtOut, TransportRtp, VariantParams};
+use crate::transport::{ExtIn, ExtOut, TransportRtpEngine};
 
-group_owner_type!(RtpSession);
+group_owner_type!(RtpEngineSession);
 
-pub enum RtpGroupIn {
-    Net(BackendIncoming),
-    Ext(RtpExtIn),
-    Close(),
+#[allow(clippy::large_enum_variant)]
+pub enum GroupInput {
+    Net(usize, BackendIncoming),
+    Cluster(RtpEngineSession, ClusterEndpointEvent),
+    Ext(RtpEngineSession, ExtIn),
 }
 
 #[derive(Debug)]
-pub enum RtpGroupOut {
-    Net(BackendOutgoing),
-    Ext(RtpExtOut),
-    Shutdown(),
+pub enum GroupOutput {
+    Net(usize, BackendOutgoing),
+    Cluster(RtpEngineSession, ClusterRoomHash, ClusterEndpointControl),
+    PeerEvent(RtpEngineSession, u64, Instant, peer_event::Event),
+    RecordEvent(RtpEngineSession, u64, Instant, SessionRecordEvent),
+    Ext(RtpEngineSession, ExtOut),
+    Shutdown(RtpEngineSession),
     Continue,
 }
 
-pub struct MediaRtpWorker<ES: 'static + MediaEdgeSecure> {
-    public_ip: IpAddr,
-    available_slots: VecDeque<usize>,
-    addr_slots: Small2dMap<SocketAddr, usize>,
-    task_slots: Small2dMap<usize, usize>,
-    queue: VecDeque<RtpGroupOut>,
-    endpoints: TaskGroup<EndpointInput<RtpExtIn>, EndpointOutput<RtpExtOut>, Endpoint<TransportRtp<ES>, RtpExtIn, RtpExtOut>, 16>,
-    secure: Arc<ES>,
+#[allow(clippy::type_complexity)]
+pub struct MediaWorkerRtpEngine {
+    ip: IpAddr,
+    endpoints: TaskGroup<EndpointInput<ExtIn>, EndpointOutput<ExtOut>, Endpoint<TransportRtpEngine, ExtIn, ExtOut>, 16>,
+    queue: VecDeque<GroupOutput>,
 }
 
-impl<ES: 'static + MediaEdgeSecure> MediaRtpWorker<ES> {
-    pub fn new(addrs: Vec<SocketAddr>, addrs_alt: Vec<SocketAddr>, secure: Arc<ES>) -> Self {
+impl MediaWorkerRtpEngine {
+    pub fn new(ip: IpAddr) -> Self {
         Self {
-            public_ip: addrs[0].ip(),
-            available_slots: VecDeque::default(),
-            addr_slots: Small2dMap::default(),
-            task_slots: Small2dMap::default(),
-            queue: VecDeque::from(addrs.iter().map(|addr| RtpGroupOut::Net(BackendOutgoing::UdpListen { addr: *addr, reuse: false })).collect::<Vec<_>>()),
+            ip,
             endpoints: TaskGroup::default(),
-            secure,
+            queue: VecDeque::new(),
         }
     }
 
-    pub fn spawn(&mut self, session_id: u64, params: VariantParams, offer: &str) -> RpcResult<(usize, String)> {
-        let slot = self.available_slots.pop_front().expect("not have available slot");
-        let local_addr = self.addr_slots.get2(&slot).expect("undefine addr for slot");
-        // let ip = local_addr.ip();
-        let port = local_addr.port();
-
-        let (trans, remote_addr, sdp) = TransportRtp::<ES>::new(params, offer, self.public_ip, port)?;
-        let ep = Endpoint::new(
-            session_id,
-            EndpointCfg {
-                max_egress_bitrate: 2_500_000,
-                max_ingress_bitrate: 2_500_000,
-                record: false,
-            },
-            trans,
-        );
-        let idx = self.endpoints.add_task(ep);
-        self.task_slots.insert(slot, idx);
-        Ok((idx, sdp))
+    pub fn spawn(&mut self, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: &str) -> RpcResult<(usize, String)> {
+        let (tran, answer) = TransportRtpEngine::new(room, peer, self.ip, offer).map_err(|e| RpcError::new(1000 as u32, &e))?;
+        let cfg = EndpointCfg {
+            max_ingress_bitrate: 2_500_000,
+            max_egress_bitrate: 2_500_000,
+            record,
+        };
+        let endpoint = Endpoint::new(session_id, cfg, tran);
+        let index = self.endpoints.add_task(endpoint);
+        Ok((index, answer))
     }
 
-    fn process_output(&mut self, now: Instant, out: EndpointOutput<RtpExtOut>) -> RtpGroupOut {
+    fn process_output(&mut self, index: usize, out: EndpointOutput<ExtOut>) -> GroupOutput {
         match out {
-            _ => RtpGroupOut::Continue,
+            EndpointOutput::Net(net) => GroupOutput::Net(index, net),
+            EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(RtpEngineSession(index), room, control),
+            EndpointOutput::PeerEvent(session_id, ts, event) => GroupOutput::PeerEvent(RtpEngineSession(index), session_id, ts, event),
+            EndpointOutput::RecordEvent(session_id, ts, event) => GroupOutput::RecordEvent(RtpEngineSession(index), session_id, ts, event),
+            EndpointOutput::Destroy => {
+                log::info!("[TransportRtpEngine] destroy endpoint {index}");
+                self.endpoints.remove_task(index);
+                GroupOutput::Shutdown(RtpEngineSession(index))
+            }
+            EndpointOutput::Ext(ext) => GroupOutput::Ext(RtpEngineSession(index), ext),
+            EndpointOutput::Continue => GroupOutput::Continue,
         }
     }
 }
 
-impl<ES: MediaEdgeSecure> MediaRtpWorker<ES> {
+impl MediaWorkerRtpEngine {
     pub fn tasks(&self) -> usize {
         self.endpoints.tasks()
     }
@@ -92,26 +91,22 @@ impl<ES: MediaEdgeSecure> MediaRtpWorker<ES> {
         self.endpoints.on_tick(now);
     }
 
-    pub fn on_event(&mut self, now: Instant, input: RtpGroupIn) {
+    pub fn on_event(&mut self, now: Instant, input: GroupInput) {
         match input {
-            RtpGroupIn::Net(BackendIncoming::UdpListenResult { bind: _, result }) => {
-                let (addr, slot) = result.expect("Should listen ok");
-                log::info!("[MediaRtpWorker] UdpListenResult {addr}, slot {slot}");
-                self.available_slots.push_back(slot);
-                self.addr_slots.insert(addr, slot);
+            GroupInput::Net(child, event) => {
+                self.endpoints.on_event(now, child, EndpointInput::Net(event));
             }
-            RtpGroupIn::Net(BackendIncoming::UdpPacket { slot, from, data }) => match self.task_slots.get1(&slot) {
-                Some(idx) => {
-                    self.endpoints.on_event(now, *idx, EndpointInput::Net(BackendIncoming::UdpPacket { slot, from, data }));
+            GroupInput::Cluster(owner, event) => {
+                self.endpoints.on_event(now, owner.index(), EndpointInput::Cluster(event));
+            }
+            GroupInput::Ext(owner, ext) => {
+                log::info!("[MediaWorkerRtpEngine] on ext to owner {:?}", owner);
+                match ext {
+                    ExtIn::Disconnect(req_id) => {
+                        self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ExtIn::Disconnect(req_id)));
+                    }
                 }
-                None => {}
-            },
-            RtpGroupIn::Ext(ext) => match ext {
-                RtpExtIn::Ping(id) => {
-                    self.queue.push_back(RtpGroupOut::Ext(RtpExtOut::Pong(id, Result::Ok("pong".to_string()))));
-                }
-            },
-            _ => {}
+            }
         }
     }
 
@@ -120,9 +115,11 @@ impl<ES: MediaEdgeSecure> MediaRtpWorker<ES> {
     }
 }
 
-impl<ES: MediaEdgeSecure> TaskSwitcherChild<RtpGroupOut> for MediaRtpWorker<ES> {
+impl TaskSwitcherChild<GroupOutput> for MediaWorkerRtpEngine {
     type Time = Instant;
-    fn pop_output(&mut self, now: Self::Time) -> Option<RtpGroupOut> {
-        self.queue.pop_front()
+    fn pop_output(&mut self, now: Instant) -> Option<GroupOutput> {
+        return_if_some!(self.queue.pop_front());
+        let (index, out) = self.endpoints.pop_output(now)?;
+        Some(self.process_output(index, out))
     }
 }

@@ -4526,6 +4526,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtp-rs"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4ed274a5b3d36c4434cff6a4de1b42f43e64ae326b1cfa72d13d9037a314355"
+
+[[package]]
 name = "rtpengine-ngcontrol"
 version = "0.1.0"
 dependencies = [
@@ -4860,15 +4866,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdp"
-version = "0.6.2"
+name = "sdp-rs"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13254db766b17451aced321e7397ebf0a446ef0c8d2942b6e67a95815421093f"
+checksum = "0663d1b6270f516dd0c5a9691de1c6b768b045f4094bd0a46887b8153b755a89"
 dependencies = [
- "rand 0.8.5",
- "substring",
- "thiserror",
- "url",
+ "chrono",
+ "nom",
+ "vec1",
 ]
 
 [[package]]
@@ -5736,15 +5741,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
 
 [[package]]
-name = "substring"
-version = "1.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42ee6433ecef213b2e72f587ef64a2f5943e7cd16fbd82dbe8bc07486c534c86"
-dependencies = [
- "autocfg",
-]
-
-[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6226,11 +6222,10 @@ dependencies = [
  "media-server-secure",
  "media-server-utils",
  "num_enum",
- "rtp",
+ "rtp-rs",
  "sans-io-runtime",
- "sdp",
+ "sdp-rs",
  "smallmap",
- "webrtc-util",
 ]
 
 [[package]]
@@ -6473,6 +6468,12 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vec1"
+version = "1.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eab68b56840f69efb0fefbe3ab6661499217ffdc58e2eef7c3f6f69835386322"
 
 [[package]]
 name = "version_check"

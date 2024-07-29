@@ -1,24 +1,20 @@
-use media_server_protocol::endpoint::ClusterConnId;
-use media_server_protocol::transport::{RpcReq, RpcRes};
+use media_server_protocol::cluster::gen_cluster_session_id;
+use media_server_protocol::endpoint::{ClusterConnId, PeerId, RoomId};
+use media_server_protocol::transport::{rtpengine, RpcReq, RpcRes};
 use media_server_utils::select2;
-use req_res::{ng_cmd_to_rpc, rpc_result_to_ng_res};
-use rtpengine_ngcontrol::{NgResponse, NgTransport};
+use rtpengine_ngcontrol::{NgCmdResult, NgCommand, NgRequest, NgResponse, NgTransport};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::rpc::Rpc;
 
-mod req_res;
-
-pub enum NgControlMsg {
-    Response(NgResponse),
-}
-
 pub struct NgControllerServer<T> {
     transport: T,
     rpc_sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
-    answer_tx: Sender<(NgResponse, SocketAddr)>,
-    answer_rx: Receiver<(NgResponse, SocketAddr)>,
+    answer_tx: Sender<(String, RpcRes<ClusterConnId>, SocketAddr)>,
+    answer_rx: Receiver<(String, RpcRes<ClusterConnId>, SocketAddr)>,
+    history: HashMap<String, ClusterConnId>,
 }
 
 impl<T: NgTransport> NgControllerServer<T> {
@@ -29,40 +25,101 @@ impl<T: NgTransport> NgControllerServer<T> {
             rpc_sender,
             answer_tx,
             answer_rx,
+            history: HashMap::new(),
         }
     }
 
     pub async fn recv(&mut self) -> Option<()> {
         match select2::or(self.transport.recv(), self.answer_rx.recv()).await {
-            select2::OrOutput::Left(Some((req, remote))) => {
-                if let Some(rpc_req) = ng_cmd_to_rpc(req.command) {
-                    let (rpc_req, rx) = Rpc::new(rpc_req);
-                    let answer_tx = self.answer_tx.clone();
-                    tokio::spawn(async move {
-                        match rx.await {
-                            Ok(res) => {
-                                if let Some(result) = rpc_result_to_ng_res(res) {
-                                    answer_tx.send((NgResponse { id: req.id, result }, remote)).await;
-                                } else {
-                                    //TODO send error
-                                }
-                            }
-                            Err(_err) => {
-                                //TODO send error
-                            }
-                        }
-                    });
-                    self.rpc_sender.send(rpc_req).await.ok()
-                } else {
-                    Some(())
-                }
-            }
-            select2::OrOutput::Right(Some((res, dest))) => {
-                self.transport.send(res, dest).await;
-                Some(())
-            }
+            select2::OrOutput::Left(Some((req, remote))) => self.process_req(req, remote).await,
+            select2::OrOutput::Right(Some((id, res, dest))) => self.process_res(id, res, dest).await,
             select2::OrOutput::Left(None) => None,
             select2::OrOutput::Right(None) => None,
         }
+    }
+
+    async fn process_req(&mut self, req: NgRequest, remote: SocketAddr) -> Option<()> {
+        let rpc_req = match req.command {
+            NgCommand::Ping => {
+                self.transport.send(req.answer(NgCmdResult::Pong { result: "OK".to_string() }), remote).await;
+                return Some(());
+            }
+            NgCommand::Offer { sdp, call_id, from_tag, ice } => {
+                let session_id = gen_cluster_session_id();
+                rtpengine::RpcReq::Connect(rtpengine::RtpConnectRequest {
+                    call_id: RoomId(call_id),
+                    leg_id: PeerId(from_tag),
+                    sdp,
+                    session_id,
+                })
+            }
+            NgCommand::Answer { sdp, call_id, from_tag, to_tag, ice } => {
+                let session_id = gen_cluster_session_id();
+                rtpengine::RpcReq::Connect(rtpengine::RtpConnectRequest {
+                    call_id: RoomId(call_id),
+                    leg_id: PeerId(to_tag),
+                    sdp,
+                    session_id,
+                })
+            }
+            NgCommand::Delete { ref from_tag, .. } => {
+                if let Some(conn) = self.history.get(from_tag) {
+                    rtpengine::RpcReq::Delete(conn.clone())
+                } else {
+                    self.transport
+                        .send(
+                            req.answer(NgCmdResult::Error {
+                                error_reason: "NOT_FOUND".to_string(),
+                                result: "Not found".to_string(),
+                            }),
+                            remote,
+                        )
+                        .await;
+                    return Some(());
+                }
+            }
+        };
+
+        let (rpc_req, rx) = Rpc::new(RpcReq::RtpEngine(rpc_req));
+        let answer_tx = self.answer_tx.clone();
+        let req_id = req.id.clone();
+        tokio::spawn(async move {
+            match rx.await {
+                Ok(res) => {
+                    if let Err(e) = answer_tx.send((req_id, res, remote)).await {
+                        log::error!("[NgControllerServer] send answer to main task error {e:?}");
+                    }
+                }
+                Err(_err) => {
+                    //TODO send error
+                }
+            }
+        });
+        self.rpc_sender.send(rpc_req).await.ok()
+    }
+
+    async fn process_res(&mut self, id: String, res: RpcRes<ClusterConnId>, dest: SocketAddr) -> Option<()> {
+        let result = match res {
+            RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Ok((peer, conn, sdp)))) => {
+                self.history.insert(peer.0, conn);
+                NgCmdResult::Answer {
+                    result: "ok".to_string(),
+                    sdp: Some(sdp),
+                }
+            }
+            RpcRes::RtpEngine(rtpengine::RpcRes::Delete(Ok(peer_id))) => {
+                self.history.remove(&peer_id.0);
+                NgCmdResult::Delete { result: "ok".to_string() }
+            }
+            RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Err(res))) | RpcRes::RtpEngine(rtpengine::RpcRes::Delete(Err(res))) => NgCmdResult::Error {
+                result: res.code.to_string(),
+                error_reason: res.message,
+            },
+            _ => {
+                return Some(());
+            }
+        };
+        self.transport.send(NgResponse { id, result }, dest).await;
+        Some(())
     }
 }
