@@ -41,10 +41,10 @@ pub fn gen_track_channel_id<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, 
     h.finish().into()
 }
 
-pub fn gen_data_channel_id<T: From<u64>>(room: ClusterRoomHash, key: String) -> T {
+pub fn gen_msg_channel_id<T: From<u64>>(room: ClusterRoomHash, label: String) -> T {
     let mut h = std::hash::DefaultHasher::new();
     room.as_ref().hash(&mut h);
-    key.hash(&mut h);
+    label.hash(&mut h);
     "datachannel".hash(&mut h);
     h.finish().into()
 }

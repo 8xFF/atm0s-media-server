@@ -51,25 +51,32 @@ message Request {
             string peer = 1;
         }
 
-        message SubscribeChannel {
-            string key = 1;
-        }
 
-        message UnsubscribeChannel {
-            string key = 1;
-        }
+        message ChannelControl {
+            string label = 1;
 
-        message PublishChannel {
-            string key = 1;
-            bytes message = 2;
+            // TODO: Add Feedback
+            message StartPublish {} 
+            message StopPublish {}
+            message Subscribe {}
+            message Unsubscribe {}
+            message Publish {
+                bytes data = 1;
+            }
+            
+            oneof control {
+                StartPublish start_pub = 2;
+                StopPublish stop_pub = 3;
+                Subscribe sub = 4;
+                Unsubscribe unsub = 5;
+                Publish pub = 6;
+            }
         }
 
         oneof request {
             SubscribePeer subscribe = 1;
             UnsubscribePeer unsubscribe = 2;
-            SubscribeChannel subscribe_channel = 3;
-            UnsubscribeChannel unsubscribe_channel = 4;
-            PublishChannel publish_channel = 5;
+            ChannelControl channel_control = 3;
         }
     }
 
@@ -154,24 +161,28 @@ message Response {
 
         }
 
-        message SubscribeChannel {
+        message ChannelControl {
+            string label = 1;
 
-        }
-
-        message UnsubscribeChannel {
-
-        }
-
-        message PublishChannel {
-
+            message StartPublish {} 
+            message StopPublish {}
+            message Subscribe {}
+            message Unsubscribe {}
+            message Publish {}
+            
+            oneof control {
+                StartPublish start_pub = 2;
+                StopPublish stop_pub = 3;
+                Subscribe sub = 4;
+                Unsubscribe unsub = 5;
+                Publish pub = 6;
+            }
         }
 
         oneof response {
             SubscribePeer subscribe = 1;
             UnsubscribePeer unsubscribe = 2;
-            SubscribeChannel subscribe_channel = 3;
-            UnsubscribeChannel unsubscribe_channel = 4;
-            PublishChannel publish_channel = 5;
+            ChannelControl channel_control = 3;
         }
     }
 
@@ -296,7 +307,7 @@ message ServerEvent {
         }
 
         message ChannelMessage {
-            string key = 1;
+            string label = 1;
             string peer = 2;
             bytes message = 3;
         }

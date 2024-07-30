@@ -79,6 +79,15 @@ pub enum ClusterAudioMixerEvent {
     SlotUnset(u8),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClusterMessageChannelControl {
+    StartPublish,
+    StopPublish,
+    Subscribe,
+    Unsubscribe,
+    PublishData(PeerId, Vec<u8>),
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterEndpointControl {
     Join(PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>),
@@ -88,9 +97,7 @@ pub enum ClusterEndpointControl {
     AudioMixer(ClusterAudioMixerControl),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackControl),
     LocalTrack(LocalTrackId, ClusterLocalTrackControl),
-    SubscribeVirtualChannel(String),
-    UnsubscribeVirtualChannel(String),
-    PublishChannel(String, PeerId, Vec<u8>),
+    MessageChannel(String, ClusterMessageChannelControl),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -102,7 +109,7 @@ pub enum ClusterEndpointEvent {
     AudioMixer(ClusterAudioMixerEvent),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackEvent),
     LocalTrack(LocalTrackId, ClusterLocalTrackEvent),
-    VirtualChannelMessage(String, PeerId, Vec<u8>),
+    MessageChannelData(String, PeerId, Vec<u8>),
 }
 
 pub enum Input<Endpoint> {
