@@ -100,16 +100,16 @@ pub mod request {
         pub mod channel_control {
             /// TODO: Add Feedback
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct StartPublish {}
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct StopPublish {}
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct Subscribe {}
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct Unsubscribe {}
             #[allow(clippy::derive_partial_eq_without_eq)]
             #[derive(Clone, PartialEq, ::prost::Message)]
@@ -277,7 +277,7 @@ pub mod response {
         }
     }
     #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Room {
         #[prost(oneof = "room::Response", tags = "1, 2, 3")]
         pub response: ::core::option::Option<room::Response>,
@@ -301,22 +301,22 @@ pub mod response {
         /// Nested message and enum types in `ChannelControl`.
         pub mod channel_control {
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct StartPublish {}
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct StopPublish {}
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct Subscribe {}
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct Unsubscribe {}
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Message)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Message)]
             pub struct Publish {}
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Clone, PartialEq, ::prost::Oneof)]
+            #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
             pub enum Control {
                 #[prost(message, tag = "2")]
                 StartPub(StartPublish),
@@ -331,7 +331,7 @@ pub mod response {
             }
         }
         #[allow(clippy::derive_partial_eq_without_eq)]
-        #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
+        #[derive(Clone, PartialEq, ::prost::Oneof)]
         pub enum Response {
             #[prost(message, tag = "1")]
             Subscribe(SubscribePeer),
