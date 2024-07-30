@@ -8,7 +8,7 @@ use media_server_connector::agent_service::Control as ConnectorControl;
 use media_server_gateway::ServiceKind;
 use media_server_protocol::protobuf::{
     cluster_connector::{
-        connector_request::Event as ConnectorEvent,
+        connector_request::Request as ConnectorRequest,
         peer_event::{route_error::ErrorType, Event as PeerEvent2, RouteError, RouteSuccess},
         PeerEvent,
     },
@@ -50,9 +50,9 @@ pub struct MediaLocalRpcHandler {
 impl MediaLocalRpcHandler {
     async fn feedback_route_begin(&self, session_id: u64, ip: IpAddr) {
         self.connector_agent_tx
-            .send(ConnectorControl::Fire(
+            .send(ConnectorControl::Request(
                 now_ms(),
-                ConnectorEvent::Peer(PeerEvent {
+                ConnectorRequest::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteBegin(RouteBegin { remote_ip: ip.to_string() })),
                 }),
@@ -63,9 +63,9 @@ impl MediaLocalRpcHandler {
 
     async fn feedback_route_success(&self, session_id: u64, after_ms: u64, node: NodeId) {
         self.connector_agent_tx
-            .send(ConnectorControl::Fire(
+            .send(ConnectorControl::Request(
                 now_ms(),
-                ConnectorEvent::Peer(PeerEvent {
+                ConnectorRequest::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteSuccess(RouteSuccess {
                         after_ms: after_ms as u32,
@@ -79,9 +79,9 @@ impl MediaLocalRpcHandler {
 
     async fn feedback_route_error(&self, session_id: u64, after_ms: u64, node: Option<NodeId>, error: ErrorType) {
         self.connector_agent_tx
-            .send(ConnectorControl::Fire(
+            .send(ConnectorControl::Request(
                 now_ms(),
-                ConnectorEvent::Peer(PeerEvent {
+                ConnectorRequest::Peer(PeerEvent {
                     session_id,
                     event: Some(PeerEvent2::RouteError(RouteError {
                         after_ms: after_ms as u32,
@@ -123,9 +123,13 @@ impl MediaLocalRpcHandler {
                 whep::RpcReq::Delete(param) => RpcRes::Whep(whep::RpcRes::Delete(self.whep_delete(conn_part, param).await)),
             },
             RpcReq::Webrtc(param) => match param {
-                webrtc::RpcReq::Connect(session_id, ip, user_agent, param) => RpcRes::Webrtc(webrtc::RpcRes::Connect(self.webrtc_connect(session_id, ip, user_agent, param).await)),
+                webrtc::RpcReq::Connect(session_id, ip, user_agent, param, extra_data, record) => {
+                    RpcRes::Webrtc(webrtc::RpcRes::Connect(self.webrtc_connect(session_id, ip, user_agent, param, extra_data, record).await))
+                }
                 webrtc::RpcReq::RemoteIce(conn, param) => RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(self.webrtc_remote_ice(conn_part, conn, param).await)),
-                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req) => RpcRes::Webrtc(webrtc::RpcRes::RestartIce(self.webrtc_restart_ice(conn_part, conn, ip, user_agent, req).await)),
+                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req, extra_data, record) => {
+                    RpcRes::Webrtc(webrtc::RpcRes::RestartIce(self.webrtc_restart_ice(conn_part, conn, ip, user_agent, req, extra_data, record).await))
+                }
                 webrtc::RpcReq::Delete(_) => {
                     //TODO implement delete webrtc conn
                     RpcRes::Webrtc(webrtc::RpcRes::RestartIce(Err(RpcError::new2(MediaServerError::NotImplemented))))
@@ -272,7 +276,7 @@ impl MediaLocalRpcHandler {
     Webrtc part
     */
 
-    async fn webrtc_connect(&self, session_id: u64, ip: IpAddr, user_agent: String, req: ConnectRequest) -> RpcResult<(ClusterConnId, ConnectResponse)> {
+    async fn webrtc_connect(&self, session_id: u64, ip: IpAddr, user_agent: String, req: ConnectRequest, extra_data: Option<String>, record: bool) -> RpcResult<(ClusterConnId, ConnectResponse)> {
         let started_at = now_ms();
         self.feedback_route_begin(session_id, ip).await;
 
@@ -284,6 +288,8 @@ impl MediaLocalRpcHandler {
                 user_agent,
                 ip: ip.to_string(),
                 req: Some(req),
+                record,
+                extra_data,
             };
             let res = self.client.webrtc_connect(sock_addr, rpc_req).await;
             log::info!("[Gateway] response from node {node_id} => {:?}", res);
@@ -329,7 +335,17 @@ impl MediaLocalRpcHandler {
         }
     }
 
-    async fn webrtc_restart_ice(&self, conn_part: Option<(NodeId, u64)>, conn: ClusterConnId, ip: IpAddr, user_agent: String, req: ConnectRequest) -> RpcResult<(ClusterConnId, ConnectResponse)> {
+    #[allow(clippy::too_many_arguments)]
+    async fn webrtc_restart_ice(
+        &self,
+        conn_part: Option<(NodeId, u64)>,
+        conn: ClusterConnId,
+        ip: IpAddr,
+        user_agent: String,
+        req: ConnectRequest,
+        extra_data: Option<String>,
+        record: bool,
+    ) -> RpcResult<(ClusterConnId, ConnectResponse)> {
         //TODO how to handle media-node down?
         if let Some((node, _session)) = conn_part {
             let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRestartIceRequest {
@@ -337,6 +353,8 @@ impl MediaLocalRpcHandler {
                 ip: ip.to_string(),
                 user_agent,
                 req: Some(req),
+                record,
+                extra_data,
             };
             log::info!("[Gateway] selected node {node}");
             let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);

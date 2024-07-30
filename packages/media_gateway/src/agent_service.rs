@@ -25,12 +25,12 @@ struct ServiceWorkersStats {
     workers: HashMap<u16, u32>,
 }
 
-impl Into<ServiceStats> for &ServiceWorkersStats {
-    fn into(self) -> ServiceStats {
-        ServiceStats {
-            live: self.workers.values().sum(),
-            max: self.max,
-            active: true, //TODO how to update this? maybe with gradeful-shutdown
+impl From<&ServiceWorkersStats> for ServiceStats {
+    fn from(value: &ServiceWorkersStats) -> Self {
+        Self {
+            live: value.workers.values().sum(),
+            max: value.max,
+            active: true, //TODO how to update this? maybe with graceful-shutdown
         }
     }
 }

@@ -62,9 +62,9 @@ We are actively refactoring entire media server and network stack with [sans-io-
 | SIP                 | SIP calls                                                                         | ❌     |
 | MoQ                 | Media-over-Quic                                                                   | ❌     |
 | Monitoring          | Dashboard for monitoring                                                          | ❌     |
-| Recording           | Record stream                                                                     | ❌     |
+| Recording           | Record stream                                                                     | 🚀     |
 | Gateway             | External gateway [RFC-0003](https://github.com/8xFF/rfcs/pull/3)                  | 🚀     |
-| Connector           | External event handling                                                           | ❌     |
+| Connector           | External event handling                                                           | 🚀     |
 
 Status:
 
@@ -100,36 +100,6 @@ docker run --net=host ghcr.io/8xff/atm0s-media-server:master --help
 cargo build --release --package atm0s-media-server
 ./target/release/atm0s-media-server --help
 ```
-
-### Run
-
-Run first WebRTC node:
-
-```bash
-atm0s-media-server --http-port 3001 --zone-index=101 webrtc
-```
-
-After node1 started it will print out the node address like `101@/ip4/192.168.1.10/udp/10101/ip4/192.168.1.10/tcp/10101`, you can use it as a seed node for other nodes.
-
-Run second WebRTC node:
-
-```bash
-atm0s-media-server --http-port 3002 --zone-index=102 --seeds FIRST_NODE_ADDR webrtc
-```
-
-Now two nodes will form a cluster and can be used for media streaming.
-
-First media-server: http://localhost:3001/samples/whip/whip.html
-
-Second media-server: http://localhost:3002/samples/whep/whep.html
-
-You can use [Pregenerated-Token](./docs/getting-started/quick-start/whip-whep.md) to publish and play stream.
-
-![Demo Screen](./docs/imgs/demo-screen.jpg)
-
-Each node also has embedded monitoring page at `http://localhost:3001/dashboard/` and `http://localhost:3002/dashboard/`
-
-![Monitoring](./docs/imgs/demo-monitor.png)
 
 ## Resources
 

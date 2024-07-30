@@ -90,6 +90,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             extension: ""
             cross: false
+            build_record_tool: true
           - build: linux musl x64
             os: ubuntu-latest
             rust: stable
@@ -156,12 +157,14 @@ jobs:
             target: x86_64-apple-darwin
             extension: ""
             cross: false
+            build_record_tool: true
           - build: macos aarch64
             os: macos-latest
             rust: stable
             target: aarch64-apple-darwin
             extension: ""
             cross: true
+            build_record_tool: true
           # - build: windows gnu x64
           #   os: ubuntu-latest
           #   rust: stable
@@ -188,7 +191,9 @@ jobs:
 
       - name: Install dev-tools
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
+        run: |
+          sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
+          sudo ln -s /bin/g++ /bin/musl-g++
 
       - uses: actions/download-artifact@v4
         with:
@@ -199,31 +204,56 @@ jobs:
         run: |
           mv ./.cargo/config.toml.release-build .cargo/config.toml
 
-      - name: Build
+      - name: Build server
         uses: actions-rs/cargo@v1
         with:
           use-cross: ${{ matrix.cross }}
           command: build
           args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }} --features embed_static
 
-      - name: Rename file
+      - name: Build record tool
+        if: matrix.build_record_tool
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.cross }}
+          command: build
+          args: --verbose --release --package media-server-record --target ${{ matrix.target }} --bin convert_record
+
+      - name: Rename server
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
-        run: mv ./target/${{ matrix.target }}/release/${{ env.APP_NAME }}${{ matrix.extension }} ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
+        run: |
+          mv ./target/${{ matrix.target }}/release/${{ env.APP_NAME }}${{ matrix.extension }} ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
+
+      - name: Rename record
+        if: ${{ matrix.build_record_tool && matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
+        run: |
+          mv ./target/${{ matrix.target }}/release/convert_record${{ matrix.extension }} convert_record-${{ matrix.target }}${{ matrix.extension }}
 
       - name: Upload Artifact to Summary
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
+          path: |
+            *-${{ matrix.target }}${{ matrix.extension }}
 
-      - name: Upload binaries to release
+      - name: Upload server binarie to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
           asset_name: ${{ env.APP_NAME }}-${{ matrix.target }}${{ matrix.extension }}
+          tag: ${{ github.ref }}
+          overwrite: true
+
+      - name: Upload record_tool binarie to release
+        if: startsWith(github.ref, 'refs/tags/') && matrix.build_record_tool
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: convert_record-${{ matrix.target }}${{ matrix.extension }}
+          asset_name: convert_record-${{ matrix.target }}${{ matrix.extension }}
           tag: ${{ github.ref }}
           overwrite: true
 

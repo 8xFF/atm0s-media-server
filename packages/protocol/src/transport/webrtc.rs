@@ -5,24 +5,25 @@ use crate::protobuf::gateway::{ConnectRequest, ConnectResponse, RemoteIceRequest
 
 #[derive(Debug, Clone)]
 pub enum RpcReq<Conn> {
-    /// Ip, Agent, Req
-    Connect(u64, IpAddr, String, ConnectRequest),
+    /// Ip, Agent, Req, Userdata, Record
+    Connect(u64, IpAddr, String, ConnectRequest, Option<String>, bool),
     RemoteIce(Conn, RemoteIceRequest),
-    RestartIce(Conn, IpAddr, String, ConnectRequest),
+    /// ConnId, Ip, Agent, Req, Userdata, Record
+    RestartIce(Conn, IpAddr, String, ConnectRequest, Option<String>, bool),
     Delete(Conn),
 }
 
 impl<Conn: ConnLayer> RpcReq<Conn> {
     pub fn down(self) -> (RpcReq<Conn::Down>, Option<Conn::DownRes>) {
         match self {
-            RpcReq::Connect(session_id, ip_addr, user_agent, req) => (RpcReq::Connect(session_id, ip_addr, user_agent, req), None),
+            RpcReq::Connect(session_id, ip_addr, user_agent, req, extra_data, record) => (RpcReq::Connect(session_id, ip_addr, user_agent, req, extra_data, record), None),
             RpcReq::RemoteIce(conn, req) => {
                 let (down, layer) = conn.down();
                 (RpcReq::RemoteIce(down, req), Some(layer))
             }
-            RpcReq::RestartIce(conn, ip_addr, user_agent, req) => {
+            RpcReq::RestartIce(conn, ip_addr, user_agent, req, extra_data, record) => {
                 let (down, layer) = conn.down();
-                (RpcReq::RestartIce(down, ip_addr, user_agent, req), Some(layer))
+                (RpcReq::RestartIce(down, ip_addr, user_agent, req, extra_data, record), Some(layer))
             }
             RpcReq::Delete(conn) => {
                 let (down, layer) = conn.down();

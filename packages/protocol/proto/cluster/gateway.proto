@@ -67,6 +67,8 @@ message WhipConnectRequest {
     string room = 4;
     string peer = 5;
     uint64 session_id = 6;
+    bool record = 7;
+    optional string extra_data = 8;
 }
 
 message WhipConnectResponse {
@@ -99,6 +101,7 @@ message WhepConnectRequest {
     string room = 4;
     string peer = 5;
     uint64 session_id = 6;
+    optional string extra_data = 8;
 }
 
 message WhepConnectResponse {
@@ -129,6 +132,8 @@ message WebrtcConnectRequest {
     string ip = 2;
     gateway.ConnectRequest req = 3;
     uint64 session_id = 4;
+    bool record = 5;
+    optional string extra_data = 8;
 }
 
 message WebrtcConnectResponse {
@@ -149,6 +154,8 @@ message WebrtcRestartIceRequest {
     string user_agent = 2;
     string ip = 3;
     gateway.ConnectRequest req = 4;
+    bool record = 5;
+    optional string extra_data = 8;
 }
 
 message WebrtcRestartIceResponse {

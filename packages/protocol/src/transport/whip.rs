@@ -13,8 +13,10 @@ pub struct WhipConnectReq {
     pub sdp: String,
     pub room: RoomId,
     pub peer: PeerId,
+    pub record: bool,
     pub ip: IpAddr,
     pub user_agent: String,
+    pub extra_data: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -100,8 +102,10 @@ impl TryFrom<protobuf::cluster_gateway::WhipConnectRequest> for WhipConnectReq {
             sdp: value.sdp,
             room: value.room.into(),
             peer: value.peer.into(),
+            record: value.record,
             ip: value.ip.parse().map_err(|_| ())?,
             user_agent: value.user_agent,
+            extra_data: value.extra_data,
         })
     }
 }
@@ -115,6 +119,8 @@ impl From<WhipConnectReq> for protobuf::cluster_gateway::WhipConnectRequest {
             sdp: val.sdp,
             room: val.room.0,
             peer: val.peer.0,
+            record: val.record,
+            extra_data: val.extra_data,
         }
     }
 }

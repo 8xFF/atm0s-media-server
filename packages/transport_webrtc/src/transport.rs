@@ -42,10 +42,11 @@ mod webrtc;
 mod whep;
 mod whip;
 
+#[allow(clippy::large_enum_variant)]
 pub enum VariantParams<ES> {
-    Whip(RoomId, PeerId),
-    Whep(RoomId, PeerId),
-    Webrtc(String, ConnectRequest, Arc<ES>),
+    Whip(RoomId, PeerId, Option<String>, bool),
+    Whep(RoomId, PeerId, Option<String>),
+    Webrtc(String, ConnectRequest, Option<String>, bool, Arc<ES>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -55,9 +56,12 @@ pub enum Variant {
     Webrtc,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
-    RestartIce(u64, Variant, IpAddr, String, ConnectRequest),
+    /// Last option<string>, bool is extra_data and record flag
+    RestartIce(u64, Variant, IpAddr, String, ConnectRequest, Option<String>, bool),
+    Disconnect(u64, Variant),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -65,6 +69,7 @@ pub enum ExtOut {
     RemoteIce(u64, Variant, RpcResult<u32>),
     /// response is (ice_lite, answer_sdp)
     RestartIce(u64, Variant, RpcResult<(bool, String)>),
+    Disconnect(u64, Variant, RpcResult<()>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -112,7 +117,15 @@ pub struct TransportWebrtc<ES> {
 }
 
 impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
-    pub fn new(remote: IpAddr, variant: VariantParams<ES>, offer: &str, dtls_cert: DtlsCert, local_addrs: Vec<(SocketAddr, usize)>, rtc_ice_lite: bool) -> RpcResult<(Self, String, String)> {
+    pub fn new(
+        remote: IpAddr,
+        variant: VariantParams<ES>,
+        offer: &str,
+        dtls_cert: DtlsCert,
+        local_addrs: &[(SocketAddr, usize)],
+        addrs_alt: &[SocketAddr],
+        rtc_ice_lite: bool,
+    ) -> RpcResult<(Self, String, String)> {
         let offer = SdpOffer::from_sdp_string(offer).map_err(|_e| RpcError::new2(WebrtcError::InvalidSdp))?;
         let rtc_config = Rtc::builder()
             .set_rtp_mode(true)
@@ -133,9 +146,9 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
 
         let mut rtc = rtc_config.build();
         let mut internal: Box<dyn TransportWebrtcInternal> = match variant {
-            VariantParams::Whip(room, peer) => Box::new(whip::TransportWebrtcWhip::new(room, peer, remote)),
-            VariantParams::Whep(room, peer) => Box::new(whep::TransportWebrtcWhep::new(room, peer, remote)),
-            VariantParams::Webrtc(_user_agent, req, secure) => {
+            VariantParams::Whip(room, peer, extra_data, _record) => Box::new(whip::TransportWebrtcWhip::new(room, peer, extra_data, remote)),
+            VariantParams::Whep(room, peer, extra_data) => Box::new(whep::TransportWebrtcWhep::new(room, peer, extra_data, remote)),
+            VariantParams::Webrtc(_user_agent, req, extra_data, _record, secure) => {
                 rtc.direct_api().create_data_channel(ChannelConfig {
                     label: "data".to_string(),
                     negotiated: Some(1000),
@@ -144,15 +157,18 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
                 //we need to start sctp as client side for handling restart-ice in new server
                 //if not, datachannel will not connect successful after reconnect to new server
                 rtc.direct_api().start_sctp(true);
-                Box::new(webrtc::TransportWebrtcSdk::new(req, secure, remote))
+                Box::new(webrtc::TransportWebrtcSdk::new(req, extra_data, secure, remote))
             }
         };
 
         rtc.direct_api().enable_twcc_feedback();
         let mut ports = Small2dMap::default();
         for (local_addr, slot) in local_addrs {
-            ports.insert(local_addr, slot);
-            rtc.add_local_candidate(Candidate::host(local_addr, Protocol::Udp).expect("Should add local candidate"));
+            ports.insert(*local_addr, *slot);
+            rtc.add_local_candidate(Candidate::host(*local_addr, Protocol::Udp).expect("Should add local candidate"));
+        }
+        for addr in addrs_alt {
+            rtc.add_local_candidate(Candidate::host(*addr, Protocol::Udp).expect("Should add local candidate"));
         }
         let answer = rtc.sdp_api().accept_offer(offer).map_err(|_e| RpcError::new2(WebrtcError::InternalServerError))?;
         let mut local_convert = LocalMediaConvert::default();
@@ -294,7 +310,7 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                     }
                     self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))));
                 }
-                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req) => {
+                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req, _extra_data, _record) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_codec_config(self.rtc.codec_config());
@@ -309,10 +325,13 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                             .push_back(TransportOutput::Ext(ExtOut::RestartIce(req_id, variant, Err(RpcError::new2(WebrtcError::InvalidSdp)))));
                     }
                 }
+                ExtIn::Disconnect(req_id, variant) => {
+                    self.internal.close(now);
+                    self.queue.push_back(TransportOutput::Ext(ExtOut::Disconnect(req_id, variant, Ok(()))));
+                }
             },
-            TransportInput::Close => {
-                log::info!("[TransportWebrtc] close request");
-                self.rtc.disconnect();
+            TransportInput::SystemClose => {
+                log::info!("[TransportWebrtc] system close request");
                 self.internal.close(now);
             }
         }

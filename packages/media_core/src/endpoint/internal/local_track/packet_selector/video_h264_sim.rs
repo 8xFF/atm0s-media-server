@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{cmp::Ordering, collections::VecDeque};
 
 use media_server_protocol::media::{MediaLayersBitrate, MediaMeta, MediaPacket};
 
@@ -53,36 +53,42 @@ impl Selector {
         if let MediaMeta::H264 { key, profile: _, sim: Some(_sim) } = &mut pkt.meta {
             match (self.current, self.target) {
                 (Some(current), Some(target)) => {
-                    if target < current {
-                        //down spatial => need wait key-frame
-                        if *key {
-                            log::info!("[H264SimSelector] down {} => {} with key", current, target);
-                            ctx.seq_rewrite.reinit();
-                            ctx.ts_rewrite.reinit();
-                            self.current = self.target;
-                        } else {
-                            self.queue.push_back(Action::RequestKeyFrame);
+                    match target.cmp(&current) {
+                        Ordering::Less => {
+                            // down spatial => need wait key-frame
+                            if *key {
+                                log::info!("[H264SimSelector] down {} => {} with key", current, target);
+                                ctx.seq_rewrite.reinit();
+                                ctx.ts_rewrite.reinit();
+                                self.current = self.target;
+                            } else {
+                                self.queue.push_back(Action::RequestKeyFrame);
+                            }
                         }
-                    } else if target > current {
-                        //up spatial => need wait key-frame
-                        if *key {
-                            log::info!("[H264SimSelector] up {} => {} with key", current, target);
-                            ctx.seq_rewrite.reinit();
-                            ctx.ts_rewrite.reinit();
-                            self.current = Some(target);
-                        } else if !*key {
-                            self.queue.push_back(Action::RequestKeyFrame);
+                        Ordering::Greater => {
+                            // up spatial => need wait key-frame
+                            if *key {
+                                log::info!("[H264SimSelector] up {} => {} with key", current, target);
+                                ctx.seq_rewrite.reinit();
+                                ctx.ts_rewrite.reinit();
+                                self.current = Some(target);
+                            } else {
+                                self.queue.push_back(Action::RequestKeyFrame);
+                            }
+                        }
+                        Ordering::Equal => {
+                            // target is equal to current, handle if needed
                         }
                     }
                 }
                 (Some(current), None) => {
-                    //need pause
-                    //TODO wait current frame finished for avoiding interrupt client
+                    // need pause
+                    // TODO: wait current frame finished for avoiding interrupt client
                     log::info!("[H264SimSelector] pause from {}", current);
                     self.current = None;
                 }
                 (None, Some(target)) => {
-                    //need resume or start => need wait key_frame
+                    // need resume or start => need wait key-frame
                     if *key {
                         log::info!("[H264SimSelector] resume to {} with key", target);
                         // with other spatial we have difference tl0xidx and pic_id offset
@@ -91,7 +97,7 @@ impl Selector {
                     }
                 }
                 (None, None) => {
-                    //reject
+                    // reject
                 }
             }
         }
@@ -184,7 +190,7 @@ mod tests {
     fn test(bitrate: u64, layers: &[u16], steps: Vec<Step>) {
         let mut ctx = VideoSelectorCtx::new(MediaKind::Video);
         ctx.seq_rewrite.reinit();
-        let mut selector = Selector::new(bitrate * 1000, layers_bitrate(&layers), (2, 2));
+        let mut selector = Selector::new(bitrate * 1000, layers_bitrate(layers), (2, 2));
         selector.on_init(&mut ctx, 0);
 
         for step in steps {

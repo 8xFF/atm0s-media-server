@@ -8,7 +8,7 @@
 //!
 //! Note that, in simulcast stream, each spatial layer is independent stream and have independent seq, ts
 
-use std::collections::VecDeque;
+use std::{cmp::Ordering, collections::VecDeque};
 
 use media_server_protocol::media::{MediaLayerSelection, MediaLayersBitrate, MediaMeta, MediaPacket};
 use media_server_utils::SeqRewrite;
@@ -73,71 +73,78 @@ impl Selector {
         if let MediaMeta::Vp8 { key, sim: Some(sim) } = &mut pkt.meta {
             match (&mut self.current, &self.target) {
                 (Some(current), Some(target)) => {
-                    //need switch to temporal layer only
-                    if target.spatial == current.spatial {
-                        //change temporal
-                        if target.temporal > current.temporal {
-                            //up temporal => need wait layer_sync
-                            if sim.spatial == current.spatial && sim.temporal <= target.temporal && sim.layer_sync {
-                                log::info!("[Vp8SimSelector] up temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
-                                current.temporal = target.temporal;
+                    match target.spatial.cmp(&current.spatial) {
+                        Ordering::Equal => {
+                            // change temporal
+                            match target.temporal.cmp(&current.temporal) {
+                                Ordering::Greater => {
+                                    // up temporal => need wait layer_sync
+                                    if sim.spatial == current.spatial && sim.temporal <= target.temporal && sim.layer_sync {
+                                        log::info!("[Vp8SimSelector] up temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
+                                        current.temporal = target.temporal;
+                                    }
+                                }
+                                Ordering::Less => {
+                                    // down temporal => do now
+                                    log::info!("[Vp8SimSelector] down temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
+                                    current.temporal = target.temporal;
+                                }
+                                Ordering::Equal => {}
                             }
-                        } else if target.temporal < current.temporal {
-                            //down temporal => do now
-                            log::info!("[Vp8SimSelector] down temporal {},{} => {},{}", current.spatial, current.temporal, target.spatial, target.temporal);
-                            current.temporal = target.temporal;
                         }
-                    } else if target.spatial < current.spatial {
-                        //down spatial => need wait key-frame
-                        //first we allway down temporal for trying reduce bandwidth
-                        if current.temporal != 0 {
-                            log::info!("[Vp8SimSelector] down spatial then down temporal from {} => 0", current.temporal);
-                            current.temporal = 0;
+                        Ordering::Less => {
+                            // down spatial => need wait key-frame
+                            // first we always down temporal for trying to reduce bandwidth
+                            if current.temporal != 0 {
+                                log::info!("[Vp8SimSelector] down spatial then down temporal from {} => 0", current.temporal);
+                                current.temporal = 0;
+                            }
+                            if *key {
+                                log::info!("[Vp8SimSelector] down {},{} => {},{} with key", current.spatial, current.temporal, target.spatial, target.temporal);
+                                // with other spatial we have difference tl0xidx and pic_id offset
+                                // therefore we need reinit both tl0idx and pic_id
+                                ctx.vp8_ctx.tl0idx_rewrite.reinit();
+                                ctx.vp8_ctx.pic_id_rewrite.reinit();
+                                ctx.seq_rewrite.reinit();
+                                ctx.ts_rewrite.reinit();
+                                current.spatial = target.spatial;
+                                current.temporal = target.temporal;
+                            } else {
+                                self.queue.push_back(Action::RequestKeyFrame);
+                            }
                         }
-                        if *key {
-                            log::info!("[Vp8SimSelector] down {},{} => {},{} with key", current.spatial, current.temporal, target.spatial, target.temporal);
-                            // with other spatial we have difference tl0xidx and pic_id offset
-                            // therefore we need reinit both tl0idx and pic_id
-                            ctx.vp8_ctx.tl0idx_rewrite.reinit();
-                            ctx.vp8_ctx.pic_id_rewrite.reinit();
-                            ctx.seq_rewrite.reinit();
-                            ctx.ts_rewrite.reinit();
-                            current.spatial = target.spatial;
-                            current.temporal = target.temporal;
-                        } else {
-                            self.queue.push_back(Action::RequestKeyFrame);
-                        }
-                    } else if target.spatial > current.spatial {
-                        //up spatial => need wait key-frame
-                        //first we try to up temporal for trying increase bandwidth
-                        if sim.spatial == current.spatial && current.temporal != 2 && sim.layer_sync {
-                            log::info!("[Vp8SimSelector] up spatial then up temporal from {} => 2 before key arrived", current.temporal);
-                            current.temporal = 2;
-                        }
+                        Ordering::Greater => {
+                            // up spatial => need wait key-frame
+                            // first we try to up temporal for trying to increase bandwidth
+                            if sim.spatial == current.spatial && current.temporal != 2 && sim.layer_sync {
+                                log::info!("[Vp8SimSelector] up spatial then up temporal from {} => 2 before key arrived", current.temporal);
+                                current.temporal = 2;
+                            }
 
-                        if *key {
-                            log::info!("[Vp8SimSelector] up {},{} => {},{} with key-frame", current.spatial, current.temporal, target.spatial, target.temporal);
-                            // with other spatial we have difference tl0xidx and pic_id offset
-                            // therefore we need reinit both tl0idx and pic_id
-                            ctx.vp8_ctx.tl0idx_rewrite.reinit();
-                            ctx.vp8_ctx.pic_id_rewrite.reinit();
-                            ctx.seq_rewrite.reinit();
-                            ctx.ts_rewrite.reinit();
-                            current.spatial = target.spatial;
-                            current.temporal = target.temporal;
-                        } else {
-                            self.queue.push_back(Action::RequestKeyFrame);
+                            if *key {
+                                log::info!("[Vp8SimSelector] up {},{} => {},{} with key-frame", current.spatial, current.temporal, target.spatial, target.temporal);
+                                // with other spatial we have difference tl0xidx and pic_id offset
+                                // therefore we need reinit both tl0idx and pic_id
+                                ctx.vp8_ctx.tl0idx_rewrite.reinit();
+                                ctx.vp8_ctx.pic_id_rewrite.reinit();
+                                ctx.seq_rewrite.reinit();
+                                ctx.ts_rewrite.reinit();
+                                current.spatial = target.spatial;
+                                current.temporal = target.temporal;
+                            } else {
+                                self.queue.push_back(Action::RequestKeyFrame);
+                            }
                         }
                     }
                 }
                 (Some(current), None) => {
-                    //need pause
-                    //TODO wait current frame finished for avoiding interrupt client
+                    // need pause
+                    // TODO: wait current frame finished for avoiding interrupt client
                     log::info!("[Vp8SimSelector] pause from {},{}", current.spatial, current.temporal);
                     self.current = None;
                 }
                 (None, Some(target)) => {
-                    //need resume or start => need wait key_frame
+                    // need resume or start => need wait key_frame
                     if *key {
                         log::info!("[Vp8SimSelector] resume to {},{} with key", target.spatial, target.temporal);
                         // with other spatial we have difference tl0xidx and pic_id offset
@@ -148,7 +155,7 @@ impl Selector {
                     }
                 }
                 (None, None) => {
-                    //reject
+                    // reject
                 }
             }
         }
@@ -247,6 +254,7 @@ mod tests {
         res
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn video_pkt(seq: u16, ts: u32, key: bool, layers: Option<&[[u16; 3]]>, spatial: u8, temporal: u8, layer_sync: bool, tl0idx: u8, pic_id: u16) -> MediaPacket {
         MediaPacket {
             ts,
@@ -276,7 +284,7 @@ mod tests {
     fn test(bitrate: u64, layers: &[[u16; 3]], steps: Vec<Step>) {
         let mut ctx = VideoSelectorCtx::new(MediaKind::Video);
         ctx.seq_rewrite.reinit();
-        let mut selector = Selector::new(bitrate * 1000, layers_bitrate(&layers), (2, 2));
+        let mut selector = Selector::new(bitrate * 1000, layers_bitrate(layers), (2, 2));
         selector.on_init(&mut ctx, 0);
 
         for step in steps {

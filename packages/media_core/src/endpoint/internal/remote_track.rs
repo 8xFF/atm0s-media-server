@@ -6,7 +6,8 @@ use media_server_protocol::{
     endpoint::{BitrateControlMode, TrackMeta, TrackName, TrackPriority},
     media::{MediaKind, MediaLayersBitrate},
     protobuf::{cluster_connector::peer_event, shared::Kind},
-    transport::RpcError,
+    record::SessionRecordEvent,
+    transport::{RemoteTrackId, RpcError},
 };
 use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
@@ -28,11 +29,12 @@ pub enum Input {
     BitrateAllocation(IngressAction),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Output {
     Event(EndpointRemoteTrackEvent),
     Cluster(ClusterRoomHash, ClusterRemoteTrackControl),
     PeerEvent(Instant, peer_event::Event),
+    RecordEvent(Instant, SessionRecordEvent),
     RpcRes(EndpointReqId, EndpointRemoteTrackRes),
     Started(MediaKind, TrackPriority),
     Update(MediaKind, TrackPriority),
@@ -40,6 +42,7 @@ pub enum Output {
 }
 
 pub struct EndpointRemoteTrack {
+    id: RemoteTrackId,
     meta: TrackMeta,
     room: Option<ClusterRoomHash>,
     name: Option<TrackName>,
@@ -48,12 +51,14 @@ pub struct EndpointRemoteTrack {
     /// This is for storing current stream layers, everytime key-frame arrived we will set this if it not set
     last_layers: Option<MediaLayersBitrate>,
     cluster_bitrate_limit: Option<(u64, u64)>,
+    record: bool,
 }
 
 impl EndpointRemoteTrack {
-    pub fn new(room: Option<ClusterRoomHash>, meta: TrackMeta) -> Self {
+    pub fn new(room: Option<ClusterRoomHash>, id: RemoteTrackId, meta: TrackMeta, record: bool) -> Self {
         log::info!("[EndpointRemoteTrack] created with room {:?} meta {:?}", room, meta);
         Self {
+            id,
             meta,
             room,
             name: None,
@@ -61,6 +66,7 @@ impl EndpointRemoteTrack {
             allocate_bitrate: None,
             last_layers: None,
             cluster_bitrate_limit: None,
+            record,
         }
     }
 
@@ -71,6 +77,10 @@ impl EndpointRemoteTrack {
         let name = return_if_none!(self.name.clone());
         log::info!("[EndpointRemoteTrack] started as name {name} after join room");
         self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Started(name.clone(), self.meta.clone())));
+        if self.record {
+            self.queue
+                .push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStarted(self.id, name.clone(), self.meta.clone())));
+        }
         self.queue.push_back(Output::PeerEvent(
             now,
             peer_event::Event::RemoteTrackStarted(peer_event::RemoteTrackStarted {
@@ -86,6 +96,9 @@ impl EndpointRemoteTrack {
         let name = return_if_none!(self.name.clone());
         log::info!("[EndpointRemoteTrack] stopped as name {name} after leave room");
         self.queue.push_back(Output::Cluster(room, ClusterRemoteTrackControl::Ended(name.clone(), self.meta.clone())));
+        if self.record {
+            self.queue.push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStopped(self.id)));
+        }
         self.queue.push_back(Output::PeerEvent(
             now,
             peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
@@ -118,6 +131,10 @@ impl EndpointRemoteTrack {
                 self.queue
                     .push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name.clone()), self.meta.clone())));
                 self.queue.push_back(Output::Started(self.meta.kind, priority));
+                if self.record {
+                    self.queue
+                        .push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStarted(self.id, name.clone().into(), self.meta.clone())));
+                }
                 self.queue.push_back(Output::PeerEvent(
                     now,
                     peer_event::Event::RemoteTrackStarted(peer_event::RemoteTrackStarted {
@@ -132,13 +149,17 @@ impl EndpointRemoteTrack {
                 //TODO clear self.last_layer if switched to new track
                 if media.layers.is_some() {
                     log::debug!("[EndpointRemoteTrack] on layers info {:?}", media.layers);
-                    self.last_layers = media.layers.clone();
+                    self.last_layers.clone_from(&media.layers);
                 }
 
                 // We restore last_layer if key frame not contain for allow consumers fast switching
                 if media.meta.is_video_key() && media.layers.is_none() && self.last_layers.is_some() {
                     log::debug!("[EndpointRemoteTrack] set layers info to key-frame {:?}", media.layers);
-                    media.layers = self.last_layers.clone();
+                    media.layers.clone_from(&self.last_layers);
+                }
+
+                if self.record {
+                    self.queue.push_back(Output::RecordEvent(now, SessionRecordEvent::TrackMedia(self.id, media.clone())));
                 }
 
                 let room = return_if_none!(self.room.as_ref());
@@ -149,7 +170,9 @@ impl EndpointRemoteTrack {
                 let room = return_if_none!(self.room.as_ref());
                 log::info!("[EndpointRemoteTrack] stopped with name {name} in room {room}");
                 self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Ended(name.clone(), self.meta.clone())));
-                self.queue.push_back(Output::Stopped(self.meta.kind));
+                if self.record {
+                    self.queue.push_back(Output::RecordEvent(now, SessionRecordEvent::TrackStopped(self.id)));
+                }
                 self.queue.push_back(Output::PeerEvent(
                     now,
                     peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
@@ -157,6 +180,8 @@ impl EndpointRemoteTrack {
                         kind: Kind::from(self.meta.kind) as i32,
                     }),
                 ));
+                // We must send Stopped at last, if not we missed some event
+                self.queue.push_back(Output::Stopped(self.meta.kind));
             }
         }
     }
@@ -226,13 +251,78 @@ impl TaskSwitcherChild<Output> for EndpointRemoteTrack {
 
 impl Drop for EndpointRemoteTrack {
     fn drop(&mut self) {
-        assert_eq!(self.queue.len(), 0);
+        assert_eq!(self.queue.len(), 0, "remote track queue should empty on drop");
     }
 }
 
 #[cfg(test)]
 mod tests {
-    //TODO start in room
+    use std::time::{Duration, Instant};
+
+    use media_server_protocol::{
+        endpoint::{TrackMeta, TrackName},
+        protobuf::{cluster_connector::peer_event, shared::Kind},
+    };
+    use sans_io_runtime::{Task, TaskSwitcherChild};
+
+    use crate::{cluster::ClusterRemoteTrackControl, transport::RemoteTrackEvent};
+
+    use super::{EndpointRemoteTrack, Input, Output};
+
+    #[test]
+    fn start_in_room() {
+        let room = 0.into();
+        let track_name = TrackName("audio_main".to_string());
+        let track_id = 1.into();
+        let track_priority = 2.into();
+        let meta = TrackMeta::default_audio();
+        let now = Instant::now();
+        let mut track = EndpointRemoteTrack::new(Some(room), track_id, meta.clone(), false);
+        assert_eq!(track.pop_output(now), None);
+
+        track.on_event(
+            now,
+            Input::Event(RemoteTrackEvent::Started {
+                name: track_name.0.clone(),
+                priority: track_priority,
+                meta: meta.clone(),
+            }),
+        );
+
+        assert_eq!(track.pop_output(now), Some(Output::Cluster(room, ClusterRemoteTrackControl::Started(track_name.clone(), meta.clone()))));
+        assert_eq!(track.pop_output(now), Some(Output::Started(meta.kind, track_priority)));
+        assert_eq!(
+            track.pop_output(now),
+            Some(Output::PeerEvent(
+                now,
+                peer_event::Event::RemoteTrackStarted(peer_event::RemoteTrackStarted {
+                    track: track_name.0.clone(),
+                    kind: Kind::from(meta.kind) as i32,
+                }),
+            ))
+        );
+        assert_eq!(track.pop_output(now), None);
+
+        //now leave room
+        let now = now + Duration::from_secs(1);
+        track.on_event(now, Input::Event(RemoteTrackEvent::Ended));
+
+        assert_eq!(track.pop_output(now), Some(Output::Cluster(room, ClusterRemoteTrackControl::Ended(track_name.clone(), meta.clone()))));
+        assert_eq!(
+            track.pop_output(now),
+            Some(Output::PeerEvent(
+                now,
+                peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
+                    track: track_name.0.clone(),
+                    kind: Kind::from(meta.kind) as i32,
+                }),
+            ))
+        );
+        //we need Output::Stopped at last
+        assert_eq!(track.pop_output(now), Some(Output::Stopped(meta.kind)));
+        assert_eq!(track.pop_output(now), None);
+    }
+
     //TODO start not in room
     //TODO stop in room
     //TODO stop not in room

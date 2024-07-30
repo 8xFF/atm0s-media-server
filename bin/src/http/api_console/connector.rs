@@ -1,3 +1,5 @@
+use crate::http::Pagination;
+
 use super::{super::Response, ConsoleApisCtx, ConsoleAuthorization};
 use media_server_protocol::{
     connector::CONNECTOR_RPC_PORT,
@@ -15,6 +17,8 @@ use poem_openapi::{
 pub struct RoomInfo {
     pub id: i32,
     pub room: String,
+    pub created_at: u64,
+    pub peers: usize,
 }
 
 #[derive(poem_openapi::Object)]
@@ -72,13 +76,27 @@ impl Apis {
         match ctx.connector.rooms(node_vnet_addr(node, CONNECTOR_RPC_PORT), GetParams { page, limit }).await {
             Some(res) => Json(Response {
                 status: true,
-                error: None,
-                data: Some(res.rooms.into_iter().map(|e| RoomInfo { id: e.id, room: e.room }).collect::<Vec<_>>()),
+                data: Some(
+                    res.rooms
+                        .into_iter()
+                        .map(|e| RoomInfo {
+                            id: e.id,
+                            room: e.room,
+                            created_at: e.created_at,
+                            peers: e.peers as usize,
+                        })
+                        .collect::<Vec<_>>(),
+                ),
+                pagination: res.pagination.map(|p| Pagination {
+                    total: p.total as usize,
+                    current: p.current as usize,
+                }),
+                ..Default::default()
             }),
             None => Json(Response {
                 status: false,
                 error: Some("CLUSTER_ERROR".to_string()),
-                data: None,
+                ..Default::default()
             }),
         }
     }
@@ -97,7 +115,6 @@ impl Apis {
         match ctx.connector.peers(node_vnet_addr(node, CONNECTOR_RPC_PORT), GetPeerParams { room, page, limit }).await {
             Some(res) => Json(Response {
                 status: true,
-                error: None,
                 data: Some(
                     res.peers
                         .into_iter()
@@ -123,11 +140,16 @@ impl Apis {
                         })
                         .collect::<Vec<_>>(),
                 ),
+                pagination: res.pagination.map(|p| Pagination {
+                    total: p.total as usize,
+                    current: p.current as usize,
+                }),
+                ..Default::default()
             }),
             None => Json(Response {
                 status: false,
                 error: Some("CLUSTER_ERROR".to_string()),
-                data: None,
+                ..Default::default()
             }),
         }
     }
@@ -145,7 +167,6 @@ impl Apis {
         match ctx.connector.sessions(node_vnet_addr(node, CONNECTOR_RPC_PORT), GetParams { page, limit }).await {
             Some(res) => Json(Response {
                 status: true,
-                error: None,
                 data: Some(
                     res.sessions
                         .into_iter()
@@ -171,16 +192,22 @@ impl Apis {
                         })
                         .collect::<Vec<_>>(),
                 ),
+                pagination: res.pagination.map(|p| Pagination {
+                    total: p.total as usize,
+                    current: p.current as usize,
+                }),
+                ..Default::default()
             }),
             None => Json(Response {
                 status: false,
                 error: Some("CLUSTER_ERROR".to_string()),
-                data: None,
+                ..Default::default()
             }),
         }
     }
 
     /// get events
+    #[allow(clippy::too_many_arguments)]
     #[oai(path = "/:node/log/events", method = "get")]
     async fn events(
         &self,
@@ -209,7 +236,6 @@ impl Apis {
         {
             Some(res) => Json(Response {
                 status: true,
-                error: None,
                 data: Some(
                     res.events
                         .into_iter()
@@ -224,11 +250,16 @@ impl Apis {
                         })
                         .collect::<Vec<_>>(),
                 ),
+                pagination: res.pagination.map(|p| Pagination {
+                    total: p.total as usize,
+                    current: p.current as usize,
+                }),
+                ..Default::default()
             }),
             None => Json(Response {
                 status: false,
                 error: Some("CLUSTER_ERROR".to_string()),
-                data: None,
+                ..Default::default()
             }),
         }
     }

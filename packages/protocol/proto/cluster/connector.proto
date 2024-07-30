@@ -7,16 +7,13 @@ import "shared.proto";
 message ConnectorRequest {
     uint64 req_id = 1;
     uint64 ts = 2;
-    oneof event {
+    oneof request {
         PeerEvent peer = 3;
+        RecordReq record = 4;
     }
 }
 
 message ConnectorResponse {
-    message Success {
-
-    }
-
     message Error {
         uint32 code = 1;
         string message = 2;
@@ -24,8 +21,9 @@ message ConnectorResponse {
 
     uint64 req_id = 1;
     oneof response {
-        Success success = 2;
-        Error error = 3;
+        Error error = 2;
+        PeerRes peer = 3;
+        RecordRes record = 4;
     }
 }
 
@@ -157,6 +155,23 @@ message PeerEvent {
     }
 }
 
+message PeerRes {
+
+}
+
+message RecordReq {
+    string room = 1;
+    string peer = 2;
+    uint64 session = 3;
+    uint32 index = 4;
+    uint64 from_ts = 5;
+    uint64 to_ts = 6;
+}
+
+message RecordRes {
+    string s3_uri = 1;
+}
+
 message GetParams {
     uint32 page = 1;
     uint32 limit = 2;
@@ -166,9 +181,12 @@ message GetRooms {
     message RoomInfo {
         int32 id = 1;
         string room = 2;
+        uint64 created_at = 3;
+        uint32 peers = 4;
     }
 
     repeated RoomInfo rooms = 1;
+    shared.Pagination pagination = 2;
 }
 
 message GetPeerParams {
@@ -198,6 +216,7 @@ message GetPeers {
     }
 
     repeated PeerInfo peers = 1;
+    shared.Pagination pagination = 2;
 }
 
 message GetSessions {
@@ -211,6 +230,7 @@ message GetSessions {
     }
 
     repeated SessionInfo sessions = 1;
+    shared.Pagination pagination = 2;
 }
 
 message GetEventParams {
@@ -233,6 +253,7 @@ message GetEvents {
     }
 
     repeated EventInfo events = 1;
+    shared.Pagination pagination = 2;
 }
 
 service MediaConnector {

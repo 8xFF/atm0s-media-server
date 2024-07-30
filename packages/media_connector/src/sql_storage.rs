@@ -1,22 +1,35 @@
-use std::time::Duration;
+use std::{collections::HashMap, time::Duration};
 
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_connector::{connector_request, peer_event};
-use media_server_utils::now_ms;
-use sea_orm::{sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set};
+use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, peer_event, PeerRes, RecordRes};
+use media_server_utils::{now_ms, CustomUri};
+use s3_presign::{Credentials, Presigner};
+use sea_orm::{
+    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait, Set,
+};
 use sea_orm_migration::MigratorTrait;
+use serde::Deserialize;
 
-use crate::{EventInfo, PeerInfo, PeerSession, Querier, RoomInfo, SessionInfo, Storage};
+use crate::{EventInfo, PagingResponse, PeerInfo, PeerSession, Querier, RoomInfo, SessionInfo, Storage};
 
 mod entity;
 mod migration;
 
+#[derive(Deserialize, Clone)]
+pub struct S3Options {
+    pub path_style: Option<bool>,
+    pub region: Option<String>,
+}
+
 pub struct ConnectorStorage {
     db: DatabaseConnection,
+    s3: Presigner,
+    s3_sub_folder: String,
 }
 
 impl ConnectorStorage {
-    pub async fn new(sql_uri: &str) -> Self {
+    pub async fn new(sql_uri: &str, s3_uri: &str) -> Self {
         let mut opt = ConnectOptions::new(sql_uri.to_owned());
         opt.max_connections(100)
             .min_connections(5)
@@ -30,7 +43,20 @@ impl ConnectorStorage {
         let db = Database::connect(opt).await.expect("Should connect to sql server");
         migration::Migrator::up(&db, None).await.expect("Should run migration success");
 
-        Self { db }
+        let s3_endpoint = CustomUri::<S3Options>::try_from(s3_uri).expect("should parse s3");
+        let mut s3 = Presigner::new(
+            Credentials::new(s3_endpoint.username.expect("Should have s3 accesskey"), s3_endpoint.password.expect("Should have s3 secretkey"), None),
+            s3_endpoint.path.first().as_ref().expect("Should have bucket name"),
+            s3_endpoint.query.region.as_ref().unwrap_or(&"".to_string()),
+        );
+        s3.endpoint(s3_endpoint.endpoint.as_str());
+        if s3_endpoint.query.path_style == Some(true) {
+            s3.use_path_style();
+        }
+
+        let s3_sub_folder = s3_endpoint.path[1..].join("/");
+
+        Self { db, s3, s3_sub_folder }
     }
 
     async fn on_peer_event(&self, from: NodeId, ts: u64, session: u64, event: peer_event::Event) -> Option<()> {
@@ -387,19 +413,45 @@ impl ConnectorStorage {
 }
 
 impl Storage for ConnectorStorage {
-    async fn on_event(&self, from: NodeId, ts: u64, _req_id: u64, event: connector_request::Event) -> Option<()> {
+    async fn on_event(&self, from: NodeId, ts: u64, event: connector_request::Request) -> Option<connector_response::Response> {
         match event {
-            connector_request::Event::Peer(event) => self.on_peer_event(from, ts, event.session_id, event.event?).await,
+            connector_request::Request::Peer(event) => {
+                self.on_peer_event(from, ts, event.session_id, event.event?).await;
+                Some(connector_response::Response::Peer(PeerRes {}))
+            }
+            connector_request::Request::Record(req) => {
+                let path = std::path::Path::new(&self.s3_sub_folder)
+                    .join(req.room)
+                    .join(req.peer)
+                    .join(req.session.to_string())
+                    .join(format!("{}-{}-{}.rec", req.index, req.from_ts, req.to_ts))
+                    .to_str()?
+                    .to_string();
+                let s3_uri = self.s3.put(&path, 86400).expect("Should create s3_uri");
+                Some(connector_response::Response::Record(RecordRes { s3_uri }))
+            }
         }
     }
 }
 
+#[derive(FromQueryResult)]
+struct RoomInfoAndPeersCount {
+    pub id: i32,
+    pub room: String,
+    pub created_at: i64,
+    pub peers: i32,
+}
+
 impl Querier for ConnectorStorage {
-    async fn rooms(&self, page: usize, count: usize) -> Option<Vec<RoomInfo>> {
+    async fn rooms(&self, page: usize, limit: usize) -> Option<PagingResponse<RoomInfo>> {
         let rooms = entity::room::Entity::find()
+            .column_as(entity::peer::Column::Id.count(), "peers")
+            .join_rev(JoinType::LeftJoin, entity::peer::Relation::Room.def())
+            .group_by(entity::room::Column::Id)
             .order_by(entity::room::Column::CreatedAt, sea_orm::Order::Desc)
-            .limit(count as u64)
-            .offset((page * count) as u64)
+            .limit(limit as u64)
+            .offset((page * limit) as u64)
+            .into_model::<RoomInfoAndPeersCount>()
             .all(&self.db)
             .await
             .ok()?
@@ -408,13 +460,18 @@ impl Querier for ConnectorStorage {
                 id: r.id,
                 room: r.room,
                 created_at: r.created_at as u64,
-                peers: 0, //TODO count peers
+                peers: r.peers as usize,
             })
             .collect::<Vec<_>>();
-        Some(rooms)
+        let total = entity::room::Entity::find().count(&self.db).await.ok()?;
+        Some(PagingResponse {
+            data: rooms,
+            current: page,
+            total: calc_page_num(total as usize, limit),
+        })
     }
 
-    async fn peers(&self, room: Option<i32>, page: usize, count: usize) -> Option<Vec<PeerInfo>> {
+    async fn peers(&self, room: Option<i32>, page: usize, limit: usize) -> Option<PagingResponse<PeerInfo>> {
         let peers = entity::peer::Entity::find();
         let peers = if let Some(room) = room {
             peers.filter(entity::peer::Column::Room.eq(room))
@@ -422,72 +479,112 @@ impl Querier for ConnectorStorage {
             peers
         };
 
+        let total = peers.clone().count(&self.db).await.ok()?;
         let peers = peers
             .order_by(entity::peer::Column::CreatedAt, sea_orm::Order::Desc)
-            .limit(count as u64)
-            .offset((page * count) as u64)
-            .find_with_related(entity::peer_session::Entity)
-            .all(&self.db)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|(r, sessions)| PeerInfo {
-                id: r.id,
-                room_id: r.room,
-                room: "".to_string(), //TODO get room
-                peer: r.peer.clone(),
-                created_at: r.created_at as u64,
-                sessions: sessions
-                    .into_iter()
-                    .map(|s| PeerSession {
-                        id: s.id,
-                        peer_id: s.peer,
-                        peer: r.peer.clone(),
-                        session: s.session as u64,
-                        joined_at: s.joined_at as u64,
-                        leaved_at: s.leaved_at.map(|l| l as u64),
-                    })
-                    .collect::<Vec<_>>(),
-            })
-            .collect::<Vec<_>>();
-
-        Some(peers)
-    }
-
-    async fn sessions(&self, page: usize, count: usize) -> Option<Vec<SessionInfo>> {
-        let sessions = entity::session::Entity::find()
-            .order_by(entity::session::Column::CreatedAt, sea_orm::Order::Desc)
-            .limit(count as u64)
-            .offset((page * count) as u64)
-            .find_with_related(entity::peer_session::Entity)
+            .find_with_related(entity::room::Entity)
+            .group_by(entity::peer::Column::Id)
+            .limit(limit as u64)
+            .offset((page * limit) as u64)
             .all(&self.db)
             .await
             .ok()?
             .into_iter()
-            .map(|(r, peers)| SessionInfo {
-                id: r.id as u64,
-                created_at: r.created_at as u64,
-                ip: r.ip,
-                user_agent: r.user_agent,
-                sdk: r.sdk,
-                peers: peers
-                    .into_iter()
-                    .map(|s| PeerSession {
-                        id: s.id,
-                        peer_id: s.peer,
-                        peer: "_".to_string(), //TODO get peer
-                        session: s.session as u64,
-                        joined_at: s.joined_at as u64,
-                        leaved_at: s.leaved_at.map(|l| l as u64),
-                    })
-                    .collect::<Vec<_>>(),
-            })
             .collect::<Vec<_>>();
-        log::info!("{:?}", sessions);
-        Some(sessions)
+
+        // TODO optimize this sub queries
+        // should combine into single query but it not allowed by sea-orm with multiple find_with_related
+        let peer_ids = peers.iter().map(|(p, _)| p.id).collect::<Vec<_>>();
+        let peer_sessions = entity::peer_session::Entity::find()
+            .filter(entity::peer_session::Column::Peer.is_in(peer_ids))
+            .all(&self.db)
+            .await
+            .ok()?;
+        let mut peers_sessions_map = HashMap::new();
+        for peer_session in peer_sessions {
+            let entry = peers_sessions_map.entry(peer_session.peer).or_insert(vec![]);
+            entry.push(peer_session);
+        }
+
+        Some(PagingResponse {
+            data: peers
+                .into_iter()
+                .map(|(peer, room)| PeerInfo {
+                    id: peer.id,
+                    room_id: peer.room,
+                    room: room.first().map(|r| r.room.clone()).unwrap_or("".to_string()),
+                    peer: peer.peer.clone(),
+                    created_at: peer.created_at as u64,
+                    sessions: peers_sessions_map
+                        .remove(&peer.id)
+                        .into_iter()
+                        .flatten()
+                        .map(|s| PeerSession {
+                            id: s.id,
+                            peer_id: s.peer,
+                            peer: peer.peer.clone(),
+                            session: s.session as u64,
+                            created_at: s.created_at as u64,
+                            joined_at: s.joined_at as u64,
+                            leaved_at: s.leaved_at.map(|l| l as u64),
+                        })
+                        .collect::<Vec<_>>(),
+                })
+                .collect::<Vec<_>>(),
+            current: page,
+            total: calc_page_num(total as usize, limit),
+        })
     }
 
-    async fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> Option<Vec<EventInfo>> {
+    async fn sessions(&self, page: usize, limit: usize) -> Option<PagingResponse<SessionInfo>> {
+        let sessions = entity::session::Entity::find()
+            .order_by(entity::session::Column::CreatedAt, sea_orm::Order::Desc)
+            .limit(limit as u64)
+            .offset((page * limit) as u64)
+            .find_with_related(entity::peer_session::Entity)
+            .all(&self.db)
+            .await
+            .ok()?;
+        let total = entity::session::Entity::find().count(&self.db).await.ok()?;
+
+        // TODO optimize this sub queries
+        // should combine into single query but it not allowed by sea-orm with multiple find_with_related
+        let peers_id = sessions.iter().flat_map(|(_, peers)| peers.iter().map(|p| p.peer)).collect::<Vec<_>>();
+        let peers = entity::peer::Entity::find().filter(entity::peer::Column::Id.is_in(peers_id)).all(&self.db).await.ok()?;
+        let mut peers_map = HashMap::new();
+        for peer in peers {
+            peers_map.insert(peer.id, peer);
+        }
+
+        Some(PagingResponse {
+            data: sessions
+                .into_iter()
+                .map(|(r, peers)| SessionInfo {
+                    id: r.id as u64,
+                    created_at: r.created_at as u64,
+                    ip: r.ip,
+                    user_agent: r.user_agent,
+                    sdk: r.sdk,
+                    peers: peers
+                        .into_iter()
+                        .map(|s| PeerSession {
+                            id: s.id,
+                            peer_id: s.peer,
+                            peer: peers_map.get(&s.peer).map(|p| p.peer.clone()).unwrap_or("_".to_string()),
+                            session: s.session as u64,
+                            created_at: s.created_at as u64,
+                            joined_at: s.joined_at as u64,
+                            leaved_at: s.leaved_at.map(|l| l as u64),
+                        })
+                        .collect::<Vec<_>>(),
+                })
+                .collect::<Vec<_>>(),
+            current: page,
+            total: calc_page_num(total as usize, limit),
+        })
+    }
+
+    async fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, limit: usize) -> Option<PagingResponse<EventInfo>> {
         let events = entity::event::Entity::find();
         let events = if let Some(session) = session {
             events.filter(entity::event::Column::Session.eq(session as i64))
@@ -507,10 +604,11 @@ impl Querier for ConnectorStorage {
             events
         };
 
+        let total = events.clone().count(&self.db).await.ok()?;
         let events = events
             .order_by(entity::event::Column::CreatedAt, sea_orm::Order::Desc)
-            .limit(count as u64)
-            .offset((page * count) as u64)
+            .limit(limit as u64)
+            .offset((page * limit) as u64)
             .all(&self.db)
             .await
             .unwrap()
@@ -525,7 +623,19 @@ impl Querier for ConnectorStorage {
                 meta: r.meta,
             })
             .collect::<Vec<_>>();
-        Some(events)
+        Some(PagingResponse {
+            data: events,
+            current: page,
+            total: calc_page_num(total as usize, limit),
+        })
+    }
+}
+
+fn calc_page_num(elms: usize, page_size: usize) -> usize {
+    if elms == 0 {
+        0
+    } else {
+        1 + (elms - 1) / page_size
     }
 }
 
@@ -539,22 +649,20 @@ mod tests {
 
     use crate::{Querier, Storage};
 
-    use super::ConnectorStorage;
+    use super::{calc_page_num, ConnectorStorage};
 
     #[tokio::test]
     async fn test_event() {
         let session_id = 10000;
         let node = 1;
         let ts = 1000;
-        let req_id = 0;
         let remote_ip = "127.0.0.1".to_string();
-        let storage = ConnectorStorage::new("sqlite::memory:").await;
+        let storage = ConnectorStorage::new("sqlite::memory:", "http://user:pass@localhost:9000/bucket").await;
         storage
             .on_event(
                 node,
                 ts,
-                req_id,
-                connector_request::Event::Peer(PeerEvent {
+                connector_request::Request::Peer(PeerEvent {
                     session_id,
                     event: Some(Event::RouteBegin(RouteBegin { remote_ip: remote_ip.clone() })),
                 }),
@@ -562,9 +670,20 @@ mod tests {
             .await
             .expect("Should process event");
 
-        assert_eq!(storage.sessions(0, 2).await.expect("Should got sessions").len(), 1);
-        assert_eq!(storage.events(None, None, None, 0, 2).await.expect("Should got events").len(), 1);
-        assert_eq!(storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events").len(), 1);
+        let sessions = storage.sessions(0, 2).await.expect("Should got sessions");
+        assert_eq!(sessions.data.len(), 1);
+        assert_eq!(sessions.total, 1);
+        assert_eq!(sessions.current, 0);
+
+        let events = storage.events(None, None, None, 0, 2).await.expect("Should got events");
+        assert_eq!(events.data.len(), 1);
+        assert_eq!(events.total, 1);
+        assert_eq!(events.current, 0);
+
+        let session_events = storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events");
+        assert_eq!(session_events.data.len(), 1);
+        assert_eq!(session_events.total, 1);
+        assert_eq!(session_events.current, 0);
     }
 
     #[tokio::test]
@@ -572,15 +691,13 @@ mod tests {
         let session_id = 10000;
         let node = 1;
         let ts = 1000;
-        let req_id = 0;
         let remote_ip = "127.0.0.1".to_string();
-        let storage = ConnectorStorage::new("sqlite::memory:").await;
+        let storage = ConnectorStorage::new("sqlite::memory:", "http://user:pass@localhost:9000/bucket").await;
         storage
             .on_event(
                 node,
                 ts,
-                req_id,
-                connector_request::Event::Peer(PeerEvent {
+                connector_request::Request::Peer(PeerEvent {
                     session_id,
                     event: Some(Event::Connecting(Connecting { remote_ip: remote_ip.clone() })),
                 }),
@@ -588,16 +705,26 @@ mod tests {
             .await
             .expect("Should process event");
 
-        assert_eq!(storage.sessions(0, 2).await.expect("Should got sessions").len(), 1);
-        assert_eq!(storage.events(None, None, None, 0, 2).await.expect("Should got events").len(), 1);
-        assert_eq!(storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events").len(), 1);
+        let sessions = storage.sessions(0, 2).await.expect("Should got sessions");
+        assert_eq!(sessions.data.len(), 1);
+        assert_eq!(sessions.total, 1);
+        assert_eq!(sessions.current, 0);
+
+        let events = storage.events(None, None, None, 0, 2).await.expect("Should got events");
+        assert_eq!(events.data.len(), 1);
+        assert_eq!(events.total, 1);
+        assert_eq!(events.current, 0);
+
+        let session_events = storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events");
+        assert_eq!(session_events.data.len(), 1);
+        assert_eq!(session_events.total, 1);
+        assert_eq!(session_events.current, 0);
 
         storage
             .on_event(
                 node,
                 ts,
-                req_id,
-                connector_request::Event::Peer(PeerEvent {
+                connector_request::Request::Peer(PeerEvent {
                     session_id,
                     event: Some(Event::Connected(Connected {
                         after_ms: 10,
@@ -608,14 +735,16 @@ mod tests {
             .await
             .expect("Should process event");
 
-        assert_eq!(storage.rooms(0, 2).await.expect("Should got rooms").len(), 0);
+        let rooms = storage.rooms(0, 2).await.expect("Should got rooms");
+        assert_eq!(rooms.data.len(), 0);
+        assert_eq!(rooms.total, 0);
+        assert_eq!(rooms.current, 0);
 
         storage
             .on_event(
                 node,
                 ts,
-                req_id,
-                connector_request::Event::Peer(PeerEvent {
+                connector_request::Request::Peer(PeerEvent {
                     session_id,
                     event: Some(Event::Join(Join {
                         room: "demo".to_string(),
@@ -626,7 +755,24 @@ mod tests {
             .await
             .expect("Should process event");
 
-        assert_eq!(storage.rooms(0, 2).await.expect("Should got rooms").len(), 1);
-        assert_eq!(storage.peers(None, 0, 2).await.expect("Should got rooms").len(), 1);
+        let rooms = storage.rooms(0, 2).await.expect("Should got rooms");
+        assert_eq!(rooms.data.len(), 1);
+        assert_eq!(rooms.total, 1);
+        assert_eq!(rooms.current, 0);
+
+        let peers = storage.peers(None, 0, 2).await.expect("Should got peers");
+        assert_eq!(peers.data.len(), 1);
+        assert_eq!(peers.total, 1);
+        assert_eq!(peers.current, 0);
+    }
+
+    //TODO: test with record link generate
+
+    #[test]
+    fn test_calc_page_num() {
+        assert_eq!(calc_page_num(0, 100), 0);
+        assert_eq!(calc_page_num(1, 100), 1);
+        assert_eq!(calc_page_num(99, 100), 1);
+        assert_eq!(calc_page_num(100, 100), 1);
     }
 }

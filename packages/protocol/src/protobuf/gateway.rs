@@ -28,7 +28,7 @@ pub struct RemoteIceRequest {
     pub candidates: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct RemoteIceResponse {
     #[prost(uint32, tag = "1")]
     pub added: u32,

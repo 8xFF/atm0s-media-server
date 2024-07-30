@@ -9,11 +9,7 @@ use atm0s_sdn::{
     NodeId, RouteRule,
 };
 use lru::LruCache;
-use media_server_protocol::protobuf::cluster_connector::{
-    connector_request::Event as ConnectorEvent,
-    connector_response::{Response, Success},
-    ConnectorRequest, ConnectorResponse,
-};
+use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, ConnectorRequest, ConnectorResponse};
 use prost::Message;
 
 use crate::{DATA_PORT, HANDLER_SERVICE_ID, HANDLER_SERVICE_NAME};
@@ -21,11 +17,12 @@ use crate::{DATA_PORT, HANDLER_SERVICE_ID, HANDLER_SERVICE_NAME};
 #[derive(Debug, Clone)]
 pub enum Control {
     Sub,
+    Res(NodeId, u64, connector_response::Response),
 }
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    Req(NodeId, u64, u64, ConnectorEvent),
+    Req(NodeId, u64, u64, connector_request::Request),
 }
 
 type ReqUuid = (NodeId, u64, u64);
@@ -35,6 +32,12 @@ pub struct ConnectorHandlerService<UserData, SC, SE, TC, TW> {
     subscriber: Option<ServiceControlActor<UserData>>,
     queue: VecDeque<ServiceOutput<UserData, FeaturesControl, SE, TW>>,
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
+}
+
+impl<UserData, SC, SE, TC, TW> Default for ConnectorHandlerService<UserData, SC, SE, TC, TW> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<UserData, SC, SE, TC, TW> ConnectorHandlerService<UserData, SC, SE, TC, TW> {
@@ -71,6 +74,13 @@ where
                         Control::Sub => {
                             self.subscriber = Some(owner);
                         }
+                        Control::Res(source, req_id, res) => {
+                            let res = ConnectorResponse { req_id, response: Some(res) };
+                            log::info!("[ConnectorHandler] reply to net {:?}", res);
+                            self.queue.push_back(ServiceOutput::FeatureControl(
+                                data::Control::DataSendRule(DATA_PORT, RouteRule::ToNode(source), NetOutgoingMeta::secure(), res.encode_to_vec()).into(),
+                            ));
+                        }
                     }
                 }
             }
@@ -86,22 +96,13 @@ where
                             }
 
                             log::info!("[ConnectorHandler] on event {:?}", msg);
-                            if let Some(event) = msg.event {
+                            if let Some(event) = msg.request {
                                 if let Some(actor) = self.subscriber {
                                     self.queue.push_back(ServiceOutput::Event(actor, Event::Req(source, msg.ts, msg.req_id, event).into()));
                                 } else {
                                     log::warn!("[ConnectorHandler] subscriber not found");
                                 }
                             }
-
-                            let res = ConnectorResponse {
-                                req_id: msg.req_id,
-                                response: Some(Response::Success(Success {})),
-                            };
-                            log::info!("[ConnectorHandler] reply to net {:?}", res);
-                            self.queue.push_back(ServiceOutput::FeatureControl(
-                                data::Control::DataSendRule(DATA_PORT, RouteRule::ToNode(source), NetOutgoingMeta::secure(), res.encode_to_vec()).into(),
-                            ));
                         } else {
                             log::warn!("[ConnectorHandler] reject msg without source");
                         }
@@ -150,6 +151,12 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
 
 pub struct ConnectorHandlerServiceBuilder<UserData, SC, SE, TC, TW> {
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
+}
+
+impl<UserData, SC, SE, TC, TW> Default for ConnectorHandlerServiceBuilder<UserData, SC, SE, TC, TW> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<UserData, SC, SE, TC, TW> ConnectorHandlerServiceBuilder<UserData, SC, SE, TC, TW> {

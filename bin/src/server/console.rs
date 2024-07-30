@@ -41,7 +41,7 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
     let storage = StorageShared::default();
 
     let node_id = node.node_id;
-    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, node.udp_port, node.custom_addrs);
+    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, &node.bind_addrs, node.bind_addrs_alt);
     let node_addr = builder.node_addr();
 
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));

@@ -30,7 +30,7 @@ impl<M: Message, const MAX_INFLIGHT: usize> MessageQueue<M, MAX_INFLIGHT> {
 
     pub fn pop(&mut self, now_ms: u64) -> Option<&M> {
         if let Some(msg_id) = self.pop_retry_msg_id(now_ms) {
-            let entry = self.inflight_ts.entry(now_ms).or_insert_with(Default::default);
+            let entry = self.inflight_ts.entry(now_ms).or_default();
             entry.push(msg_id);
             return Some(self.inflight.get(&msg_id).expect("should exist retry_msg_id"));
         }
@@ -38,7 +38,7 @@ impl<M: Message, const MAX_INFLIGHT: usize> MessageQueue<M, MAX_INFLIGHT> {
         if self.inflight.len() < MAX_INFLIGHT {
             let msg = self.queue.pop_front()?;
             let msg_id = msg.msg_id();
-            let entry = self.inflight_ts.entry(now_ms).or_insert_with(Default::default);
+            let entry = self.inflight_ts.entry(now_ms).or_default();
             entry.push(msg_id);
             self.inflight.insert(msg_id, msg);
             self.inflight.get(&msg_id)

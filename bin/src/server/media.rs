@@ -1,16 +1,25 @@
 use std::{
     collections::HashMap,
-    net::{IpAddr, SocketAddr, SocketAddrV4},
+    net::SocketAddr,
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
-use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut};
+use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut, TimePivot, TimeTicker};
 use clap::Parser;
 use media_server_gateway::ServiceKind;
-use media_server_protocol::{gateway::GATEWAY_RPC_PORT, protobuf::cluster_gateway::MediaEdgeServiceServer, rpc::quinn::QuinnServer};
-use media_server_runner::MediaConfig;
+use media_server_protocol::{
+    gateway::GATEWAY_RPC_PORT,
+    protobuf::{
+        cluster_connector::{connector_request, connector_response},
+        cluster_gateway::MediaEdgeServiceServer,
+    },
+    rpc::quinn::QuinnServer,
+};
+use media_server_record::MediaRecordService;
+use media_server_runner::{MediaConfig, UserData, SE};
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
+use media_server_utils::now_ms;
 use rand::random;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sans_io_runtime::{backend::PollingBackend, Controller};
@@ -38,21 +47,26 @@ pub struct Args {
     #[arg(env, long)]
     ice_lite: bool,
 
-    /// Binding port
-    #[arg(env, long, default_value_t = 0)]
-    media_port: u16,
-
-    /// Allow private ip
-    #[arg(env, long, default_value_t = false)]
-    allow_private_ip: bool,
-
-    /// Custom binding address for WebRTC UDP
-    #[arg(env, long)]
-    custom_ips: Vec<IpAddr>,
+    /// Seed port for binding media UDP socket. It will increase by one for each worker.
+    /// Default: worker0: 20000, worker1: 20001, worker2: 20002, ...
+    #[arg(env, long, default_value_t = 20000)]
+    webrtc_port_seed: u16,
 
     /// Max ccu per core
     #[arg(env, long, default_value_t = 200)]
     ccu_per_core: u32,
+
+    /// Record cache
+    #[arg(env, long, default_value = "./record_cache/")]
+    record_cache: String,
+
+    /// Record memory max size in bytes
+    #[arg(env, long, default_value_t = 100_000_000)]
+    record_mem_max_size: usize,
+
+    /// Record upload workers
+    #[arg(env, long, default_value_t = 5)]
+    record_upload_worker: usize,
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -79,25 +93,21 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let node_id = node.node_id;
     let node_session = random();
 
-    let mut webrtc_addrs = args.custom_ips.into_iter().map(|ip| SocketAddr::new(ip, args.media_port)).collect::<Vec<_>>();
-    local_ip_address::local_ip().into_iter().for_each(|ip| {
-        if let IpAddr::V4(ip) = ip {
-            if !ip.is_private() || args.allow_private_ip {
-                println!("Detect local ip: {ip}");
-                webrtc_addrs.push(SocketAddr::V4(SocketAddrV4::new(ip, 0)));
-            }
-        }
-    });
-
-    println!("Running media server with addrs: {:?}, ice-lite: {}", webrtc_addrs, args.ice_lite);
     let mut controller = Controller::<_, _, _, _, _, 128>::default();
     for i in 0..workers {
+        let webrtc_port = args.webrtc_port_seed + i as u16;
+        let webrtc_addrs = node.bind_addrs.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
+        let webrtc_addrs_alt = node.bind_addrs_alt.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
+
+        println!("Running media server worker {i} with addrs: {:?}, ice-lite: {}", webrtc_addrs, args.ice_lite);
+
         let cfg = runtime_worker::ICfg {
             controller: i == 0,
             node: node.clone(),
             session: node_session,
             media: MediaConfig {
-                webrtc_addrs: webrtc_addrs.clone(),
+                webrtc_addrs,
+                webrtc_addrs_alt,
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
                 max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core)]),
@@ -107,7 +117,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     }
 
     for seed in node.seeds {
-        controller.send_to(0, ExtIn::Sdn(SdnExtIn::ConnectTo(seed)));
+        controller.send_to(0, ExtIn::Sdn(SdnExtIn::ConnectTo(seed), true));
     }
 
     let mut req_id_seed = 0;
@@ -136,20 +146,49 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     // for routing to best media-node
     let mut node_metrics_collector = NodeMetricsCollector::default();
 
+    // Collect record packets into chunks and upload to service
+    let mut record_service = MediaRecordService::new(args.record_upload_worker, &args.record_cache, args.record_mem_max_size);
+    let timer = TimePivot::build();
+    let mut ticker = TimeTicker::build(1000);
+
     loop {
         if controller.process().is_none() {
             break;
+        }
+
+        if ticker.tick(Instant::now()) {
+            record_service.on_tick(timer.timestamp_ms(Instant::now()));
         }
 
         // Pop from metric collector and pass to Gateway agent service
         if let Some(metrics) = node_metrics_collector.pop_measure() {
             controller.send_to(
                 0, //because sdn controller allway is run inside worker 0
-                ExtIn::NodeStats(metrics).into(),
+                ExtIn::NodeStats(metrics),
             );
         }
+        // Pop control and event from record storage
+        while let Some(out) = record_service.pop_output() {
+            match out {
+                media_server_record::Output::Stats(_) => {
+                    //TODO
+                }
+                media_server_record::Output::UploadRequest(upload_id, req) => {
+                    controller.send_to_best(ExtIn::Sdn(
+                        SdnExtIn::ServicesControl(
+                            media_server_connector::AGENT_SERVICE_ID.into(),
+                            UserData::Record(upload_id),
+                            media_server_connector::agent_service::Control::Request(now_ms(), connector_request::Request::Record(req)).into(),
+                        ),
+                        false,
+                    ));
+                }
+            }
+        }
+
         while let Ok(control) = vnet_rx.try_recv() {
-            controller.send_to_best(ExtIn::Sdn(SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, control.into())));
+            // TODO: fix bug with send_to_best cause cannot connect, avoid send to worker 0
+            controller.send_to(0, ExtIn::Sdn(SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, control.into()), true));
         }
         while let Ok(req) = req_rx.try_recv() {
             let req_id = req_id_seed;
@@ -188,6 +227,21 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                     if let Err(e) = vnet_tx.try_send(event) {
                         log::error!("[MediaEdge] forward Sdn SocketEvent error {:?}", e);
                     }
+                }
+                ExtOut::Sdn(SdnExtOut::ServicesEvent(_service, userdata, SE::Connector(event))) => {
+                    match event {
+                        media_server_connector::agent_service::Event::Response(res) => {
+                            if let (UserData::Record(upload_id), connector_response::Response::Record(res)) = (userdata, res) {
+                                record_service.on_input(timer.timestamp_ms(Instant::now()), media_server_record::Input::UploadResponse(upload_id, res));
+                            }
+                        }
+                        media_server_connector::agent_service::Event::Stats { queue: _, inflight: _, acked: _ } => {
+                            //TODO
+                        }
+                    }
+                }
+                ExtOut::Record(session, ts, event) => {
+                    record_service.on_input(timer.timestamp_ms(Instant::now()), media_server_record::Input::Event(session, timer.timestamp_ms(ts), event));
                 }
                 _ => {}
             }

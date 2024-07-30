@@ -3,17 +3,21 @@ use std::{collections::VecDeque, time::Instant};
 use atm0s_sdn::{SdnExtIn, SdnExtOut, SdnWorkerBusEvent};
 
 use media_server_gateway::NodeMetrics;
-use media_server_protocol::transport::{RpcReq, RpcRes};
+use media_server_protocol::{
+    record::SessionRecordEvent,
+    transport::{RpcReq, RpcRes},
+};
 use media_server_runner::{Input as WorkerInput, MediaConfig, MediaServerWorker, Output as WorkerOutput, Owner, UserData, SC, SE, TC, TW};
 use media_server_secure::MediaEdgeSecure;
-use rand::random;
 use sans_io_runtime::{BusChannelControl, BusControl, BusEvent, WorkerInner, WorkerInnerInput, WorkerInnerOutput};
 
 use crate::NodeConfig;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum ExtIn {
-    Sdn(SdnExtIn<UserData, SC>),
+    /// ext, send controller or worker, true is controller
+    Sdn(SdnExtIn<UserData, SC>, bool),
     Rpc(u64, RpcReq<usize>),
     NodeStats(NodeMetrics),
 }
@@ -22,6 +26,7 @@ pub enum ExtIn {
 pub enum ExtOut {
     Rpc(u64, u16, RpcRes<usize>),
     Sdn(SdnExtOut<UserData, SE>),
+    Record(u64, Instant, SessionRecordEvent),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -58,11 +63,11 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
         let worker = MediaServerWorker::new(
             index,
             cfg.node.node_id,
-            random(),
+            cfg.session,
             &cfg.node.secret,
             cfg.controller,
-            cfg.node.udp_port,
-            cfg.node.custom_addrs,
+            cfg.node.bind_addrs,
+            cfg.node.bind_addrs_alt,
             cfg.node.zone,
             cfg.media,
         );
@@ -115,6 +120,7 @@ impl<ES: MediaEdgeSecure> MediaRuntimeWorker<ES> {
             },
             WorkerOutput::Net(owner, out) => Output::Net(owner, out),
             WorkerOutput::Continue => Output::Continue,
+            WorkerOutput::Record(session_id, ts, event) => Output::Ext(true, ExtOut::Record(session_id, ts, event)),
         }
     }
 
@@ -126,7 +132,7 @@ impl<ES: MediaEdgeSecure> MediaRuntimeWorker<ES> {
             },
             Input::Ext(ext) => match ext {
                 ExtIn::Rpc(req_id, ext) => WorkerInput::ExtRpc(req_id, ext),
-                ExtIn::Sdn(ext) => WorkerInput::ExtSdn(ext),
+                ExtIn::Sdn(ext, is_controller) => WorkerInput::ExtSdn(ext, is_controller),
                 ExtIn::NodeStats(metrics) => WorkerInput::NodeStats(metrics),
             },
             Input::Net(owner, event) => WorkerInput::Net(owner, event),

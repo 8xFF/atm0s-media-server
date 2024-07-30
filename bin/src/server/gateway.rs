@@ -95,7 +95,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     let node_id = node.node_id;
 
-    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, node.udp_port, node.custom_addrs);
+    let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, &node.bind_addrs, node.bind_addrs_alt);
     let node_addr = builder.node_addr();
     let node_info = ClusterNodeInfo::Gateway(
         ClusterNodeGenericInfo {
@@ -221,7 +221,8 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                     media_server_gateway::store_service::Event::FindNodeRes(req_id, res) => requester.on_find_node_res(req_id, res),
                 },
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
-                    media_server_connector::agent_service::Event::Stats { queue, inflight, acked } => {}
+                    media_server_connector::agent_service::Event::Stats { queue: _, inflight: _, acked: _ } => {}
+                    media_server_connector::agent_service::Event::Response(_) => {}
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {
                     if let Err(e) = vnet_tx.try_send(event) {
