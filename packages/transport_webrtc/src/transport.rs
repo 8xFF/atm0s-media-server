@@ -149,13 +149,19 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
             VariantParams::Whip(room, peer, extra_data, _record) => Box::new(whip::TransportWebrtcWhip::new(room, peer, extra_data, remote)),
             VariantParams::Whep(room, peer, extra_data) => Box::new(whep::TransportWebrtcWhep::new(room, peer, extra_data, remote)),
             VariantParams::Webrtc(_user_agent, req, extra_data, _record, secure) => {
+                // after first release we switched to channel_id 0 for resolving problem with firefox
+                let channel_id = if req.version.eq("pure-ts@0.0.0") {
+                    1000
+                } else {
+                    0
+                };
                 rtc.direct_api().create_data_channel(ChannelConfig {
                     label: "data".to_string(),
-                    negotiated: Some(1000),
+                    negotiated: Some(channel_id),
                     ..Default::default()
                 });
-                //we need to start sctp as client side for handling restart-ice in new server
-                //if not, datachannel will not connect successful after reconnect to new server
+                // we need to start sctp as client side for handling restart-ice in new server
+                // if not, datachannel will not connect successful after reconnect to new server
                 rtc.direct_api().start_sctp(true);
                 Box::new(webrtc::TransportWebrtcSdk::new(req, extra_data, secure, remote))
             }
