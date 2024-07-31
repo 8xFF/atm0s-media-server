@@ -62,23 +62,6 @@ impl<T: ParseFromJSON + ToJSON + Type + Send + Sync> Default for Response<T> {
     }
 }
 
-pub struct Rpc<Req, Res> {
-    pub req: Req,
-    pub answer_tx: tokio::sync::oneshot::Sender<Res>,
-}
-
-impl<Req, Res> Rpc<Req, Res> {
-    pub fn new(req: Req) -> (Self, tokio::sync::oneshot::Receiver<Res>) {
-        let (answer_tx, answer_rx) = tokio::sync::oneshot::channel();
-        (Self { req, answer_tx }, answer_rx)
-    }
-
-    #[allow(unused)]
-    pub fn res(self, res: Res) {
-        let _ = self.answer_tx.send(res);
-    }
-}
-
 #[cfg(feature = "console")]
 pub async fn run_console_http_server(
     port: u16,
@@ -128,7 +111,7 @@ pub async fn run_console_http_server(
 #[cfg(feature = "gateway")]
 pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, GS: 'static + MediaGatewaySecure + Send + Sync>(
     port: u16,
-    sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
+    sender: Sender<crate::rpc::Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
     edge_secure: Arc<ES>,
     gateway_secure: Arc<GS>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -161,7 +144,7 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
 #[cfg(feature = "media")]
 pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, GS: 'static + MediaGatewaySecure + Send + Sync>(
     port: u16,
-    sender: Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
+    sender: Sender<crate::rpc::Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
     edge_secure: Arc<ES>,
     gateway_secure: Option<Arc<GS>>,
 ) -> Result<(), Box<dyn std::error::Error>> {

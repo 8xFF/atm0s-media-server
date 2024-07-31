@@ -11,10 +11,13 @@ use media_server_protocol::{
     rpc::quinn::{QuinnClient, QuinnServer},
 };
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
+use rtpengine_ngcontrol::NgUdpTransport;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
+use std::net::SocketAddr;
 
 use crate::{
     http::run_gateway_http_server,
+    ng_controller::NgControllerServer,
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, make_quinn_server, VirtualNetwork},
     NodeConfig,
@@ -69,6 +72,10 @@ pub struct Args {
     /// Max disk usage (in percent) of media-node or gateway-node we allow to route to
     #[arg(env, long, default_value_t = 90)]
     max_disk: u8,
+
+    /// Port for binding rtpengine command UDP socket.
+    #[arg(env, long, default_value = "127.0.0.1:22222")]
+    rtpengine_cmd_addr: Option<SocketAddr>,
 }
 
 pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -86,10 +93,25 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let gateway_secure = Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes()));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     if let Some(http_port) = http_port {
+        let req_tx = req_tx.clone();
+        let secure2 = edge_secure.clone();
         tokio::spawn(async move {
-            if let Err(e) = run_gateway_http_server(http_port, req_tx, edge_secure, gateway_secure).await {
+            if let Err(e) = run_gateway_http_server(http_port, req_tx, secure2, gateway_secure).await {
                 log::error!("HTTP Error: {}", e);
             }
+        });
+    }
+
+    //Running ng controller for Voip
+    if let Some(ngproto_addr) = args.rtpengine_cmd_addr {
+        let req_tx = req_tx.clone();
+        let rtpengine_udp = NgUdpTransport::new(ngproto_addr).await;
+        let secure2 = edge_secure.clone();
+        tokio::spawn(async move {
+            log::info!("[MediaServer] start ng_controller task");
+            let mut server = NgControllerServer::new(rtpengine_udp, secure2, req_tx);
+            while server.recv().await.is_some() {}
+            log::info!("[MediaServer] stop ng_controller task");
         });
     }
 

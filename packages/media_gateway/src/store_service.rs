@@ -69,6 +69,7 @@ where
                         disk: ping.disk as u8,
                         origin,
                         webrtc: ping.webrtc,
+                        rtpengine: ping.rtpengine,
                     },
                 )
             }
@@ -107,6 +108,7 @@ where
                             memory: ping.memory as u32,
                             disk: ping.disk as u32,
                             webrtc: ping.webrtc,
+                            rtpengine: ping.rtpengine,
                             origin: Some(ping.origin),
                         })),
                     }

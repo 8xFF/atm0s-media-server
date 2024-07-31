@@ -13,6 +13,7 @@ pub struct PingEvent {
     pub disk: u8,
     pub origin: Origin,
     pub webrtc: Option<ServiceStats>,
+    pub rtpengine: Option<ServiceStats>,
 }
 
 pub struct GatewayStore {
@@ -20,6 +21,7 @@ pub struct GatewayStore {
     node: NodeMetrics,
     location: Location,
     webrtc: ServiceStore,
+    rtpengine: ServiceStore,
     output: Option<PingEvent>,
     max_cpu: u8,
     max_memory: u8,
@@ -31,6 +33,7 @@ impl GatewayStore {
         Self {
             node: NodeMetrics::default(),
             webrtc: ServiceStore::new(ServiceKind::Webrtc, location),
+            rtpengine: ServiceStore::new(ServiceKind::RtpEngine, location),
             zone,
             location,
             output: None,
@@ -56,6 +59,7 @@ impl GatewayStore {
                 location: Some(self.location),
             }),
             webrtc: self.webrtc.local_stats(),
+            rtpengine: self.rtpengine.local_stats(),
         };
 
         log::trace!("[GatewayStore] create ping event for broadcast {:?}", ping);
@@ -66,14 +70,24 @@ impl GatewayStore {
         log::debug!("[GatewayStore] on ping from {from} data {:?}", ping);
         let node_usage = node_usage(&ping, self.max_cpu, self.max_memory, self.max_disk);
         let webrtc_usage = webrtc_usage(&ping, self.max_cpu, self.max_memory, self.max_disk);
+        let rtpengine_usage = rtpengine_usage(&ping, self.max_cpu, self.max_memory, self.max_disk);
         match ping.origin {
-            Origin::Media(_) => match (node_usage, webrtc_usage, ping.webrtc) {
-                (Some(_node), Some(webrtc), Some(stats)) => self.webrtc.on_node_ping(now, from, webrtc, stats),
-                e => {
-                    log::warn!("[GatewayStore] remove node because usage too high {:?}", e);
-                    self.webrtc.remove_node(from);
+            Origin::Media(_) => {
+                match (node_usage, webrtc_usage, ping.webrtc) {
+                    (Some(_node), Some(webrtc), Some(stats)) => self.webrtc.on_node_ping(now, from, webrtc, stats),
+                    e => {
+                        log::warn!("[GatewayStore] remove node from webrtc because usage too high {:?}", e);
+                        self.webrtc.remove_node(from);
+                    }
                 }
-            },
+                match (node_usage, rtpengine_usage, ping.rtpengine) {
+                    (Some(_node), Some(rtpengine), Some(stats)) => self.rtpengine.on_node_ping(now, from, rtpengine, stats),
+                    e => {
+                        log::warn!("[GatewayStore] remove node from rtpengine because usage too high {:?}", e);
+                        self.rtpengine.remove_node(from);
+                    }
+                }
+            }
             Origin::Gateway(gateway) => {
                 if gateway.zone == self.zone {
                     //Reject stats from same zone
@@ -90,6 +104,7 @@ impl GatewayStore {
     pub fn best_for(&self, kind: ServiceKind, location: Option<Location>) -> Option<u32> {
         let node = match kind {
             ServiceKind::Webrtc => self.webrtc.best_for(location),
+            ServiceKind::RtpEngine => self.rtpengine.best_for(location),
         };
         log::debug!("[GatewayStore] query best {:?} for {:?} got {:?}", kind, location, node);
         node
@@ -137,6 +152,23 @@ fn webrtc_usage(ping: &PingEvent, max_cpu: u8, max_memory: u8, max_disk: u8) -> 
     webrtc.active.then(|| ping.cpu.max(((webrtc.live * 100) / webrtc.max) as u8))
 }
 
+fn rtpengine_usage(ping: &PingEvent, max_cpu: u8, max_memory: u8, max_disk: u8) -> Option<u8> {
+    if ping.cpu >= max_cpu {
+        return None;
+    }
+
+    if ping.memory >= max_memory {
+        return None;
+    }
+
+    if ping.disk >= max_disk {
+        return None;
+    }
+
+    let rtpengine = ping.rtpengine.as_ref()?;
+    rtpengine.active.then(|| ping.cpu.max(((rtpengine.live * 100) / rtpengine.max) as u8))
+}
+
 #[cfg(test)]
 mod tests {
     use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, GatewayOrigin, MediaOrigin, Origin, ServiceStats};
@@ -157,6 +189,7 @@ mod tests {
                 disk: 0,
                 origin: Origin::Media(MediaOrigin {}),
                 webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+                rtpengine: None,
             },
         );
 
@@ -175,6 +208,7 @@ mod tests {
                     zone: 0,
                 }),
                 webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+                rtpengine: None,
             })
         );
     }
@@ -191,6 +225,7 @@ mod tests {
                 disk: 20,
                 origin: Origin::Media(MediaOrigin {}),
                 webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+                rtpengine: None,
             },
         );
 
@@ -203,6 +238,7 @@ mod tests {
                 disk: 90,
                 origin: Origin::Media(MediaOrigin {}),
                 webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+                rtpengine: None,
             },
         );
 
@@ -215,6 +251,7 @@ mod tests {
                 disk: 20,
                 origin: Origin::Media(MediaOrigin {}),
                 webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+                rtpengine: None,
             },
         );
 
@@ -236,6 +273,7 @@ mod tests {
                     zone: 256,
                 }),
                 webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+                rtpengine: None,
             },
         );
 
@@ -254,6 +292,7 @@ mod tests {
                     zone: 0,
                 }),
                 webrtc: None,
+                rtpengine: None,
             })
         );
     }

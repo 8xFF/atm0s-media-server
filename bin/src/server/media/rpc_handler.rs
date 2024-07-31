@@ -6,21 +6,21 @@ use media_server_protocol::{
     endpoint::ClusterConnId,
     protobuf::{
         cluster_gateway::{
-            MediaEdgeServiceHandler, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WebrtcRestartIceRequest, WebrtcRestartIceResponse, WhepCloseRequest,
-            WhepCloseResponse, WhepConnectRequest, WhepConnectResponse, WhepRemoteIceRequest, WhepRemoteIceResponse, WhipCloseRequest, WhipCloseResponse, WhipConnectRequest, WhipConnectResponse,
-            WhipRemoteIceRequest, WhipRemoteIceResponse,
+            MediaEdgeServiceHandler, RtpEngineConnectRequest, RtpEngineConnectResponse, RtpEngineDeleteRequest, RtpEngineDeleteResponse, WebrtcConnectRequest, WebrtcConnectResponse,
+            WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WebrtcRestartIceRequest, WebrtcRestartIceResponse, WhepCloseRequest, WhepCloseResponse, WhepConnectRequest, WhepConnectResponse,
+            WhepRemoteIceRequest, WhepRemoteIceResponse, WhipCloseRequest, WhipCloseResponse, WhipConnectRequest, WhipConnectResponse, WhipRemoteIceRequest, WhipRemoteIceResponse,
         },
         gateway::RemoteIceRequest,
     },
     transport::{
-        webrtc,
+        rtpengine, webrtc,
         whep::{self, WhepDeleteReq, WhepRemoteIceReq},
         whip::{self, WhipDeleteReq, WhipRemoteIceReq},
         RpcReq, RpcRes,
     },
 };
 
-use crate::http::Rpc;
+use crate::rpc::Rpc;
 
 #[derive(Clone)]
 pub struct Ctx {
@@ -169,6 +169,33 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
                 r.conn_id = conn.to_string();
                 WebrtcRestartIceResponse { res: Some(r) }
             }),
+            _ => None,
+        }
+    }
+
+    /* Start of rtp-engine */
+    async fn rtp_engine_connect(&self, ctx: &Ctx, req: RtpEngineConnectRequest) -> Option<RtpEngineConnectResponse> {
+        let req = req.try_into().ok()?;
+        log::info!("On rtp_engine_connect from gateway");
+        let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::Connect(req)));
+        ctx.req_tx.send(req).await.ok()?;
+        let res = rx.await.ok()?;
+        match res {
+            RpcRes::RtpEngine(rtpengine::RpcRes::Connect(res)) => res.ok().map(|(conn, sdp)| RtpEngineConnectResponse { sdp, conn: conn.to_string() }),
+            _ => None,
+        }
+    }
+
+    async fn rtp_engine_delete(&self, ctx: &Ctx, req: RtpEngineDeleteRequest) -> Option<RtpEngineDeleteResponse> {
+        log::info!("On rtp_engine_delete from gateway");
+        let conn_id = req.conn.parse().ok()?;
+        let conn = req.conn.clone();
+        let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::Delete(conn_id)));
+        ctx.req_tx.send(req).await.ok()?;
+        let res = rx.await.ok()?;
+        //TODO process with ICE restart
+        match res {
+            RpcRes::RtpEngine(rtpengine::RpcRes::Delete(res)) => res.ok().map(|_r| RtpEngineDeleteResponse { conn }),
             _ => None,
         }
     }

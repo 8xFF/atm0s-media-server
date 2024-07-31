@@ -5,6 +5,7 @@ pub mod store_service;
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum ServiceKind {
     Webrtc,
+    RtpEngine,
 }
 
 #[derive(Debug, Clone, Default)]

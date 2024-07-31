@@ -41,6 +41,7 @@ message PingEvent {
     uint32 disk = 5;
 
     ServiceStats webrtc = 6;
+    ServiceStats rtpengine = 7;
 }
 
 message Empty {}
@@ -57,6 +58,9 @@ service MediaEdge {
     rpc WebrtcConnect (WebrtcConnectRequest) returns (WebrtcConnectResponse);
     rpc WebrtcRemoteIce (WebrtcRemoteIceRequest) returns (WebrtcRemoteIceResponse);
     rpc WebrtcRestartIce (WebrtcRestartIceRequest) returns (WebrtcRestartIceResponse);
+
+    rpc RtpEngineConnect (RtpEngineConnectRequest) returns (RtpEngineConnectResponse);
+    rpc RtpEngineDelete (RtpEngineDeleteRequest) returns (RtpEngineDeleteResponse);
 }
 
 //For whip
@@ -160,4 +164,27 @@ message WebrtcRestartIceRequest {
 
 message WebrtcRestartIceResponse {
     gateway.ConnectResponse res = 1;
+}
+
+//For RtpEngine
+message RtpEngineConnectRequest {
+    uint64 session_id = 1;
+    string room = 2;
+    string peer = 3;
+    string sdp = 4;
+    bool record = 5;
+    optional string extra_data = 6;
+}
+
+message RtpEngineConnectResponse {
+    string conn = 1;
+    string sdp = 2;
+}
+
+message RtpEngineDeleteRequest {
+    string conn = 1;
+}
+
+message RtpEngineDeleteResponse {
+    string conn = 1;
 }
