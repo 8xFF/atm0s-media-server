@@ -14,7 +14,7 @@ prost = { workspace = true }
 poem = { version = "3.0", features = ["static-files"] }
 poem-openapi = { version = "5.0", features = ["swagger-ui"] }
 rust-embed = { version = "8.0", features = ["compression"], optional = true }
-tokio = { version = "1.37", features = ["full"] }
+tokio = { version = "1.39", features = ["full"] }
 sans-io-runtime = { workspace = true }
 atm0s-sdn = { workspace = true }
 media-server-protocol = { path = "../packages/protocol", features = ["quinn-rpc"] }
