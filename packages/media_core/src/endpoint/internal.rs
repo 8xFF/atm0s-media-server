@@ -452,7 +452,7 @@ impl EndpointInternal {
             },
             ClusterEndpointEvent::RemoteTrack(track, event) => self.on_cluster_remote_track(now, track, event),
             ClusterEndpointEvent::LocalTrack(track, event) => self.on_cluster_local_track(now, track, event),
-            ClusterEndpointEvent::MessageChannelData(key, from, message) => self.queue.push_back(InternalOutput::Event(EndpointEvent::ChannelMessage(key, from, message))),
+            ClusterEndpointEvent::MessageChannelData(key, from, message) => self.queue.push_back(InternalOutput::Event(EndpointEvent::ChannelMessage(key.into(), from, message))),
         }
     }
 

@@ -5,15 +5,18 @@ use std::{
 };
 
 use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId};
-use media_server_protocol::datachannel::MessageChannelPacket;
+use media_server_protocol::message_channel::MessageChannelPacket;
 use sans_io_runtime::{return_if_none, TaskSwitcherChild};
 
 use super::Output;
-use crate::cluster::{id_generator, ClusterEndpointEvent, ClusterRoomHash};
+use crate::{
+    cluster::{id_generator, ClusterEndpointEvent, ClusterRoomHash},
+    endpoint::MessageChannelLabel,
+};
 
 struct ChannelContainer<Endpoint> {
     subscribers: HashSet<Endpoint>,
-    label: String,
+    label: MessageChannelLabel,
 }
 
 pub struct MessageChannelSubscriber<Endpoint> {
@@ -37,10 +40,10 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelSubscriber<Endpoint> {
         self.queue.is_empty() && self.subscriptions.is_empty() && self.channels.is_empty()
     }
 
-    pub fn on_channel_subscribe(&mut self, endpoint: Endpoint, label: &str) {
+    pub fn on_channel_subscribe(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         log::info!("[ClusterRoomDataChannel {}/Subscribers] Subscribe channel", self.room);
 
-        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label.to_string());
+        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label);
 
         match self.channels.entry(channel_id) {
             Entry::Occupied(mut o) => {
@@ -49,7 +52,7 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelSubscriber<Endpoint> {
             Entry::Vacant(v) => {
                 let mut channel = ChannelContainer {
                     subscribers: HashSet::new(),
-                    label: label.to_string(),
+                    label: label.clone(),
                 };
                 channel.subscribers.insert(endpoint);
                 v.insert(channel);
@@ -60,9 +63,9 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelSubscriber<Endpoint> {
         self.subscriptions.entry(endpoint).or_default().insert(channel_id);
     }
 
-    pub fn on_channel_unsubscribe(&mut self, endpoint: Endpoint, label: &str) {
+    pub fn on_channel_unsubscribe(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         log::info!("[ClusterRoomDataChannel {}/Subscribers] unsubscribe channel", self.room);
-        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label.to_string());
+        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label);
 
         let channel = return_if_none!(self.channels.get_mut(&channel_id));
 

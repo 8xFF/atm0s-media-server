@@ -11,11 +11,14 @@
 use std::{fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::features::{dht_kv, FeaturesControl, FeaturesEvent};
-use media_server_protocol::datachannel::MessageChannelPacket;
-use pubsub::RoomMessageChannel;
+use media_server_protocol::message_channel::MessageChannelPacket;
+use message_channel::RoomMessageChannel;
 use sans_io_runtime::{return_if_none, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
-use crate::transport::{LocalTrackId, RemoteTrackId};
+use crate::{
+    endpoint::MessageChannelLabel,
+    transport::{LocalTrackId, RemoteTrackId},
+};
 
 use audio_mixer::AudioMixer;
 use media_track::MediaTrack;
@@ -25,8 +28,8 @@ use super::{id_generator, ClusterEndpointControl, ClusterEndpointEvent, ClusterL
 
 mod audio_mixer;
 mod media_track;
+mod message_channel;
 mod metadata;
-mod pubsub;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum RoomFeature {
@@ -65,7 +68,7 @@ pub struct ClusterRoom<Endpoint: Debug + Copy + Clone + Hash + Eq> {
     metadata: TaskSwitcherBranch<RoomMetadata<Endpoint>, metadata::Output<Endpoint>>,
     media_track: TaskSwitcherBranch<MediaTrack<Endpoint>, media_track::Output<Endpoint>>,
     audio_mixer: TaskSwitcherBranch<AudioMixer<Endpoint>, audio_mixer::Output<Endpoint>>,
-    message_channel: TaskSwitcherBranch<RoomMessageChannel<Endpoint>, pubsub::Output<Endpoint>>,
+    message_channel: TaskSwitcherBranch<RoomMessageChannel<Endpoint>, message_channel::Output<Endpoint>>,
     switcher: TaskSwitcher,
 }
 
@@ -131,9 +134,9 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                 TaskType::MessageChannel => {
                     if let Some(out) = self.message_channel.pop_output((), &mut self.switcher) {
                         match out {
-                            pubsub::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
-                            pubsub::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MessageChannel), FeaturesControl::PubSub(control))),
-                            pubsub::Output::OnResourceEmpty => {
+                            message_channel::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
+                            message_channel::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MessageChannel), FeaturesControl::PubSub(control))),
+                            message_channel::Output::OnResourceEmpty => {
                                 if self.is_empty() {
                                     break Some(Output::Destroy(self.room));
                                 }
@@ -249,7 +252,7 @@ impl<Endpoint: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Endpoint> {
         }
     }
 
-    fn on_control_message_channel(&mut self, endpoint: Endpoint, label: String, control: ClusterMessageChannelControl) {
+    fn on_control_message_channel(&mut self, endpoint: Endpoint, label: MessageChannelLabel, control: ClusterMessageChannelControl) {
         match control {
             ClusterMessageChannelControl::Subscribe => self.message_channel.input(&mut self.switcher).on_channel_subscribe(endpoint, &label),
             ClusterMessageChannelControl::Unsubscribe => self.message_channel.input(&mut self.switcher).on_channel_unsubscribe(endpoint, &label),

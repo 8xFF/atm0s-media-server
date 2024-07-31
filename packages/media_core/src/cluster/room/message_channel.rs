@@ -1,11 +1,14 @@
 use atm0s_sdn::features::pubsub;
-use media_server_protocol::datachannel::MessageChannelPacket;
+use media_server_protocol::message_channel::MessageChannelPacket;
 use publisher::MessageChannelPublisher;
 use sans_io_runtime::{TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 use std::{fmt::Debug, hash::Hash};
 use subscriber::MessageChannelSubscriber;
 
-use crate::cluster::{ClusterEndpointEvent, ClusterRoomHash};
+use crate::{
+    cluster::{ClusterEndpointEvent, ClusterRoomHash},
+    endpoint::MessageChannelLabel,
+};
 
 mod publisher;
 mod subscriber;
@@ -53,23 +56,23 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMessageChannel<Endpoint> {
         }
     }
 
-    pub fn on_channel_publish_start(&mut self, endpoint: Endpoint, label: &str) {
+    pub fn on_channel_publish_start(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         self.publisher.input(&mut self.switcher).on_channel_pub_start(endpoint, label);
     }
 
-    pub fn on_channel_publish_stop(&mut self, endpoint: Endpoint, label: &str) {
+    pub fn on_channel_publish_stop(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         self.publisher.input(&mut self.switcher).on_channel_pub_stop(endpoint, label);
     }
 
-    pub fn on_channel_data(&mut self, endpoint: Endpoint, label: &str, data: MessageChannelPacket) {
+    pub fn on_channel_data(&mut self, endpoint: Endpoint, label: &MessageChannelLabel, data: MessageChannelPacket) {
         self.publisher.input(&mut self.switcher).on_channel_data(endpoint, label, data);
     }
 
-    pub fn on_channel_subscribe(&mut self, endpoint: Endpoint, label: &str) {
+    pub fn on_channel_subscribe(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         self.subscriber.input(&mut self.switcher).on_channel_subscribe(endpoint, label);
     }
 
-    pub fn on_channel_unsubscribe(&mut self, endpoint: Endpoint, label: &str) {
+    pub fn on_channel_unsubscribe(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         self.subscriber.input(&mut self.switcher).on_channel_unsubscribe(endpoint, label);
     }
 
@@ -123,13 +126,16 @@ mod tests {
     use std::collections::{HashMap, HashSet};
 
     use atm0s_sdn::features::pubsub::{self, ChannelControl};
-    use media_server_protocol::{datachannel::MessageChannelPacket, endpoint::PeerId};
+    use media_server_protocol::{endpoint::PeerId, message_channel::MessageChannelPacket};
     use sans_io_runtime::TaskSwitcherChild;
 
-    use crate::cluster::{
-        id_generator,
-        room::pubsub::{Output, RoomMessageChannel},
-        ClusterEndpointEvent,
+    use crate::{
+        cluster::{
+            id_generator,
+            room::message_channel::{Output, RoomMessageChannel},
+            ClusterEndpointEvent,
+        },
+        endpoint::MessageChannelLabel,
     };
 
     #[test]
@@ -139,10 +145,10 @@ mod tests {
         let mut room = RoomMessageChannel::new(room_id);
         let user1 = 1;
         let user2 = 2;
-        let label1 = "test";
+        let label1 = &MessageChannelLabel("test".to_string());
 
         // 1 -> test
-        let channel_id1 = id_generator::gen_msg_channel_id(room_id, label1.to_string());
+        let channel_id1 = id_generator::gen_msg_channel_id(room_id, label1);
 
         room.on_channel_publish_start(user1, label1);
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id1, ChannelControl::PubStart))));
@@ -167,35 +173,35 @@ mod tests {
         let user1 = 1;
         let user2 = 2;
         let user3 = 3;
-        let label1 = "test";
-        let label2 = "test2";
+        let label1 = MessageChannelLabel("test".to_string());
+        let label2 = MessageChannelLabel("test2".to_string());
 
         // 1 -> test
         // 2 -> test
         // 3 -> test2
-        let channel_id1 = id_generator::gen_msg_channel_id(room_id, label1.to_string());
-        let channel_id2 = id_generator::gen_msg_channel_id(room_id, label2.to_string());
+        let channel_id1 = id_generator::gen_msg_channel_id(room_id, &label1);
+        let channel_id2 = id_generator::gen_msg_channel_id(room_id, &label2);
 
-        room.on_channel_subscribe(user1, label1);
+        room.on_channel_subscribe(user1, &label1);
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id1, ChannelControl::SubAuto))));
         assert_eq!(room.pop_output(now), None);
 
         // Second subscriber will do nothing but register in the subscriber list
-        room.on_channel_subscribe(user2, label1);
+        room.on_channel_subscribe(user2, &label1);
         assert_eq!(room.pop_output(now), None);
 
         // First subscriber of a new channel should start publish and subscribe too
-        room.on_channel_subscribe(user3, label2);
+        room.on_channel_subscribe(user3, &label2);
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id2, ChannelControl::SubAuto))));
 
         // Last subscriber that unsubscribes will stop the channel
-        room.on_channel_unsubscribe(user1, label1);
+        room.on_channel_unsubscribe(user1, &label1);
         assert_eq!(room.pop_output(now), None);
-        room.on_channel_unsubscribe(user2, label1);
+        room.on_channel_unsubscribe(user2, &label1);
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id1, ChannelControl::UnsubAuto))));
         assert_eq!(room.pop_output(now), None);
 
-        room.on_channel_unsubscribe(user3, label2);
+        room.on_channel_unsubscribe(user3, &label2);
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id2, ChannelControl::UnsubAuto))));
         assert_eq!(room.pop_output(now), None);
 
@@ -209,14 +215,14 @@ mod tests {
         let mut room = RoomMessageChannel::new(room_id);
         let user1 = 1;
         let user2 = 2;
-        let label1 = "test";
+        let label1 = MessageChannelLabel("test".to_string());
 
-        let channel_id1 = id_generator::gen_msg_channel_id(room_id, label1.to_string());
+        let channel_id1 = id_generator::gen_msg_channel_id(room_id, &label1);
 
-        room.on_channel_subscribe(user1, label1);
+        room.on_channel_subscribe(user1, &label1);
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id1, ChannelControl::SubAuto))));
 
-        room.on_channel_subscribe(user2, label1);
+        room.on_channel_subscribe(user2, &label1);
         assert_eq!(room.pop_output(now), None);
 
         let peer_id = PeerId::from("testid");
@@ -246,8 +252,8 @@ mod tests {
         assert!(receivers[&user2]);
         assert_eq!(room.pop_output(now), None);
 
-        room.on_channel_unsubscribe(user1, label1);
-        room.on_channel_unsubscribe(user2, label1);
+        room.on_channel_unsubscribe(user1, &label1);
+        room.on_channel_unsubscribe(user2, &label1);
 
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id1, ChannelControl::UnsubAuto))));
         assert_eq!(room.pop_output(now), None);
@@ -260,9 +266,9 @@ mod tests {
         let mut room = RoomMessageChannel::new(room_id);
         let user1 = 1;
         let user2 = 2;
-        let label1 = "test";
+        let label1 = &MessageChannelLabel("test".to_string());
 
-        let channel_id1 = id_generator::gen_msg_channel_id(room_id, label1.to_string());
+        let channel_id1 = id_generator::gen_msg_channel_id(room_id, label1);
 
         room.on_channel_subscribe(user1, label1);
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id1, ChannelControl::SubAuto))));
@@ -299,11 +305,11 @@ mod tests {
         let mut room = RoomMessageChannel::new(room_id);
         let user1 = 1;
         let user2 = 2;
-        let label1 = "test";
-        let label2 = "test2";
+        let label1 = &MessageChannelLabel("test".to_string());
+        let label2 = &MessageChannelLabel("test2".to_string());
 
-        let channel_id1 = id_generator::gen_msg_channel_id(room_id, label1.to_string());
-        let channel_id2 = id_generator::gen_msg_channel_id(room_id, label2.to_string());
+        let channel_id1 = id_generator::gen_msg_channel_id(room_id, label1);
+        let channel_id2 = id_generator::gen_msg_channel_id(room_id, label2);
 
         room.on_channel_subscribe(user1, label1);
         assert_eq!(room.pop_output(now), Some(Output::Pubsub(pubsub::Control(channel_id1, ChannelControl::SubAuto))));

@@ -7,7 +7,7 @@ use std::{
 use media_server_core::{
     endpoint::{
         EndpointAudioMixerReq, EndpointEvent, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointMessageChannelReq, EndpointMessageChannelRes, EndpointRemoteTrackReq, EndpointReq, EndpointReqId,
-        EndpointRes,
+        EndpointRes, MessageChannelLabel,
     },
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportError, TransportEvent, TransportOutput, TransportState},
 };
@@ -355,9 +355,13 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 self.queue.push_back(InternalOutput::Str0mBwe(current, desired))
             }
             EndpointEvent::ChannelMessage(label, from, message) => {
-                log::info!("[TransportWebrtcSdk] datachannel message {label}");
+                log::info!("[TransportWebrtcSdk] datachannel message {}", label.0);
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
-                    event: Some(ProtoRoomEvent2::ChannelMessage(ChannelMessage { label, peer: from.0, message })),
+                    event: Some(ProtoRoomEvent2::ChannelMessage(ChannelMessage {
+                        label: label.0,
+                        peer: from.0,
+                        message,
+                    })),
                 }))
             }
             EndpointEvent::GoAway(_, _) => {}
@@ -439,7 +443,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     req_id.0,
                     media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
                         response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label,
+                            label: label.0,
                             control: Some(Control::Sub(Subscribe {})),
                         })),
                     }),
@@ -449,7 +453,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     req_id.0,
                     media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
                         response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label,
+                            label: label.0,
                             control: Some(Control::Unsub(Unsubscribe {})),
                         })),
                     }),
@@ -458,7 +462,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     req_id.0,
                     media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
                         response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label,
+                            label: label.0,
                             control: Some(Control::StartPub(StartPublish {})),
                         })),
                     }),
@@ -467,7 +471,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     req_id.0,
                     media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
                         response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label,
+                            label: label.0,
                             control: Some(Control::StopPub(StopPublish {})),
                         })),
                     }),
@@ -476,7 +480,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                     req_id.0,
                     media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
                         response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label,
+                            label: label.0,
                             control: Some(Control::Pub(Publish {})),
                         })),
                     }),
@@ -869,7 +873,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
     fn on_room_req(&mut self, req_id: u32, req: protobuf::session::request::room::Request) {
         match req {
             protobuf::session::request::room::Request::ChannelControl(control) => {
-                let label = control.label;
+                let label = MessageChannelLabel(control.label);
                 let req = match control.control {
                     Some(RoomChannelControlReq::Control::Sub(_)) => Some(EndpointMessageChannelReq::Subscribe),
                     Some(RoomChannelControlReq::Control::Unsub(_)) => Some(EndpointMessageChannelReq::Unsubscribe),

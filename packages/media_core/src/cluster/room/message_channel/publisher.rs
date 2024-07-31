@@ -5,10 +5,13 @@ use std::{
 };
 
 use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId};
-use media_server_protocol::datachannel::MessageChannelPacket;
+use media_server_protocol::message_channel::MessageChannelPacket;
 use sans_io_runtime::{return_if_none, TaskSwitcherChild};
 
-use crate::cluster::{id_generator, ClusterRoomHash};
+use crate::{
+    cluster::{id_generator, ClusterRoomHash},
+    endpoint::MessageChannelLabel,
+};
 
 use super::Output;
 
@@ -37,10 +40,10 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelPublisher<Endpoint> {
         self.queue.is_empty() && self.channels.is_empty() && self.publishers.is_empty()
     }
 
-    pub fn on_channel_pub_start(&mut self, endpoint: Endpoint, label: &str) {
+    pub fn on_channel_pub_start(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         log::info!("[ClusterRoomDataChannel {}/Publishers] publish start message channel", self.room);
 
-        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label.to_string());
+        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label);
 
         match self.channels.entry(channel_id) {
             Entry::Occupied(mut o) => {
@@ -57,10 +60,10 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelPublisher<Endpoint> {
         self.publishers.entry(endpoint).or_default().insert(channel_id);
     }
 
-    pub fn on_channel_pub_stop(&mut self, endpoint: Endpoint, label: &str) {
+    pub fn on_channel_pub_stop(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         log::info!("[ClusterRoomDataChannel {}/Publishers] publish start message channel", self.room);
 
-        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label.to_string());
+        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label);
         let channel = return_if_none!(self.channels.get_mut(&channel_id));
 
         channel.publishers.remove(&endpoint);
@@ -93,10 +96,10 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelPublisher<Endpoint> {
         }
     }
 
-    pub fn on_channel_data(&mut self, endpoint: Endpoint, label: &str, data: MessageChannelPacket) {
+    pub fn on_channel_data(&mut self, endpoint: Endpoint, label: &MessageChannelLabel, data: MessageChannelPacket) {
         log::info!("[ClusterRoomDataChannel {}/Publishers] publish to message datachannel", self.room);
 
-        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label.to_string());
+        let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label);
         let channel = return_if_none!(self.channels.get(&channel_id));
         if channel.publishers.contains(&endpoint) {
             let data = data.serialize();

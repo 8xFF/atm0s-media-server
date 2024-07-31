@@ -20,7 +20,10 @@ use media_server_protocol::{
     media::MediaPacket,
 };
 
-use crate::transport::{LocalTrackId, RemoteTrackId};
+use crate::{
+    endpoint::MessageChannelLabel,
+    transport::{LocalTrackId, RemoteTrackId},
+};
 
 use self::room::ClusterRoom;
 pub use self::room::RoomUserData;
@@ -97,7 +100,7 @@ pub enum ClusterEndpointControl {
     AudioMixer(ClusterAudioMixerControl),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackControl),
     LocalTrack(LocalTrackId, ClusterLocalTrackControl),
-    MessageChannel(String, ClusterMessageChannelControl),
+    MessageChannel(MessageChannelLabel, ClusterMessageChannelControl),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,7 +112,7 @@ pub enum ClusterEndpointEvent {
     AudioMixer(ClusterAudioMixerEvent),
     RemoteTrack(RemoteTrackId, ClusterRemoteTrackEvent),
     LocalTrack(LocalTrackId, ClusterLocalTrackEvent),
-    MessageChannelData(String, PeerId, Vec<u8>),
+    MessageChannelData(MessageChannelLabel, PeerId, Vec<u8>),
 }
 
 pub enum Input<Endpoint> {
