@@ -356,20 +356,12 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 log::info!("[TransportWebrtcSdk] datachannel message {}", label.0);
                 self.send_event(ProtoServerEvent::MessageChannel(ProtoMessageChannelContainerEvent {
                     label: label.0,
-                    event: Some(ProtoMessageChannelEvent::Message(MessageChannelMessageEvent {
-                        peer: from.0,
-                        message,
-                    }))
+                    event: Some(ProtoMessageChannelEvent::Message(MessageChannelMessageEvent { peer: from.0, message })),
                 }));
             }
             EndpointEvent::GoAway(_, _) => {}
         }
     }
-    // (ChannelMessage {
-    //                         label: label.0,
-    //                         peer: from.0,
-    //                         message,
-    //                     })),
 
     fn on_transport_rpc_res(&mut self, _now: Instant, req_id: EndpointReqId, res: EndpointRes) {
         match res {
