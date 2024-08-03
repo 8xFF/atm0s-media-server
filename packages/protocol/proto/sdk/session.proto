@@ -51,35 +51,33 @@ message Request {
             string peer = 1;
         }
 
-
-        message ChannelControl {
-            string label = 1;
-
-            // TODO: Add Feedback
-            message StartPublish {} 
-            message StopPublish {}
-            message Subscribe {}
-            message Unsubscribe {}
-            message Publish {
-                bytes data = 1;
-            }
-            
-            oneof control {
-                StartPublish start_pub = 2;
-                StopPublish stop_pub = 3;
-                Subscribe sub = 4;
-                Unsubscribe unsub = 5;
-                Publish pub = 6;
-            }
-        }
-
         oneof request {
             SubscribePeer subscribe = 1;
             UnsubscribePeer unsubscribe = 2;
-            ChannelControl channel_control = 3;
         }
     }
 
+    message MessageChannel {
+        string label = 1;
+
+        // TODO: Add Feedback
+        message StartPublish {} 
+        message StopPublish {}
+        message Subscribe {}
+        message Unsubscribe {}
+        message Publish {
+            bytes data = 1;
+        }
+        
+        oneof request {
+            StartPublish start_pub = 2;
+            StopPublish stop_pub = 3;
+            Subscribe sub = 4;
+            Unsubscribe unsub = 5;
+            Publish pub = 6;
+        }
+    }
+    
     message Sender {
         message Attach {
             shared.Sender.Source source = 1;
@@ -123,6 +121,7 @@ message Request {
         Sender sender = 4;
         Receiver receiver = 5;
         features.Request features = 6;
+        MessageChannel message_channel = 7;
     }
 }
 
@@ -161,30 +160,32 @@ message Response {
 
         }
 
-        message ChannelControl {
-            string label = 1;
-
-            message StartPublish {} 
-            message StopPublish {}
-            message Subscribe {}
-            message Unsubscribe {}
-            message Publish {}
-            
-            oneof control {
-                StartPublish start_pub = 2;
-                StopPublish stop_pub = 3;
-                Subscribe sub = 4;
-                Unsubscribe unsub = 5;
-                Publish pub = 6;
-            }
-        }
-
         oneof response {
             SubscribePeer subscribe = 1;
             UnsubscribePeer unsubscribe = 2;
-            ChannelControl channel_control = 3;
+        }
+ 
+    }
+
+    message MessageChannel {
+        string label = 1;
+
+        message StartPublish {} 
+        message StopPublish {}
+        message Subscribe {}
+        message Unsubscribe {}
+        message Publish {}
+        
+        oneof response {
+            StartPublish start_pub = 2;
+            StopPublish stop_pub = 3;
+            Subscribe sub = 4;
+            Unsubscribe unsub = 5;
+            Publish pub = 6;
         }
     }
+
+    
 
     message Sender {
         message Attach {
@@ -234,6 +235,7 @@ message Response {
         Sender sender = 5;
         Receiver receiver = 6;
         features.Response features = 7;
+        MessageChannel message_channel = 8;
     }
 }
 
@@ -307,12 +309,6 @@ message ServerEvent {
             shared.Kind kind = 3;
         }
 
-        message ChannelMessage {
-            string label = 1;
-            string peer = 2;
-            bytes message = 3;
-        }
-
         oneof event {
             PeerJoined peer_joined = 1;
             PeerUpdated peer_updated = 2;
@@ -320,7 +316,19 @@ message ServerEvent {
             TrackStarted track_started = 4;
             TrackUpdated track_updated = 5;
             TrackStopped track_stopped = 6;
-            ChannelMessage channel_message = 7;
+        }
+    }
+
+    message MessageChannel {
+        string label = 1;
+
+        message Message {
+            string peer = 1;
+            bytes message = 2;
+        }
+
+        oneof event {
+            Message message = 2;
         }
     }
 
@@ -378,6 +386,7 @@ message ServerEvent {
         Receiver receiver = 5;
         Response response = 6;
         features.ServerEvent features = 7;
+        MessageChannel message_channel = 8;
     }
 }
 

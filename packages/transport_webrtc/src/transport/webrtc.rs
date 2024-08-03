@@ -25,19 +25,17 @@ use media_server_protocol::{
         },
         gateway::ConnectRequest,
         session::{
-            request::room::channel_control as RoomChannelControlReq,
+            request::message_channel as MessageChannelControlReq,
             response::{
-                room::{
-                    channel_control::{Control, Publish, StartPublish, StopPublish, Subscribe, Unsubscribe},
-                    ChannelControl, Response as ProtoRoomSessionResponses,
-                },
-                Room as ProtoRoomSessionResponse,
+                message_channel::{Publish, Response as MessageChannelResponse, StartPublish, StopPublish, Subscribe, Unsubscribe},
+                MessageChannel,
             },
             server_event::{
+                message_channel::{Event as ProtoMessageChannelEvent, Message as MessageChannelMessageEvent},
                 receiver::{Event as ProtoReceiverEvent, State as ProtoReceiverState, VoiceActivity as ProtoReceiverVoiceActivity},
-                room::{ChannelMessage, Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted, TrackStopped},
+                room::{Event as ProtoRoomEvent2, PeerJoined, PeerLeaved, TrackStarted, TrackStopped},
                 sender::{Event as ProtoSenderEvent, State as ProtoSenderState},
-                Event as ProtoServerEvent, Receiver as ProtoReceiverEventContainer, Room as ProtoRoomEvent, Sender as ProtoSenderEventContainer,
+                Event as ProtoServerEvent, MessageChannel as ProtoMessageChannelContainerEvent, Receiver as ProtoReceiverEventContainer, Room as ProtoRoomEvent, Sender as ProtoSenderEventContainer,
             },
             ClientEvent,
         },
@@ -356,17 +354,22 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             }
             EndpointEvent::ChannelMessage(label, from, message) => {
                 log::info!("[TransportWebrtcSdk] datachannel message {}", label.0);
-                self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
-                    event: Some(ProtoRoomEvent2::ChannelMessage(ChannelMessage {
-                        label: label.0,
+                self.send_event(ProtoServerEvent::MessageChannel(ProtoMessageChannelContainerEvent {
+                    label: label.0,
+                    event: Some(ProtoMessageChannelEvent::Message(MessageChannelMessageEvent {
                         peer: from.0,
                         message,
-                    })),
-                }))
+                    }))
+                }));
             }
             EndpointEvent::GoAway(_, _) => {}
         }
     }
+    // (ChannelMessage {
+    //                         label: label.0,
+    //                         peer: from.0,
+    //                         message,
+    //                     })),
 
     fn on_transport_rpc_res(&mut self, _now: Instant, req_id: EndpointReqId, res: EndpointRes) {
         match res {
@@ -441,48 +444,38 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             EndpointRes::MessageChannel(label, control) => match control {
                 EndpointMessageChannelRes::Subscribe(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
-                        response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label: label.0,
-                            control: Some(Control::Sub(Subscribe {})),
-                        })),
+                    media_server_protocol::protobuf::session::response::Response::MessageChannel(MessageChannel {
+                        label: label.0,
+                        response: Some(MessageChannelResponse::Sub(Subscribe {})),
                     }),
                 ),
 
                 EndpointMessageChannelRes::Unsubscribe(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
-                        response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label: label.0,
-                            control: Some(Control::Unsub(Unsubscribe {})),
-                        })),
+                    media_server_protocol::protobuf::session::response::Response::MessageChannel(MessageChannel {
+                        label: label.0,
+                        response: Some(MessageChannelResponse::Unsub(Unsubscribe {})),
                     }),
                 ),
                 EndpointMessageChannelRes::StartPublish(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
-                        response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label: label.0,
-                            control: Some(Control::StartPub(StartPublish {})),
-                        })),
+                    media_server_protocol::protobuf::session::response::Response::MessageChannel(MessageChannel {
+                        label: label.0,
+                        response: Some(MessageChannelResponse::StartPub(StartPublish {})),
                     }),
                 ),
                 EndpointMessageChannelRes::StopPublish(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
-                        response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label: label.0,
-                            control: Some(Control::StopPub(StopPublish {})),
-                        })),
+                    media_server_protocol::protobuf::session::response::Response::MessageChannel(MessageChannel {
+                        label: label.0,
+                        response: Some(MessageChannelResponse::StopPub(StopPublish {})),
                     }),
                 ),
                 EndpointMessageChannelRes::PublishData(Ok(_)) => self.send_rpc_res(
                     req_id.0,
-                    media_server_protocol::protobuf::session::response::Response::Room(ProtoRoomSessionResponse {
-                        response: Some(ProtoRoomSessionResponses::ChannelControl(ChannelControl {
-                            label: label.0,
-                            control: Some(Control::Pub(Publish {})),
-                        })),
+                    media_server_protocol::protobuf::session::response::Response::MessageChannel(MessageChannel {
+                        label: label.0,
+                        response: Some(MessageChannelResponse::Pub(Publish {})),
                     }),
                 ),
                 EndpointMessageChannelRes::Subscribe(Err(err)) => self.send_rpc_res_err(req_id.0, err),
@@ -693,6 +686,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     Some(room_req) => self.on_room_req(req.req_id, room_req),
                     None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
                 },
+                Some(protobuf::session::request::Request::MessageChannel(channel)) => match channel.request {
+                    Some(msg_chan_req) => self.on_msg_chan_req(req.req_id, MessageChannelLabel(channel.label), msg_chan_req),
+                    None => self.send_rpc_res_err(req.req_id, RpcError::new2(WebrtcError::RpcInvalidRequest)),
+                },
                 Some(protobuf::session::request::Request::Features(features_req)) => {
                     if let Some(protobuf::features::request::Request::Mixer(mixer_req)) = features_req.request {
                         if let Some(mixer_req) = mixer_req.request {
@@ -870,28 +867,20 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
         }
     }
 
-    fn on_room_req(&mut self, req_id: u32, req: protobuf::session::request::room::Request) {
-        match req {
-            protobuf::session::request::room::Request::ChannelControl(control) => {
-                let label = MessageChannelLabel(control.label);
-                let req = match control.control {
-                    Some(RoomChannelControlReq::Control::Sub(_)) => Some(EndpointMessageChannelReq::Subscribe),
-                    Some(RoomChannelControlReq::Control::Unsub(_)) => Some(EndpointMessageChannelReq::Unsubscribe),
-                    Some(RoomChannelControlReq::Control::StartPub(_)) => Some(EndpointMessageChannelReq::StartPublish),
-                    Some(RoomChannelControlReq::Control::StopPub(_)) => Some(EndpointMessageChannelReq::StopPublish),
-                    Some(RoomChannelControlReq::Control::Pub(pub_data)) => Some(EndpointMessageChannelReq::PublishData(pub_data.data)),
-                    None => None,
-                };
+    fn on_msg_chan_req(&mut self, req_id: u32, label: MessageChannelLabel, req: protobuf::session::request::message_channel::Request) {
+        let req = match req {
+            MessageChannelControlReq::Request::Sub(_) => EndpointMessageChannelReq::Subscribe,
+            MessageChannelControlReq::Request::Unsub(_) => EndpointMessageChannelReq::Unsubscribe,
+            MessageChannelControlReq::Request::StartPub(_) => EndpointMessageChannelReq::StartPublish,
+            MessageChannelControlReq::Request::StopPub(_) => EndpointMessageChannelReq::StopPublish,
+            MessageChannelControlReq::Request::Pub(pub_data) => EndpointMessageChannelReq::PublishData(pub_data.data),
+        };
+        self.queue
+            .push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), EndpointReq::MessageChannel(label, req))));
+    }
 
-                if let Some(req) = req {
-                    self.queue
-                        .push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(req_id.into(), EndpointReq::MessageChannel(label, req))));
-                }
-            }
-            _ => {
-                // self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcNotImplemented));
-            }
-        }
+    fn on_room_req(&mut self, _req_id: u32, _req: protobuf::session::request::room::Request) {
+        todo!()
     }
 }
 
