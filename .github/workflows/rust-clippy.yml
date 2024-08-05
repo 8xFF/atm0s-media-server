@@ -7,12 +7,12 @@ name: rust-clippy analyze
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
     # The branches below must be a subset of the branches above
-    branches: [ "master" ]
+    branches: ["master"]
   schedule:
-    - cron: '29 19 * * 2'
+    - cron: "29 19 * * 2"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -33,6 +33,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt install -y libsoxr-dev libopus-dev libssl-dev
+
       - uses: actions/cache@v3
         id: cache-cargo
         with:
@@ -48,7 +53,7 @@ jobs:
         with:
           version: "25.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Run rust-clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -56,7 +61,7 @@ jobs:
         run: cargo install clippy-sarif sarif-fmt
 
       - name: Run rust-sarif
-        run: cargo clippy --all-features --message-format=json | 
+        run: cargo clippy --all-features --message-format=json |
           clippy-sarif | tee rust-clippy-results.sarif | sarif-fmt
 
       - name: Upload analysis results to GitHub

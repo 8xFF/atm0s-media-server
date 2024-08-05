@@ -10,5 +10,6 @@ smallmap = { workspace = true }
 sorted-vec = "0.8"
 log = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
-uriparse = "0.6.4"
-serde-querystring = "0.2.1"
+uriparse = "0.6"
+serde-querystring = "0.2"
+pin-project-lite = "0.2"

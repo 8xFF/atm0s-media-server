@@ -7,9 +7,14 @@ members = [
     "packages/media_core",
     "packages/media_runner",
     "packages/transport_webrtc",
+    "packages/transport_rtpengine",
     "packages/media_secure",
     "packages/media_gateway",
-    "packages/audio_mixer", "packages/media_connector", "packages/media_record",
+    "packages/audio_mixer",
+    "packages/media_connector",
+    "packages/media_record",
+    "packages/media_codecs",
+    "packages/rtpengine_ngcontrol",
 ]
 
 [workspace.dependencies]

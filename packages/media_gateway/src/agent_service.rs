@@ -90,6 +90,7 @@ where
                         memory: self.node.memory as u32,
                         disk: self.node.disk as u32,
                         webrtc: self.services.get(&ServiceKind::Webrtc).map(|s| s.into()),
+                        rtpengine: self.services.get(&ServiceKind::RtpEngine).map(|s| s.into()),
                         origin: Some(Origin::Media(MediaOrigin {})),
                     })),
                 }

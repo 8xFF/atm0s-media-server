@@ -4,10 +4,12 @@ use atm0s_sdn::{NodeAddr, NodeId};
 
 mod errors;
 mod http;
+mod ng_controller;
 #[cfg(feature = "node_metrics")]
 mod node_metrics;
 #[cfg(feature = "quinn_vnet")]
 mod quinn;
+mod rpc;
 pub mod server;
 
 #[derive(Clone)]

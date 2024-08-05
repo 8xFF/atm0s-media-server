@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -21,11 +21,13 @@ use media_server_runner::{MediaConfig, UserData, SE};
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
 use media_server_utils::now_ms;
 use rand::random;
+use rtpengine_ngcontrol::NgUdpTransport;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sans_io_runtime::{backend::PollingBackend, Controller};
 
 use crate::{
     http::run_media_http_server,
+    ng_controller::NgControllerServer,
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_server, VirtualNetwork},
     server::media::runtime_worker::MediaRuntimeWorker,
@@ -47,10 +49,19 @@ pub struct Args {
     #[arg(env, long)]
     ice_lite: bool,
 
-    /// Seed port for binding media UDP socket. It will increase by one for each worker.
+    /// Seed port for binding webrtc UDP socket. It will increase by one for each worker.
     /// Default: worker0: 20000, worker1: 20001, worker2: 20002, ...
     #[arg(env, long, default_value_t = 20000)]
     webrtc_port_seed: u16,
+
+    /// Port for binding rtpengine command UDP socket.
+    #[arg(env, long)]
+    rtpengine_cmd_addr: Option<SocketAddr>,
+
+    /// RtpEngine RTP Listen IP
+    /// Default: 127.0.0.1
+    #[arg(env, long, default_value = "127.0.0.1")]
+    rtpengine_rtp_ip: IpAddr,
 
     /// Max ccu per core
     #[arg(env, long, default_value_t = 200)]
@@ -78,15 +89,28 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let default_cluster_key = PrivatePkcs8KeyDer::from(default_cluster_key_buf.to_vec());
 
     let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
-    let secure2 = args.enable_token_api.then(|| Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes())));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
-    let req_tx2 = req_tx.clone();
     if let Some(http_port) = http_port {
+        let secure2 = args.enable_token_api.then(|| Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes())));
+        let req_tx = req_tx.clone();
         let secure = secure.clone();
         tokio::spawn(async move {
-            if let Err(e) = run_media_http_server(http_port, req_tx2, secure, secure2).await {
+            if let Err(e) = run_media_http_server(http_port, req_tx, secure, secure2).await {
                 log::error!("HTTP Error: {}", e);
             }
+        });
+    }
+
+    //Running ng controller for Voip
+    if let Some(ngproto_addr) = args.rtpengine_cmd_addr {
+        let req_tx = req_tx.clone();
+        let rtpengine_udp = NgUdpTransport::new(ngproto_addr).await;
+        let secure = secure.clone();
+        tokio::spawn(async move {
+            log::info!("[MediaServer] start ng_controller task");
+            let mut server = NgControllerServer::new(rtpengine_udp, secure, req_tx);
+            while server.recv().await.is_some() {}
+            log::info!("[MediaServer] stop ng_controller task");
         });
     }
 
@@ -108,9 +132,10 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             media: MediaConfig {
                 webrtc_addrs,
                 webrtc_addrs_alt,
+                rtpengine_rtp_ip: args.rtpengine_rtp_ip,
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
-                max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core)]),
+                max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core), (ServiceKind::RtpEngine, workers as u32 * args.ccu_per_core)]),
             },
         };
         controller.add_worker::<_, _, MediaRuntimeWorker<_>, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);

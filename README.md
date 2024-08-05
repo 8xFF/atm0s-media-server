@@ -59,7 +59,7 @@ We are actively refactoring entire media server and network stack with [sans-io-
 | WebRTC-SDK          | Webrtc-SDK Protocol [RFC-0005](https://github.com/8xFF/rfcs/pull/5)               | 🚀     |
 | RTMP                | RTMP Protocol                                                                     | ❌     |
 | RTMP-Transcode      | RTMP with Transcode                                                               | ❌     |
-| SIP                 | SIP calls                                                                         | ❌     |
+| SIP                 | SIP calls [Sip-call-sample](https://github.com/8xFF/atm0s-media-sip-call-sample)  | 🚀     |
 | MoQ                 | Media-over-Quic                                                                   | ❌     |
 | Monitoring          | Dashboard for monitoring                                                          | ❌     |
 | Recording           | Record stream                                                                     | 🚀     |
