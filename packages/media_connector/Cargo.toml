@@ -19,7 +19,7 @@ sea-orm = { version = "0.12", features = [
     "sqlx-mysql",
     "runtime-tokio-rustls",
 ] }
-sea-query = "0.30.7"
+sea-query = "0.31.0"
 serde_json = "1.0"
 s3-presign = "0.0.2"
 
