@@ -1,3 +1,4 @@
+use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, GatewayOrigin, Origin, ServiceStats};
 
 use crate::{NodeMetrics, ServiceKind};
@@ -32,8 +33,8 @@ impl GatewayStore {
     pub fn new(zone: u32, location: Location, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
         Self {
             node: NodeMetrics::default(),
-            webrtc: ServiceStore::new(ServiceKind::Webrtc, location),
-            rtpengine: ServiceStore::new(ServiceKind::RtpEngine, location),
+            webrtc: ServiceStore::new(zone, ServiceKind::Webrtc, location),
+            rtpengine: ServiceStore::new(zone, ServiceKind::RtpEngine, location),
             zone,
             location,
             output: None,
@@ -101,12 +102,21 @@ impl GatewayStore {
         }
     }
 
-    pub fn best_for(&self, kind: ServiceKind, location: Option<Location>) -> Option<u32> {
+    pub fn best_for(&self, kind: ServiceKind, location: Option<Location>) -> Option<NodeId> {
         let node = match kind {
             ServiceKind::Webrtc => self.webrtc.best_for(location),
             ServiceKind::RtpEngine => self.rtpengine.best_for(location),
         };
         log::debug!("[GatewayStore] query best {:?} for {:?} got {:?}", kind, location, node);
+        node
+    }
+
+    pub fn dest_for(&self, kind: ServiceKind, dest: NodeId) -> Option<NodeId> {
+        let node = match kind {
+            ServiceKind::Webrtc => self.webrtc.dest_for(dest),
+            ServiceKind::RtpEngine => self.rtpengine.dest_for(dest),
+        };
+        log::debug!("[GatewayStore] query dest {:?} for node {} got {:?}", kind, dest, node);
         node
     }
 

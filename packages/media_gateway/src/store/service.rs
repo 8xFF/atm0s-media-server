@@ -1,4 +1,6 @@
+use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, ServiceStats};
+use media_server_utils::node_zone_id;
 
 use crate::ServiceKind;
 
@@ -22,6 +24,7 @@ struct ZoneSource {
 }
 
 pub struct ServiceStore {
+    zone: u32,
     kind: ServiceKind,
     location: Location,
     local_sources: Vec<NodeSource>,
@@ -29,9 +32,10 @@ pub struct ServiceStore {
 }
 
 impl ServiceStore {
-    pub fn new(kind: ServiceKind, location: Location) -> Self {
+    pub fn new(zone: u32, kind: ServiceKind, location: Location) -> Self {
         log::info!("[ServiceStore {:?}] create new in {:?}", kind, location);
         Self {
+            zone,
             kind,
             location,
             local_sources: vec![],
@@ -153,6 +157,28 @@ impl ServiceStore {
         min_node
     }
 
+    /// If we in same zone then only check local registry
+    /// Else we forward it to the zone gateway if avaiable
+    pub fn dest_for(&self, dest: NodeId) -> Option<u32> {
+        if node_zone_id(dest) == self.zone {
+            for n in self.local_sources.iter() {
+                if n.node == dest {
+                    return Some(dest);
+                }
+            }
+
+            None
+        } else {
+            for z in self.zone_sources.iter() {
+                if z.zone == node_zone_id(dest) {
+                    return z.gateways.first().map(|s| s.node);
+                }
+            }
+
+            None
+        }
+    }
+
     pub fn local_stats(&self) -> Option<ServiceStats> {
         if self.local_sources.is_empty() {
             return None;
@@ -225,7 +251,7 @@ mod tests {
 
     #[test]
     fn empty_store() {
-        let store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
         assert_eq!(store.best_for(None), None);
         assert_eq!(store.best_for(Some(Location { lat: 1.0, lon: 1.0 })), None);
 
@@ -234,7 +260,7 @@ mod tests {
 
     #[test]
     fn local_store() {
-        let mut store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
         store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
         store.on_node_ping(0, 2, 50, ServiceStats { live: 60, max: 1000, active: true });
@@ -259,7 +285,7 @@ mod tests {
 
     #[test]
     fn remote_zones_store() {
-        let mut store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
         store.on_gateway_ping(0, 256, 256, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
         store.on_gateway_ping(0, 256, 257, 50, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
@@ -283,7 +309,7 @@ mod tests {
 
     #[test]
     fn local_and_remote_zones() {
-        let mut store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
         store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
         store.on_gateway_ping(0, 256, 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
@@ -309,7 +335,7 @@ mod tests {
 
     #[test]
     fn clear_timeout() {
-        let mut store = ServiceStore::new(ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
         store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
         store.on_gateway_ping(0, 256, 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
@@ -321,5 +347,25 @@ mod tests {
 
         assert_eq!(store.local_sources.len(), 0);
         assert_eq!(store.zone_sources.len(), 0);
+    }
+
+    #[test]
+    fn dest_for_same_zone() {
+        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
+
+        assert_eq!(store.dest_for(1), Some(1));
+        assert_eq!(store.dest_for(2), None);
+    }
+
+    #[test]
+    fn dest_for_other_zone() {
+        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+
+        store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, 256, 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+
+        assert_eq!(store.dest_for(260), Some(257));
+        assert_eq!(store.dest_for(1024), None);
     }
 }

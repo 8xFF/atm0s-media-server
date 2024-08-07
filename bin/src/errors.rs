@@ -6,4 +6,5 @@ pub enum MediaServerError {
     NodePoolEmpty = 0x00020003,
     MediaResError = 0x00020004,
     NotImplemented = 0x00020005,
+    NodeTimeout = 0x00020006,
 }

@@ -2953,6 +2953,7 @@ dependencies = [
  "atm0s-sdn",
  "log",
  "media-server-protocol",
+ "media-server-utils",
  "prost",
  "serde",
 ]
