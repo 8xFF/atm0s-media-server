@@ -12,7 +12,7 @@ atm0s-sdn = { workspace = true }
 prost = { workspace = true }
 lru = "0.12"
 async-trait = "0.1"
-sea-orm-migration = "0.12"
+sea-orm-migration = "1.0"
 sea-orm = { version = "0.12", features = [
     "sqlx-sqlite",
     "sqlx-postgres",
