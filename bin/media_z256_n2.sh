@@ -9,4 +9,5 @@ cargo run -- \
     --seeds 256@/ip4/127.0.0.1/udp/11000 \
     --workers 2 \
     media \
+        --webrtc-port-seed 11300 \
         --enable-token-api

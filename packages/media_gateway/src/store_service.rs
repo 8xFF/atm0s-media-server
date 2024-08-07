@@ -6,7 +6,7 @@ use atm0s_sdn::{
         ServiceWorkerOutput,
     },
     features::{data, FeaturesControl, FeaturesEvent},
-    RouteRule, ServiceBroadcastLevel,
+    NodeId, RouteRule, ServiceBroadcastLevel,
 };
 use media_server_protocol::protobuf::{
     self,
@@ -23,6 +23,7 @@ use crate::{
 pub enum Control {
     NodeStats(NodeMetrics),
     FindNodeReq(u64, ServiceKind, Option<Location>),
+    FindDestReq(u64, ServiceKind, NodeId),
     GetMediaStats,
 }
 
@@ -30,6 +31,7 @@ pub enum Control {
 pub enum Event {
     MediaStats(u32, u32),
     FindNodeRes(u64, Option<u32>),
+    FindDestRes(u64, Option<u32>),
 }
 
 pub struct GatewayStoreService<UserData, SC, SE, TC, TW> {
@@ -131,6 +133,10 @@ where
                         Control::FindNodeReq(req_id, kind, location) => {
                             let out = self.store.best_for(kind, location);
                             self.queue.push_back(ServiceOutput::Event(actor, Event::FindNodeRes(req_id, out).into()));
+                        }
+                        Control::FindDestReq(req_id, kind, dest) => {
+                            let out = self.store.dest_for(kind, dest);
+                            self.queue.push_back(ServiceOutput::Event(actor, Event::FindDestRes(req_id, out).into()));
                         }
                         Control::NodeStats(metrics) => {
                             log::debug!("[GatewayStoreService] node metrics {:?}", metrics);

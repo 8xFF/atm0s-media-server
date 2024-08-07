@@ -316,7 +316,7 @@ impl MediaLocalRpcHandler {
                 }
             } else {
                 self.feedback_route_error(session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+                Err(RpcError::new2(MediaServerError::NodeTimeout))
             }
         } else {
             self.feedback_route_error(session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
@@ -325,22 +325,16 @@ impl MediaLocalRpcHandler {
     }
 
     async fn webrtc_remote_ice(&self, conn_part: Option<(NodeId, u64)>, conn: ClusterConnId, param: RemoteIceRequest) -> RpcResult<RemoteIceResponse> {
-        if let Some((node, _session)) = conn_part {
-            let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRemoteIceRequest {
-                conn: conn.to_string(),
-                candidates: param.candidates,
-            };
-            log::info!("[Gateway] selected node {node}");
-            let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
-            let res = self.client.webrtc_remote_ice(sock_addr, rpc_req).await;
-            if let Some(res) = res {
-                Ok(RemoteIceResponse { added: res.added })
-            } else {
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
-            }
-        } else {
-            Err(RpcError::new2(MediaServerError::InvalidConnId))
-        }
+        let (node, _session) = conn_part.ok_or(RpcError::new2(MediaServerError::InvalidConnId))?;
+        let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRemoteIceRequest {
+            conn: conn.to_string(),
+            candidates: param.candidates,
+        };
+        log::info!("[Gateway] selected node {node}");
+        let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
+        let res = self.client.webrtc_remote_ice(sock_addr, rpc_req).await;
+        let res = res.ok_or(RpcError::new2(MediaServerError::GatewayRpcError))?;
+        Ok(RemoteIceResponse { added: res.added })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -354,31 +348,34 @@ impl MediaLocalRpcHandler {
         extra_data: Option<String>,
         record: bool,
     ) -> RpcResult<(ClusterConnId, ConnectResponse)> {
-        //TODO how to handle media-node down?
-        if let Some((node, _session)) = conn_part {
-            let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRestartIceRequest {
-                conn: conn.to_string(),
-                ip: ip.to_string(),
-                user_agent,
-                req: Some(req),
-                record,
-                extra_data,
-            };
-            log::info!("[Gateway] selected node {node}");
-            let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
-            let res = self.client.webrtc_restart_ice(sock_addr, rpc_req).await;
-            if let Some(res) = res {
-                if let Some(res) = res.res {
-                    Ok((res.conn_id.parse().unwrap(), res))
-                } else {
-                    Err(RpcError::new2(MediaServerError::MediaResError))
+        let (node, _session) = conn_part.ok_or(RpcError::new2(MediaServerError::InvalidConnId))?;
+        let dest = match self.selector.dest_for(ServiceKind::Webrtc, node).await {
+            Some(dest) => dest,
+            None => match self.selector.select(ServiceKind::Webrtc, self.ip2location.get_location(&ip)).await {
+                Some(dest) => {
+                    log::warn!("[Gateway] not found dest {node} found other node {dest} for restart-ice (reconnect to other server)");
+                    dest
                 }
-            } else {
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
-            }
-        } else {
-            Err(RpcError::new2(MediaServerError::InvalidConnId))
-        }
+                None => {
+                    log::warn!("[Gateway] node pool empty for restart-ice to dest {node}");
+                    return RpcResult::Err(RpcError::new2(MediaServerError::NodePoolEmpty));
+                }
+            },
+        };
+        log::info!("[Gateway] selected dest node {dest} with provided node {node}");
+        let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRestartIceRequest {
+            conn: conn.to_string(),
+            ip: ip.to_string(),
+            user_agent,
+            req: Some(req),
+            record,
+            extra_data,
+        };
+        let sock_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
+        let res = self.client.webrtc_restart_ice(sock_addr, rpc_req).await;
+        let res = res.ok_or(RpcError::new2(MediaServerError::GatewayRpcError))?;
+        let res = res.res.ok_or(RpcError::new2(MediaServerError::MediaResError))?;
+        Ok((res.conn_id.parse().unwrap(), res))
     }
 
     /*
