@@ -191,7 +191,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             tick_ms: 1000,
             data: DataPlaneCfg {
                 worker_id: 0,
-                services: vec![visualization, discovery, gateway],
+                services: vec![visualization, discovery, gateway, connector],
                 history,
             },
         };
