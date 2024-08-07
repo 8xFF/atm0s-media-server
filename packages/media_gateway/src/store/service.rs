@@ -158,7 +158,7 @@ impl ServiceStore {
     }
 
     /// If we in same zone then only check local registry
-    /// Else we forward it to the zone gateway if avaiable
+    /// Else we forward it to the zone gateway if available
     pub fn dest_for(&self, dest: NodeId) -> Option<u32> {
         if node_zone_id(dest) == self.zone {
             for n in self.local_sources.iter() {

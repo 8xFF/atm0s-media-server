@@ -27,7 +27,7 @@ impl GatewayDestSelector {
     }
 
     /// Find forward dest if we need to send request to a node.
-    /// if node is in current zone, then return Some(node) if it avaiable
+    /// if node is in current zone, then return Some(node) if it available
     /// if node in other zone, return the zone gateway node
     pub async fn dest_for(&self, kind: ServiceKind, node: NodeId) -> Option<NodeId> {
         let (tx, rx) = oneshot::channel();
