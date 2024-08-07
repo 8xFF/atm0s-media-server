@@ -3,6 +3,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use atm0s_sdn::features::dht_kv::{Key, Map};
 use media_server_protocol::endpoint::{PeerId, TrackName};
 
+use crate::endpoint::MessageChannelLabel;
+
 use super::ClusterRoomHash;
 
 pub fn peer_map(room: ClusterRoomHash, peer: &PeerId) -> Map {
@@ -33,11 +35,19 @@ pub fn tracks_key(peer: &PeerId, track: &TrackName) -> Key {
     h.finish().into()
 }
 
-pub fn gen_channel_id<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track: &TrackName) -> T {
+pub fn gen_track_channel_id<T: From<u64>>(room: ClusterRoomHash, peer: &PeerId, track: &TrackName) -> T {
     let mut h = std::hash::DefaultHasher::new();
     room.as_ref().hash(&mut h);
     peer.as_ref().hash(&mut h);
     track.as_ref().hash(&mut h);
+    h.finish().into()
+}
+
+pub fn gen_msg_channel_id<T: From<u64>>(room: ClusterRoomHash, label: &MessageChannelLabel) -> T {
+    let mut h = std::hash::DefaultHasher::new();
+    room.as_ref().hash(&mut h);
+    label.0.hash(&mut h);
+    "message_channel".hash(&mut h);
     h.finish().into()
 }
 

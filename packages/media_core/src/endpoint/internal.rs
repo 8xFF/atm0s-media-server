@@ -12,14 +12,19 @@ use media_server_utils::Small2dMap;
 use sans_io_runtime::{return_if_none, return_if_some, TaskGroup, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::{
-    cluster::{ClusterAudioMixerControl, ClusterAudioMixerEvent, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRemoteTrackEvent, ClusterRoomHash},
+    cluster::{
+        ClusterAudioMixerControl, ClusterAudioMixerEvent, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterMessageChannelControl, ClusterRemoteTrackEvent, ClusterRoomHash,
+    },
     errors::EndpointErrors,
     transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, TransportEvent, TransportState, TransportStats},
 };
 
 use self::{bitrate_allocator::BitrateAllocator, local_track::EndpointLocalTrack, remote_track::EndpointRemoteTrack};
 
-use super::{middleware::EndpointMiddleware, EndpointAudioMixerEvent, EndpointAudioMixerReq, EndpointAudioMixerRes, EndpointCfg, EndpointEvent, EndpointReq, EndpointReqId, EndpointRes};
+use super::{
+    middleware::EndpointMiddleware, EndpointAudioMixerEvent, EndpointAudioMixerReq, EndpointAudioMixerRes, EndpointCfg, EndpointEvent, EndpointMessageChannelReq, EndpointMessageChannelRes,
+    EndpointReq, EndpointReqId, EndpointRes,
+};
 
 mod bitrate_allocator;
 mod local_track;
@@ -185,6 +190,91 @@ impl EndpointInternal {
                         self.queue.push_back(InternalOutput::RpcRes(
                             req_id,
                             EndpointRes::AudioMixer(EndpointAudioMixerRes::Detach(Err(RpcError::new2(EndpointErrors::AudioMixerWrongMode)))),
+                        ));
+                    }
+                }
+            },
+            EndpointReq::MessageChannel(label, control) => match control {
+                EndpointMessageChannelReq::Subscribe => {
+                    if let Some((room, _, _, _)) = &self.joined {
+                        self.queue
+                            .push_back(InternalOutput::RpcRes(req_id, EndpointRes::MessageChannel(label.clone(), EndpointMessageChannelRes::Subscribe(Ok(())))));
+                        self.queue.push_back(InternalOutput::Cluster(
+                            *room,
+                            ClusterEndpointControl::MessageChannel(label.clone(), ClusterMessageChannelControl::Subscribe),
+                        ));
+                    } else {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label, EndpointMessageChannelRes::Subscribe(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))),
+                        ));
+                    }
+                }
+                EndpointMessageChannelReq::Unsubscribe => {
+                    if let Some((room, _, _, _)) = &self.joined {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label.clone(), EndpointMessageChannelRes::Unsubscribe(Ok(()))),
+                        ));
+                        self.queue.push_back(InternalOutput::Cluster(
+                            *room,
+                            ClusterEndpointControl::MessageChannel(label.clone(), ClusterMessageChannelControl::Unsubscribe),
+                        ));
+                    } else {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label, EndpointMessageChannelRes::Unsubscribe(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))),
+                        ));
+                    }
+                }
+                EndpointMessageChannelReq::StartPublish => {
+                    if let Some((room, _, _, _)) = &self.joined {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label.clone(), EndpointMessageChannelRes::StartPublish(Ok(()))),
+                        ));
+                        self.queue.push_back(InternalOutput::Cluster(
+                            *room,
+                            ClusterEndpointControl::MessageChannel(label.clone(), ClusterMessageChannelControl::StartPublish),
+                        ));
+                    } else {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label, EndpointMessageChannelRes::StartPublish(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))),
+                        ));
+                    }
+                }
+                EndpointMessageChannelReq::StopPublish => {
+                    if let Some((room, _, _, _)) = &self.joined {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label.clone(), EndpointMessageChannelRes::StopPublish(Ok(()))),
+                        ));
+                        self.queue.push_back(InternalOutput::Cluster(
+                            *room,
+                            ClusterEndpointControl::MessageChannel(label.clone(), ClusterMessageChannelControl::StopPublish),
+                        ));
+                    } else {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label, EndpointMessageChannelRes::StopPublish(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))),
+                        ));
+                    }
+                }
+                EndpointMessageChannelReq::PublishData(data) => {
+                    if let Some((room, _, peer_id, _)) = &self.joined {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label.clone(), EndpointMessageChannelRes::PublishData(Ok(()))),
+                        ));
+                        self.queue.push_back(InternalOutput::Cluster(
+                            *room,
+                            ClusterEndpointControl::MessageChannel(label.clone(), ClusterMessageChannelControl::PublishData(peer_id.clone(), data)),
+                        ));
+                    } else {
+                        self.queue.push_back(InternalOutput::RpcRes(
+                            req_id,
+                            EndpointRes::MessageChannel(label, EndpointMessageChannelRes::PublishData(Err(RpcError::new2(EndpointErrors::EndpointNotInRoom)))),
                         ));
                     }
                 }
@@ -362,6 +452,7 @@ impl EndpointInternal {
             },
             ClusterEndpointEvent::RemoteTrack(track, event) => self.on_cluster_remote_track(now, track, event),
             ClusterEndpointEvent::LocalTrack(track, event) => self.on_cluster_local_track(now, track, event),
+            ClusterEndpointEvent::MessageChannelData(key, from, message) => self.queue.push_back(InternalOutput::Event(EndpointEvent::ChannelMessage(key, from, message))),
         }
     }
 

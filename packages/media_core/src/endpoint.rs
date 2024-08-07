@@ -100,8 +100,29 @@ pub enum EndpointAudioMixerRes {
     Detach(RpcResult<()>),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointMessageChannelReq {
+    Subscribe,
+    Unsubscribe,
+    StartPublish,
+    StopPublish,
+    PublishData(Vec<u8>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EndpointMessageChannelRes {
+    Subscribe(RpcResult<()>),
+    Unsubscribe(RpcResult<()>),
+    StartPublish(RpcResult<()>),
+    StopPublish(RpcResult<()>),
+    PublishData(RpcResult<()>),
+}
+
 #[derive(Debug, PartialEq, Eq, derive_more::From)]
 pub struct EndpointReqId(pub u32);
+
+#[derive(Debug, PartialEq, Eq, Clone, derive_more::From)]
+pub struct MessageChannelLabel(pub String);
 
 /// This is control APIs, which is used to control server from Endpoint SDK
 #[derive(Debug, PartialEq, Eq)]
@@ -113,6 +134,7 @@ pub enum EndpointReq {
     AudioMixer(EndpointAudioMixerReq),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackReq),
     LocalTrack(LocalTrackId, EndpointLocalTrackReq),
+    MessageChannel(MessageChannelLabel, EndpointMessageChannelReq),
 }
 
 /// This is response, which is used to send response back to Endpoint SDK
@@ -125,6 +147,7 @@ pub enum EndpointRes {
     AudioMixer(EndpointAudioMixerRes),
     RemoteTrack(RemoteTrackId, EndpointRemoteTrackRes),
     LocalTrack(LocalTrackId, EndpointLocalTrackRes),
+    MessageChannel(MessageChannelLabel, EndpointMessageChannelRes),
 }
 
 /// This is used for controlling the local track, which is sent from endpoint
@@ -165,6 +188,9 @@ pub enum EndpointEvent {
     },
     /// This session will be disconnect after some seconds
     GoAway(u8, Option<String>),
+
+    /// DataChannel events
+    ChannelMessage(MessageChannelLabel, PeerId, Vec<u8>),
 }
 
 pub enum EndpointInput<Ext> {

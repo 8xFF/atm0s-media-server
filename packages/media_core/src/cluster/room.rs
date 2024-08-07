@@ -11,18 +11,24 @@
 use std::{fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::features::{dht_kv, FeaturesControl, FeaturesEvent};
+use media_server_protocol::message_channel::MessageChannelPacket;
+use message_channel::RoomMessageChannel;
 use sans_io_runtime::{return_if_none, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
-use crate::transport::{LocalTrackId, RemoteTrackId};
+use crate::{
+    endpoint::MessageChannelLabel,
+    transport::{LocalTrackId, RemoteTrackId},
+};
 
 use audio_mixer::AudioMixer;
 use media_track::MediaTrack;
 use metadata::RoomMetadata;
 
-use super::{id_generator, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackControl, ClusterRemoteTrackControl, ClusterRoomHash};
+use super::{id_generator, ClusterEndpointControl, ClusterEndpointEvent, ClusterLocalTrackControl, ClusterMessageChannelControl, ClusterRemoteTrackControl, ClusterRoomHash};
 
 mod audio_mixer;
 mod media_track;
+mod message_channel;
 mod metadata;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -30,6 +36,7 @@ pub enum RoomFeature {
     MetaData,
     MediaTrack,
     AudioMixer,
+    MessageChannel,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -53,6 +60,7 @@ enum TaskType {
     Metadata,
     MediaTrack,
     AudioMixer,
+    MessageChannel,
 }
 
 pub struct ClusterRoom<Endpoint: Debug + Copy + Clone + Hash + Eq> {
@@ -60,6 +68,7 @@ pub struct ClusterRoom<Endpoint: Debug + Copy + Clone + Hash + Eq> {
     metadata: TaskSwitcherBranch<RoomMetadata<Endpoint>, metadata::Output<Endpoint>>,
     media_track: TaskSwitcherBranch<MediaTrack<Endpoint>, media_track::Output<Endpoint>>,
     audio_mixer: TaskSwitcherBranch<AudioMixer<Endpoint>, audio_mixer::Output<Endpoint>>,
+    message_channel: TaskSwitcherBranch<RoomMessageChannel<Endpoint>, message_channel::Output<Endpoint>>,
     switcher: TaskSwitcher,
 }
 
@@ -122,6 +131,19 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                         }
                     }
                 }
+                TaskType::MessageChannel => {
+                    if let Some(out) = self.message_channel.pop_output((), &mut self.switcher) {
+                        match out {
+                            message_channel::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
+                            message_channel::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MessageChannel), FeaturesControl::PubSub(control))),
+                            message_channel::Output::OnResourceEmpty => {
+                                if self.is_empty() {
+                                    break Some(Output::Destroy(self.room));
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -135,12 +157,13 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             metadata: TaskSwitcherBranch::new(RoomMetadata::new(room), TaskType::Metadata),
             media_track: TaskSwitcherBranch::new(MediaTrack::new(room), TaskType::MediaTrack),
             audio_mixer: TaskSwitcherBranch::new(AudioMixer::new(room, mixer_channel_id), TaskType::AudioMixer),
-            switcher: TaskSwitcher::new(3),
+            message_channel: TaskSwitcherBranch::new(RoomMessageChannel::new(room), TaskType::MessageChannel),
+            switcher: TaskSwitcher::new(4),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.metadata.is_empty() && self.media_track.is_empty() && self.audio_mixer.is_empty()
+        self.metadata.is_empty() && self.media_track.is_empty() && self.audio_mixer.is_empty() && self.message_channel.is_empty()
     }
 
     fn on_sdn_event(&mut self, now: Instant, userdata: RoomUserData, event: FeaturesEvent) {
@@ -155,6 +178,9 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             (RoomFeature::AudioMixer, FeaturesEvent::PubSub(event)) => {
                 self.audio_mixer.input(&mut self.switcher).on_pubsub_event(now, event);
             }
+            (RoomFeature::MessageChannel, FeaturesEvent::PubSub(event)) => {
+                self.message_channel.input(&mut self.switcher).on_pubsub_event(event);
+            }
             _ => {}
         }
     }
@@ -168,6 +194,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             ClusterEndpointControl::Leave => {
                 self.audio_mixer.input(&mut self.switcher).on_leave(now, endpoint);
                 self.metadata.input(&mut self.switcher).on_leave(endpoint);
+                self.message_channel.input(&mut self.switcher).on_leave(endpoint);
             }
             ClusterEndpointControl::SubscribePeer(target) => {
                 self.metadata.input(&mut self.switcher).on_subscribe_peer(endpoint, target);
@@ -180,6 +207,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             }
             ClusterEndpointControl::RemoteTrack(track, control) => self.on_control_remote_track(now, endpoint, track, control),
             ClusterEndpointControl::LocalTrack(track, control) => self.on_control_local_track(now, endpoint, track, control),
+            ClusterEndpointControl::MessageChannel(label, control) => self.on_control_message_channel(endpoint, label, control),
         }
     }
 }
@@ -223,6 +251,19 @@ impl<Endpoint: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Endpoint> {
             ClusterLocalTrackControl::Unsubscribe => self.media_track.input(&mut self.switcher).on_track_unsubscribe(endpoint, track_id),
         }
     }
+
+    fn on_control_message_channel(&mut self, endpoint: Endpoint, label: MessageChannelLabel, control: ClusterMessageChannelControl) {
+        match control {
+            ClusterMessageChannelControl::Subscribe => self.message_channel.input(&mut self.switcher).on_channel_subscribe(endpoint, &label),
+            ClusterMessageChannelControl::Unsubscribe => self.message_channel.input(&mut self.switcher).on_channel_unsubscribe(endpoint, &label),
+            ClusterMessageChannelControl::StartPublish => self.message_channel.input(&mut self.switcher).on_channel_publish_start(endpoint, &label),
+            ClusterMessageChannelControl::StopPublish => self.message_channel.input(&mut self.switcher).on_channel_publish_stop(endpoint, &label),
+            ClusterMessageChannelControl::PublishData(peer_id, data) => {
+                let pkt = MessageChannelPacket { from: peer_id, data };
+                self.message_channel.input(&mut self.switcher).on_channel_data(endpoint, &label, pkt);
+            }
+        }
+    }
 }
 
 impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Drop for ClusterRoom<Endpoint> {
@@ -231,6 +272,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Drop for ClusterRoom<Endpoint> 
         assert!(self.audio_mixer.is_empty(), "Audio mixer not empty");
         assert!(self.media_track.is_empty(), "Media track not empty");
         assert!(self.metadata.is_empty(), "Metadata not empty");
+        assert!(self.message_channel.is_empty(), "Data channel not empty");
     }
 }
 

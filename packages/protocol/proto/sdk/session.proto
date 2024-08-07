@@ -42,7 +42,7 @@ message Request {
         }
     }
 
-    message Rooom {
+    message Room {
         message SubscribePeer {
             string peer = 1;
         }
@@ -57,6 +57,27 @@ message Request {
         }
     }
 
+    message MessageChannel {
+        string label = 1;
+
+        // TODO: Add Feedback
+        message StartPublish {} 
+        message StopPublish {}
+        message Subscribe {}
+        message Unsubscribe {}
+        message Publish {
+            bytes data = 1;
+        }
+        
+        oneof request {
+            StartPublish start_pub = 2;
+            StopPublish stop_pub = 3;
+            Subscribe sub = 4;
+            Unsubscribe unsub = 5;
+            Publish pub = 6;
+        }
+    }
+    
     message Sender {
         message Attach {
             shared.Sender.Source source = 1;
@@ -96,10 +117,11 @@ message Request {
     uint32 req_id = 1;
     oneof request {
         Session session = 2;
-        Rooom room = 3;
+        Room room = 3;
         Sender sender = 4;
         Receiver receiver = 5;
         features.Request features = 6;
+        MessageChannel message_channel = 7;
     }
 }
 
@@ -142,7 +164,28 @@ message Response {
             SubscribePeer subscribe = 1;
             UnsubscribePeer unsubscribe = 2;
         }
+ 
     }
+
+    message MessageChannel {
+        string label = 1;
+
+        message StartPublish {} 
+        message StopPublish {}
+        message Subscribe {}
+        message Unsubscribe {}
+        message Publish {}
+        
+        oneof response {
+            StartPublish start_pub = 2;
+            StopPublish stop_pub = 3;
+            Subscribe sub = 4;
+            Unsubscribe unsub = 5;
+            Publish pub = 6;
+        }
+    }
+
+    
 
     message Sender {
         message Attach {
@@ -192,6 +235,7 @@ message Response {
         Sender sender = 5;
         Receiver receiver = 6;
         features.Response features = 7;
+        MessageChannel message_channel = 8;
     }
 }
 
@@ -275,6 +319,19 @@ message ServerEvent {
         }
     }
 
+    message MessageChannel {
+        string label = 1;
+
+        message Message {
+            string peer = 1;
+            bytes message = 2;
+        }
+
+        oneof event {
+            Message message = 2;
+        }
+    }
+
     message Sender {
         message State {
             shared.Sender.Status status = 1;
@@ -329,6 +386,7 @@ message ServerEvent {
         Receiver receiver = 5;
         Response response = 6;
         features.ServerEvent features = 7;
+        MessageChannel message_channel = 8;
     }
 }
 

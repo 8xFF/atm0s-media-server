@@ -163,6 +163,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             }
             EndpointEvent::GoAway(_seconds, _reason) => {}
             EndpointEvent::AudioMixer(_) => {}
+            EndpointEvent::ChannelMessage(..) => {}
         }
     }
 
