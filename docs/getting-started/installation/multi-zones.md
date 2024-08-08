@@ -12,9 +12,9 @@ Note that you can deploy multi connectors in some zones to handle room and peer 
 
 ## Prerequisites
 
-- Choose a different zone id for each zone, it is 32bit with format: 0x00_00_XX_00, example: 0, 256, 512
+- Choose a different zone id for each zone, it is 24bit unsigned number.
 - Select a secret for all zones.
 
 ## Deploying each zone, same as a single-zone cluster
 
-The deployment steps are the same as for a single-zone cluster with addition `--zone-id ZONE_ID` param. However, starting from second zone, you don't need to add console node, instead of that you can reuse single console node for all zones.
+The deployment steps are the same as for a single-zone cluster with addition `--sdn-zone-id ZONE_ID` param. However, starting from second zone, you don't need to add console node, instead of that you can reuse single console node for all zones.
