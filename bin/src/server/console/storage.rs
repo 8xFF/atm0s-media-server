@@ -212,7 +212,7 @@ impl Storage {
     pub fn consoles(&self) -> Vec<ConsoleNode> {
         self.zones
             .iter()
-            .map(|(id, z)| {
+            .flat_map(|(_id, z)| {
                 z.consoles
                     .iter()
                     .map(|(id, g)| ConsoleNode {
@@ -225,8 +225,7 @@ impl Storage {
                     })
                     .collect::<Vec<_>>()
             })
-            .flatten()
-            .collect::<Vec<_>>()
+            .collect()
     }
 
     pub fn zones(&self) -> Vec<Zone> {
