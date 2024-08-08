@@ -57,6 +57,14 @@ struct Args {
     #[arg(env, long, default_value_t = 1)]
     workers: usize,
 
+    /// Enable sentry report
+    #[arg(env, long)]
+    sentry_disable: bool,
+
+    /// Sentry report endpoint
+    #[arg(env, long, default_value = "https://46f5e9a11d430eb479b516fc12033e78@o4507218956386304.ingest.us.sentry.io/4507739106836480")]
+    sentry_endpoint: String,
+
     #[command(subcommand)]
     server: server::ServerType,
 }
@@ -71,6 +79,16 @@ async fn main() {
     }
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+
+    if !args.sentry_disable {
+        let _guard = sentry::init((
+            args.sentry_endpoint.as_str(),
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                ..Default::default()
+            },
+        ));
+    }
 
     let http_port = args.http_port;
     let workers = args.workers;
