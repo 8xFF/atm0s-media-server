@@ -3,7 +3,7 @@ RUST_BACKTRACE=1 \
 cargo run -- \
     --enable-private-ip \
     --sdn-zone-id 0 \
-    --sdn-zone-idx 3 \
+    --sdn-zone-node-id 3 \
     --seeds 1@/ip4/127.0.0.1/udp/10001 \
     --workers 2 \
     media \

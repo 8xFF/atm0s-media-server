@@ -5,7 +5,7 @@ cargo run -- \
     --enable-private-ip \
     --sdn-port 10001 \
     --sdn-zone-id 0 \
-    --sdn-zone-idx 1 \
+    --sdn-zone-node-id 1 \
     --seeds 0@/ip4/127.0.0.1/udp/10000 \
     --workers 2 \
     gateway \

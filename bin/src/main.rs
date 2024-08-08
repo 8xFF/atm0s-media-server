@@ -30,7 +30,7 @@ struct Args {
 
     /// The 8-bit index of the current node within the SDN zone.
     #[arg(env, long, default_value_t = 0)]
-    sdn_zone_idx: u8,
+    sdn_zone_node_id: u8,
 
     /// Manually specify the IP address of the node. This disables IP autodetection.
     #[arg(env, long)]
@@ -123,7 +123,7 @@ async fn main() {
             .collect::<Vec<_>>()
     };
     let node = NodeConfig {
-        node_id: ZoneId(args.sdn_zone_id).to_node_id(args.sdn_zone_idx),
+        node_id: ZoneId(args.sdn_zone_id).to_node_id(args.sdn_zone_node_id),
         secret: args.secret,
         seeds: args.seeds,
         bind_addrs,

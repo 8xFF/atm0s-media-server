@@ -42,7 +42,7 @@ Console node will expose at least 1 tcp port and 1 udp port
 docker run -d --name main-console --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
     --sdn-port 10000 \
-    --sdn-zone-idx 0 \
+    --sdn-zone-node-id 0 \
     --http-port 8080 \
     --enable-private-ip \
     console
@@ -62,7 +62,7 @@ Gateway node will expose at least 1 tcp port and 1 udp port
 docker run -d --name gateway1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
     --sdn-port 10010 \
-    --sdn-zone-idx 10 \
+    --sdn-zone-node-id 10 \
     --http-port 3000 \
     --enable-private-ip \
     --seeds 0@/ip4/127.0.0.1/udp/10000 \
@@ -73,7 +73,7 @@ docker run -d --name gateway1 --net=host ghcr.io/8xff/atm0s-media-gateway:master
 docker run -d --name gateway2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
     --sdn-port 10011 \
-    --sdn-zone-idx 11 \
+    --sdn-zone-node-id 11 \
     --http-port 3001 \
     --enable-private-ip \
     --seeds 0@/ip4/127.0.0.1/udp/10000 \
@@ -93,7 +93,7 @@ In default it will store data inside a sqlite file. For connecting to other data
 docker run -d --name main-connector --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
     --sdn-port 10020 \
-    --sdn-zone-idx 20 \
+    --sdn-zone-node-id 20 \
     --enable-private-ip \
     --seeds 10@/ip4/127.0.0.1/udp/10010 \
     --seeds 11@/ip4/127.0.0.1/udp/10011 \
@@ -107,7 +107,7 @@ docker run -d --name main-connector --net=host ghcr.io/8xff/atm0s-media-gateway:
 docker run -d --name media1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
     --sdn-port 10100 \
-    --sdn-zone-idx 100 \
+    --sdn-zone-node-id 100 \
     --enable-private-ip \
     --seeds 10@/ip4/127.0.0.1/udp/10010 \
     --seeds 11@/ip4/127.0.0.1/udp/10011 \
@@ -119,7 +119,7 @@ docker run -d --name media1 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
 docker run -d --name media2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
     --secret secr3t \
     --sdn-port 10101 \
-    --sdn-zone-idx 101 \
+    --sdn-zone-node-id 101 \
     --enable-private-ip \
     --seeds 10@/ip4/127.0.0.1/udp/10010 \
     --seeds 11@/ip4/127.0.0.1/udp/10011 \
