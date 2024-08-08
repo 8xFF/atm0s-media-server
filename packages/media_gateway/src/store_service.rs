@@ -8,9 +8,12 @@ use atm0s_sdn::{
     features::{data, FeaturesControl, FeaturesEvent},
     NodeId, RouteRule, ServiceBroadcastLevel,
 };
-use media_server_protocol::protobuf::{
-    self,
-    cluster_gateway::{gateway_event, ping_event::gateway_origin::Location},
+use media_server_protocol::{
+    cluster::ZoneId,
+    protobuf::{
+        self,
+        cluster_gateway::{gateway_event, ping_event::gateway_origin::Location},
+    },
 };
 use prost::Message as _;
 
@@ -46,7 +49,7 @@ where
     SC: From<Control> + TryInto<Control>,
     SE: From<Event> + TryInto<Event>,
 {
-    pub fn new(zone: u32, lat: f32, lon: f32, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
+    pub fn new(zone: ZoneId, lat: f32, lon: f32, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
         Self {
             store: GatewayStore::new(zone, Location { lat, lon }, max_cpu, max_memory, max_disk),
             queue: VecDeque::from([ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())]),
@@ -192,7 +195,7 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
 
 pub struct GatewayStoreServiceBuilder<UserData, SC, SE, TC, TW> {
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
-    zone: u32,
+    zone: ZoneId,
     lat: f32,
     lon: f32,
     max_memory: u8,
@@ -201,7 +204,7 @@ pub struct GatewayStoreServiceBuilder<UserData, SC, SE, TC, TW> {
 }
 
 impl<UserData, SC, SE, TC, TW> GatewayStoreServiceBuilder<UserData, SC, SE, TC, TW> {
-    pub fn new(zone: u32, lat: f32, lon: f32, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
+    pub fn new(zone: ZoneId, lat: f32, lon: f32, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
         Self {
             zone,
             lat,

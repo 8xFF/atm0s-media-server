@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use atm0s_sdn::{NodeAddr, NodeId};
+use media_server_protocol::cluster::ZoneId;
 
 mod errors;
 mod http;
@@ -18,6 +19,6 @@ pub struct NodeConfig {
     pub secret: String,
     pub seeds: Vec<NodeAddr>,
     pub bind_addrs: Vec<SocketAddr>,
-    pub zone: u32,
+    pub zone: ZoneId,
     pub bind_addrs_alt: Vec<SocketAddr>,
 }

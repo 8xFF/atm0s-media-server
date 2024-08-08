@@ -4,7 +4,7 @@ use std::{
 };
 
 use atm0s_sdn::{services::visualization::ConnectionInfo, NodeId};
-use media_server_protocol::cluster::{ClusterGatewayInfo, ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo};
+use media_server_protocol::cluster::{ClusterGatewayInfo, ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo, ZoneId};
 
 const NODE_TIMEOUT: u64 = 30_000;
 
@@ -132,7 +132,7 @@ struct ZoneContainer {
 
 #[derive(Debug, Default)]
 struct Storage {
-    zones: HashMap<u32, ZoneContainer>,
+    zones: HashMap<ZoneId, ZoneContainer>,
 }
 
 impl Storage {
@@ -149,8 +149,8 @@ impl Storage {
     pub fn on_ping(&mut self, now: u64, node: NodeId, info: ClusterNodeInfo, conns: Vec<ConnectionInfo>) {
         match info {
             ClusterNodeInfo::Console(generic) => {
-                let zone_id = node & 0xFF_FF_FF_00;
-                log::info!("Zone {zone_id} on console ping, zones {}", self.zones.len());
+                let zone_id = ZoneId::from_node_id(node);
+                log::info!("Zone {zone_id:?} on console ping, zones {}", self.zones.len());
                 let zone = self.zones.entry(zone_id).or_default();
                 zone.consoles.insert(
                     node,
@@ -160,11 +160,11 @@ impl Storage {
                         conns: conns.into_iter().map(|c| c.into()).collect::<Vec<_>>(),
                     },
                 );
-                log::info!("Zone {zone_id} on console ping, after zones {}", self.zones.len());
+                log::info!("Zone {zone_id:?} on console ping, after zones {}", self.zones.len());
             }
             ClusterNodeInfo::Gateway(generic, info) => {
-                let zone_id = node & 0xFF_FF_FF_00;
-                log::info!("Zone {zone_id} on gateway ping");
+                let zone_id = ZoneId::from_node_id(node);
+                log::info!("Zone {zone_id:?} on gateway ping");
                 let zone = self.zones.entry(zone_id).or_default();
                 zone.lat = info.lat;
                 zone.lon = info.lon;
@@ -179,8 +179,8 @@ impl Storage {
                 );
             }
             ClusterNodeInfo::Media(generic, info) => {
-                let zone_id = node & 0xFF_FF_FF_00;
-                log::info!("Zone {zone_id} on media ping");
+                let zone_id = ZoneId::from_node_id(node);
+                log::info!("Zone {zone_id:?} on media ping");
                 let zone = self.zones.entry(zone_id).or_default();
                 zone.medias.insert(
                     node,
@@ -193,8 +193,8 @@ impl Storage {
                 );
             }
             ClusterNodeInfo::Connector(generic) => {
-                let zone_id = node & 0xFF_FF_FF_00;
-                log::info!("Zone {zone_id} on connector ping, zones {}", self.zones.len());
+                let zone_id = ZoneId::from_node_id(node);
+                log::info!("Zone {zone_id:?} on connector ping, zones {}", self.zones.len());
                 let zone = self.zones.entry(zone_id).or_default();
                 zone.connectors.insert(
                     node,
@@ -204,9 +204,29 @@ impl Storage {
                         conns: conns.into_iter().map(|c| c.into()).collect::<Vec<_>>(),
                     },
                 );
-                log::info!("Zone {zone_id} on console ping, after zones {}", self.zones.len());
+                log::info!("Zone {zone_id:?} on console ping, after zones {}", self.zones.len());
             }
         }
+    }
+
+    pub fn consoles(&self) -> Vec<ConsoleNode> {
+        self.zones
+            .iter()
+            .map(|(id, z)| {
+                z.consoles
+                    .iter()
+                    .map(|(id, g)| ConsoleNode {
+                        addr: g.generic.addr.clone(),
+                        node_id: *id,
+                        cpu: g.generic.cpu,
+                        memory: g.generic.memory,
+                        disk: g.generic.disk,
+                        conns: g.conns.clone(),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect::<Vec<_>>()
     }
 
     pub fn zones(&self) -> Vec<Zone> {
@@ -215,7 +235,7 @@ impl Storage {
             .map(|(id, z)| Zone {
                 lat: z.lat,
                 lon: z.lon,
-                zone_id: *id,
+                zone_id: id.0,
                 consoles: z.consoles.len(),
                 gateways: z.gateways.len(),
                 medias: z.medias.len(),
@@ -224,7 +244,7 @@ impl Storage {
             .collect::<Vec<_>>()
     }
 
-    pub fn zone(&self, zone_id: u32) -> Option<ZoneDetails> {
+    pub fn zone(&self, zone_id: ZoneId) -> Option<ZoneDetails> {
         let z = self.zones.get(&zone_id)?;
         Some(ZoneDetails {
             lat: z.lat,
@@ -299,18 +319,22 @@ impl StorageShared {
         self.storage.write().expect("should lock storage").on_ping(now, node, info, conns);
     }
 
+    pub fn consoles(&self) -> Vec<ConsoleNode> {
+        self.storage.read().expect("should lock storage").consoles()
+    }
+
     pub fn zones(&self) -> Vec<Zone> {
         self.storage.read().expect("should lock storage").zones()
     }
 
-    pub fn zone(&self, zone_id: u32) -> Option<ZoneDetails> {
+    pub fn zone(&self, zone_id: ZoneId) -> Option<ZoneDetails> {
         self.storage.read().expect("should lock storage").zone(zone_id)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use media_server_protocol::cluster::{ClusterGatewayInfo, ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo};
+    use media_server_protocol::cluster::{ClusterGatewayInfo, ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo, ZoneId};
 
     use crate::server::console_storage::{ConnectorNode, ConsoleNode, GatewayNode, MediaNode, Zone, ZoneDetails, NODE_TIMEOUT};
 
@@ -347,7 +371,7 @@ mod tests {
         );
 
         assert_eq!(
-            storage.zone(0),
+            storage.zone(ZoneId(0)),
             Some(ZoneDetails {
                 lat: 0.0,
                 lon: 0.0,
@@ -365,12 +389,12 @@ mod tests {
             })
         );
 
-        assert_eq!(storage.zone(1), None);
+        assert_eq!(storage.zone(ZoneId(1)), None);
 
         storage.on_tick(NODE_TIMEOUT);
         //after timeout should clear
         assert_eq!(storage.zones(), vec![]);
-        assert_eq!(storage.zone(0), None);
+        assert_eq!(storage.zone(ZoneId(0)), None);
     }
 
     #[test]
@@ -412,7 +436,7 @@ mod tests {
         );
 
         assert_eq!(
-            storage.zone(0),
+            storage.zone(ZoneId(0)),
             Some(ZoneDetails {
                 lat: 10.0,
                 lon: 11.0,
@@ -432,12 +456,12 @@ mod tests {
             })
         );
 
-        assert_eq!(storage.zone(1), None);
+        assert_eq!(storage.zone(ZoneId(1)), None);
 
         storage.on_tick(NODE_TIMEOUT);
         //after timeout should clear
         assert_eq!(storage.zones(), vec![]);
-        assert_eq!(storage.zone(0), None);
+        assert_eq!(storage.zone(ZoneId(0)), None);
     }
 
     #[test]
@@ -474,7 +498,7 @@ mod tests {
         );
 
         assert_eq!(
-            storage.zone(0),
+            storage.zone(ZoneId(0)),
             Some(ZoneDetails {
                 lat: 0.0,
                 lon: 0.0,
@@ -494,12 +518,12 @@ mod tests {
             })
         );
 
-        assert_eq!(storage.zone(1), None);
+        assert_eq!(storage.zone(ZoneId(1)), None);
 
         storage.on_tick(NODE_TIMEOUT);
         //after timeout should clear
         assert_eq!(storage.zones(), vec![]);
-        assert_eq!(storage.zone(0), None);
+        assert_eq!(storage.zone(ZoneId(0)), None);
     }
 
     #[test]
@@ -533,7 +557,7 @@ mod tests {
         );
 
         assert_eq!(
-            storage.zone(0),
+            storage.zone(ZoneId(0)),
             Some(ZoneDetails {
                 lat: 0.0,
                 lon: 0.0,
@@ -551,11 +575,11 @@ mod tests {
             })
         );
 
-        assert_eq!(storage.zone(1), None);
+        assert_eq!(storage.zone(ZoneId(1)), None);
 
         storage.on_tick(NODE_TIMEOUT);
         //after timeout should clear
         assert_eq!(storage.zones(), vec![]);
-        assert_eq!(storage.zone(0), None);
+        assert_eq!(storage.zone(ZoneId(0)), None);
     }
 }

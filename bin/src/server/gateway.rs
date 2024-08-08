@@ -49,32 +49,32 @@ type TW = ();
 
 #[derive(Debug, Parser)]
 pub struct Args {
-    /// Location latude
+    /// Location latitude.
     #[arg(env, long, default_value_t = 0.0)]
     lat: f32,
 
-    /// Location longtude
+    /// Location longitude.
     #[arg(env, long, default_value_t = 0.0)]
     lon: f32,
 
-    /// GeoIp database
+    /// Path to the GeoIP database.
     #[arg(env, long, default_value = "./maxminddb-data/GeoLite2-City.mmdb")]
     geo_db: String,
 
-    /// Max cpu usage (in percent) of media-node or gateway-node we allow to route to
+    /// Maximum CPU usage (in percent) allowed for routing to a media node or gateway node.
     #[arg(env, long, default_value_t = 60)]
     max_cpu: u8,
 
-    /// Max memory usage (in percent) of media-node or gateway-node we allow to route to
+    /// Maximum memory usage (in percent) allowed for routing to a media node or gateway node.
     #[arg(env, long, default_value_t = 80)]
     max_memory: u8,
 
-    /// Max disk usage (in percent) of media-node or gateway-node we allow to route to
+    /// Maximum disk usage (in percent) allowed for routing to a media node or gateway node.
     #[arg(env, long, default_value_t = 90)]
     max_disk: u8,
 
-    /// Port for binding rtpengine command UDP socket.
-    #[arg(env, long, default_value = "127.0.0.1:22222")]
+    /// The port for binding the RTPengine command UDP socket.
+    #[arg(env, long)]
     rtpengine_cmd_addr: Option<SocketAddr>,
 }
 

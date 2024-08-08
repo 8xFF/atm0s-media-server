@@ -16,7 +16,7 @@ use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
 use media_server_core::cluster::{self, MediaCluster};
 use media_server_gateway::{agent_service::GatewayAgentServiceBuilder, NodeMetrics, ServiceKind, AGENT_SERVICE_ID};
 use media_server_protocol::{
-    cluster::{ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo},
+    cluster::{ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo, ZoneId},
     gateway::generate_gateway_zone_tag,
     protobuf::{
         cluster_connector::{connector_request, PeerEvent},
@@ -144,7 +144,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         controller: bool,
         sdn_bind_addrs: Vec<SocketAddr>,
         sdn_custom_addrs: Vec<SocketAddr>,
-        sdn_zone: u32,
+        sdn_zone: ZoneId,
         media: MediaConfig<ES>,
     ) -> Self {
         let secure = media.secure.clone(); //TODO why need this?

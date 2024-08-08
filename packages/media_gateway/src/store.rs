@@ -1,5 +1,8 @@
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, GatewayOrigin, Origin, ServiceStats};
+use media_server_protocol::{
+    cluster::ZoneId,
+    protobuf::cluster_gateway::ping_event::{gateway_origin::Location, GatewayOrigin, Origin, ServiceStats},
+};
 
 use crate::{NodeMetrics, ServiceKind};
 
@@ -18,7 +21,7 @@ pub struct PingEvent {
 }
 
 pub struct GatewayStore {
-    zone: u32,
+    zone: ZoneId,
     node: NodeMetrics,
     location: Location,
     webrtc: ServiceStore,
@@ -30,7 +33,7 @@ pub struct GatewayStore {
 }
 
 impl GatewayStore {
-    pub fn new(zone: u32, location: Location, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
+    pub fn new(zone: ZoneId, location: Location, max_cpu: u8, max_memory: u8, max_disk: u8) -> Self {
         Self {
             node: NodeMetrics::default(),
             webrtc: ServiceStore::new(zone, ServiceKind::Webrtc, location),
@@ -56,7 +59,7 @@ impl GatewayStore {
             memory: self.node.memory,
             disk: self.node.disk,
             origin: Origin::Gateway(GatewayOrigin {
-                zone: self.zone,
+                zone: self.zone.0,
                 location: Some(self.location),
             }),
             webrtc: self.webrtc.local_stats(),
@@ -90,13 +93,16 @@ impl GatewayStore {
                 }
             }
             Origin::Gateway(gateway) => {
-                if gateway.zone == self.zone {
+                if gateway.zone == self.zone.0 {
                     //Reject stats from same zone
                     return;
                 }
                 match (node_usage, webrtc_usage, gateway.location, ping.webrtc) {
-                    (Some(node), Some(webrtc), Some(location), Some(stats)) => self.webrtc.on_gateway_ping(now, gateway.zone, from, node, location, webrtc, stats),
-                    _ => self.webrtc.remove_gateway(gateway.zone, from),
+                    (Some(node), Some(webrtc), Some(location), Some(stats)) => self.webrtc.on_gateway_ping(now, ZoneId(gateway.zone), from, node, location, webrtc, stats),
+                    _ => {
+                        self.webrtc.remove_gateway(ZoneId(gateway.zone), from);
+                        self.rtpengine.remove_gateway(ZoneId(gateway.zone), from);
+                    }
                 }
             }
         }
@@ -181,7 +187,10 @@ fn rtpengine_usage(ping: &PingEvent, max_cpu: u8, max_memory: u8, max_disk: u8) 
 
 #[cfg(test)]
 mod tests {
-    use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, GatewayOrigin, MediaOrigin, Origin, ServiceStats};
+    use media_server_protocol::{
+        cluster::ZoneId,
+        protobuf::cluster_gateway::ping_event::{gateway_origin::Location, GatewayOrigin, MediaOrigin, Origin, ServiceStats},
+    };
 
     use crate::ServiceKind;
 
@@ -189,7 +198,7 @@ mod tests {
 
     #[test]
     fn local_ping() {
-        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
+        let mut store = GatewayStore::new(ZoneId(0), Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
         store.on_ping(
             0,
             1,
@@ -225,7 +234,7 @@ mod tests {
 
     #[test]
     fn local_reject_max_usage() {
-        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
+        let mut store = GatewayStore::new(ZoneId(0), Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
         store.on_ping(
             0,
             1,
@@ -270,7 +279,7 @@ mod tests {
 
     #[test]
     fn remote_ping() {
-        let mut store = GatewayStore::new(0, Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
+        let mut store = GatewayStore::new(ZoneId(0), Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
         store.on_ping(
             0,
             257,

@@ -3,6 +3,7 @@ use std::net::{IpAddr, SocketAddr};
 use atm0s_media_server::{server, NodeConfig};
 use atm0s_sdn::NodeAddr;
 use clap::Parser;
+use media_server_protocol::cluster::ZoneId;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 const MAX_ZONE_ID: u32 = 1u32 << 24;
@@ -122,11 +123,11 @@ async fn main() {
             .collect::<Vec<_>>()
     };
     let node = NodeConfig {
-        node_id: (args.sdn_zone_id << 8) | args.sdn_zone_idx as u32,
+        node_id: ZoneId(args.sdn_zone_id).to_node_id(args.sdn_zone_idx),
         secret: args.secret,
         seeds: args.seeds,
         bind_addrs,
-        zone: args.sdn_zone_id << 8,
+        zone: ZoneId(args.sdn_zone_id),
         bind_addrs_alt: args.node_ip_alt.into_iter().map(|ip| SocketAddr::new(ip, sdn_port)).collect::<Vec<_>>(),
     };
 
