@@ -5,7 +5,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub node: u32,
+    pub node: i64,
     /// This is node timestamp
     pub node_ts: i64,
     pub session: i64,
