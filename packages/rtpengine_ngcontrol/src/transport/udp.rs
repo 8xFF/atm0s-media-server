@@ -11,7 +11,7 @@ pub struct NgUdpTransport {
 
 impl NgUdpTransport {
     pub async fn new(addr: SocketAddr) -> Self {
-        let socket = UdpSocket::bind(addr).await.expect("Should listen on port {port}");
+        let socket = UdpSocket::bind(addr).await.expect("Should listen on {port}");
         log::info!("[NgUdpTransport] listen on addr {addr}");
         Self { socket }
     }

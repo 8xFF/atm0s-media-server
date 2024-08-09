@@ -41,41 +41,42 @@ use runtime_worker::{ExtIn, ExtOut};
 
 #[derive(Debug, Parser)]
 pub struct Args {
-    /// Enable token API or not, which allow generate token
+    /// Enables the Token API, which allows token generation.
     #[arg(env, long)]
     enable_token_api: bool,
 
-    /// Webrtc Ice Lite
+    /// Enables WebRTC ICE Lite mode.
     #[arg(env, long)]
     ice_lite: bool,
 
-    /// Seed port for binding webrtc UDP socket. It will increase by one for each worker.
-    /// Default: worker0: 20000, worker1: 20001, worker2: 20002, ...
-    #[arg(env, long, default_value_t = 20000)]
+    /// The seed port for binding the WebRTC UDP socket. The port will increment by one for each worker.
+    /// Default: 0, which assigns the port randomly.
+    /// If set to 20000, each worker will be assigned a unique port: worker0: 20000, worker1: 20001, worker2: 20002, ...
+    #[arg(env, long, default_value_t = 0)]
     webrtc_port_seed: u16,
 
-    /// Port for binding rtpengine command UDP socket.
+    /// The port for binding the RTPengine command UDP socket.
     #[arg(env, long)]
     rtpengine_cmd_addr: Option<SocketAddr>,
 
-    /// RtpEngine RTP Listen IP
+    /// The IP address for RTPengine RTP listening.
     /// Default: 127.0.0.1
     #[arg(env, long, default_value = "127.0.0.1")]
     rtpengine_rtp_ip: IpAddr,
 
-    /// Max ccu per core
+    /// Maximum concurrent connections per CPU core.
     #[arg(env, long, default_value_t = 200)]
     ccu_per_core: u32,
 
-    /// Record cache
+    /// Directory for storing cached recordings.
     #[arg(env, long, default_value = "./record_cache/")]
     record_cache: String,
 
-    /// Record memory max size in bytes
+    /// Maximum size of the recording cache in bytes.
     #[arg(env, long, default_value_t = 100_000_000)]
     record_mem_max_size: usize,
 
-    /// Record upload workers
+    /// Number of workers for uploading recordings.
     #[arg(env, long, default_value_t = 5)]
     record_upload_worker: usize,
 }
@@ -119,7 +120,13 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
 
     let mut controller = Controller::<_, _, _, _, _, 128>::default();
     for i in 0..workers {
-        let webrtc_port = args.webrtc_port_seed + i as u16;
+        let webrtc_port = if args.webrtc_port_seed > 0 {
+            args.webrtc_port_seed + i as u16
+        } else {
+            // We get a free port
+            let udp_socket = std::net::UdpSocket::bind("0.0.0.0:0").expect("Should get free port");
+            udp_socket.local_addr().expect("Should get free port").port()
+        };
         let webrtc_addrs = node.bind_addrs.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
         let webrtc_addrs_alt = node.bind_addrs_alt.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
 

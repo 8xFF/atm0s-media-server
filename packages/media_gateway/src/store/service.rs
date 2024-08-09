@@ -1,6 +1,8 @@
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, ServiceStats};
-use media_server_utils::node_zone_id;
+use media_server_protocol::{
+    cluster::ZoneId,
+    protobuf::cluster_gateway::ping_event::{gateway_origin::Location, ServiceStats},
+};
 
 use crate::ServiceKind;
 
@@ -16,7 +18,7 @@ struct NodeSource {
 
 /// This is for other cluster
 struct ZoneSource {
-    zone: u32,
+    zone: ZoneId,
     usage: u8,
     location: Location,
     last_updated: u64,
@@ -24,7 +26,7 @@ struct ZoneSource {
 }
 
 pub struct ServiceStore {
-    zone: u32,
+    zone: ZoneId,
     kind: ServiceKind,
     location: Location,
     local_sources: Vec<NodeSource>,
@@ -32,7 +34,7 @@ pub struct ServiceStore {
 }
 
 impl ServiceStore {
-    pub fn new(zone: u32, kind: ServiceKind, location: Location) -> Self {
+    pub fn new(zone: ZoneId, kind: ServiceKind, location: Location) -> Self {
         log::info!("[ServiceStore {:?}] create new in {:?}", kind, location);
         Self {
             zone,
@@ -75,7 +77,7 @@ impl ServiceStore {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn on_gateway_ping(&mut self, now: u64, zone: u32, gateway: u32, gateway_usage: u8, location: Location, usage: u8, stats: ServiceStats) {
+    pub fn on_gateway_ping(&mut self, now: u64, zone: ZoneId, gateway: u32, gateway_usage: u8, location: Location, usage: u8, stats: ServiceStats) {
         if let Some(z) = self.zone_sources.iter_mut().find(|s| s.zone == zone) {
             z.usage = usage;
             z.last_updated = now;
@@ -84,7 +86,7 @@ impl ServiceStore {
                 g.last_updated = now;
             } else {
                 log::info!(
-                    "[ServiceStore {:?}] zone {zone} at {:?} add new gateway {gateway} gateway usage {gateway_usage}, stats {:?}",
+                    "[ServiceStore {:?}] zone {zone:?} at {:?} add new gateway {gateway} gateway usage {gateway_usage}, stats {:?}",
                     self.kind,
                     z.location,
                     stats
@@ -99,7 +101,7 @@ impl ServiceStore {
             z.gateways.sort();
         } else {
             log::info!(
-                "[ServiceStore {:?}] new zone {zone} at {:?} usage {usage}, gateway {gateway} gateway usage {gateway_usage}, stats {:?}",
+                "[ServiceStore {:?}] new zone {zone:?} at {:?} usage {usage}, gateway {gateway} gateway usage {gateway_usage}, stats {:?}",
                 self.kind,
                 location,
                 stats
@@ -120,12 +122,12 @@ impl ServiceStore {
         self.local_sources.sort();
     }
 
-    pub fn remove_gateway(&mut self, zone: u32, gateway: u32) {
+    pub fn remove_gateway(&mut self, zone: ZoneId, gateway: u32) {
         if let Some((index, z)) = self.zone_sources.iter_mut().enumerate().find(|(_i, z)| z.zone == zone) {
             if let Some((g_index, _g)) = z.gateways.iter_mut().enumerate().find(|(_i, g)| g.node == gateway) {
                 let g = z.gateways.remove(g_index);
                 log::info!(
-                    "[ServiceStore {:?}] zone {zone} at {:?} remove gateway {} gateway usage {}, stats {:?}",
+                    "[ServiceStore {:?}] zone {zone:?} at {:?} remove gateway {} gateway usage {}, stats {:?}",
                     self.kind,
                     z.location,
                     g.node,
@@ -135,7 +137,7 @@ impl ServiceStore {
             }
             if z.gateways.is_empty() {
                 let zone = self.zone_sources.remove(index);
-                log::info!("[ServiceStore {:?}] remove zone {} at {:?}", self.kind, zone.zone, zone.location,);
+                log::info!("[ServiceStore {:?}] remove zone {:?} at {:?}", self.kind, zone.zone, zone.location,);
             }
         }
     }
@@ -160,7 +162,7 @@ impl ServiceStore {
     /// If we in same zone then only check local registry
     /// Else we forward it to the zone gateway if available
     pub fn dest_for(&self, dest: NodeId) -> Option<u32> {
-        if node_zone_id(dest) == self.zone {
+        if ZoneId::from_node_id(dest) == self.zone {
             for n in self.local_sources.iter() {
                 if n.node == dest {
                     return Some(dest);
@@ -170,7 +172,7 @@ impl ServiceStore {
             None
         } else {
             for z in self.zone_sources.iter() {
-                if z.zone == node_zone_id(dest) {
+                if z.zone == ZoneId::from_node_id(dest) {
                     return z.gateways.first().map(|s| s.node);
                 }
             }
@@ -243,7 +245,10 @@ fn distance(node1: &Location, node2: &Location) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use media_server_protocol::protobuf::cluster_gateway::ping_event::{gateway_origin::Location, ServiceStats};
+    use media_server_protocol::{
+        cluster::ZoneId,
+        protobuf::cluster_gateway::ping_event::{gateway_origin::Location, ServiceStats},
+    };
 
     use crate::{store::service::PING_TIMEOUT, ServiceKind};
 
@@ -251,7 +256,7 @@ mod tests {
 
     #[test]
     fn empty_store() {
-        let store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let store = ServiceStore::new(ZoneId(0), ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
         assert_eq!(store.best_for(None), None);
         assert_eq!(store.best_for(Some(Location { lat: 1.0, lon: 1.0 })), None);
 
@@ -260,7 +265,7 @@ mod tests {
 
     #[test]
     fn local_store() {
-        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(ZoneId(0), ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
         store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
         store.on_node_ping(0, 2, 50, ServiceStats { live: 60, max: 1000, active: true });
@@ -285,23 +290,23 @@ mod tests {
 
     #[test]
     fn remote_zones_store() {
-        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(ZoneId(0), ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
-        store.on_gateway_ping(0, 256, 256, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
-        store.on_gateway_ping(0, 256, 257, 50, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, ZoneId(1), 256, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, ZoneId(1), 257, 50, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
 
         //should got lowest usage gateway node
         assert_eq!(store.best_for(None), Some(257));
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
 
         //after gateway 257 increase usage should switch to 256
-        store.on_gateway_ping(0, 256, 257, 65, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, ZoneId(1), 257, 65, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
 
         assert_eq!(store.best_for(None), Some(256));
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(256));
 
         //should fallback to remain gateway
-        store.remove_gateway(256, 256);
+        store.remove_gateway(ZoneId(1), 256);
 
         assert_eq!(store.best_for(None), Some(257));
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
@@ -309,10 +314,10 @@ mod tests {
 
     #[test]
     fn local_and_remote_zones() {
-        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(ZoneId(0), ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
         store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
-        store.on_gateway_ping(0, 256, 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, ZoneId(1), 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
 
         //should got local zone if don't provide location
         assert_eq!(store.best_for(None), Some(1));
@@ -327,7 +332,7 @@ mod tests {
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), Some(257));
 
         //after remove other zone should return None
-        store.remove_gateway(256, 257);
+        store.remove_gateway(ZoneId(1), 257);
 
         assert_eq!(store.best_for(None), None);
         assert_eq!(store.best_for(Some(Location { lat: 2.0, lon: 2.0 })), None);
@@ -335,10 +340,10 @@ mod tests {
 
     #[test]
     fn clear_timeout() {
-        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(ZoneId(0), ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
         store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
-        store.on_gateway_ping(0, 256, 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, ZoneId(1), 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
 
         assert_eq!(store.local_sources.len(), 1);
         assert_eq!(store.zone_sources.len(), 1);
@@ -351,7 +356,7 @@ mod tests {
 
     #[test]
     fn dest_for_same_zone() {
-        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(ZoneId(0), ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
         store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
 
         assert_eq!(store.dest_for(1), Some(1));
@@ -360,12 +365,12 @@ mod tests {
 
     #[test]
     fn dest_for_other_zone() {
-        let mut store = ServiceStore::new(0, ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
+        let mut store = ServiceStore::new(ZoneId(0), ServiceKind::Webrtc, Location { lat: 1.0, lon: 1.0 });
 
         store.on_node_ping(0, 1, 60, ServiceStats { live: 100, max: 1000, active: true });
-        store.on_gateway_ping(0, 256, 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
+        store.on_gateway_ping(0, ZoneId(1), 257, 60, Location { lat: 2.0, lon: 2.0 }, 50, ServiceStats { live: 100, max: 1000, active: true });
 
         assert_eq!(store.dest_for(260), Some(257));
-        assert_eq!(store.dest_for(1024), None);
+        assert_eq!(store.dest_for(2), None);
     }
 }

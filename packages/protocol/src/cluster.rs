@@ -1,5 +1,18 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ZoneId(pub u32);
+
+impl ZoneId {
+    pub fn from_node_id(node: u32) -> Self {
+        Self(node >> 8)
+    }
+
+    pub fn to_node_id(&self, idx: u8) -> u32 {
+        self.0 << 8 | idx as u32
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterNodeGenericInfo {
     pub addr: String,

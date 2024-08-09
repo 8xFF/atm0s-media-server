@@ -1,67 +1,70 @@
 use std::net::{IpAddr, SocketAddr};
 
 use atm0s_media_server::{server, NodeConfig};
-use atm0s_sdn::{NodeAddr, NodeId};
+use atm0s_sdn::NodeAddr;
 use clap::Parser;
+use media_server_protocol::cluster::ZoneId;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+const MAX_ZONE_ID: u32 = 1u32 << 24;
 
 /// Scalable Media Server solution for WebRTC, RTMP, and SIP.
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Http port
+    /// HTTP port for incoming requests.
     #[arg(env, long)]
     http_port: Option<u16>,
 
-    /// Run http with tls or not
+    /// Enable TLS for HTTP connections (set to the port number for HTTPS).
     #[arg(env, long)]
     http_tls: Option<u16>,
 
-    /// Sdn port
+    /// SDN (Software-Defined Networking) port.
     #[arg(env, long, default_value_t = 0)]
     sdn_port: u16,
 
-    /// Sdn Zone, which is 32bit number with last 8bit is 0
+    /// SDN zone identifier, a 24-bit number representing the zone ID.
     #[arg(env, long, default_value_t = 0)]
-    sdn_zone: u32,
+    sdn_zone_id: u32,
 
-    /// Current Node ID
-    #[arg(env, long, default_value_t = 1)]
-    node_id: NodeId,
+    /// The 8-bit index of the current node within the SDN zone.
+    #[arg(env, long, default_value_t = 0)]
+    sdn_zone_node_id: u8,
 
-    /// Setting the single node IP option will disable the autodetect IP addresses logic
+    /// Manually specify the IP address of the node. This disables IP autodetection.
     #[arg(env, long)]
     node_ip: Option<IpAddr>,
 
-    /// Some alternative node IPs, which are useful with some cloud providers behind NAT, like AWS or GCP ...
+    /// Alternative IP addresses for the node, useful for environments like AWS or GCP that are behind NAT.
     #[arg(env, long)]
     node_ip_alt: Vec<IpAddr>,
 
-    /// Enable private ip
+    /// Enable private IP addresses for the node.
     #[arg(env, long)]
     enable_private_ip: bool,
 
-    /// Enable ipv6
+    /// Enable IPv6 support.
     #[arg(env, long)]
     enable_ipv6: bool,
 
-    /// Cluster Secret Key
+    /// Cluster secret key used for secure communication between nodes.
     #[arg(env, long, default_value = "insecure")]
     secret: String,
 
-    /// Neighbors
+    /// Addresses of neighboring nodes for cluster communication.
     #[arg(env, long)]
     seeds: Vec<NodeAddr>,
 
-    /// Workers
+    /// Number of worker threads to spawn.
     #[arg(env, long, default_value_t = 1)]
     workers: usize,
 
-    /// Enable sentry report
+    /// Disable Sentry error reporting.
     #[arg(env, long)]
     sentry_disable: bool,
 
-    /// Sentry report endpoint
+    /// Sentry error reporting endpoint.
     #[arg(env, long, default_value = "https://46f5e9a11d430eb479b516fc12033e78@o4507218956386304.ingest.us.sentry.io/4507739106836480")]
     sentry_endpoint: String,
 
@@ -80,6 +83,8 @@ async fn main() {
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
 
+    assert!(args.sdn_zone_id < MAX_ZONE_ID, "sdn_zone_id must < {MAX_ZONE_ID}");
+
     if !args.sentry_disable {
         let _guard = sentry::init((
             args.sentry_endpoint.as_str(),
@@ -91,9 +96,18 @@ async fn main() {
     }
 
     let http_port = args.http_port;
+    let sdn_port = if args.sdn_port > 0 {
+        args.sdn_port
+    } else {
+        // We get a free port
+        let udp_socket = std::net::UdpSocket::bind("0.0.0.0:0").expect("Should get free port");
+        udp_socket.local_addr().expect("Should get free port").port()
+    };
+
     let workers = args.workers;
+
     let bind_addrs = if let Some(ip) = args.node_ip {
-        vec![SocketAddr::new(ip, args.sdn_port)]
+        vec![SocketAddr::new(ip, sdn_port)]
     } else {
         local_ip_address::list_afinet_netifas()
             .expect("Should have list interfaces")
@@ -103,18 +117,18 @@ async fn main() {
                     IpAddr::V4(ipv4) => !ipv4.is_private() || args.enable_private_ip,
                     IpAddr::V6(ipv6) => !ipv6.is_unspecified() && !ipv6.is_multicast() && (!ipv6.is_loopback() || args.enable_private_ip) && args.enable_ipv6,
                 };
-                allow && std::net::UdpSocket::bind(SocketAddr::new(*ip, 0)).is_ok()
+                allow && std::net::UdpSocket::bind(SocketAddr::new(*ip, sdn_port)).is_ok()
             })
-            .map(|(_name, ip)| SocketAddr::new(ip, args.sdn_port))
+            .map(|(_name, ip)| SocketAddr::new(ip, sdn_port))
             .collect::<Vec<_>>()
     };
     let node = NodeConfig {
-        node_id: args.node_id,
+        node_id: ZoneId(args.sdn_zone_id).to_node_id(args.sdn_zone_node_id),
         secret: args.secret,
         seeds: args.seeds,
         bind_addrs,
-        zone: args.sdn_zone,
-        bind_addrs_alt: args.node_ip_alt.into_iter().map(|ip| SocketAddr::new(ip, args.sdn_port)).collect::<Vec<_>>(),
+        zone: ZoneId(args.sdn_zone_id),
+        bind_addrs_alt: args.node_ip_alt.into_iter().map(|ip| SocketAddr::new(ip, sdn_port)).collect::<Vec<_>>(),
     };
 
     log::info!("Bind addrs {:?}, bind addrs alt {:?}", node.bind_addrs, node.bind_addrs_alt);
