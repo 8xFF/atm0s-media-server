@@ -418,6 +418,7 @@ dependencies = [
 name = "atm0s-media-server"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "atm0s-sdn",
  "clap",
  "convert-enum",
@@ -441,6 +442,7 @@ dependencies = [
  "quinn",
  "rand 0.8.5",
  "rcgen",
+ "reqwest",
  "rtpengine-ngcontrol",
  "rust-embed",
  "rustls 0.23.12",
