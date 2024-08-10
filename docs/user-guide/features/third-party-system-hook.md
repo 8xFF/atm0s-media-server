@@ -74,7 +74,7 @@ Each event will have an individual payload
 {
     session: number,
     track: number,
-    event: 'local_track' | 'local_track_attached' | 'local_track_dettached',
+    event: 'local_track' | 'local_track_attached' | 'local_track_detached',
     kind: number | null,
     remote_peer: string | null,
     remote_track: string | null

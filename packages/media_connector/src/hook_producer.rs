@@ -24,12 +24,11 @@ impl ConnectorHookProducer {
 
     pub fn on_event(&mut self, from: NodeId, ts: u64, event: connector_request::Request) -> Option<()> {
         match event {
-            connector_request::Request::Peer(event) => match event.event {
-                Some(ev) => {
+            connector_request::Request::Peer(event) => {
+                if let Some(ev) = event.event {
                     self.on_peer_event(from, ts, event.session_id, ev);
                 }
-                None => {}
-            },
+            }
             connector_request::Request::Record(_) => {}
         }
         Some(())
@@ -42,7 +41,7 @@ impl ConnectorHookProducer {
             peer_event::Event::RouteError(_params) => None,
             peer_event::Event::Connecting(params) => Some(HookEvent::Session {
                 node: from,
-                ts: ts,
+                ts,
                 session,
                 state: crate::hooks::events::SessionState::Connecting,
                 remote_ip: Some(params.remote_ip),
@@ -53,7 +52,7 @@ impl ConnectorHookProducer {
             }),
             peer_event::Event::Connected(params) => Some(HookEvent::Session {
                 node: from,
-                ts: ts,
+                ts,
                 session,
                 state: crate::hooks::events::SessionState::Connected,
                 remote_ip: Some(params.remote_ip),
@@ -64,7 +63,7 @@ impl ConnectorHookProducer {
             }),
             peer_event::Event::ConnectError(params) => Some(HookEvent::Session {
                 node: from,
-                ts: ts,
+                ts,
                 session,
                 state: crate::hooks::events::SessionState::ConnectError,
                 remote_ip: None,
@@ -75,7 +74,7 @@ impl ConnectorHookProducer {
             }),
             peer_event::Event::Reconnect(params) => Some(HookEvent::Session {
                 node: from,
-                ts: ts,
+                ts,
                 session,
                 state: crate::hooks::events::SessionState::Reconnect,
                 remote_ip: Some(params.remote_ip),
@@ -86,7 +85,7 @@ impl ConnectorHookProducer {
             }),
             peer_event::Event::Reconnected(params) => Some(HookEvent::Session {
                 node: from,
-                ts: ts,
+                ts,
                 session,
                 state: crate::hooks::events::SessionState::Reconnected,
                 remote_ip: Some(params.remote_ip),
@@ -97,7 +96,7 @@ impl ConnectorHookProducer {
             }),
             peer_event::Event::Disconnected(params) => Some(HookEvent::Session {
                 node: from,
-                ts: ts,
+                ts,
                 session,
                 state: crate::hooks::events::SessionState::Disconnected,
                 remote_ip: None,
@@ -108,7 +107,7 @@ impl ConnectorHookProducer {
             }),
             peer_event::Event::Join(params) => Some(HookEvent::Peer {
                 node: from,
-                ts: ts,
+                ts,
                 session,
                 room: params.room,
                 peer: params.peer,
@@ -116,7 +115,7 @@ impl ConnectorHookProducer {
             }),
             peer_event::Event::Leave(params) => Some(HookEvent::Peer {
                 node: from,
-                ts: ts,
+                ts,
                 session,
                 room: params.room,
                 peer: params.peer,
@@ -163,7 +162,7 @@ impl ConnectorHookProducer {
                 ts,
                 session,
                 track: params.track,
-                event: crate::hooks::events::LocalTrackEvent::Dettached,
+                event: crate::hooks::events::LocalTrackEvent::Detached,
                 kind: None,
                 remote_peer: Some(params.remote_peer),
                 remote_track: Some(params.remote_track),

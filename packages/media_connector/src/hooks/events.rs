@@ -66,8 +66,8 @@ pub enum LocalTrackEvent {
     LocalTrack,
     #[serde(rename = "local_track_attached")]
     Attached,
-    #[serde(rename = "local_track_dettached")]
-    Dettached,
+    #[serde(rename = "local_track_detached")]
+    Detached,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -259,7 +259,7 @@ impl Serialize for HookEvent {
                 let payload = HookRemoteTrackEventPayload {
                     session: *session,
                     track: track.clone(),
-                    kind: kind.clone(),
+                    kind: *kind,
                     event: event.clone(),
                 };
                 let payload = serde_json::to_value(payload).map_err(serde::ser::Error::custom)?;
@@ -283,9 +283,9 @@ impl Serialize for HookEvent {
             } => {
                 let payload = HookLocalTrackEventPayload {
                     session: *session,
-                    track: track.clone(),
+                    track: *track,
                     event: event.clone(),
-                    kind: kind.clone(),
+                    kind: *kind,
                     remote_peer: remote_peer.clone(),
                     remote_track: remote_track.clone(),
                 };
