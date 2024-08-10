@@ -30,9 +30,9 @@ pub struct HookSessionEventPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PeerEvent {
-    #[serde(rename = "joined")]
+    #[serde(rename = "peer_joined")]
     Joined,
-    #[serde(rename = "leaved")]
+    #[serde(rename = "peer_leaved")]
     Leaved,
 }
 
@@ -42,6 +42,42 @@ pub struct HookPeerEventPayload {
     pub peer: String,
     pub room: String,
     pub event: PeerEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum RemoteTrackEvent {
+    #[serde(rename = "remote_track_started")]
+    Started,
+    #[serde(rename = "remote_track_ended")]
+    Ended,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HookRemoteTrackEventPayload {
+    pub session: u64,
+    pub track: String,
+    pub kind: i32,
+    pub event: RemoteTrackEvent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum LocalTrackEvent {
+    #[serde(rename = "local_track")]
+    LocalTrack,
+    #[serde(rename = "local_track_attached")]
+    Attached,
+    #[serde(rename = "local_track_dettached")]
+    Dettached,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HookLocalTrackEventPayload {
+    pub session: u64,
+    pub track: i32,
+    pub event: LocalTrackEvent,
+    pub kind: Option<i32>,
+    pub remote_peer: Option<String>,
+    pub remote_track: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -64,6 +100,24 @@ pub enum HookEvent {
         room: String,
         peer: String,
         event: PeerEvent,
+    },
+    RemoteTrack {
+        node: NodeId,
+        ts: u64,
+        session: u64,
+        track: String,
+        kind: i32,
+        event: RemoteTrackEvent,
+    },
+    LocalTrack {
+        node: NodeId,
+        ts: u64,
+        session: u64,
+        track: i32,
+        event: LocalTrackEvent,
+        kind: Option<i32>,
+        remote_peer: Option<String>,
+        remote_track: Option<String>,
     },
 }
 
@@ -105,6 +159,30 @@ impl<'de> Deserialize<'de> for HookEvent {
                     room: payload.room,
                     peer: payload.peer,
                     event: payload.event,
+                })
+            }
+            "remote_track" => {
+                let payload: HookRemoteTrackEventPayload = serde_json::from_value(data.payload).map_err(serde::de::Error::custom)?;
+                Ok(HookEvent::RemoteTrack {
+                    node: data.node,
+                    ts: data.ts,
+                    session: payload.session,
+                    track: payload.track,
+                    kind: payload.kind,
+                    event: payload.event,
+                })
+            }
+            "local_track" => {
+                let payload: HookLocalTrackEventPayload = serde_json::from_value(data.payload).map_err(serde::de::Error::custom)?;
+                Ok(HookEvent::LocalTrack {
+                    node: data.node,
+                    ts: data.ts,
+                    session: payload.session,
+                    track: payload.track,
+                    event: payload.event,
+                    kind: payload.kind,
+                    remote_peer: payload.remote_peer,
+                    remote_track: payload.remote_track,
                 })
             }
             _ => Err(serde::de::Error::custom(format!("unknown event: {}", data.event))),
@@ -170,6 +248,56 @@ impl Serialize for HookEvent {
                 };
                 data.serialize(serializer)
             }
+            HookEvent::RemoteTrack {
+                node,
+                ts,
+                session,
+                track,
+                kind,
+                event,
+            } => {
+                let payload = HookRemoteTrackEventPayload {
+                    session: *session,
+                    track: track.clone(),
+                    kind: kind.clone(),
+                    event: event.clone(),
+                };
+                let payload = serde_json::to_value(payload).map_err(serde::ser::Error::custom)?;
+                let data = DataInner {
+                    node: *node,
+                    ts: *ts,
+                    event: "remote_track".to_string(),
+                    payload,
+                };
+                data.serialize(serializer)
+            }
+            HookEvent::LocalTrack {
+                node,
+                ts,
+                session,
+                track,
+                event,
+                kind,
+                remote_peer,
+                remote_track,
+            } => {
+                let payload = HookLocalTrackEventPayload {
+                    session: *session,
+                    track: track.clone(),
+                    event: event.clone(),
+                    kind: kind.clone(),
+                    remote_peer: remote_peer.clone(),
+                    remote_track: remote_track.clone(),
+                };
+                let payload = serde_json::to_value(payload).map_err(serde::ser::Error::custom)?;
+                let data = DataInner {
+                    node: *node,
+                    ts: *ts,
+                    event: "local_track".to_string(),
+                    payload,
+                };
+                data.serialize(serializer)
+            }
         }
     }
 }
@@ -202,7 +330,7 @@ mod test {
 
     #[test]
     pub fn test_peer_event() {
-        let data = r#"{"node":1,"ts":1,"event":"peer","payload":{"event":"joined","peer":"peer","room":"room","session":1}}"#;
+        let data = r#"{"node":1,"ts":1,"event":"peer","payload":{"event":"peer_joined","peer":"peer","room":"room","session":1}}"#;
         let event = serde_json::from_str::<HookEvent>(data).unwrap();
         assert_eq!(
             event,
@@ -213,6 +341,46 @@ mod test {
                 room: "room".to_string(),
                 peer: "peer".to_string(),
                 event: PeerEvent::Joined
+            }
+        );
+        let json = serde_json::to_string(&event).unwrap();
+        assert_eq!(json, data);
+    }
+
+    #[test]
+    pub fn test_remote_track() {
+        let data = r#"{"node":1,"ts":1,"event":"remote_track","payload":{"event":"remote_track_started","kind":1,"session":1,"track":"track"}}"#;
+        let event = serde_json::from_str::<HookEvent>(data).unwrap();
+        assert_eq!(
+            event,
+            HookEvent::RemoteTrack {
+                node: 1,
+                ts: 1,
+                session: 1,
+                track: "track".to_string(),
+                kind: 1,
+                event: RemoteTrackEvent::Started
+            }
+        );
+        let json = serde_json::to_string(&event).unwrap();
+        assert_eq!(json, data);
+    }
+
+    #[test]
+    pub fn test_local_track() {
+        let data = r#"{"node":1,"ts":1,"event":"local_track","payload":{"event":"local_track","kind":1,"remote_peer":null,"remote_track":"track","session":1,"track":1}}"#;
+        let event = serde_json::from_str::<HookEvent>(data).unwrap();
+        assert_eq!(
+            event,
+            HookEvent::LocalTrack {
+                node: 1,
+                ts: 1,
+                session: 1,
+                track: 1,
+                event: LocalTrackEvent::LocalTrack,
+                kind: Some(1),
+                remote_peer: None,
+                remote_track: Some("track".to_string()),
             }
         );
         let json = serde_json::to_string(&event).unwrap();
