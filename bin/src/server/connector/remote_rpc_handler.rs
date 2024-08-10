@@ -17,7 +17,15 @@ pub struct ConnectorRemoteRpcHandlerImpl {}
 
 impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
     async fn rooms(&self, ctx: &Ctx, req: GetParams) -> Option<GetRooms> {
-        let response = ctx.storage.rooms(req.page as usize, req.limit as usize).await?;
+        log::info!("[ConnectorRemoteRpcHandler] on get rooms {req:?}");
+        let response = match ctx.storage.rooms(req.page as usize, req.limit as usize).await {
+            Ok(res) => res,
+            Err(err) => {
+                log::error!("[ConnectorRemoteRpcHandler] on get rooms error {err}");
+                return None;
+            }
+        };
+        log::info!("[ConnectorRemoteRpcHandler] on got {} rooms", response.data.len());
 
         let rooms = response
             .data
@@ -40,7 +48,16 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
     }
 
     async fn peers(&self, ctx: &Ctx, req: GetPeerParams) -> Option<GetPeers> {
-        let response = ctx.storage.peers(req.room, req.page as usize, req.limit as usize).await?;
+        log::info!("[ConnectorRemoteRpcHandler] on get peers page {req:?}");
+        let response = match ctx.storage.peers(req.room, req.page as usize, req.limit as usize).await {
+            Ok(res) => res,
+            Err(err) => {
+                log::error!("[ConnectorRemoteRpcHandler] on get peers error {err}");
+                return None;
+            }
+        };
+        log::info!("[ConnectorRemoteRpcHandler] on got {} peers", response.data.len());
+
         let peers = response
             .data
             .into_iter()
@@ -76,7 +93,16 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
     }
 
     async fn sessions(&self, ctx: &Ctx, req: GetParams) -> Option<GetSessions> {
-        let response = ctx.storage.sessions(req.page as usize, req.limit as usize).await?;
+        log::info!("[ConnectorRemoteRpcHandler] on get sessions page {req:?}");
+        let response = match ctx.storage.sessions(req.page as usize, req.limit as usize).await {
+            Ok(res) => res,
+            Err(err) => {
+                log::error!("[ConnectorRemoteRpcHandler] on get sessions error {err}");
+                return None;
+            }
+        };
+        log::info!("[ConnectorRemoteRpcHandler] on got {} sessions", response.data.len());
+
         let sessions = response
             .data
             .into_iter()
@@ -111,7 +137,16 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
     }
 
     async fn events(&self, ctx: &Ctx, req: GetEventParams) -> Option<GetEvents> {
-        let response = ctx.storage.events(req.session, req.start_ts, req.end_ts, req.page as usize, req.limit as usize).await?;
+        log::info!("[ConnectorRemoteRpcHandler] on get events page {req:?}");
+        let response = match ctx.storage.events(req.session, req.start_ts, req.end_ts, req.page as usize, req.limit as usize).await {
+            Ok(res) => res,
+            Err(err) => {
+                log::error!("[ConnectorRemoteRpcHandler] on get events error {err}");
+                return None;
+            }
+        };
+        log::info!("[ConnectorRemoteRpcHandler] on got {} events", response.data.len());
+
         let events = response
             .data
             .into_iter()

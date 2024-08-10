@@ -78,8 +78,8 @@ pub trait Storage {
 }
 
 pub trait Querier {
-    fn rooms(&self, page: usize, count: usize) -> impl std::future::Future<Output = Option<PagingResponse<RoomInfo>>> + Send;
-    fn peers(&self, room: Option<i32>, page: usize, count: usize) -> impl std::future::Future<Output = Option<PagingResponse<PeerInfo>>> + Send;
-    fn sessions(&self, page: usize, count: usize) -> impl std::future::Future<Output = Option<PagingResponse<SessionInfo>>> + Send;
-    fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> impl std::future::Future<Output = Option<PagingResponse<EventInfo>>> + Send;
+    fn rooms(&self, page: usize, count: usize) -> impl std::future::Future<Output = Result<PagingResponse<RoomInfo>, String>> + Send;
+    fn peers(&self, room: Option<i32>, page: usize, count: usize) -> impl std::future::Future<Output = Result<PagingResponse<PeerInfo>, String>> + Send;
+    fn sessions(&self, page: usize, count: usize) -> impl std::future::Future<Output = Result<PagingResponse<SessionInfo>, String>> + Send;
+    fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> impl std::future::Future<Output = Result<PagingResponse<EventInfo>, String>> + Send;
 }

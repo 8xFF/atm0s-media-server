@@ -60,13 +60,9 @@ struct Args {
     #[arg(env, long, default_value_t = 1)]
     workers: usize,
 
-    /// Disable Sentry error reporting.
-    #[arg(env, long)]
-    sentry_disable: bool,
-
     /// Sentry error reporting endpoint.
-    #[arg(env, long, default_value = "https://46f5e9a11d430eb479b516fc12033e78@o4507218956386304.ingest.us.sentry.io/4507739106836480")]
-    sentry_endpoint: String,
+    #[arg(env, long)]
+    sentry_endpoint: Option<String>,
 
     #[command(subcommand)]
     server: server::ServerType,
@@ -85,9 +81,9 @@ async fn main() {
 
     assert!(args.sdn_zone_id < MAX_ZONE_ID, "sdn_zone_id must < {MAX_ZONE_ID}");
 
-    if !args.sentry_disable {
+    if let Some(sentry_endpoint) = args.sentry_endpoint {
         let _guard = sentry::init((
-            args.sentry_endpoint.as_str(),
+            sentry_endpoint.as_str(),
             sentry::ClientOptions {
                 release: sentry::release_name!(),
                 ..Default::default()
