@@ -83,6 +83,7 @@ pub struct HookLocalTrackEventPayload {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum HookEvent {
     Session {
+        uuid: String,
         node: NodeId,
         ts: u64,
         session: u64,
@@ -94,6 +95,7 @@ pub enum HookEvent {
         error: Option<i32>,
     },
     Peer {
+        uuid: String,
         node: NodeId,
         ts: u64,
         session: u64,
@@ -102,6 +104,7 @@ pub enum HookEvent {
         event: PeerEvent,
     },
     RemoteTrack {
+        uuid: String,
         node: NodeId,
         ts: u64,
         session: u64,
@@ -110,6 +113,7 @@ pub enum HookEvent {
         event: RemoteTrackEvent,
     },
     LocalTrack {
+        uuid: String,
         node: NodeId,
         ts: u64,
         session: u64,
@@ -121,6 +125,17 @@ pub enum HookEvent {
     },
 }
 
+impl HookEvent {
+    pub fn id(&self) -> &str {
+        match self {
+            HookEvent::Session { uuid, .. } => uuid,
+            HookEvent::Peer { uuid, .. } => uuid,
+            HookEvent::RemoteTrack { uuid, .. } => uuid,
+            HookEvent::LocalTrack { uuid, .. } => uuid,
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for HookEvent {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -128,6 +143,7 @@ impl<'de> Deserialize<'de> for HookEvent {
     {
         #[derive(Deserialize, Debug)]
         pub struct DataInner {
+            pub uuid: String,
             pub node: u32,
             pub ts: u64,
             pub event: String,
@@ -139,6 +155,7 @@ impl<'de> Deserialize<'de> for HookEvent {
             "session" => {
                 let payload: HookSessionEventPayload = serde_json::from_value(data.payload).map_err(serde::de::Error::custom)?;
                 Ok(HookEvent::Session {
+                    uuid: data.uuid,
                     node: data.node,
                     ts: data.ts,
                     session: payload.session,
@@ -153,6 +170,7 @@ impl<'de> Deserialize<'de> for HookEvent {
             "peer" => {
                 let payload: HookPeerEventPayload = serde_json::from_value(data.payload).map_err(serde::de::Error::custom)?;
                 Ok(HookEvent::Peer {
+                    uuid: data.uuid,
                     node: data.node,
                     ts: data.ts,
                     session: payload.session,
@@ -164,6 +182,7 @@ impl<'de> Deserialize<'de> for HookEvent {
             "remote_track" => {
                 let payload: HookRemoteTrackEventPayload = serde_json::from_value(data.payload).map_err(serde::de::Error::custom)?;
                 Ok(HookEvent::RemoteTrack {
+                    uuid: data.uuid,
                     node: data.node,
                     ts: data.ts,
                     session: payload.session,
@@ -175,6 +194,7 @@ impl<'de> Deserialize<'de> for HookEvent {
             "local_track" => {
                 let payload: HookLocalTrackEventPayload = serde_json::from_value(data.payload).map_err(serde::de::Error::custom)?;
                 Ok(HookEvent::LocalTrack {
+                    uuid: data.uuid,
                     node: data.node,
                     ts: data.ts,
                     session: payload.session,
@@ -197,6 +217,7 @@ impl Serialize for HookEvent {
     {
         #[derive(Serialize, Debug)]
         pub struct DataInner {
+            uuid: String,
             pub node: u32,
             pub ts: u64,
             pub event: String,
@@ -204,6 +225,7 @@ impl Serialize for HookEvent {
         }
         match self {
             HookEvent::Session {
+                uuid,
                 node,
                 ts,
                 session,
@@ -225,6 +247,7 @@ impl Serialize for HookEvent {
                 };
                 let payload = serde_json::to_value(payload).map_err(serde::ser::Error::custom)?;
                 let data = DataInner {
+                    uuid: uuid.clone(),
                     node: *node,
                     ts: *ts,
                     event: "session".to_string(),
@@ -232,7 +255,15 @@ impl Serialize for HookEvent {
                 };
                 data.serialize(serializer)
             }
-            HookEvent::Peer { node, ts, session, room, peer, event } => {
+            HookEvent::Peer {
+                uuid,
+                node,
+                ts,
+                session,
+                room,
+                peer,
+                event,
+            } => {
                 let payload = HookPeerEventPayload {
                     session: *session,
                     peer: peer.clone(),
@@ -241,6 +272,7 @@ impl Serialize for HookEvent {
                 };
                 let payload = serde_json::to_value(payload).map_err(serde::ser::Error::custom)?;
                 let data = DataInner {
+                    uuid: uuid.clone(),
                     node: *node,
                     ts: *ts,
                     event: "peer".to_string(),
@@ -249,6 +281,7 @@ impl Serialize for HookEvent {
                 data.serialize(serializer)
             }
             HookEvent::RemoteTrack {
+                uuid,
                 node,
                 ts,
                 session,
@@ -264,6 +297,7 @@ impl Serialize for HookEvent {
                 };
                 let payload = serde_json::to_value(payload).map_err(serde::ser::Error::custom)?;
                 let data = DataInner {
+                    uuid: uuid.clone(),
                     node: *node,
                     ts: *ts,
                     event: "remote_track".to_string(),
@@ -272,6 +306,7 @@ impl Serialize for HookEvent {
                 data.serialize(serializer)
             }
             HookEvent::LocalTrack {
+                uuid,
                 node,
                 ts,
                 session,
@@ -291,6 +326,7 @@ impl Serialize for HookEvent {
                 };
                 let payload = serde_json::to_value(payload).map_err(serde::ser::Error::custom)?;
                 let data = DataInner {
+                    uuid: uuid.clone(),
                     node: *node,
                     ts: *ts,
                     event: "local_track".to_string(),
@@ -308,11 +344,12 @@ mod test {
 
     #[test]
     pub fn test_session_event() {
-        let data = r#"{"node":1,"ts":1,"event":"session","payload":{"after_ms":null,"duration":null,"error":null,"reason":null,"remote_ip":"127.0.0.1","session":1,"state":"connecting"}}"#;
+        let data = r#"{"uuid":"67e55044-10b1-426f-9247-bb680e5fe0c8","node":1,"ts":1,"event":"session","payload":{"after_ms":null,"duration":null,"error":null,"reason":null,"remote_ip":"127.0.0.1","session":1,"state":"connecting"}}"#;
         let event = serde_json::from_str::<HookEvent>(data).unwrap();
         assert_eq!(
             event,
             HookEvent::Session {
+                uuid: "67e55044-10b1-426f-9247-bb680e5fe0c8".to_string(),
                 node: 1,
                 ts: 1,
                 session: 1,
@@ -330,11 +367,12 @@ mod test {
 
     #[test]
     pub fn test_peer_event() {
-        let data = r#"{"node":1,"ts":1,"event":"peer","payload":{"event":"peer_joined","peer":"peer","room":"room","session":1}}"#;
+        let data = r#"{"uuid":"67e55044-10b1-426f-9247-bb680e5fe0c8","node":1,"ts":1,"event":"peer","payload":{"event":"peer_joined","peer":"peer","room":"room","session":1}}"#;
         let event = serde_json::from_str::<HookEvent>(data).unwrap();
         assert_eq!(
             event,
             HookEvent::Peer {
+                uuid: "67e55044-10b1-426f-9247-bb680e5fe0c8".to_string(),
                 node: 1,
                 ts: 1,
                 session: 1,
@@ -349,11 +387,12 @@ mod test {
 
     #[test]
     pub fn test_remote_track() {
-        let data = r#"{"node":1,"ts":1,"event":"remote_track","payload":{"event":"remote_track_started","kind":1,"session":1,"track":"track"}}"#;
+        let data = r#"{"uuid":"67e55044-10b1-426f-9247-bb680e5fe0c8","node":1,"ts":1,"event":"remote_track","payload":{"event":"remote_track_started","kind":1,"session":1,"track":"track"}}"#;
         let event = serde_json::from_str::<HookEvent>(data).unwrap();
         assert_eq!(
             event,
             HookEvent::RemoteTrack {
+                uuid: "67e55044-10b1-426f-9247-bb680e5fe0c8".to_string(),
                 node: 1,
                 ts: 1,
                 session: 1,
@@ -368,11 +407,12 @@ mod test {
 
     #[test]
     pub fn test_local_track() {
-        let data = r#"{"node":1,"ts":1,"event":"local_track","payload":{"event":"local_track","kind":1,"remote_peer":null,"remote_track":"track","session":1,"track":1}}"#;
+        let data = r#"{"uuid":"67e55044-10b1-426f-9247-bb680e5fe0c8","node":1,"ts":1,"event":"local_track","payload":{"event":"local_track","kind":1,"remote_peer":null,"remote_track":"track","session":1,"track":1}}"#;
         let event = serde_json::from_str::<HookEvent>(data).unwrap();
         assert_eq!(
             event,
             HookEvent::LocalTrack {
+                uuid: "67e55044-10b1-426f-9247-bb680e5fe0c8".to_string(),
                 node: 1,
                 ts: 1,
                 session: 1,

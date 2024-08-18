@@ -1,12 +1,15 @@
+use std::io::Error;
+
 use async_trait::async_trait;
 use atm0s_sdn::{sans_io_runtime::collections::DynamicDeque, NodeId};
 use media_server_protocol::protobuf::cluster_connector::{connector_request, peer_event};
+use uuid::{NoContext, Timestamp};
 
 use crate::hooks::events::HookEvent;
 
 #[async_trait]
 pub trait HookPublisher {
-    async fn publish(&self, event: HookEvent) -> Option<()>;
+    async fn publish(&self, event: HookEvent) -> Option<Error>;
 }
 
 pub struct ConnectorHookProducer {
@@ -35,11 +38,13 @@ impl ConnectorHookProducer {
     }
 
     fn on_peer_event(&mut self, from: NodeId, ts: u64, session: u64, ev: peer_event::Event) -> Option<()> {
+        let uuid = uuid::Uuid::new_v7(Timestamp::from_unix(NoContext, ts, 0)).to_string();
         let hook_data: Option<HookEvent> = match ev {
             peer_event::Event::RouteBegin(_params) => None,
             peer_event::Event::RouteSuccess(_params) => None,
             peer_event::Event::RouteError(_params) => None,
             peer_event::Event::Connecting(params) => Some(HookEvent::Session {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -51,6 +56,7 @@ impl ConnectorHookProducer {
                 error: None,
             }),
             peer_event::Event::Connected(params) => Some(HookEvent::Session {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -62,6 +68,7 @@ impl ConnectorHookProducer {
                 error: None,
             }),
             peer_event::Event::ConnectError(params) => Some(HookEvent::Session {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -73,6 +80,7 @@ impl ConnectorHookProducer {
                 error: Some(params.error),
             }),
             peer_event::Event::Reconnect(params) => Some(HookEvent::Session {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -84,6 +92,7 @@ impl ConnectorHookProducer {
                 error: None,
             }),
             peer_event::Event::Reconnected(params) => Some(HookEvent::Session {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -95,6 +104,7 @@ impl ConnectorHookProducer {
                 error: None,
             }),
             peer_event::Event::Disconnected(params) => Some(HookEvent::Session {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -106,6 +116,7 @@ impl ConnectorHookProducer {
                 error: None,
             }),
             peer_event::Event::Join(params) => Some(HookEvent::Peer {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -114,6 +125,7 @@ impl ConnectorHookProducer {
                 event: crate::hooks::events::PeerEvent::Joined,
             }),
             peer_event::Event::Leave(params) => Some(HookEvent::Peer {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -122,6 +134,7 @@ impl ConnectorHookProducer {
                 event: crate::hooks::events::PeerEvent::Leaved,
             }),
             peer_event::Event::RemoteTrackStarted(params) => Some(HookEvent::RemoteTrack {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -130,6 +143,7 @@ impl ConnectorHookProducer {
                 event: crate::hooks::events::RemoteTrackEvent::Started,
             }),
             peer_event::Event::RemoteTrackEnded(params) => Some(HookEvent::RemoteTrack {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -138,6 +152,7 @@ impl ConnectorHookProducer {
                 event: crate::hooks::events::RemoteTrackEvent::Ended,
             }),
             peer_event::Event::LocalTrack(params) => Some(HookEvent::LocalTrack {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -148,6 +163,7 @@ impl ConnectorHookProducer {
                 remote_track: None,
             }),
             peer_event::Event::LocalTrackAttach(params) => Some(HookEvent::LocalTrack {
+                uuid,
                 node: from,
                 ts,
                 session,
@@ -158,6 +174,7 @@ impl ConnectorHookProducer {
                 remote_track: Some(params.remote_track),
             }),
             peer_event::Event::LocalTrackDetach(params) => Some(HookEvent::LocalTrack {
+                uuid,
                 node: from,
                 ts,
                 session,

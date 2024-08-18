@@ -1,3 +1,5 @@
+use std::io::Error;
+
 use media_server_connector::{hook_producer::HookPublisher, hooks::events::HookEvent};
 
 pub struct HttpHookPublisher {
@@ -14,20 +16,20 @@ impl HttpHookPublisher {
 
 #[async_trait::async_trait]
 impl HookPublisher for HttpHookPublisher {
-    async fn publish(&self, event: HookEvent) -> Option<()> {
+    async fn publish(&self, event: HookEvent) -> Option<Error> {
         let res = self.client.post(self.uri.clone()).json(&event).send().await;
         match res {
             Ok(res) => {
                 log::debug!("[HttpHookPublisher] publish response {:?}", res);
                 if res.status().is_success() {
-                    Some(())
-                } else {
                     None
+                } else {
+                    Some(Error::new(std::io::ErrorKind::Other, format!("request error with status: {}", res.status())))
                 }
             }
             Err(e) => {
                 log::error!("[HttpHookPublisher] publish error {:?}", e);
-                None
+                Some(Error::new(std::io::ErrorKind::Other, e.to_string()))
             }
         }
     }

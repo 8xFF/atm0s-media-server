@@ -51,6 +51,8 @@ pub struct Args {
     #[arg(env, long, default_value = "http://user:pass@localhost:9000/bucket/path/?path_style=true")]
     s3_uri: String,
 
+    /// Hook Uri.
+    /// If set, will send hook event to this uri. example: http://localhost:8080/hook
     #[arg(env, long)]
     hook_uri: Option<String>,
 }
@@ -59,7 +61,6 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
     let connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri, &args.s3_uri).await);
-    log::info!("args: {:?}", args);
     let hook_publisher: Option<Box<dyn HookPublisher>> = if let Some(hook_uri) = args.hook_uri {
         Some(Box::new(http_hook_publisher::HttpHookPublisher::new(hook_uri)))
     } else {
