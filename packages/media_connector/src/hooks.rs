@@ -1,9 +1,16 @@
-use std::io::Error;
+pub mod events;
+pub mod storage;
+pub mod worker;
+
+use std::{io::Error, sync::Arc};
 
 use async_trait::async_trait;
-use atm0s_sdn::{sans_io_runtime::collections::DynamicDeque, NodeId};
+use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_connector::{connector_request, peer_event};
+use media_server_utils::now_ms;
+use storage::HookStorage;
 use uuid::{NoContext, Timestamp};
+use worker::HookWorker;
 
 use crate::hooks::events::HookEvent;
 
@@ -12,16 +19,27 @@ pub trait HookPublisher {
     async fn publish(&self, event: HookEvent) -> Option<Error>;
 }
 
-pub struct ConnectorHookProducer {
-    queue: DynamicDeque<HookEvent, 1024>,
-    publisher: Option<Box<dyn HookPublisher>>,
+pub struct HookControllerCfg {
+    pub worker_num: u16,
+    pub job_num: u16,
 }
 
-impl ConnectorHookProducer {
-    pub fn new(publisher: Option<Box<dyn HookPublisher>>) -> Self {
+pub struct ConnectorHookController {
+    cfg: HookControllerCfg,
+    workers: Vec<HookWorker>,
+    storage: Arc<dyn HookStorage>,
+}
+
+impl ConnectorHookController {
+    pub fn new(publisher: Option<Arc<dyn HookPublisher>>, cfg: HookControllerCfg) -> Self {
+        let mut workers = Vec::new();
+        for _ in 0..cfg.worker_num {
+            workers.push(HookWorker::new(publisher.clone()));
+        }
         Self {
-            queue: DynamicDeque::default(),
-            publisher,
+            cfg,
+            workers,
+            storage: Arc::new(storage::InMemoryHookStorage::default()),
         }
     }
 
@@ -187,17 +205,25 @@ impl ConnectorHookProducer {
             peer_event::Event::Stats(_params) => None,
         };
         if let Some(hook_data) = hook_data {
-            self.queue.push_back(hook_data);
+            log::error!("hook_data: {:?}", hook_data);
+            self.storage.push_back(hook_data);
         }
         Some(())
     }
 
-    pub async fn on_tick(&mut self) -> Option<()> {
-        if let Some(hook_data) = self.queue.pop_front() {
-            if let Some(publisher) = self.publisher.as_ref() {
-                let _ = publisher.publish(hook_data).await;
-            }
+    pub async fn on_tick(&mut self) {
+        // log::error!("on_tick: on worker ticks");
+        for worker in self.workers.iter_mut() {
+            worker.on_tick().await;
         }
-        Some(())
+
+        let jobs = self.storage.jobs(self.cfg.job_num as i16);
+        for job in jobs.iter() {
+            // log::error!("job: {:?}", job.payload);
+            let path = job.payload.session() % (self.cfg.worker_num as u64);
+            self.workers[path as usize].push(job.clone());
+        }
+
+        self.storage.clean_timeout_event(now_ms());
     }
 }

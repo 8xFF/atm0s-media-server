@@ -4,7 +4,6 @@ use serde_json::Value;
 
 pub mod agent_service;
 pub mod handler_service;
-pub mod hook_producer;
 pub mod hooks;
 mod msg_queue;
 pub mod sql_storage;

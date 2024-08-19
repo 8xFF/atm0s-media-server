@@ -134,6 +134,24 @@ impl HookEvent {
             HookEvent::LocalTrack { uuid, .. } => uuid,
         }
     }
+
+    pub fn session(&self) -> u64 {
+        match self {
+            HookEvent::Session { session, .. } => *session,
+            HookEvent::Peer { session, .. } => *session,
+            HookEvent::RemoteTrack { session, .. } => *session,
+            HookEvent::LocalTrack { session, .. } => *session,
+        }
+    }
+
+    pub fn ts(&self) -> u64 {
+        match self {
+            HookEvent::Session { ts, .. } => *ts,
+            HookEvent::Peer { ts, .. } => *ts,
+            HookEvent::RemoteTrack { ts, .. } => *ts,
+            HookEvent::LocalTrack { ts, .. } => *ts,
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for HookEvent {

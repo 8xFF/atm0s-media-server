@@ -4,7 +4,7 @@ use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, service
 use clap::Parser;
 use media_server_connector::{
     handler_service::{self, ConnectorHandlerServiceBuilder},
-    hook_producer::{ConnectorHookProducer, HookPublisher},
+    hooks::{ConnectorHookController, HookControllerCfg, HookPublisher},
     sql_storage::ConnectorStorage,
     Storage, HANDLER_SERVICE_ID,
 };
@@ -61,12 +61,13 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
     let connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri, &args.s3_uri).await);
-    let hook_publisher: Option<Box<dyn HookPublisher>> = if let Some(hook_uri) = args.hook_uri {
-        Some(Box::new(http_hook_publisher::HttpHookPublisher::new(hook_uri)))
+    let hook_publisher: Option<Arc<dyn HookPublisher>> = if let Some(hook_uri) = args.hook_uri {
+        log::info!("[Connector] Hook publisher enabled with uri {}", hook_uri);
+        Some(Arc::new(http_hook_publisher::HttpHookPublisher::new(hook_uri)))
     } else {
         None
     };
-    let mut connector_hook_producer = ConnectorHookProducer::new(hook_publisher);
+    let mut hook_controller = ConnectorHookController::new(hook_publisher, HookControllerCfg { worker_num: 5, job_num: 10 });
 
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
@@ -156,10 +157,11 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
         loop {
             select! {
                 Some((from, ts, _req_id, req)) = connector_hook_rx.recv() => {
-                    connector_hook_producer.on_event(from, ts, req);
+                    log::error!("[MediaConnector] hook event {:?}", req);
+                    hook_controller.on_event(from, ts, req);
                 }
                 _ = interval.tick()  => {
-                    connector_hook_producer.on_tick().await;
+                    hook_controller.on_tick().await;
                 }
                 else => {
                     break;
@@ -196,6 +198,7 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
                     media_server_connector::handler_service::Event::Req(from, ts, req_id, event) => {
                         let ev = event.clone();
+                        log::error!("[MediaConnector] hook event {:?}", ev);
                         if let Err(e) = connector_storage_tx.send((from, ts, req_id, event)).await {
                             log::error!("[MediaConnector] send event to storage error {:?}", e);
                         }

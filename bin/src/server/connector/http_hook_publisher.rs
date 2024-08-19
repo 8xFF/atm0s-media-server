@@ -1,6 +1,6 @@
 use std::io::Error;
 
-use media_server_connector::{hook_producer::HookPublisher, hooks::events::HookEvent};
+use media_server_connector::{hooks::events::HookEvent, hooks::HookPublisher};
 
 pub struct HttpHookPublisher {
     uri: String,
