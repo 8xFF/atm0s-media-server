@@ -23,6 +23,7 @@ Message will sent to another system by using JSON format, defined here:
 
 ```typescript
 {
+    uuid: string,
     node: number,
     ts: number,
     event: 'session' | 'peer' | 'remote_track' | 'loacl_track',
