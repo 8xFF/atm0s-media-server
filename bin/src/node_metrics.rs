@@ -21,13 +21,13 @@ impl Default for NodeMetricsCollector {
 
         disks.refresh_list();
         sys.refresh_all();
-        sys.refresh_cpu();
+        sys.refresh_cpu_all();
 
         std::thread::spawn(move || {
             loop {
                 disks.refresh();
                 sys.refresh_all();
-                sys.refresh_cpu();
+                sys.refresh_cpu_all();
 
                 let mut sum = 0.0;
                 for cpu in sys.cpus() {
