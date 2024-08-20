@@ -157,7 +157,6 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
         loop {
             select! {
                 Some((from, ts, _req_id, req)) = connector_hook_rx.recv() => {
-                    log::error!("[MediaConnector] hook event {:?}", req);
                     hook_controller.on_event(from, ts, req);
                 }
                 _ = interval.tick()  => {
@@ -198,7 +197,6 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
                     media_server_connector::handler_service::Event::Req(from, ts, req_id, event) => {
                         let ev = event.clone();
-                        log::error!("[MediaConnector] hook event {:?}", ev);
                         if let Err(e) = connector_storage_tx.send((from, ts, req_id, event)).await {
                             log::error!("[MediaConnector] send event to storage error {:?}", e);
                         }

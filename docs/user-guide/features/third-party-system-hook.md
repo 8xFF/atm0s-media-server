@@ -26,7 +26,7 @@ Message will sent to another system by using JSON format, defined here:
     uuid: string,
     node: number,
     ts: number,
-    event: 'session' | 'peer' | 'remote_track' | 'loacl_track',
+    event: 'session' | 'peer' | 'remote_track' | 'local_track',
     payload: JSON
 }
 ```

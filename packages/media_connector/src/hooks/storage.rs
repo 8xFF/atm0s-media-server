@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::{rc::Rc, sync::RwLock};
 
 use media_server_utils::now_ms;
 
@@ -8,7 +8,7 @@ use super::events::HookEvent;
 pub struct HookJobData {
     pub payload: HookEvent,
     pub ts: u64,
-    on_done: Arc<dyn Fn(String)>,
+    on_done: Rc<dyn Fn(String)>,
 }
 
 impl HookJobData {
@@ -23,17 +23,18 @@ pub trait HookStorage {
     fn clean_timeout_event(&self, now: u64);
 }
 
+#[derive(Default)]
 pub struct InMemoryHookStorage {
-    queue: Arc<RwLock<Vec<HookJobData>>>,
+    queue: Rc<RwLock<Vec<HookJobData>>>,
 }
 
 impl InMemoryHookStorage {
-    pub fn default() -> Self {
-        Self { queue: Default::default() }
-    }
-
     pub fn len(&self) -> usize {
         self.queue.read().unwrap().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.queue.read().unwrap().is_empty()
     }
 }
 
@@ -44,7 +45,7 @@ impl HookStorage for InMemoryHookStorage {
             let mut queue = cloned_queue.write().unwrap();
             queue.retain(|job| job.payload.id() != uuid.as_str());
         };
-        let ack = Arc::new(ack);
+        let ack = Rc::new(ack);
         let mut queue = self.queue.write().unwrap();
         queue.push(HookJobData {
             payload: data,

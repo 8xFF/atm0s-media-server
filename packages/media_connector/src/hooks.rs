@@ -2,7 +2,7 @@ pub mod events;
 pub mod storage;
 pub mod worker;
 
-use std::{io::Error, sync::Arc};
+use std::{io::Error, rc::Rc, sync::Arc};
 
 use async_trait::async_trait;
 use atm0s_sdn::NodeId;
@@ -27,7 +27,7 @@ pub struct HookControllerCfg {
 pub struct ConnectorHookController {
     cfg: HookControllerCfg,
     workers: Vec<HookWorker>,
-    storage: Arc<dyn HookStorage>,
+    storage: Rc<dyn HookStorage>,
 }
 
 impl ConnectorHookController {
@@ -39,7 +39,7 @@ impl ConnectorHookController {
         Self {
             cfg,
             workers,
-            storage: Arc::new(storage::InMemoryHookStorage::default()),
+            storage: Rc::new(storage::InMemoryHookStorage::default()),
         }
     }
 
@@ -212,14 +212,12 @@ impl ConnectorHookController {
     }
 
     pub async fn on_tick(&mut self) {
-        // log::error!("on_tick: on worker ticks");
         for worker in self.workers.iter_mut() {
             worker.on_tick().await;
         }
 
         let jobs = self.storage.jobs(self.cfg.job_num as i16);
         for job in jobs.iter() {
-            // log::error!("job: {:?}", job.payload);
             let path = job.payload.session() % (self.cfg.worker_num as u64);
             self.workers[path as usize].push(job.clone());
         }
