@@ -6,14 +6,16 @@ use media_server_protocol::{
     endpoint::ClusterConnId,
     protobuf::{
         cluster_gateway::{
-            MediaEdgeServiceHandler, RtpEngineConnectRequest, RtpEngineConnectResponse, RtpEngineDeleteRequest, RtpEngineDeleteResponse, WebrtcConnectRequest, WebrtcConnectResponse,
-            WebrtcRemoteIceRequest, WebrtcRemoteIceResponse, WebrtcRestartIceRequest, WebrtcRestartIceResponse, WhepCloseRequest, WhepCloseResponse, WhepConnectRequest, WhepConnectResponse,
-            WhepRemoteIceRequest, WhepRemoteIceResponse, WhipCloseRequest, WhipCloseResponse, WhipConnectRequest, WhipConnectResponse, WhipRemoteIceRequest, WhipRemoteIceResponse,
+            MediaEdgeServiceHandler, RtpEngineCreateAnswerRequest, RtpEngineCreateAnswerResponse, RtpEngineCreateOfferRequest, RtpEngineCreateOfferResponse, RtpEngineDeleteRequest,
+            RtpEngineDeleteResponse, RtpEngineSetAnswerRequest, RtpEngineSetAnswerResponse, WebrtcConnectRequest, WebrtcConnectResponse, WebrtcRemoteIceRequest, WebrtcRemoteIceResponse,
+            WebrtcRestartIceRequest, WebrtcRestartIceResponse, WhepCloseRequest, WhepCloseResponse, WhepConnectRequest, WhepConnectResponse, WhepRemoteIceRequest, WhepRemoteIceResponse,
+            WhipCloseRequest, WhipCloseResponse, WhipConnectRequest, WhipConnectResponse, WhipRemoteIceRequest, WhipRemoteIceResponse,
         },
         gateway::RemoteIceRequest,
     },
     transport::{
-        rtpengine, webrtc,
+        rtpengine::{self, RtpSetAnswerRequest},
+        webrtc,
         whep::{self, WhepDeleteReq, WhepRemoteIceReq},
         whip::{self, WhipDeleteReq, WhipRemoteIceReq},
         RpcReq, RpcRes,
@@ -174,14 +176,38 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
     }
 
     /* Start of rtp-engine */
-    async fn rtp_engine_connect(&self, ctx: &Ctx, req: RtpEngineConnectRequest) -> Option<RtpEngineConnectResponse> {
+    async fn rtp_engine_create_offer(&self, ctx: &Ctx, req: RtpEngineCreateOfferRequest) -> Option<RtpEngineCreateOfferResponse> {
         let req = req.try_into().ok()?;
-        log::info!("On rtp_engine_connect from gateway");
-        let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::Connect(req)));
+        log::info!("On rtp_engine_create_offer from gateway");
+        let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::CreateOffer(req)));
         ctx.req_tx.send(req).await.ok()?;
         let res = rx.await.ok()?;
         match res {
-            RpcRes::RtpEngine(rtpengine::RpcRes::Connect(res)) => res.ok().map(|(conn, sdp)| RtpEngineConnectResponse { sdp, conn: conn.to_string() }),
+            RpcRes::RtpEngine(rtpengine::RpcRes::CreateOffer(res)) => res.ok().map(|(conn, sdp)| RtpEngineCreateOfferResponse { sdp, conn: conn.to_string() }),
+            _ => None,
+        }
+    }
+
+    async fn rtp_engine_set_answer(&self, ctx: &Ctx, req: RtpEngineSetAnswerRequest) -> Option<RtpEngineSetAnswerResponse> {
+        let conn_id = req.conn.parse().ok()?;
+        log::info!("On rtp_engine_set_answer from gateway");
+        let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::SetAnswer(conn_id, RtpSetAnswerRequest { sdp: req.sdp })));
+        ctx.req_tx.send(req).await.ok()?;
+        let res = rx.await.ok()?;
+        match res {
+            RpcRes::RtpEngine(rtpengine::RpcRes::SetAnswer(res)) => res.ok().map(|conn| RtpEngineSetAnswerResponse { conn: conn.to_string() }),
+            _ => None,
+        }
+    }
+
+    async fn rtp_engine_create_answer(&self, ctx: &Ctx, req: RtpEngineCreateAnswerRequest) -> Option<RtpEngineCreateAnswerResponse> {
+        let req = req.try_into().ok()?;
+        log::info!("On rtp_engine_create_answer from gateway");
+        let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::CreateAnswer(req)));
+        ctx.req_tx.send(req).await.ok()?;
+        let res = rx.await.ok()?;
+        match res {
+            RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(res)) => res.ok().map(|(conn, sdp)| RtpEngineCreateAnswerResponse { sdp, conn: conn.to_string() }),
             _ => None,
         }
     }

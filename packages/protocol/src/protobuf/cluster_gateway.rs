@@ -246,7 +246,43 @@ pub struct WebrtcRestartIceResponse {
 /// For RtpEngine
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RtpEngineConnectRequest {
+pub struct RtpEngineCreateOfferRequest {
+    #[prost(uint64, tag = "1")]
+    pub session_id: u64,
+    #[prost(string, tag = "2")]
+    pub room: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub peer: ::prost::alloc::string::String,
+    #[prost(bool, tag = "5")]
+    pub record: bool,
+    #[prost(string, optional, tag = "6")]
+    pub extra_data: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RtpEngineCreateOfferResponse {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub sdp: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RtpEngineSetAnswerRequest {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub sdp: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RtpEngineSetAnswerResponse {
+    #[prost(string, tag = "1")]
+    pub conn: ::prost::alloc::string::String,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RtpEngineCreateAnswerRequest {
     #[prost(uint64, tag = "1")]
     pub session_id: u64,
     #[prost(string, tag = "2")]
@@ -262,7 +298,7 @@ pub struct RtpEngineConnectRequest {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RtpEngineConnectResponse {
+pub struct RtpEngineCreateAnswerResponse {
     #[prost(string, tag = "1")]
     pub conn: ::prost::alloc::string::String,
     #[prost(string, tag = "2")]
@@ -327,11 +363,21 @@ pub trait MediaEdgeServiceHandler<CTX> {
         ctx: &CTX,
         req: WebrtcRestartIceRequest,
     ) -> Option<WebrtcRestartIceResponse>;
-    async fn rtp_engine_connect(
+    async fn rtp_engine_create_offer(
         &self,
         ctx: &CTX,
-        req: RtpEngineConnectRequest,
-    ) -> Option<RtpEngineConnectResponse>;
+        req: RtpEngineCreateOfferRequest,
+    ) -> Option<RtpEngineCreateOfferResponse>;
+    async fn rtp_engine_set_answer(
+        &self,
+        ctx: &CTX,
+        req: RtpEngineSetAnswerRequest,
+    ) -> Option<RtpEngineSetAnswerResponse>;
+    async fn rtp_engine_create_answer(
+        &self,
+        ctx: &CTX,
+        req: RtpEngineCreateAnswerRequest,
+    ) -> Option<RtpEngineCreateAnswerResponse>;
     async fn rtp_engine_delete(
         &self,
         ctx: &CTX,
@@ -474,17 +520,50 @@ impl<
         let in_buf = stream.read().await?;
         WebrtcRestartIceResponse::decode(in_buf.as_slice()).ok()
     }
-    pub async fn rtp_engine_connect(
+    pub async fn rtp_engine_create_offer(
         &self,
         dest: D,
-        req: RtpEngineConnectRequest,
-    ) -> Option<RtpEngineConnectResponse> {
+        req: RtpEngineCreateOfferRequest,
+    ) -> Option<RtpEngineCreateOfferResponse> {
         use prost::Message;
-        let mut stream = self.client.connect(dest, "rtp_engine_connect.service").await?;
+        let mut stream = self
+            .client
+            .connect(dest, "rtp_engine_create_offer.service")
+            .await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        RtpEngineConnectResponse::decode(in_buf.as_slice()).ok()
+        RtpEngineCreateOfferResponse::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn rtp_engine_set_answer(
+        &self,
+        dest: D,
+        req: RtpEngineSetAnswerRequest,
+    ) -> Option<RtpEngineSetAnswerResponse> {
+        use prost::Message;
+        let mut stream = self
+            .client
+            .connect(dest, "rtp_engine_set_answer.service")
+            .await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        RtpEngineSetAnswerResponse::decode(in_buf.as_slice()).ok()
+    }
+    pub async fn rtp_engine_create_answer(
+        &self,
+        dest: D,
+        req: RtpEngineCreateAnswerRequest,
+    ) -> Option<RtpEngineCreateAnswerResponse> {
+        use prost::Message;
+        let mut stream = self
+            .client
+            .connect(dest, "rtp_engine_create_answer.service")
+            .await?;
+        let out_buf = req.encode_to_vec();
+        stream.write(&out_buf).await?;
+        let in_buf = stream.read().await?;
+        RtpEngineCreateAnswerResponse::decode(in_buf.as_slice()).ok()
     }
     pub async fn rtp_engine_delete(
         &self,
@@ -681,14 +760,50 @@ impl<
                         }
                     });
                 }
-                "rtp_engine_connect.service" => {
+                "rtp_engine_create_offer.service" => {
                     tokio::task::spawn_local(async move {
                         if let Some(in_buf) = stream.read().await {
-                            if let Ok(req) = RtpEngineConnectRequest::decode(
+                            if let Ok(req) = RtpEngineCreateOfferRequest::decode(
                                 in_buf.as_slice(),
                             ) {
                                 if let Some(res) = handler
-                                    .rtp_engine_connect(&ctx, req)
+                                    .rtp_engine_create_offer(&ctx, req)
+                                    .await
+                                {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "rtp_engine_set_answer.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = RtpEngineSetAnswerRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler
+                                    .rtp_engine_set_answer(&ctx, req)
+                                    .await
+                                {
+                                    let out_buf = res.encode_to_vec();
+                                    stream.write(&out_buf).await;
+                                    stream.close().await;
+                                }
+                            }
+                        }
+                    });
+                }
+                "rtp_engine_create_answer.service" => {
+                    tokio::task::spawn_local(async move {
+                        if let Some(in_buf) = stream.read().await {
+                            if let Ok(req) = RtpEngineCreateAnswerRequest::decode(
+                                in_buf.as_slice(),
+                            ) {
+                                if let Some(res) = handler
+                                    .rtp_engine_create_answer(&ctx, req)
                                     .await
                                 {
                                     let out_buf = res.encode_to_vec();

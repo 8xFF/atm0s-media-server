@@ -6,7 +6,21 @@ use crate::{
 use super::{ConnLayer, RpcResult};
 
 #[derive(Debug, Clone)]
-pub struct RtpConnectRequest {
+pub struct RtpCreateOfferRequest {
+    pub session_id: u64,
+    pub room: RoomId,
+    pub peer: PeerId,
+    pub record: bool,
+    pub extra_data: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RtpSetAnswerRequest {
+    pub sdp: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct RtpCreateAnswerRequest {
     pub session_id: u64,
     pub room: RoomId,
     pub peer: PeerId,
@@ -17,14 +31,21 @@ pub struct RtpConnectRequest {
 
 #[derive(Debug, Clone)]
 pub enum RpcReq<Conn> {
-    Connect(RtpConnectRequest),
+    CreateOffer(RtpCreateOfferRequest),
+    CreateAnswer(RtpCreateAnswerRequest),
+    SetAnswer(Conn, RtpSetAnswerRequest),
     Delete(Conn),
 }
 
 impl<Conn: ConnLayer> RpcReq<Conn> {
     pub fn down(self) -> (RpcReq<Conn::Down>, Option<Conn::DownRes>) {
         match self {
-            RpcReq::Connect(conn_req) => (RpcReq::Connect(conn_req.clone()), None),
+            RpcReq::CreateOffer(conn_req) => (RpcReq::CreateOffer(conn_req.clone()), None),
+            RpcReq::SetAnswer(conn, req) => {
+                let (down, layer) = conn.down();
+                (RpcReq::SetAnswer(down, req), Some(layer))
+            }
+            RpcReq::CreateAnswer(conn_req) => (RpcReq::CreateAnswer(conn_req.clone()), None),
             RpcReq::Delete(conn) => {
                 let (down, layer) = conn.down();
                 (RpcReq::Delete(down), Some(layer))
@@ -34,7 +55,9 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
 
     pub fn get_down_part(&self) -> Option<Conn::DownRes> {
         match self {
-            RpcReq::Connect(..) => None,
+            RpcReq::CreateOffer(..) => None,
+            RpcReq::SetAnswer(conn, ..) => Some(conn.get_down_part()),
+            RpcReq::CreateAnswer(..) => None,
             RpcReq::Delete(conn, ..) => Some(conn.get_down_part()),
         }
     }
@@ -42,22 +65,51 @@ impl<Conn: ConnLayer> RpcReq<Conn> {
 
 #[derive(Debug, Clone)]
 pub enum RpcRes<Conn> {
-    Connect(RpcResult<(Conn, String)>),
+    CreateOffer(RpcResult<(Conn, String)>),
+    SetAnswer(RpcResult<Conn>),
+    CreateAnswer(RpcResult<(Conn, String)>),
     Delete(RpcResult<Conn>),
 }
 
 impl<Conn: ConnLayer> RpcRes<Conn> {
     pub fn up(self, param: Conn::UpParam) -> RpcRes<Conn::Up> {
         match self {
-            RpcRes::Connect(res) => RpcRes::Connect(res.map(|(conn, sdp)| (conn.up(param), sdp))),
+            RpcRes::CreateOffer(res) => RpcRes::CreateOffer(res.map(|(conn, sdp)| (conn.up(param), sdp))),
+            RpcRes::SetAnswer(res) => RpcRes::SetAnswer(res.map(|conn| conn.up(param))),
+            RpcRes::CreateAnswer(res) => RpcRes::CreateAnswer(res.map(|(conn, sdp)| (conn.up(param), sdp))),
             RpcRes::Delete(res) => RpcRes::Delete(res.map(|conn| conn.up(param))),
         }
     }
 }
 
-impl TryFrom<protobuf::cluster_gateway::RtpEngineConnectRequest> for RtpConnectRequest {
+impl TryFrom<protobuf::cluster_gateway::RtpEngineCreateOfferRequest> for RtpCreateOfferRequest {
     type Error = ();
-    fn try_from(value: protobuf::cluster_gateway::RtpEngineConnectRequest) -> Result<Self, Self::Error> {
+    fn try_from(value: protobuf::cluster_gateway::RtpEngineCreateOfferRequest) -> Result<Self, Self::Error> {
+        Ok(Self {
+            session_id: value.session_id,
+            room: value.room.into(),
+            peer: value.peer.into(),
+            record: value.record,
+            extra_data: value.extra_data,
+        })
+    }
+}
+
+impl From<RtpCreateOfferRequest> for protobuf::cluster_gateway::RtpEngineCreateOfferRequest {
+    fn from(val: RtpCreateOfferRequest) -> Self {
+        protobuf::cluster_gateway::RtpEngineCreateOfferRequest {
+            session_id: val.session_id,
+            room: val.room.0,
+            peer: val.peer.0,
+            record: val.record,
+            extra_data: val.extra_data,
+        }
+    }
+}
+
+impl TryFrom<protobuf::cluster_gateway::RtpEngineCreateAnswerRequest> for RtpCreateAnswerRequest {
+    type Error = ();
+    fn try_from(value: protobuf::cluster_gateway::RtpEngineCreateAnswerRequest) -> Result<Self, Self::Error> {
         Ok(Self {
             session_id: value.session_id,
             sdp: value.sdp,
@@ -69,9 +121,9 @@ impl TryFrom<protobuf::cluster_gateway::RtpEngineConnectRequest> for RtpConnectR
     }
 }
 
-impl From<RtpConnectRequest> for protobuf::cluster_gateway::RtpEngineConnectRequest {
-    fn from(val: RtpConnectRequest) -> Self {
-        protobuf::cluster_gateway::RtpEngineConnectRequest {
+impl From<RtpCreateAnswerRequest> for protobuf::cluster_gateway::RtpEngineCreateAnswerRequest {
+    fn from(val: RtpCreateAnswerRequest) -> Self {
+        protobuf::cluster_gateway::RtpEngineCreateAnswerRequest {
             session_id: val.session_id,
             sdp: val.sdp,
             room: val.room.0,

@@ -19,7 +19,7 @@ use media_server_protocol::{
         quinn::{QuinnClient, QuinnStream},
     },
     transport::{
-        rtpengine::RtpConnectRequest,
+        rtpengine::{RtpCreateAnswerRequest, RtpCreateOfferRequest},
         webrtc,
         whep::{self, WhepConnectReq, WhepConnectRes, WhepDeleteReq, WhepDeleteRes, WhepRemoteIceReq, WhepRemoteIceRes},
         whip::{self, WhipConnectReq, WhipConnectRes, WhipDeleteReq, WhipDeleteRes, WhipRemoteIceReq, WhipRemoteIceRes},
@@ -140,7 +140,9 @@ impl MediaLocalRpcHandler {
                 }
             },
             RpcReq::RtpEngine(param) => match param {
-                rtpengine::RpcReq::Connect(param) => RpcRes::RtpEngine(rtpengine::RpcRes::Connect(self.rtpengine_connect(param).await)),
+                rtpengine::RpcReq::CreateOffer(param) => RpcRes::RtpEngine(rtpengine::RpcRes::CreateOffer(self.rtpengine_create_offer(param).await)),
+                rtpengine::RpcReq::SetAnswer(conn, param) => RpcRes::RtpEngine(rtpengine::RpcRes::SetAnswer(self.rtpengine_set_answer(conn_part, conn, param.sdp).await)),
+                rtpengine::RpcReq::CreateAnswer(param) => RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(self.rtpengine_create_answer(param).await)),
                 rtpengine::RpcReq::Delete(param) => RpcRes::RtpEngine(rtpengine::RpcRes::Delete(self.rtpengine_delete(conn_part, param).await)),
             },
         }
@@ -382,7 +384,7 @@ impl MediaLocalRpcHandler {
         RtpEngine part
     */
 
-    async fn rtpengine_connect(&self, param: RtpConnectRequest) -> RpcResult<(ClusterConnId, String)> {
+    async fn rtpengine_create_offer(&self, param: RtpCreateOfferRequest) -> RpcResult<(ClusterConnId, String)> {
         let started_at = now_ms();
         let session_id = param.session_id;
         // TODO get remote ip
@@ -391,7 +393,47 @@ impl MediaLocalRpcHandler {
         if let Some(node_id) = self.selector.select(ServiceKind::RtpEngine, None).await {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             log::info!("[Gateway] selected node {node_id}");
-            let res = self.client.rtp_engine_connect(sock_addr, param.into()).await;
+            let res = self.client.rtp_engine_create_offer(sock_addr, param.into()).await;
+            log::info!("[Gateway] response from node {node_id} => {:?}", res);
+            if let Some(res) = res {
+                self.feedback_route_success(session_id, now_ms() - started_at, node_id).await;
+                Ok((res.conn.parse().unwrap(), res.sdp))
+            } else {
+                self.feedback_route_error(session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            }
+        } else {
+            self.feedback_route_error(session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
+            Err(RpcError::new2(MediaServerError::NodePoolEmpty))
+        }
+    }
+
+    async fn rtpengine_set_answer(&self, conn_part: Option<(NodeId, u64)>, conn: ClusterConnId, sdp: String) -> RpcResult<ClusterConnId> {
+        if let Some((node, _session)) = conn_part {
+            let rpc_req = media_server_protocol::protobuf::cluster_gateway::RtpEngineSetAnswerRequest { conn: conn.to_string(), sdp };
+            log::info!("[Gateway] selected node {node}");
+            let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
+            let res = self.client.rtp_engine_set_answer(sock_addr, rpc_req).await;
+            if let Some(_res) = res {
+                Ok(conn)
+            } else {
+                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            }
+        } else {
+            Err(RpcError::new2(MediaServerError::InvalidConnId))
+        }
+    }
+
+    async fn rtpengine_create_answer(&self, param: RtpCreateAnswerRequest) -> RpcResult<(ClusterConnId, String)> {
+        let started_at = now_ms();
+        let session_id = param.session_id;
+        // TODO get remote ip
+        self.feedback_route_begin(session_id, IpAddr::V4(Ipv4Addr::LOCALHOST)).await;
+
+        if let Some(node_id) = self.selector.select(ServiceKind::RtpEngine, None).await {
+            let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
+            log::info!("[Gateway] selected node {node_id}");
+            let res = self.client.rtp_engine_create_answer(sock_addr, param.into()).await;
             log::info!("[Gateway] response from node {node_id} => {:?}", res);
             if let Some(res) = res {
                 self.feedback_route_success(session_id, now_ms() - started_at, node_id).await;

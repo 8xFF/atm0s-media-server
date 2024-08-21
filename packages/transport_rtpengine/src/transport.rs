@@ -16,6 +16,7 @@ use media_server_core::{
 use media_server_protocol::{
     endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackPriority, TrackSource},
     media::{MediaKind, MediaMeta, MediaPacket},
+    transport::{RpcError, RpcResult},
 };
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
@@ -24,6 +25,8 @@ use sans_io_runtime::{
 };
 use sdp_rs::SessionDescription;
 
+use crate::RtpEngineError;
+
 const REMOTE_AUDIO_TRACK: RemoteTrackId = RemoteTrackId(0);
 const LOCAL_AUDIO_TRACK: LocalTrackId = LocalTrackId(0);
 const AUDIO_NAME: &str = "audio_main";
@@ -31,16 +34,18 @@ const DEFAULT_PRIORITY: TrackPriority = TrackPriority(1);
 
 #[allow(clippy::large_enum_variant)]
 pub enum ExtIn {
+    SetAnswer(u64, String),
     Disconnect(u64),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExtOut {
+    SetAnswer(u64, RpcResult<()>),
     Disconnect(u64),
 }
 
 pub struct TransportRtpEngine {
-    remote: SocketAddr,
+    remote: Option<SocketAddr>,
     room: RoomId,
     peer: PeerId,
     udp_slot: Option<usize>,
@@ -51,7 +56,33 @@ pub struct TransportRtpEngine {
 }
 
 impl TransportRtpEngine {
-    pub fn new(room: RoomId, peer: PeerId, ip: IpAddr, offer: &str) -> Result<(Self, String), String> {
+    pub fn new_offer(room: RoomId, peer: PeerId, ip: IpAddr) -> Result<(Self, String), String> {
+        let socket = std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).map_err(|e| e.to_string())?;
+        let port = socket.local_addr().map_err(|e| e.to_string())?.port();
+        let answer = sdp_builder(ip, port);
+
+        Ok((
+            Self {
+                remote: None,
+                room,
+                peer,
+                udp_slot: None,
+                queue: DynamicDeque::from([
+                    TransportOutput::Net(BackendOutgoing::UdpListen {
+                        addr: SocketAddr::new(ip, port),
+                        reuse: false,
+                    }),
+                    TransportOutput::Event(TransportEvent::State(TransportState::New)),
+                ]),
+                pcma_to_opus: AudioTranscoder::new(PcmaDecoder::default(), OpusEncoder::default()),
+                opus_to_pcma: AudioTranscoder::new(OpusDecoder::default(), PcmaEncoder::default()),
+                tmp_buf: [0; 1500],
+            },
+            answer,
+        ))
+    }
+
+    pub fn new_answer(room: RoomId, peer: PeerId, ip: IpAddr, offer: &str) -> Result<(Self, String), String> {
         let mut offer = SessionDescription::try_from(offer.to_string()).map_err(|e| e.to_string())?;
         let dest_ip: IpAddr = offer.connection.ok_or("CONNECTION_NOT_FOUND".to_string())?.connection_address.base;
         let dest_port = offer.media_descriptions.pop().ok_or("MEDIA_NOT_FOUND".to_string())?.media.port;
@@ -59,24 +90,11 @@ impl TransportRtpEngine {
 
         let socket = std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).map_err(|e| e.to_string())?;
         let port = socket.local_addr().map_err(|e| e.to_string())?.port();
-        //TODO adaptive codec type
-        let answer = format!(
-            "v=0
-o=Z 0 1094063179 IN IP4 {ip}
-s=Z
-c=IN IP4 {ip}
-t=0 0
-m=audio {port} RTP/AVP 8 101 0
-a=rtpmap:101 telephone-event/8000
-a=fmtp:101 0-16
-a=sendrecv
-a=rtcp-mux
-"
-        );
+        let answer = sdp_builder(ip, port);
 
         Ok((
             Self {
-                remote,
+                remote: Some(remote),
                 room,
                 peer,
                 udp_slot: None,
@@ -94,6 +112,16 @@ a=rtcp-mux
             answer,
         ))
     }
+
+    fn set_answer(&mut self, answer: &str) -> RpcResult<()> {
+        let mut offer = SessionDescription::try_from(answer.to_string()).map_err(|e| RpcError::new(RtpEngineError::InvalidSdp as u32, &e.to_string()))?;
+        let dest_ip: IpAddr = offer.connection.ok_or(RpcError::new2(RtpEngineError::SdpConnectionNotFound))?.connection_address.base;
+        let dest_port = offer.media_descriptions.pop().ok_or(RpcError::new2(RtpEngineError::SdpMediaNotFound))?.media.port;
+        let remote = SocketAddr::new(dest_ip, dest_port);
+        self.remote = Some(remote);
+        self.queue.push_back(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(dest_ip))));
+        Ok(())
+    }
 }
 
 impl Transport<ExtIn, ExtOut> for TransportRtpEngine {
@@ -107,6 +135,14 @@ impl Transport<ExtIn, ExtOut> for TransportRtpEngine {
                 log::info!("[TransportRtpEngine] on rpc_res {res:?}");
             }
             TransportInput::Ext(ext) => match ext {
+                ExtIn::SetAnswer(req_id, sdp) => {
+                    log::info!("[TransportRtpEngine] received answer from client");
+                    let res = self.set_answer(&sdp);
+                    if let Err(e) = &res {
+                        log::error!("[TransportRtpEngine] set answer from client error {e:?}");
+                    }
+                    self.queue.push_back(TransportOutput::Ext(ExtOut::SetAnswer(req_id, res)));
+                }
                 ExtIn::Disconnect(req_id) => {
                     log::info!("[TransportRtpEngine] switched to disconnected with close action from client");
                     self.queue.push_back(TransportOutput::Ext(ExtOut::Disconnect(req_id)));
@@ -227,21 +263,21 @@ impl TransportRtpEngine {
             EndpointEvent::LocalMediaTrack(_track, event) => match event {
                 EndpointLocalTrackEvent::Media(media) => {
                     let slot = return_if_none!(self.udp_slot);
-                    log::debug!("send rtp to {} {} {} len {}", self.remote, media.seq, media.ts, media.data.len());
-                    if let Some(size) = self.opus_to_pcma.transcode(&media.data, &mut self.tmp_buf) {
-                        if let Ok(data) = rtp_rs::RtpPacketBuilder::new()
-                            .marked(media.marker)
-                            .payload_type(8) // TODO avoid hard-coding
-                            .timestamp(media.ts)
-                            .sequence(media.seq.into())
-                            .payload(&self.tmp_buf[..size])
-                            .build()
-                        {
-                            self.queue.push_back(TransportOutput::Net(BackendOutgoing::UdpPacket {
-                                slot,
-                                to: self.remote,
-                                data: data.into(),
-                            }))
+                    if let Some(remote) = self.remote {
+                        log::debug!("[TransportRtpEngine] send rtp to {} {} {} len {}", remote, media.seq, media.ts, media.data.len());
+                        if let Some(size) = self.opus_to_pcma.transcode(&media.data, &mut self.tmp_buf) {
+                            if let Ok(data) = rtp_rs::RtpPacketBuilder::new()
+                                .marked(media.marker)
+                                .payload_type(8) // TODO avoid hard-coding
+                                .timestamp(media.ts)
+                                .sequence(media.seq.into())
+                                .payload(&self.tmp_buf[..size])
+                                .build()
+                            {
+                                self.queue.push_back(TransportOutput::Net(BackendOutgoing::UdpPacket { slot, to: remote, data: data.into() }))
+                            }
+                        } else {
+                            log::warn!("[TransportRtpEngine] send rtp without remote addr");
                         }
                     }
                 }
@@ -283,4 +319,21 @@ fn pkt_type(value: &[u8]) -> Option<MultiplexKind> {
     } else {
         None
     }
+}
+
+//TODO adaptive codec type
+fn sdp_builder(ip: IpAddr, port: u16) -> String {
+    format!(
+        "v=0
+o=Z 0 1094063179 IN IP4 {ip}
+s=Z
+c=IN IP4 {ip}
+t=0 0
+m=audio {port} RTP/AVP 8 101 0
+a=rtpmap:101 telephone-event/8000
+a=fmtp:101 0-16
+a=sendrecv
+a=rtcp-mux
+"
+    )
 }

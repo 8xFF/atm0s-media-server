@@ -25,6 +25,7 @@ pub enum TransportError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TransportState {
+    New,
     Connecting(IpAddr),
     ConnectError(TransportError),
     Connected(IpAddr),

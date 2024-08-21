@@ -146,6 +146,15 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     let whep_ui = whep_service.swagger_ui();
     let whep_spec = whep_service.spec();
 
+    let rtpengine_service: OpenApiService<_, ()> = OpenApiService::new(
+        api_media::RtpengineApis::<ES>::new(sender.clone(), edge_secure.clone()),
+        "Media RtpEngine Gateway APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/");
+    let rtpengine_ui = rtpengine_service.swagger_ui();
+    let rtpengine_spec = rtpengine_service.spec();
+
     #[cfg(not(feature = "embed_static"))]
     let samples = StaticFilesEndpoint::new("./public/media/").index_file("index.html");
     #[cfg(feature = "embed_static")]
@@ -165,6 +174,9 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
         .nest("/whep/", whep_service)
         .nest("/whep/ui", whep_ui)
         .at("/whep/spec", poem::endpoint::make_sync(move |_| whep_spec.clone()))
+        .nest("/rtpengine/", rtpengine_service)
+        .nest("/rtpengine/ui", rtpengine_ui)
+        .at("/rtpengine/spec", poem::endpoint::make_sync(move |_| rtpengine_spec.clone()))
         .with(Cors::new());
 
     Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
@@ -217,6 +229,15 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
     let whep_ui = whep_service.swagger_ui();
     let whep_spec = whep_service.spec();
 
+    let rtpengine_service: OpenApiService<_, ()> = OpenApiService::new(
+        api_media::RtpengineApis::<ES>::new(sender.clone(), edge_secure.clone()),
+        "Media RtpEngine Gateway APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/");
+    let rtpengine_ui = rtpengine_service.swagger_ui();
+    let rtpengine_spec = rtpengine_service.spec();
+
     #[cfg(not(feature = "embed_static"))]
     let samples = StaticFilesEndpoint::new("./public/media/").index_file("index.html");
     #[cfg(feature = "embed_static")]
@@ -233,6 +254,9 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
         .nest("/whep/", whep_service)
         .nest("/whep/ui", whep_ui)
         .at("/whep/spec", poem::endpoint::make_sync(move |_| whep_spec.clone()))
+        .nest("/rtpengine/", rtpengine_service)
+        .nest("/rtpengine/ui", rtpengine_ui)
+        .at("/rtpengine/spec", poem::endpoint::make_sync(move |_| rtpengine_spec.clone()))
         .with(Cors::new());
 
     Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
