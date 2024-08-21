@@ -118,9 +118,33 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     let token_service: OpenApiService<_, ()> = OpenApiService::new(api_token::TokenApis::<GS>::new(), "App APIs", env!("CARGO_PKG_VERSION")).server("/token/");
     let token_ui = token_service.swagger_ui();
     let token_spec = token_service.spec();
-    let media_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis::<ES>::new(), "Media Gateway APIs", env!("CARGO_PKG_VERSION")).server("/media/");
-    let media_ui = media_service.swagger_ui();
-    let media_spec = media_service.spec();
+
+    let webrtc_service: OpenApiService<_, ()> = OpenApiService::new(
+        api_media::WebrtcApis::<ES>::new(sender.clone(), edge_secure.clone()),
+        "Media Webrtc Gateway APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/");
+    let webrtc_ui = webrtc_service.swagger_ui();
+    let webrtc_spec = webrtc_service.spec();
+
+    let whip_service: OpenApiService<_, ()> = OpenApiService::new(
+        api_media::WhipApis::<ES>::new(sender.clone(), edge_secure.clone()),
+        "Media Whip Gateway APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/");
+    let whip_ui = whip_service.swagger_ui();
+    let whip_spec = whip_service.spec();
+
+    let whep_service: OpenApiService<_, ()> = OpenApiService::new(
+        api_media::WhepApis::<ES>::new(sender.clone(), edge_secure.clone()),
+        "Media Whep Gateway APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/");
+    let whep_ui = whep_service.swagger_ui();
+    let whep_spec = whep_service.spec();
 
     #[cfg(not(feature = "embed_static"))]
     let samples = StaticFilesEndpoint::new("./public/media/").index_file("index.html");
@@ -132,9 +156,15 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
         .nest("/token/", token_service.data(api_token::TokenServerCtx { secure: gateway_secure }))
         .nest("/token/ui", token_ui)
         .at("/token/spec", poem::endpoint::make_sync(move |_| token_spec.clone()))
-        .nest("/", media_service.data(api_media::MediaServerCtx { sender, secure: edge_secure }))
-        .nest("/ui", media_ui)
-        .at("/spec", poem::endpoint::make_sync(move |_| media_spec.clone()))
+        .nest("/webrtc/", webrtc_service)
+        .nest("/webrtc/ui", webrtc_ui)
+        .at("/webrtc/spec", poem::endpoint::make_sync(move |_| webrtc_spec.clone()))
+        .nest("/whip/", whip_service)
+        .nest("/whip/ui", whip_ui)
+        .at("/whip/spec", poem::endpoint::make_sync(move |_| whip_spec.clone()))
+        .nest("/whep/", whep_service)
+        .nest("/whep/ui", whep_ui)
+        .at("/whep/spec", poem::endpoint::make_sync(move |_| whep_spec.clone()))
         .with(Cors::new());
 
     Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
@@ -159,9 +189,33 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
             .nest("/token/ui", token_ui)
             .at("/token/spec", poem::endpoint::make_sync(move |_| token_spec.clone()));
     }
-    let media_service: OpenApiService<_, ()> = OpenApiService::new(api_media::MediaApis::<ES>::new(), "Media Gateway APIs", env!("CARGO_PKG_VERSION")).server("/media/");
-    let media_ui = media_service.swagger_ui();
-    let media_spec = media_service.spec();
+
+    let webrtc_service: OpenApiService<_, ()> = OpenApiService::new(
+        api_media::WebrtcApis::<ES>::new(sender.clone(), edge_secure.clone()),
+        "Media Webrtc Gateway APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/");
+    let webrtc_ui = webrtc_service.swagger_ui();
+    let webrtc_spec = webrtc_service.spec();
+
+    let whip_service: OpenApiService<_, ()> = OpenApiService::new(
+        api_media::WhipApis::<ES>::new(sender.clone(), edge_secure.clone()),
+        "Media Whip Gateway APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/");
+    let whip_ui = whip_service.swagger_ui();
+    let whip_spec = whip_service.spec();
+
+    let whep_service: OpenApiService<_, ()> = OpenApiService::new(
+        api_media::WhepApis::<ES>::new(sender.clone(), edge_secure.clone()),
+        "Media Whep Gateway APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/");
+    let whep_ui = whep_service.swagger_ui();
+    let whep_spec = whep_service.spec();
 
     #[cfg(not(feature = "embed_static"))]
     let samples = StaticFilesEndpoint::new("./public/media/").index_file("index.html");
@@ -170,9 +224,15 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
 
     let route = route
         .nest("/samples", samples)
-        .nest("/", media_service.data(api_media::MediaServerCtx { sender, secure: edge_secure }))
-        .nest("/ui", media_ui)
-        .at("/spec", poem::endpoint::make_sync(move |_| media_spec.clone()))
+        .nest("/webrtc/", webrtc_service)
+        .nest("/webrtc/ui", webrtc_ui)
+        .at("/webrtc/spec", poem::endpoint::make_sync(move |_| webrtc_spec.clone()))
+        .nest("/whip/", whip_service)
+        .nest("/whip/ui", whip_ui)
+        .at("/whip/spec", poem::endpoint::make_sync(move |_| whip_spec.clone()))
+        .nest("/whep/", whep_service)
+        .nest("/whep/ui", whep_ui)
+        .at("/whep/spec", poem::endpoint::make_sync(move |_| whep_spec.clone()))
         .with(Cors::new());
 
     Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
