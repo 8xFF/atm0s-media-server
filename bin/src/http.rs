@@ -124,7 +124,7 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
         "Media Webrtc Gateway APIs",
         env!("CARGO_PKG_VERSION"),
     )
-    .server("/");
+    .server("/webrtc/");
     let webrtc_ui = webrtc_service.swagger_ui();
     let webrtc_spec = webrtc_service.spec();
 
@@ -133,7 +133,7 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
         "Media Whip Gateway APIs",
         env!("CARGO_PKG_VERSION"),
     )
-    .server("/");
+    .server("/whip/");
     let whip_ui = whip_service.swagger_ui();
     let whip_spec = whip_service.spec();
 
@@ -142,7 +142,7 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
         "Media Whep Gateway APIs",
         env!("CARGO_PKG_VERSION"),
     )
-    .server("/");
+    .server("/whep/");
     let whep_ui = whep_service.swagger_ui();
     let whep_spec = whep_service.spec();
 
@@ -151,7 +151,7 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
         "Media RtpEngine Gateway APIs",
         env!("CARGO_PKG_VERSION"),
     )
-    .server("/");
+    .server("/rtpengine/");
     let rtpengine_ui = rtpengine_service.swagger_ui();
     let rtpengine_spec = rtpengine_service.spec();
 
@@ -207,7 +207,7 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
         "Media Webrtc Gateway APIs",
         env!("CARGO_PKG_VERSION"),
     )
-    .server("/");
+    .server("/webrtc/");
     let webrtc_ui = webrtc_service.swagger_ui();
     let webrtc_spec = webrtc_service.spec();
 
@@ -216,7 +216,7 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
         "Media Whip Gateway APIs",
         env!("CARGO_PKG_VERSION"),
     )
-    .server("/");
+    .server("/whip/");
     let whip_ui = whip_service.swagger_ui();
     let whip_spec = whip_service.spec();
 
@@ -225,7 +225,7 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
         "Media Whep Gateway APIs",
         env!("CARGO_PKG_VERSION"),
     )
-    .server("/");
+    .server("/whep/");
     let whep_ui = whep_service.swagger_ui();
     let whep_spec = whep_service.spec();
 
@@ -234,7 +234,7 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
         "Media RtpEngine Gateway APIs",
         env!("CARGO_PKG_VERSION"),
     )
-    .server("/");
+    .server("/rtpengine/");
     let rtpengine_ui = rtpengine_service.swagger_ui();
     let rtpengine_spec = rtpengine_service.spec();
 
