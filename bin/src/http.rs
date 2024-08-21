@@ -114,6 +114,7 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     sender: Sender<crate::rpc::Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
     edge_secure: Arc<ES>,
     gateway_secure: Arc<GS>,
+    ext_auth_uri: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let token_service: OpenApiService<_, ()> = OpenApiService::new(api_token::TokenApis::<GS>::new(), "App APIs", env!("CARGO_PKG_VERSION")).server("/token/");
     let token_ui = token_service.swagger_ui();
@@ -132,7 +133,14 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
         .nest("/token/", token_service.data(api_token::TokenServerCtx { secure: gateway_secure }))
         .nest("/token/ui", token_ui)
         .at("/token/spec", poem::endpoint::make_sync(move |_| token_spec.clone()))
-        .nest("/", media_service.data(api_media::MediaServerCtx { sender, secure: edge_secure }))
+        .nest(
+            "/",
+            media_service.data(api_media::MediaServerCtx {
+                sender,
+                secure: edge_secure,
+                ext_auth_uri,
+            }),
+        )
         .nest("/ui", media_ui)
         .at("/spec", poem::endpoint::make_sync(move |_| media_spec.clone()))
         .with(Cors::new());
@@ -147,6 +155,7 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
     sender: Sender<crate::rpc::Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
     edge_secure: Arc<ES>,
     gateway_secure: Option<Arc<GS>>,
+    ext_auth_uri: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut route = Route::new();
 
@@ -170,7 +179,14 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
 
     let route = route
         .nest("/samples", samples)
-        .nest("/", media_service.data(api_media::MediaServerCtx { sender, secure: edge_secure }))
+        .nest(
+            "/",
+            media_service.data(api_media::MediaServerCtx {
+                sender,
+                secure: edge_secure,
+                ext_auth_uri,
+            }),
+        )
         .nest("/ui", media_ui)
         .at("/spec", poem::endpoint::make_sync(move |_| media_spec.clone()))
         .with(Cors::new());

@@ -79,6 +79,11 @@ pub struct Args {
     /// Number of workers for uploading recordings.
     #[arg(env, long, default_value_t = 5)]
     record_upload_worker: usize,
+
+    /// External HTTP endpoint URI for third-party authentication and authorization.
+    /// The URI should be in the format of `http(s)://<host>:<port>` or `http(s)://example.com`, without the backslash at the end.
+    #[arg(env, long)]
+    ext_auth_uri: Option<String>,
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -96,7 +101,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         let req_tx = req_tx.clone();
         let secure = secure.clone();
         tokio::spawn(async move {
-            if let Err(e) = run_media_http_server(http_port, req_tx, secure, secure2).await {
+            if let Err(e) = run_media_http_server(http_port, req_tx, secure, secure2, args.ext_auth_uri).await {
                 log::error!("HTTP Error: {}", e);
             }
         });
