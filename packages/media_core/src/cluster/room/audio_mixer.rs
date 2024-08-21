@@ -161,21 +161,15 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
     }
 
     pub fn on_track_publish(&mut self, now: Instant, endpoint: Endpoint, track: RemoteTrackId, peer: PeerId, name: TrackName) {
-        if self.auto_mode.contains_key(&endpoint) {
-            self.publisher.input(&mut self.switcher).on_track_publish(now, endpoint, track, peer, name);
-        }
+        self.publisher.input(&mut self.switcher).on_track_publish(now, endpoint, track, peer, name);
     }
 
     pub fn on_track_data(&mut self, now: Instant, endpoint: Endpoint, track: RemoteTrackId, media: &MediaPacket) {
-        if self.auto_mode.contains_key(&endpoint) {
-            self.publisher.input(&mut self.switcher).on_track_data(now, endpoint, track, media);
-        }
+        self.publisher.input(&mut self.switcher).on_track_data(now, endpoint, track, media);
     }
 
     pub fn on_track_unpublish(&mut self, now: Instant, endpoint: Endpoint, track: RemoteTrackId) {
-        if self.auto_mode.contains_key(&endpoint) {
-            self.publisher.input(&mut self.switcher).on_track_unpublish(now, endpoint, track);
-        }
+        self.publisher.input(&mut self.switcher).on_track_unpublish(now, endpoint, track);
     }
 
     pub fn on_pubsub_event(&mut self, now: Instant, event: pubsub::Event) {

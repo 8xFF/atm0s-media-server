@@ -49,6 +49,8 @@ pub struct TransportRtpEngine {
     room: RoomId,
     peer: PeerId,
     udp_slot: Option<usize>,
+    answered: bool,
+    connected: bool,
     queue: DynamicDeque<TransportOutput<ExtOut>, 4>,
     pcma_to_opus: AudioTranscoder<PcmaDecoder, OpusEncoder>,
     opus_to_pcma: AudioTranscoder<OpusDecoder, PcmaEncoder>,
@@ -67,6 +69,8 @@ impl TransportRtpEngine {
                 room,
                 peer,
                 udp_slot: None,
+                answered: false,
+                connected: false,
                 queue: DynamicDeque::from([
                     TransportOutput::Net(BackendOutgoing::UdpListen {
                         addr: SocketAddr::new(ip, port),
@@ -88,6 +92,8 @@ impl TransportRtpEngine {
         let dest_port = offer.media_descriptions.pop().ok_or("MEDIA_NOT_FOUND".to_string())?.media.port;
         let remote = SocketAddr::new(dest_ip, dest_port);
 
+        log::info!("[TransportRtpEngine] on create answer => set remote to {remote}");
+
         let socket = std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).map_err(|e| e.to_string())?;
         let port = socket.local_addr().map_err(|e| e.to_string())?.port();
         let answer = sdp_builder(ip, port);
@@ -98,6 +104,8 @@ impl TransportRtpEngine {
                 room,
                 peer,
                 udp_slot: None,
+                answered: true,
+                connected: false,
                 queue: DynamicDeque::from([
                     TransportOutput::Net(BackendOutgoing::UdpListen {
                         addr: SocketAddr::new(ip, port),
@@ -114,11 +122,18 @@ impl TransportRtpEngine {
     }
 
     fn set_answer(&mut self, answer: &str) -> RpcResult<()> {
-        let mut offer = SessionDescription::try_from(answer.to_string()).map_err(|e| RpcError::new(RtpEngineError::InvalidSdp as u32, &e.to_string()))?;
-        let dest_ip: IpAddr = offer.connection.ok_or(RpcError::new2(RtpEngineError::SdpConnectionNotFound))?.connection_address.base;
-        let dest_port = offer.media_descriptions.pop().ok_or(RpcError::new2(RtpEngineError::SdpMediaNotFound))?.media.port;
+        let mut answer = SessionDescription::try_from(answer.to_string()).map_err(|e| RpcError::new(RtpEngineError::InvalidSdp as u32, &e.to_string()))?;
+        log::info!("[TransportRtpEngine] on answer {answer:?}");
+        let dest_ip: IpAddr = if let Some(conn) = answer.connection {
+            conn.connection_address.base
+        } else {
+            answer.origin.unicast_address
+        };
+        let dest_port = answer.media_descriptions.pop().ok_or(RpcError::new2(RtpEngineError::SdpMediaNotFound))?.media.port;
         let remote = SocketAddr::new(dest_ip, dest_port);
         self.remote = Some(remote);
+        self.answered = true;
+        log::info!("[TransportRtpEngine] on answer => reset remote to {remote}");
         self.queue.push_back(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(dest_ip))));
         Ok(())
     }
@@ -162,30 +177,7 @@ impl TransportRtpEngine {
             BackendIncoming::UdpListenResult { bind, result } => match result {
                 Ok((addr, slot)) => {
                     log::info!("[TransportRtpEngine] bind {bind} => {addr} with slot {slot}");
-                    log::info!("[TransportRtpEngine] switched to connected");
                     self.udp_slot = Some(slot);
-                    self.queue.push_back(TransportOutput::Event(TransportEvent::State(TransportState::Connected(addr.ip()))));
-                    self.queue.push_back(TransportOutput::RpcReq(
-                        0.into(),
-                        EndpointReq::JoinRoom(
-                            self.room.clone(),
-                            self.peer.clone(),
-                            PeerMeta { metadata: None, extra_data: None },
-                            RoomInfoPublish { peer: false, tracks: true },
-                            RoomInfoSubscribe { peers: false, tracks: true },
-                            None,
-                        ),
-                    ));
-                    self.queue.push_back(TransportOutput::Event(TransportEvent::RemoteTrack(
-                        REMOTE_AUDIO_TRACK,
-                        RemoteTrackEvent::Started {
-                            name: AUDIO_NAME.to_string(),
-                            priority: TrackPriority(100),
-                            meta: TrackMeta::default_audio(),
-                        },
-                    )));
-                    self.queue
-                        .push_back(TransportOutput::Event(TransportEvent::LocalTrack(LOCAL_AUDIO_TRACK, LocalTrackEvent::Started(MediaKind::Audio))));
                 }
                 Err(err) => {
                     log::error!("[TransportRtpEngine] bind {bind} failed {err:?}");
@@ -199,7 +191,7 @@ impl TransportRtpEngine {
                 if let Some(MultiplexKind::Rtp) = pkt_type {
                     if let Ok(rtp) = rtp_rs::RtpReader::new(buf) {
                         log::debug!(
-                            "on rtp from {} {} {:?} {} len {}",
+                            "[TransportRtpEngine] on rtp from {} {} {:?} {} len {}",
                             from,
                             rtp.payload_type(),
                             rtp.sequence_number(),
@@ -207,17 +199,45 @@ impl TransportRtpEngine {
                             rtp.payload().len()
                         );
                         if rtp.payload_type() == 8 {
+                            if self.answered && !self.connected {
+                                self.connected = true;
+                                log::info!("[TransportRtpEngine] first rtp packet after answered => switch to connected mode and join room");
+                                self.queue.push_back(TransportOutput::Event(TransportEvent::State(TransportState::Connected(from.ip()))));
+                                self.queue.push_back(TransportOutput::Event(TransportEvent::RemoteTrack(
+                                    REMOTE_AUDIO_TRACK,
+                                    RemoteTrackEvent::Started {
+                                        name: AUDIO_NAME.to_string(),
+                                        priority: TrackPriority(100),
+                                        meta: TrackMeta::default_audio(),
+                                    },
+                                )));
+                                self.queue
+                                    .push_back(TransportOutput::Event(TransportEvent::LocalTrack(LOCAL_AUDIO_TRACK, LocalTrackEvent::Started(MediaKind::Audio))));
+                                self.queue.push_back(TransportOutput::RpcReq(
+                                    0.into(),
+                                    EndpointReq::JoinRoom(
+                                        self.room.clone(),
+                                        self.peer.clone(),
+                                        PeerMeta { metadata: None, extra_data: None },
+                                        RoomInfoPublish { peer: true, tracks: true },
+                                        RoomInfoSubscribe { peers: false, tracks: true },
+                                        None,
+                                    ),
+                                ));
+                            }
+
                             //TODO avoid hard-coding
                             if let Some(size) = self.pcma_to_opus.transcode(rtp.payload(), &mut self.tmp_buf) {
                                 let media = MediaPacket {
-                                    ts: rtp.timestamp(),
+                                    ts: rtp.timestamp().wrapping_mul(6), //TODO avoid overflow
                                     seq: rtp.sequence_number().into(),
                                     marker: rtp.mark(),
                                     nackable: false,
                                     layers: None,
-                                    meta: MediaMeta::Opus { audio_level: None }, //TODO how to get audio level from opus?
+                                    meta: MediaMeta::Opus { audio_level: Some(0) }, //TODO how to get audio level from opus?
                                     data: self.tmp_buf[..size].to_vec(),
                                 };
+                                log::debug!("[TransportRtpEngine] transcode to opus {} {} {}", media.seq, media.ts, media.data.len());
                                 self.queue
                                     .push_back(TransportOutput::Event(TransportEvent::RemoteTrack(REMOTE_AUDIO_TRACK, RemoteTrackEvent::Media(media))));
                             }
@@ -233,7 +253,7 @@ impl TransportRtpEngine {
             EndpointEvent::PeerTrackStarted(peer, track, _) => {
                 //TODO select only one or audio_mixer
                 if self.peer != peer {
-                    log::debug!("[TransportRtpEngine] room {} peer {} attach to {peer}/{track}", self.room, self.peer);
+                    log::info!("[TransportRtpEngine] room {} peer {} attach to {peer}/{track}", self.room, self.peer);
                     self.queue.push_back(TransportOutput::RpcReq(
                         1.into(),
                         EndpointReq::LocalTrack(
@@ -264,12 +284,19 @@ impl TransportRtpEngine {
                 EndpointLocalTrackEvent::Media(media) => {
                     let slot = return_if_none!(self.udp_slot);
                     if let Some(remote) = self.remote {
-                        log::debug!("[TransportRtpEngine] send rtp to {} {} {} len {}", remote, media.seq, media.ts, media.data.len());
                         if let Some(size) = self.opus_to_pcma.transcode(&media.data, &mut self.tmp_buf) {
+                            log::debug!(
+                                "[TransportRtpEngine] transcode opus rtp to pcma {} {} {} len {} => {}",
+                                remote,
+                                media.seq,
+                                media.ts,
+                                media.data.len(),
+                                size
+                            );
                             if let Ok(data) = rtp_rs::RtpPacketBuilder::new()
                                 .marked(media.marker)
                                 .payload_type(8) // TODO avoid hard-coding
-                                .timestamp(media.ts)
+                                .timestamp(media.ts / 6) //TODO avoid hard-coding downsample
                                 .sequence(media.seq.into())
                                 .payload(&self.tmp_buf[..size])
                                 .build()

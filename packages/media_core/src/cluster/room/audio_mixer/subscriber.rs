@@ -41,7 +41,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscr
             queue: Default::default(),
             endpoints: IndexMap::new(),
             outputs: array::from_fn(|_| None),
-            mixer: audio_mixer::AudioMixer::new(3), //TODO dynamic this
+            mixer: audio_mixer::AudioMixer::new(OUTPUTS),
         }
     }
 

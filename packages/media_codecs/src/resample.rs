@@ -20,7 +20,7 @@ impl<const FROM: u32, const TO: u32> Default for Resampler<FROM, TO> {
 
 impl<const FROM: u32, const TO: u32> Resampler<FROM, TO> {
     pub fn resample(&mut self, input: &[i16], output: &mut [i16]) -> Option<usize> {
-        let (_used, generated) = self.soxr.process(Some(input), output).expect("Should process");
+        let (_used, generated) = self.soxr.process(Some(input), &mut output[0..(input.len() * TO as usize / FROM as usize)]).expect("Should process");
         Some(generated)
     }
 }
