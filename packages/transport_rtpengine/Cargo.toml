@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 log = { workspace = true }
 num_enum = { workspace = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = ["full"] }
 smallmap = { workspace = true }
 sans-io-runtime = { workspace = true, default-features = false }
 media-server-secure = { path = "../media_secure" }
