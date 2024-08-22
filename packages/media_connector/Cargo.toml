@@ -12,14 +12,14 @@ atm0s-sdn = { workspace = true }
 prost = { workspace = true }
 lru = "0.12"
 async-trait = "0.1"
-sea-orm-migration = "0.12"
-sea-orm = { version = "0.12", features = [
+sea-orm-migration = "1.1.0-rc.1"
+sea-orm = { version = "1.1.0-rc.1", features = [
     "sqlx-sqlite",
     "sqlx-postgres",
     "sqlx-mysql",
     "runtime-tokio-rustls",
 ] }
-sea-query = "0.30.7"
+sea-query = "0.31"
 serde_json = "1.0"
 s3-presign = "0.0.2"
 uuid = {version = "1.10.0", features = ["fast-rng", "v7"]}

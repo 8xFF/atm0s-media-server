@@ -30,7 +30,8 @@ vulnerability = "deny"
 unmaintained = "warn"
 yanked = "deny"
 ignore = [
-    "RUSTSEC-2023-0071" # a new version of rsa has not been released
+    "RUSTSEC-2023-0071", # a new version of rsa has not been released
+    "RUSTSEC-2024-0363" # a new version of sqlx has not been released
 ]
 
 [bans]
