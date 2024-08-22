@@ -1,4 +1,4 @@
-use std::{fmt::Display, hash::Hash};
+use std::hash::Hash;
 
 use derive_more::{Display, From};
 use serde::{Deserialize, Serialize};
