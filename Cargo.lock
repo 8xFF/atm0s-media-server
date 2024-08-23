@@ -2835,7 +2835,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -4983,9 +4983,9 @@ dependencies = [
 
 [[package]]
 name = "sans-io-runtime"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd3778b0f45136dc7e535d3385f9b762123d3b9133aedb714cc0c0bfd203f373"
+checksum = "b9ecb86ad7989fbacc137308565897a1e401a101043c1ccfbe5bd8a9fea79675"
 dependencies = [
  "convert-enum",
  "derive_more 0.99.18",
@@ -7045,7 +7045,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
