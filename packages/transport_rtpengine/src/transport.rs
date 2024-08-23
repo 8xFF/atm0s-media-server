@@ -1,7 +1,7 @@
 use std::{
     net::{IpAddr, SocketAddr},
     ops::Deref,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use media_server_codecs::{
@@ -11,7 +11,7 @@ use media_server_codecs::{
 };
 use media_server_core::{
     endpoint::{EndpointEvent, EndpointLocalTrackConfig, EndpointLocalTrackEvent, EndpointLocalTrackReq, EndpointReq},
-    transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, Transport, TransportEvent, TransportInput, TransportOutput, TransportState},
+    transport::{LocalTrackEvent, LocalTrackId, RemoteTrackEvent, RemoteTrackId, Transport, TransportError, TransportEvent, TransportInput, TransportOutput, TransportState},
 };
 use media_server_protocol::{
     endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackPriority, TrackSource},
@@ -26,6 +26,8 @@ use sans_io_runtime::{
 use sdp_rs::SessionDescription;
 
 use crate::RtpEngineError;
+
+const TIMEOUT_DURATION_MS: u64 = 60_000;
 
 const REMOTE_AUDIO_TRACK: RemoteTrackId = RemoteTrackId(0);
 const LOCAL_AUDIO_TRACK: LocalTrackId = LocalTrackId(0);
@@ -51,6 +53,9 @@ pub struct TransportRtpEngine {
     udp_slot: Option<usize>,
     answered: bool,
     connected: bool,
+    created: Instant,
+    last_recv_rtp: Option<Instant>,
+    last_send_rtp: Option<Instant>,
     queue: DynamicDeque<TransportOutput<ExtOut>, 4>,
     pcma_to_opus: AudioTranscoder<PcmaDecoder, OpusEncoder>,
     opus_to_pcma: AudioTranscoder<OpusDecoder, PcmaEncoder>,
@@ -71,6 +76,9 @@ impl TransportRtpEngine {
                 udp_slot: None,
                 answered: false,
                 connected: false,
+                created: Instant::now(),
+                last_recv_rtp: None,
+                last_send_rtp: None,
                 queue: DynamicDeque::from([
                     TransportOutput::Net(BackendOutgoing::UdpListen {
                         addr: SocketAddr::new(ip, port),
@@ -106,6 +114,9 @@ impl TransportRtpEngine {
                 udp_slot: None,
                 answered: true,
                 connected: false,
+                created: Instant::now(),
+                last_recv_rtp: None,
+                last_send_rtp: None,
                 queue: DynamicDeque::from([
                     TransportOutput::Net(BackendOutgoing::UdpListen {
                         addr: SocketAddr::new(ip, port),
@@ -140,12 +151,25 @@ impl TransportRtpEngine {
 }
 
 impl Transport<ExtIn, ExtOut> for TransportRtpEngine {
-    fn on_tick(&mut self, _now: Instant) {}
+    fn on_tick(&mut self, _now: Instant) {
+        let last_activity = match (self.last_recv_rtp, self.last_send_rtp) {
+            (None, None) => self.created,
+            (Some(time), None) => time,
+            (None, Some(time)) => time,
+            (Some(time1), Some(time2)) => time1.max(time2),
+        };
 
-    fn on_input(&mut self, _now: Instant, input: TransportInput<ExtIn>) {
+        if last_activity.elapsed() >= Duration::from_millis(TIMEOUT_DURATION_MS) {
+            log::warn!("[TransportRtpEngine] timeout after {TIMEOUT_DURATION_MS} ms don't has activity");
+            self.queue
+                .push_back(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(TransportError::Timeout)))));
+        }
+    }
+
+    fn on_input(&mut self, now: Instant, input: TransportInput<ExtIn>) {
         match input {
-            TransportInput::Net(event) => self.on_backend(event),
-            TransportInput::Endpoint(event) => self.on_event(event),
+            TransportInput::Net(event) => self.on_backend(now, event),
+            TransportInput::Endpoint(event) => self.on_event(now, event),
             TransportInput::RpcRes(_, res) => {
                 log::info!("[TransportRtpEngine] on rpc_res {res:?}");
             }
@@ -172,7 +196,7 @@ impl Transport<ExtIn, ExtOut> for TransportRtpEngine {
 }
 
 impl TransportRtpEngine {
-    fn on_backend(&mut self, event: BackendIncoming) {
+    fn on_backend(&mut self, now: Instant, event: BackendIncoming) {
         match event {
             BackendIncoming::UdpListenResult { bind, result } => match result {
                 Ok((addr, slot)) => {
@@ -190,6 +214,7 @@ impl TransportRtpEngine {
                 let pkt_type = pkt_type(buf);
                 if let Some(MultiplexKind::Rtp) = pkt_type {
                     if let Ok(rtp) = rtp_rs::RtpReader::new(buf) {
+                        self.last_recv_rtp = Some(now);
                         log::debug!(
                             "[TransportRtpEngine] on rtp from {} {} {:?} {} len {}",
                             from,
@@ -248,7 +273,7 @@ impl TransportRtpEngine {
         }
     }
 
-    fn on_event(&mut self, event: EndpointEvent) {
+    fn on_event(&mut self, now: Instant, event: EndpointEvent) {
         match event {
             EndpointEvent::PeerTrackStarted(peer, track, _) => {
                 //TODO select only one or audio_mixer
@@ -282,6 +307,7 @@ impl TransportRtpEngine {
             }
             EndpointEvent::LocalMediaTrack(_track, event) => match event {
                 EndpointLocalTrackEvent::Media(media) => {
+                    self.last_send_rtp = Some(now);
                     let slot = return_if_none!(self.udp_slot);
                     if let Some(remote) = self.remote {
                         if let Some(size) = self.opus_to_pcma.transcode(&media.data, &mut self.tmp_buf) {
