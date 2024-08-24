@@ -4,6 +4,16 @@ package cluster_connector;
 
 import "shared.proto";
 
+message HookEvent {
+    uint32 node = 1;
+    uint64 ts = 2;
+    oneof event {
+        RoomEvent room = 3;
+        PeerEvent peer = 4;
+        RecordEvent record = 5;
+    }
+}
+
 message ConnectorRequest {
     uint64 req_id = 1;
     uint64 ts = 2;
@@ -157,6 +167,54 @@ message PeerEvent {
 
 message PeerRes {
 
+}
+
+message RoomEvent {
+    message RoomStarted {
+
+    }
+
+    message RoomPeerJoined {
+        string peer = 1;
+    }
+
+    message RoomPeerLeaved {
+        string peer = 1;
+    }
+
+    message RoomAllPeersLeaved {
+
+    }
+
+    message RoomStopped {
+
+    }
+
+    string room = 1;
+    oneof event {
+        RoomStarted started = 2;
+        RoomPeerJoined peer_joined = 3;
+        RoomPeerLeaved peer_leaved = 4;
+        RoomAllPeersLeaved all_peers_leaved = 5;
+        RoomStopped stopped = 6;
+    }
+}
+
+message RecordEvent {
+    message RecordStarted {
+        string path = 1;
+    }
+
+    message RecordPeerJoined {
+        string peer = 1;
+        string path = 2;
+    }
+
+    string room = 1;
+    oneof event {
+        RecordStarted started = 2;
+        RecordPeerJoined peer_joined = 3;
+    }
 }
 
 message RecordReq {

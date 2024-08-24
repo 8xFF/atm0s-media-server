@@ -4,9 +4,7 @@ use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, service
 use clap::Parser;
 use media_server_connector::{
     handler_service::{self, ConnectorHandlerServiceBuilder},
-    hooks::{ConnectorHookController, HookControllerCfg, HookPublisher},
-    sql_storage::ConnectorStorage,
-    Storage, HANDLER_SERVICE_ID,
+    ConnectorCfg, ConnectorStorage, HookBodyType, HANDLER_SERVICE_ID,
 };
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
@@ -15,7 +13,7 @@ use media_server_protocol::{
     rpc::quinn::QuinnServer,
 };
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
-use tokio::{select, sync::mpsc::channel, time};
+use tokio::sync::mpsc::channel;
 
 use crate::{
     node_metrics::NodeMetricsCollector,
@@ -24,7 +22,6 @@ use crate::{
 };
 use sans_io_runtime::backend::PollingBackend;
 
-mod http_hook_publisher;
 mod remote_rpc_handler;
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
@@ -55,19 +52,36 @@ pub struct Args {
     /// If set, will send hook event to this uri. example: http://localhost:8080/hook
     #[arg(env, long)]
     hook_uri: Option<String>,
+
+    /// Hook workers
+    /// #[arg(env, long, default_value_t = 8)]
+    hook_workers: usize,
+
+    /// Hook body type
+    /// #[arg(env, long, default_value = "ProtobufJson")]
+    hook_body_type: HookBodyType,
+
+    /// Destroy room after no-one online. default is 30 minutes
+    /// #[arg(env, long, default_value_t = 1_800_000)]
+    destroy_room_after_ms: u64,
 }
 
 pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
-    let connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri, &args.s3_uri).await);
-    let hook_publisher: Option<Arc<dyn HookPublisher>> = if let Some(hook_uri) = args.hook_uri {
-        log::info!("[Connector] Hook publisher enabled with uri {}", hook_uri);
-        Some(Arc::new(http_hook_publisher::HttpHookPublisher::new(hook_uri)))
-    } else {
-        None
-    };
-    let mut hook_controller = ConnectorHookController::new(hook_publisher, HookControllerCfg { worker_num: 5, job_num: 10 });
+    let mut connector_storage = ConnectorStorage::new(
+        node.node_id,
+        ConnectorCfg {
+            sql_uri: args.db_uri,
+            s3_uri: args.s3_uri,
+            hook_url: args.hook_uri,
+            hook_workers: args.hook_workers,
+            hook_body_type: args.hook_body_type,
+            room_destroy_after_ms: args.destroy_room_after_ms,
+        },
+    )
+    .await;
+    let connector_querier = connector_storage.querier();
 
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
@@ -105,7 +119,7 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     let media_rpc_socket = vnet.udp_socket(CONNECTOR_RPC_PORT).await.expect("Should open virtual port for gateway rpc");
     let mut media_rpc_server = MediaConnectorServiceServer::new(
         QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert.clone()).expect("Should create endpoint for media rpc server")),
-        remote_rpc_handler::Ctx { storage: connector_storage.clone() },
+        remote_rpc_handler::Ctx { storage: Arc::new(connector_querier) },
         remote_rpc_handler::ConnectorRemoteRpcHandlerImpl::default(),
     );
 
@@ -123,7 +137,6 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     controller.service_control(HANDLER_SERVICE_ID.into(), (), handler_service::Control::Sub.into());
 
     let (connector_storage_tx, mut connector_storage_rx) = channel(1024);
-    let (connector_hook_tx, mut connector_hook_rx) = channel(1024);
     let (connector_handler_control_tx, mut connector_handler_control_rx) = channel(1024);
     tokio::task::spawn_local(async move {
         while let Some((from, ts, req_id, event)) = connector_storage_rx.recv().await {
@@ -147,23 +160,6 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
                     {
                         log::error!("[Connector] send control to service error {:?}", e);
                     }
-                }
-            }
-        }
-    });
-
-    tokio::task::spawn_local(async move {
-        let mut interval = time::interval(Duration::from_millis(10));
-        loop {
-            select! {
-                Some((from, ts, _req_id, req)) = connector_hook_rx.recv() => {
-                    hook_controller.on_event(from, ts, req);
-                }
-                _ = interval.tick()  => {
-                    hook_controller.on_tick().await;
-                }
-                else => {
-                    break;
                 }
             }
         }
@@ -196,11 +192,9 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
             match out {
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
                     media_server_connector::handler_service::Event::Req(from, ts, req_id, event) => {
-                        let ev = event.clone();
                         if let Err(e) = connector_storage_tx.send((from, ts, req_id, event)).await {
                             log::error!("[MediaConnector] send event to storage error {:?}", e);
                         }
-                        let _ = connector_hook_tx.send((from, ts, req_id, ev)).await;
                     }
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {

@@ -7,6 +7,8 @@ pub struct Model {
     pub id: i32,
     pub room: String,
     pub created_at: i64,
+    /// This is node timestamp
+    pub destroyed_at: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -1,17 +1,25 @@
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::{HashMap, VecDeque},
+    time::Duration,
+};
 
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, peer_event, PeerRes, RecordRes};
-use media_server_utils::{now_ms, CustomUri};
+use media_server_protocol::protobuf::cluster_connector::{
+    connector_request, connector_response, hook_event, peer_event,
+    room_event::{self, RoomAllPeersLeaved, RoomPeerJoined, RoomPeerLeaved, RoomStarted, RoomStopped},
+    HookEvent, PeerRes, RecordRes, RoomEvent,
+};
+use media_server_utils::CustomUri;
 use s3_presign::{Credentials, Presigner};
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
-    RelationTrait, Set,
+    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
+    QuerySelect, RelationTrait, Set,
 };
 use sea_orm_migration::MigratorTrait;
+use sea_query::{Expr, IntoCondition};
 use serde::Deserialize;
 
-use crate::{EventInfo, PagingResponse, PeerInfo, PeerSession, Querier, RoomInfo, SessionInfo, Storage};
+use crate::{ConnectorCfg, EventInfo, PagingResponse, PeerInfo, PeerSession, Querier, RoomInfo, SessionInfo, Storage};
 
 mod entity;
 mod migration;
@@ -22,15 +30,18 @@ pub struct S3Options {
     pub region: Option<String>,
 }
 
-pub struct ConnectorStorage {
+pub struct ConnectorSqlStorage {
+    node: NodeId,
     db: DatabaseConnection,
     s3: Presigner,
     s3_sub_folder: String,
+    room_destroy_after_ms: u64,
+    hook_events: VecDeque<HookEvent>,
 }
 
-impl ConnectorStorage {
-    pub async fn new(sql_uri: &str, s3_uri: &str) -> Self {
-        let mut opt = ConnectOptions::new(sql_uri.to_owned());
+impl ConnectorSqlStorage {
+    pub async fn new(node: NodeId, cfg: &ConnectorCfg) -> Self {
+        let mut opt = ConnectOptions::new(cfg.sql_uri.clone());
         opt.max_connections(100)
             .min_connections(5)
             .connect_timeout(Duration::from_secs(8))
@@ -43,7 +54,7 @@ impl ConnectorStorage {
         let db = Database::connect(opt).await.expect("Should connect to sql server");
         migration::Migrator::up(&db, None).await.expect("Should run migration success");
 
-        let s3_endpoint = CustomUri::<S3Options>::try_from(s3_uri).expect("should parse s3");
+        let s3_endpoint = CustomUri::<S3Options>::try_from(cfg.s3_uri.as_str()).expect("should parse s3");
         let mut s3 = Presigner::new(
             Credentials::new(s3_endpoint.username.expect("Should have s3 accesskey"), s3_endpoint.password.expect("Should have s3 secretkey"), None),
             s3_endpoint.path.first().as_ref().expect("Should have bucket name"),
@@ -56,71 +67,107 @@ impl ConnectorStorage {
 
         let s3_sub_folder = s3_endpoint.path[1..].join("/");
 
-        Self { db, s3, s3_sub_folder }
+        Self {
+            node,
+            db,
+            s3,
+            s3_sub_folder,
+            room_destroy_after_ms: cfg.room_destroy_after_ms,
+            hook_events: Default::default(),
+        }
     }
 
-    async fn on_peer_event(&self, from: NodeId, ts: u64, session: u64, event: peer_event::Event) -> Option<()> {
+    async fn close_exited_rooms(&mut self, now_ms: u64) -> Result<(), DbErr> {
+        let rooms = entity::room::Entity::find().filter(entity::room::Column::DestroyedAt.is_null()).limit(10).all(&self.db).await?;
+        for room in rooms {
+            let online_peers = self.online_peers_count(room.id).await?;
+            if online_peers == 0 {
+                let time_pivot = match self.last_leaved_peer(room.id).await? {
+                    Some(peer) => peer.leaved_at.expect("Should have leaved_at"),
+                    None => room.created_at,
+                };
+
+                if time_pivot as u64 + self.room_destroy_after_ms <= now_ms {
+                    log::info!("[ConnectorSqlStorage] room {} {} no-one online after {}ms => destroy", room.id, room.room, self.room_destroy_after_ms);
+                    let room_name = room.room.clone();
+                    let mut model: entity::room::ActiveModel = room.into();
+                    model.destroyed_at = Set(Some(now_ms as i64));
+                    model.save(&self.db).await?;
+
+                    // all peers leave room => fire event
+                    self.hook_events.push_back(HookEvent {
+                        node: self.node,
+                        ts: now_ms,
+                        event: Some(hook_event::Event::Room(RoomEvent {
+                            room: room_name,
+                            event: Some(room_event::Event::Stopped(RoomStopped {})),
+                        })),
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn on_peer_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, session: u64, event: peer_event::Event) -> Result<(), DbErr> {
         match event {
             peer_event::Event::RouteBegin(params) => {
                 entity::session::Entity::insert(entity::session::ActiveModel {
                     id: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     ip: Set(Some(params.remote_ip.clone())),
                     ..Default::default()
                 })
                 .exec(&self.db)
-                .await
-                .ok()?;
+                .await?;
 
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("RouteBegin".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
+                .await?;
 
-                Some(())
+                Ok(())
             }
             peer_event::Event::RouteSuccess(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("RouteSuccess".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::RouteError(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("RouteError".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::Connecting(params) => {
                 entity::session::Entity::insert(entity::session::ActiveModel {
                     id: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     ..Default::default()
                 })
                 .on_conflict(
@@ -128,295 +175,362 @@ impl ConnectorStorage {
                     OnConflict::column(entity::session::Column::Id).do_nothing().to_owned(),
                 )
                 .exec(&self.db)
-                .await
-                .ok()?;
+                .await?;
 
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("Connecting".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::Connected(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("Connected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::ConnectError(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("ConnectError".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::Stats(_) => todo!(),
             peer_event::Event::Reconnect(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("Reconnect".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::Reconnected(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("Reconnected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::Disconnected(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("Disconnected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::Join(params) => {
-                let room = self.upsert_room(&params.room).await?;
-                let peer = self.upsert_peer(room, &params.peer).await?;
-                let _peer_session = self.upsert_peer_session(peer, session, ts).await?;
+                let room = self.upsert_room(now_ms, event_ts, &params.room).await?;
+                let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
+                let _peer_session = self.upsert_peer_session(now_ms, peer, session, event_ts).await?;
+
+                // peer join room => fire event
+                self.hook_events.push_back(HookEvent {
+                    node: self.node,
+                    ts: event_ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        room: params.room.clone(),
+                        event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: params.peer.clone() })),
+                    })),
+                });
 
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("Join".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::Leave(params) => {
-                let room = self.upsert_room(&params.room).await?;
-                let peer = self.upsert_peer(room, &params.peer).await?;
+                // peer leave room => fire event
+                self.hook_events.push_back(HookEvent {
+                    node: self.node,
+                    ts: event_ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        room: params.room.clone(),
+                        event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: params.peer.clone() })),
+                    })),
+                });
+
+                let room = self.upsert_room(now_ms, event_ts, &params.room).await?;
+                let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
                 let peer_session = entity::peer_session::Entity::find()
                     .filter(entity::peer_session::Column::Peer.eq(peer))
                     .filter(entity::peer_session::Column::Session.eq(session))
                     .one(&self.db)
-                    .await
-                    .ok()?;
+                    .await?;
                 if let Some(peer_session) = peer_session {
                     let mut model: entity::peer_session::ActiveModel = peer_session.into();
-                    model.leaved_at = Set(Some(ts as i64));
-                    model.save(&self.db).await.ok()?;
+                    model.leaved_at = Set(Some(event_ts as i64));
+                    model.save(&self.db).await?;
+                }
+
+                let online_peers = self.online_peers_count(room).await?;
+
+                if online_peers == 0 {
+                    // all peers leave room => fire event
+                    self.hook_events.push_back(HookEvent {
+                        node: self.node,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Room(RoomEvent {
+                            room: params.room.clone(),
+                            event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {})),
+                        })),
+                    });
                 }
 
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("Leave".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::RemoteTrackStarted(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("RemoteTrackStarted".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::RemoteTrackEnded(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("RemoteTrackEnded".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::LocalTrack(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("LocalTrack".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::LocalTrackAttach(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("LocalTrackAttach".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
             peer_event::Event::LocalTrackDetach(params) => {
                 entity::event::ActiveModel {
                     node: Set(from as i64),
-                    node_ts: Set(ts as i64),
+                    node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
-                    created_at: Set(now_ms() as i64),
+                    created_at: Set(now_ms as i64),
                     event: Set("LocalTrackDetach".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
                     ..Default::default()
                 }
                 .insert(&self.db)
-                .await
-                .ok()?;
-                Some(())
+                .await?;
+                Ok(())
             }
         }
     }
 
-    async fn upsert_room(&self, room: &str) -> Option<i32> {
-        let room_row = entity::room::Entity::find().filter(entity::room::Column::Room.eq(room)).one(&self.db).await.ok()?;
+    async fn upsert_room(&mut self, now_ms: u64, event_ts: u64, room: &str) -> Result<i32, DbErr> {
+        let room_row = entity::room::Entity::find().filter(entity::room::Column::Room.eq(room)).one(&self.db).await?;
         if let Some(info) = room_row {
-            Some(info.id)
+            Ok(info.id)
         } else {
+            // new room created => fire event
+            self.hook_events.push_back(HookEvent {
+                node: self.node,
+                ts: event_ts,
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: room.to_owned(),
+                    event: Some(room_event::Event::Started(RoomStarted {})),
+                })),
+            });
+
             entity::room::ActiveModel {
                 room: Set(room.to_owned()),
-                created_at: Set(now_ms() as i64),
+                created_at: Set(now_ms as i64),
                 ..Default::default()
             }
             .insert(&self.db)
             .await
-            .ok()
             .map(|r| r.id)
         }
     }
 
-    async fn upsert_peer(&self, room: i32, peer: &str) -> Option<i32> {
+    async fn upsert_peer(&self, now_ms: u64, room: i32, peer: &str) -> Result<i32, DbErr> {
         let peer_row = entity::peer::Entity::find()
             .filter(entity::peer::Column::Room.eq(room))
             .filter(entity::peer::Column::Peer.eq(peer))
             .one(&self.db)
-            .await
-            .ok()?;
+            .await?;
         if let Some(info) = peer_row {
-            Some(info.id)
+            Ok(info.id)
         } else {
             entity::peer::ActiveModel {
                 room: Set(room),
                 peer: Set(peer.to_owned()),
-                created_at: Set(now_ms() as i64),
+                created_at: Set(now_ms as i64),
                 ..Default::default()
             }
             .insert(&self.db)
             .await
-            .ok()
             .map(|r| r.id)
         }
     }
 
-    async fn upsert_peer_session(&self, peer: i32, session: u64, ts: u64) -> Option<i32> {
+    async fn upsert_peer_session(&self, now_ms: u64, peer: i32, session: u64, event_ts: u64) -> Result<i32, DbErr> {
         let peer_row = entity::peer_session::Entity::find()
             .filter(entity::peer_session::Column::Session.eq(session))
             .filter(entity::peer_session::Column::Peer.eq(peer))
             .one(&self.db)
-            .await
-            .ok()?;
+            .await?;
         if let Some(info) = peer_row {
-            Some(info.id)
+            Ok(info.id)
         } else {
             entity::peer_session::ActiveModel {
                 session: Set(session as i64),
                 peer: Set(peer),
-                created_at: Set(now_ms() as i64),
-                joined_at: Set(ts as i64),
+                created_at: Set(now_ms as i64),
+                joined_at: Set(event_ts as i64),
                 ..Default::default()
             }
             .insert(&self.db)
             .await
-            .ok()
             .map(|r| r.id)
         }
     }
+
+    async fn online_peers_count(&self, room: i32) -> Result<u64, DbErr> {
+        entity::peer_session::Entity::find()
+            .filter(entity::peer_session::Column::LeavedAt.is_null())
+            .join(
+                JoinType::InnerJoin,
+                entity::peer_session::Relation::Peer
+                    .def()
+                    .on_condition(move |_left, right| Expr::col((right, entity::peer::Column::Room)).is(room).into_condition()),
+            )
+            .count(&self.db)
+            .await
+    }
+
+    async fn last_leaved_peer(&self, room: i32) -> Result<Option<entity::peer_session::Model>, DbErr> {
+        entity::peer_session::Entity::find()
+            .filter(entity::peer_session::Column::LeavedAt.is_not_null())
+            .join(
+                JoinType::InnerJoin,
+                entity::peer_session::Relation::Peer
+                    .def()
+                    .on_condition(move |_left, right| Expr::col((right, entity::peer::Column::Room)).is(room).into_condition()),
+            )
+            .order_by_desc(entity::peer_session::Column::LeavedAt)
+            .one(&self.db)
+            .await
+    }
 }
 
-impl Storage for ConnectorStorage {
-    async fn on_event(&self, from: NodeId, ts: u64, event: connector_request::Request) -> Option<connector_response::Response> {
+impl Storage for ConnectorSqlStorage {
+    type Q = ConnectorSqlQuerier;
+    fn querier(&mut self) -> Self::Q {
+        ConnectorSqlQuerier { db: self.db.clone() }
+    }
+    async fn on_tick(&mut self, now_ms: u64) {
+        if let Err(e) = self.close_exited_rooms(now_ms).await {
+            log::error!("[ConnectorSqlStorage] db error {e:?}");
+        }
+    }
+    async fn on_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, event: connector_request::Request) -> Option<connector_response::Response> {
         match event {
             connector_request::Request::Peer(event) => {
-                self.on_peer_event(from, ts, event.session_id, event.event?).await;
+                if let Err(e) = self.on_peer_event(now_ms, from, event_ts, event.session_id, event.event.clone()?).await {
+                    log::error!("[ConnectorSqlStorage] db error {e:?}");
+                }
+                self.hook_events.push_back(HookEvent {
+                    node: from,
+                    ts: event_ts,
+                    event: Some(hook_event::Event::Peer(event)),
+                });
                 Some(connector_response::Response::Peer(PeerRes {}))
             }
             connector_request::Request::Record(req) => {
@@ -432,6 +546,14 @@ impl Storage for ConnectorStorage {
             }
         }
     }
+
+    fn pop_hook_event(&mut self) -> Option<HookEvent> {
+        self.hook_events.pop_front()
+    }
+}
+
+pub struct ConnectorSqlQuerier {
+    db: DatabaseConnection,
 }
 
 #[derive(FromQueryResult)]
@@ -442,7 +564,8 @@ struct RoomInfoAndPeersCount {
     pub peers: i64,
 }
 
-impl Querier for ConnectorStorage {
+#[async_trait::async_trait]
+impl Querier for ConnectorSqlQuerier {
     async fn rooms(&self, page: usize, limit: usize) -> Result<PagingResponse<RoomInfo>, String> {
         let rooms = entity::room::Entity::find()
             .column_as(entity::peer::Column::Id.count(), "peers")
@@ -648,14 +771,15 @@ fn calc_page_num(elms: usize, page_size: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use media_server_protocol::protobuf::cluster_connector::{
-        connector_request,
-        peer_event::{Connected, Connecting, Event, Join, RouteBegin},
-        PeerEvent,
+        connector_request, hook_event,
+        peer_event::{Connected, Connecting, Event, Join, Leave, RouteBegin},
+        room_event::{self, RoomAllPeersLeaved, RoomPeerJoined, RoomPeerLeaved, RoomStarted, RoomStopped},
+        HookEvent, PeerEvent, RoomEvent,
     };
 
-    use crate::{Querier, Storage};
+    use crate::{ConnectorCfg, HookBodyType, Querier, Storage};
 
-    use super::{calc_page_num, ConnectorStorage};
+    use super::{calc_page_num, ConnectorSqlStorage};
 
     #[tokio::test]
     async fn test_event() {
@@ -663,30 +787,43 @@ mod tests {
         let node = 1;
         let ts = 1000;
         let remote_ip = "127.0.0.1".to_string();
-        let storage = ConnectorStorage::new("sqlite::memory:", "http://user:pass@localhost:9000/bucket").await;
-        storage
-            .on_event(
+        let cfg = ConnectorCfg {
+            sql_uri: "sqlite::memory:".to_owned(),
+            s3_uri: "http://user:pass@localhost:9000/bucket".to_owned(),
+            hook_url: None,
+            hook_workers: 0,
+            hook_body_type: HookBodyType::ProtobufJson,
+            room_destroy_after_ms: 300_000,
+        };
+        let mut storage = ConnectorSqlStorage::new(node, &cfg).await;
+        let querier = storage.querier();
+        let event = PeerEvent {
+            session_id,
+            event: Some(Event::RouteBegin(RouteBegin { remote_ip: remote_ip.clone() })),
+        };
+        storage.on_event(0, node, ts, connector_request::Request::Peer(event.clone())).await.expect("Should process event");
+
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
                 node,
                 ts,
-                connector_request::Request::Peer(PeerEvent {
-                    session_id,
-                    event: Some(Event::RouteBegin(RouteBegin { remote_ip: remote_ip.clone() })),
-                }),
-            )
-            .await
-            .expect("Should process event");
+                event: Some(hook_event::Event::Peer(event))
+            })
+        );
+        assert_eq!(storage.pop_hook_event(), None);
 
-        let sessions = storage.sessions(0, 2).await.expect("Should got sessions");
+        let sessions = querier.sessions(0, 2).await.expect("Should got sessions");
         assert_eq!(sessions.data.len(), 1);
         assert_eq!(sessions.total, 1);
         assert_eq!(sessions.current, 0);
 
-        let events = storage.events(None, None, None, 0, 2).await.expect("Should got events");
+        let events = querier.events(None, None, None, 0, 2).await.expect("Should got events");
         assert_eq!(events.data.len(), 1);
         assert_eq!(events.total, 1);
         assert_eq!(events.current, 0);
 
-        let session_events = storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events");
+        let session_events = querier.events(Some(session_id), None, None, 0, 2).await.expect("Should got events");
         assert_eq!(session_events.data.len(), 1);
         assert_eq!(session_events.total, 1);
         assert_eq!(session_events.current, 0);
@@ -698,78 +835,187 @@ mod tests {
         let node = 1;
         let ts = 1000;
         let remote_ip = "127.0.0.1".to_string();
-        let storage = ConnectorStorage::new("sqlite::memory:", "http://user:pass@localhost:9000/bucket").await;
+        let cfg = ConnectorCfg {
+            sql_uri: "sqlite::memory:".to_owned(),
+            s3_uri: "http://user:pass@localhost:9000/bucket".to_owned(),
+            hook_url: None,
+            hook_workers: 0,
+            hook_body_type: HookBodyType::ProtobufJson,
+            room_destroy_after_ms: 300_000,
+        };
+        let mut storage = ConnectorSqlStorage::new(node, &cfg).await;
+        let querier = storage.querier();
+        let connecting_event = PeerEvent {
+            session_id,
+            event: Some(Event::Connecting(Connecting { remote_ip: remote_ip.clone() })),
+        };
         storage
-            .on_event(
-                node,
-                ts,
-                connector_request::Request::Peer(PeerEvent {
-                    session_id,
-                    event: Some(Event::Connecting(Connecting { remote_ip: remote_ip.clone() })),
-                }),
-            )
+            .on_event(0, node, ts, connector_request::Request::Peer(connecting_event.clone()))
             .await
             .expect("Should process event");
 
-        let sessions = storage.sessions(0, 2).await.expect("Should got sessions");
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Peer(connecting_event))
+            })
+        );
+        assert_eq!(storage.pop_hook_event(), None);
+
+        let sessions = querier.sessions(0, 2).await.expect("Should got sessions");
         assert_eq!(sessions.data.len(), 1);
         assert_eq!(sessions.total, 1);
         assert_eq!(sessions.current, 0);
 
-        let events = storage.events(None, None, None, 0, 2).await.expect("Should got events");
+        let events = querier.events(None, None, None, 0, 2).await.expect("Should got events");
         assert_eq!(events.data.len(), 1);
         assert_eq!(events.total, 1);
         assert_eq!(events.current, 0);
 
-        let session_events = storage.events(Some(session_id), None, None, 0, 2).await.expect("Should got events");
+        let session_events = querier.events(Some(session_id), None, None, 0, 2).await.expect("Should got events");
         assert_eq!(session_events.data.len(), 1);
         assert_eq!(session_events.total, 1);
         assert_eq!(session_events.current, 0);
 
+        let connected_event = PeerEvent {
+            session_id,
+            event: Some(Event::Connected(Connected {
+                after_ms: 10,
+                remote_ip: remote_ip.clone(),
+            })),
+        };
         storage
-            .on_event(
-                node,
-                ts,
-                connector_request::Request::Peer(PeerEvent {
-                    session_id,
-                    event: Some(Event::Connected(Connected {
-                        after_ms: 10,
-                        remote_ip: remote_ip.clone(),
-                    })),
-                }),
-            )
+            .on_event(0, node, ts, connector_request::Request::Peer(connected_event.clone()))
             .await
             .expect("Should process event");
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Peer(connected_event))
+            })
+        );
+        assert_eq!(storage.pop_hook_event(), None);
 
-        let rooms = storage.rooms(0, 2).await.expect("Should got rooms");
+        let rooms = querier.rooms(0, 2).await.expect("Should got rooms");
         assert_eq!(rooms.data.len(), 0);
         assert_eq!(rooms.total, 0);
         assert_eq!(rooms.current, 0);
 
-        storage
-            .on_event(
+        let join_event = PeerEvent {
+            session_id,
+            event: Some(Event::Join(Join {
+                room: "demo".to_string(),
+                peer: "peer".to_string(),
+            })),
+        };
+        storage.on_event(0, node, ts, connector_request::Request::Peer(join_event.clone())).await.expect("Should process event");
+
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
                 node,
                 ts,
-                connector_request::Request::Peer(PeerEvent {
-                    session_id,
-                    event: Some(Event::Join(Join {
-                        room: "demo".to_string(),
-                        peer: "peer".to_string(),
-                    })),
-                }),
-            )
-            .await
-            .expect("Should process event");
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: "demo".to_owned(),
+                    event: Some(room_event::Event::Started(RoomStarted {}))
+                }))
+            })
+        );
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: "demo".to_owned(),
+                    event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
+                }))
+            })
+        );
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Peer(join_event))
+            })
+        );
+        assert_eq!(storage.pop_hook_event(), None);
 
-        let rooms = storage.rooms(0, 2).await.expect("Should got rooms");
+        let rooms = querier.rooms(0, 2).await.expect("Should got rooms");
         assert_eq!(rooms.data.len(), 1);
         assert_eq!(rooms.total, 1);
         assert_eq!(rooms.current, 0);
 
-        let peers = storage.peers(None, 0, 2).await.expect("Should got peers");
+        let peers = querier.peers(None, 0, 2).await.expect("Should got peers");
         assert_eq!(peers.data.len(), 1);
         assert_eq!(peers.total, 1);
         assert_eq!(peers.current, 0);
+
+        // now leave room
+        let leave_event = PeerEvent {
+            session_id,
+            event: Some(Event::Leave(Leave {
+                room: "demo".to_string(),
+                peer: "peer".to_string(),
+            })),
+        };
+        storage
+            .on_event(1000, node, ts, connector_request::Request::Peer(leave_event.clone()))
+            .await
+            .expect("Should process event");
+
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: "demo".to_string(),
+                    event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: "peer".to_string() }))
+                }))
+            })
+        );
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: "demo".to_owned(),
+                    event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {}))
+                }))
+            })
+        );
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Peer(leave_event))
+            })
+        );
+        assert_eq!(storage.pop_hook_event(), None);
+
+        // we will destroy room after timeout
+        storage.on_tick(1000 + cfg.room_destroy_after_ms).await;
+
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts: 1000 + cfg.room_destroy_after_ms,
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: "demo".to_owned(),
+                    event: Some(room_event::Event::Stopped(RoomStopped {}))
+                }))
+            })
+        );
+        assert_eq!(storage.pop_hook_event(), None);
     }
 
     //TODO: test with record link generate
@@ -781,4 +1027,7 @@ mod tests {
         assert_eq!(calc_page_num(99, 100), 1);
         assert_eq!(calc_page_num(100, 100), 1);
     }
+
+    #[tokio::test]
+    async fn room_hook_event() {}
 }
