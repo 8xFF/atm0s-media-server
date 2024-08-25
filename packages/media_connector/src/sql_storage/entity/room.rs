@@ -6,6 +6,8 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub room: String,
+    /// Record folder path
+    pub record: Option<String>,
     pub created_at: i64,
     /// This is node timestamp
     pub last_peer_leaved_at: Option<i64>,

@@ -8,6 +8,8 @@ pub struct Model {
     pub peer: i32,
     pub room: i32,
     pub session: i64,
+    /// Record folder path
+    pub record: Option<String>,
     pub created_at: i64,
     /// This is node timestamp
     pub joined_at: i64,

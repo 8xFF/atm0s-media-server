@@ -13,7 +13,13 @@ impl MigrationTrait for Migration {
             .alter_table(Table::alter().table(Room::Table).add_column(ColumnDef::new(Room::LastPeerLeavedAt).big_integer()).to_owned())
             .await?;
         manager
+            .alter_table(Table::alter().table(Room::Table).add_column(ColumnDef::new(Room::Record).string()).to_owned())
+            .await?;
+        manager
             .alter_table(Table::alter().table(PeerSession::Table).add_column(ColumnDef::new(PeerSession::Room).big_integer()).to_owned())
+            .await?;
+        manager
+            .alter_table(Table::alter().table(PeerSession::Table).add_column(ColumnDef::new(PeerSession::Record).string()).to_owned())
             .await?;
         let db = manager.get_connection();
         db.execute_unprepared(
@@ -43,7 +49,9 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager.alter_table(Table::alter().table(Room::Table).drop_column(Room::DestroyedAt).to_owned()).await?;
         manager.alter_table(Table::alter().table(Room::Table).drop_column(Room::LastPeerLeavedAt).to_owned()).await?;
+        manager.alter_table(Table::alter().table(Room::Table).drop_column(Room::Record).to_owned()).await?;
         manager.alter_table(Table::alter().table(PeerSession::Table).drop_column(PeerSession::Room).to_owned()).await?;
+        manager.alter_table(Table::alter().table(PeerSession::Table).drop_column(PeerSession::Record).to_owned()).await?;
         manager.drop_index(Index::drop().name("room_last_peer_leaved_at").table(Room::Table).to_owned()).await?;
         manager.drop_index(Index::drop().name("room_destroyed_at").table(Room::Table).to_owned()).await?;
         manager.drop_index(Index::drop().name("peer_session_leaved_at").table(PeerSession::Table).to_owned()).await?;
@@ -57,6 +65,7 @@ enum Room {
     Table,
     LastPeerLeavedAt,
     DestroyedAt,
+    Record,
 }
 
 #[derive(Iden)]
@@ -64,4 +73,5 @@ enum PeerSession {
     Table,
     Room,
     LeavedAt,
+    Record,
 }

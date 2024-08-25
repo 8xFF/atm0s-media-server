@@ -2,7 +2,7 @@ use sea_orm_migration::{MigrationTrait, MigratorTrait};
 
 mod m20240626_0001_init;
 mod m20240809_0001_change_node_id_i64;
-mod m20240824_0001_add_room_destroyed_at;
+mod m20240824_0001_add_room_destroy_and_record;
 
 pub struct Migrator;
 
@@ -12,7 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20240626_0001_init::Migration),
             Box::new(m20240809_0001_change_node_id_i64::Migration),
-            Box::new(m20240824_0001_add_room_destroyed_at::Migration),
+            Box::new(m20240824_0001_add_room_destroy_and_record::Migration),
         ]
     }
 }

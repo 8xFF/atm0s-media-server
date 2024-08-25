@@ -6,8 +6,9 @@ use std::{
 use atm0s_sdn::NodeId;
 use media_server_protocol::protobuf::cluster_connector::{
     connector_request, connector_response, hook_event, peer_event,
+    record_event::{self, RecordPeerJoined, RecordStarted},
     room_event::{self, RoomAllPeersLeaved, RoomPeerJoined, RoomPeerLeaved, RoomStarted, RoomStopped},
-    HookEvent, PeerRes, RecordRes, RoomEvent,
+    HookEvent, PeerRes, RecordEvent, RecordRes, RoomEvent,
 };
 use media_server_utils::CustomUri;
 use s3_presign::{Credentials, Presigner};
@@ -481,6 +482,7 @@ impl ConnectorSqlStorage {
         if let Some(info) = peer_row {
             Ok(info.id)
         } else {
+            log::info!("[ConnectorSqlStorage] new peer_session {peer} for internal_room_id {room}");
             entity::peer_session::ActiveModel {
                 session: Set(session as i64),
                 peer: Set(peer),
@@ -534,10 +536,65 @@ impl Storage for ConnectorSqlStorage {
                 Some(connector_response::Response::Peer(PeerRes {}))
             }
             connector_request::Request::Record(req) => {
-                let path = std::path::Path::new(&self.s3_sub_folder)
-                    .join(req.room)
-                    .join(req.peer)
-                    .join(req.session.to_string())
+                let room = entity::room::Entity::find()
+                    .filter(entity::room::Column::Room.eq(&req.room))
+                    .filter(entity::room::Column::DestroyedAt.is_null())
+                    .one(&self.db)
+                    .await
+                    .ok()??;
+                let room_id = room.id;
+                let room_path = if let Some(path) = room.record {
+                    path
+                } else {
+                    let room_path = std::path::Path::new(&self.s3_sub_folder).join(&req.room).join(room_id.to_string()).to_str()?.to_string();
+                    log::info!("[ConnectorSqlStorage] room {} record started in path: {room_path}", req.room);
+                    self.hook_events.push_back(HookEvent {
+                        node: from,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Record(RecordEvent {
+                            room: req.room.clone(),
+                            event: Some(record_event::Event::Started(RecordStarted { path: room_path.clone() })),
+                        })),
+                    });
+
+                    let mut model: entity::room::ActiveModel = room.into();
+                    model.record = Set(Some(room_path.clone()));
+                    model.save(&self.db).await.ok()?;
+                    room_path
+                };
+
+                let peer_session = entity::peer_session::Entity::find()
+                    .filter(entity::peer_session::Column::Session.eq(req.session as i64))
+                    .filter(entity::peer_session::Column::Room.eq(room_id))
+                    .order_by_desc(entity::peer_session::Column::CreatedAt)
+                    .one(&self.db)
+                    .await
+                    .ok()??;
+                let peer_path = if let Some(path) = peer_session.record {
+                    path
+                } else {
+                    let peer_path = std::path::Path::new(&req.peer).join(peer_session.id.to_string()).to_str()?.to_string();
+                    log::info!("[ConnectorSqlStorage] room {} peer {} record started in path: {peer_path}", req.room, req.peer);
+                    self.hook_events.push_back(HookEvent {
+                        node: from,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Record(RecordEvent {
+                            room: req.room.clone(),
+                            event: Some(record_event::Event::PeerJoined(RecordPeerJoined {
+                                peer: req.peer.clone(),
+                                path: peer_path.clone(),
+                            })),
+                        })),
+                    });
+
+                    let mut model: entity::peer_session::ActiveModel = peer_session.into();
+                    model.record = Set(Some(peer_path.clone()));
+                    model.save(&self.db).await.ok()?;
+                    peer_path
+                };
+
+                let path = std::path::Path::new(&room_path)
+                    .join(&peer_path)
                     .join(format!("{}-{}-{}.rec", req.index, req.from_ts, req.to_ts))
                     .to_str()?
                     .to_string();
