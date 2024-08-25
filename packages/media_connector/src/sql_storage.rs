@@ -594,7 +594,7 @@ impl Storage for ConnectorSqlStorage {
                 };
 
                 let path = std::path::Path::new(&room_path)
-                    .join(&peer_path)
+                    .join(peer_path)
                     .join(format!("{}-{}-{}.rec", req.index, req.from_ts, req.to_ts))
                     .to_str()?
                     .to_string();
