@@ -12,6 +12,7 @@ use media_server_protocol::{
     protobuf::cluster_connector::{connector_response, MediaConnectorServiceServer},
     rpc::quinn::QuinnServer,
 };
+use media_server_utils::select2;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use tokio::sync::mpsc::channel;
 
@@ -54,16 +55,21 @@ pub struct Args {
     hook_uri: Option<String>,
 
     /// Hook workers
-    /// #[arg(env, long, default_value_t = 8)]
+    #[arg(env, long, default_value_t = 8)]
     hook_workers: usize,
 
     /// Hook body type
-    /// #[arg(env, long, default_value = "ProtobufJson")]
+    #[arg(env, long, default_value = "protobuf-json")]
     hook_body_type: HookBodyType,
 
-    /// Destroy room after no-one online. default is 30 minutes
-    /// #[arg(env, long, default_value_t = 1_800_000)]
+    /// Destroy room after no-one online, default is 2 minutes
+    #[arg(env, long, default_value_t = 120_000)]
     destroy_room_after_ms: u64,
+
+    /// Storage tick interval, default is 1 minute
+    /// This is used for clearing ended room
+    #[arg(env, long, default_value_t = 60_000)]
+    storage_tick_interval_ms: u64,
 }
 
 pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
@@ -138,28 +144,39 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
 
     let (connector_storage_tx, mut connector_storage_rx) = channel(1024);
     let (connector_handler_control_tx, mut connector_handler_control_rx) = channel(1024);
+    let mut connector_storage_interval = tokio::time::interval(Duration::from_millis(args.storage_tick_interval_ms));
     tokio::task::spawn_local(async move {
-        while let Some((from, ts, req_id, event)) = connector_storage_rx.recv().await {
-            match connector_storage.on_event(from, ts, event).await {
-                Some(res) => {
-                    if let Err(e) = connector_handler_control_tx.send(handler_service::Control::Res(from, req_id, res)).await {
-                        log::error!("[Connector] send control to service error {:?}", e);
+        loop {
+            match select2::or(connector_storage_interval.tick(), connector_storage_rx.recv()).await {
+                select2::OrOutput::Left(_) => {
+                    connector_storage.on_tick().await;
+                }
+                select2::OrOutput::Right(Some((from, ts, req_id, event))) => {
+                    match connector_storage.on_event(from, ts, event).await {
+                        Some(res) => {
+                            if let Err(e) = connector_handler_control_tx.send(handler_service::Control::Res(from, req_id, res)).await {
+                                log::error!("[Connector] send control to service error {:?}", e);
+                            }
+                        }
+                        None => {
+                            if let Err(e) = connector_handler_control_tx
+                                .send(handler_service::Control::Res(
+                                    from,
+                                    req_id,
+                                    connector_response::Response::Error(connector_response::Error {
+                                        code: 0, //TODO return error from storage
+                                        message: "STORAGE_ERROR".to_string(),
+                                    }),
+                                ))
+                                .await
+                            {
+                                log::error!("[Connector] send control to service error {:?}", e);
+                            }
+                        }
                     }
                 }
-                None => {
-                    if let Err(e) = connector_handler_control_tx
-                        .send(handler_service::Control::Res(
-                            from,
-                            req_id,
-                            connector_response::Response::Error(connector_response::Error {
-                                code: 0, //TODO return error from storage
-                                message: "STORAGE_ERROR".to_string(),
-                            }),
-                        ))
-                        .await
-                    {
-                        log::error!("[Connector] send control to service error {:?}", e);
-                    }
+                select2::OrOutput::Right(None) => {
+                    break;
                 }
             }
         }

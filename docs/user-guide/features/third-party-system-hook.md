@@ -19,67 +19,36 @@ cargo run -- \
 
 ## Message format
 
-Message will sent to another system by using JSON format, defined here:
+Message will sent to another system by using JSON (serde and serde_json) or Binary format which is generated from Protobuf, defined by HookEvent message:
 
-```typescript
-{
-    uuid: string,
-    node: number,
-    ts: number,
-    event: 'session' | 'peer' | 'remote_track' | 'local_track',
-    payload: JSON
+```protobuf
+message HookEvent {
+    uint32 node = 1;
+    uint64 ts = 2;
+    oneof event {
+        RoomEvent room = 3;
+        PeerEvent peer = 4;
+        RecordEvent record = 5;
+    }
 }
 ```
 
-Each event will have an individual payload
+Example with Json:
 
-### Session payload
-
-```typescript
+```json
 {
-    session: number,
-    state: 'connecting' | 'connected' | 'reconnect' | 'disconnected' | 'reconnected' | 'connect_error'
-    remote_ip: string | null,
-    after_ms: number | null
-    duration: number | null,
-    reason: number | null,
-    error: number | null
-}
-```
-
-### Peer payload
-
-```typescript
-{
-    session: number,
-    peer: string,
-    room: string,
-    event: 'peer_joined' | 'peer_leaved'
-}
-```
-
-### Remote track payload
-
-```typescript
-{
-    session: number
-    track: string,
-    kind: number,
-    event: 'remote_track_started' | 'remote_track_ended'
-}
-```
-
-### Local track payload
-
-```typescript
-{
-    session: number,
-    track: number,
-    event: 'local_track' | 'local_track_attached' | 'local_track_detached',
-    kind: number | null,
-    remote_peer: string | null,
-    remote_track: string | null
-}
+  "node":1,
+  "ts":1724605969302,
+  "event":{
+    "Peer":{
+      "session_id":3005239549225289700,
+      "event":{
+        "RouteBegin":{
+          "remote_ip":"127.0.0.1"
+        }
+      }
+    }
+  }
 ```
 
 ## Supported Provider
@@ -87,4 +56,3 @@ Each event will have an individual payload
 | provider | status               | description                                             |
 | -------- | -------------------- | ------------------------------------------------------- |
 | webhook  | :white_check_mark:   | Will send each event using Restful API with POST method |
-| nats     | :white_large_square: |                                                         |

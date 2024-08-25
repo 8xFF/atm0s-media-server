@@ -122,6 +122,11 @@ impl ConnectorStorage {
 
     pub async fn on_tick(&mut self) {
         self.sql_storage.on_tick(now_ms()).await;
+        while let Some(event) = self.sql_storage.pop_hook_event() {
+            if let Some(hook) = &self.hook {
+                hook.on_event(event);
+            }
+        }
     }
 
     pub async fn on_event(&mut self, from: NodeId, ts: u64, req: connector_request::Request) -> Option<connector_response::Response> {

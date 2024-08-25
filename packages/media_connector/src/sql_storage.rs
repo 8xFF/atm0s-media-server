@@ -12,8 +12,8 @@ use media_server_protocol::protobuf::cluster_connector::{
 use media_server_utils::CustomUri;
 use s3_presign::{Credentials, Presigner};
 use sea_orm::{
-    sea_query::OnConflict, ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect, RelationTrait, Set,
+    ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
+    Set,
 };
 use sea_orm_migration::MigratorTrait;
 use sea_query::{Expr, IntoCondition};
@@ -84,7 +84,7 @@ impl ConnectorSqlStorage {
             .limit(100)
             .all(&self.db)
             .await?;
-        log::info!("[ConnectorSqlStorage] {} rooms without online sessions", rooms_wait_destroy.len());
+        log::info!("[ConnectorSqlStorage] clear {} rooms after {} ms inactive", rooms_wait_destroy.len(), self.room_destroy_after_ms);
 
         for room in rooms_wait_destroy {
             log::info!("[ConnectorSqlStorage] room {} {} no-one online after {}ms => destroy", room.id, room.room, self.room_destroy_after_ms);
@@ -108,17 +108,19 @@ impl ConnectorSqlStorage {
     }
 
     async fn on_peer_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, session: u64, event: peer_event::Event) -> Result<(), DbErr> {
+        if entity::session::Entity::find_by_id(session as i64).one(&self.db).await?.is_none() {
+            log::info!("[ConnectorSqlStorage] new session {session} from node {from}");
+            entity::session::Entity::insert(entity::session::ActiveModel {
+                id: Set(session as i64),
+                created_at: Set(now_ms as i64),
+                ..Default::default()
+            })
+            .exec(&self.db)
+            .await?;
+        }
+
         match event {
             peer_event::Event::RouteBegin(params) => {
-                entity::session::Entity::insert(entity::session::ActiveModel {
-                    id: Set(session as i64),
-                    created_at: Set(now_ms as i64),
-                    ip: Set(Some(params.remote_ip.clone())),
-                    ..Default::default()
-                })
-                .exec(&self.db)
-                .await?;
-
                 entity::event::ActiveModel {
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
@@ -162,18 +164,6 @@ impl ConnectorSqlStorage {
                 Ok(())
             }
             peer_event::Event::Connecting(params) => {
-                entity::session::Entity::insert(entity::session::ActiveModel {
-                    id: Set(session as i64),
-                    created_at: Set(now_ms as i64),
-                    ..Default::default()
-                })
-                .on_conflict(
-                    // on conflict do nothing
-                    OnConflict::column(entity::session::Column::Id).do_nothing().to_owned(),
-                )
-                .exec(&self.db)
-                .await?;
-
                 entity::event::ActiveModel {
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
@@ -313,6 +303,7 @@ impl ConnectorSqlStorage {
                 let online_peers = self.online_peers_count(room).await?;
 
                 if online_peers == 0 {
+                    log::info!("[ConnectorSqlStorage] last peer leaved room {}", params.room);
                     entity::room::Entity::update(entity::room::ActiveModel {
                         id: Set(room),
                         last_peer_leaved_at: Set(Some(now_ms as i64)),
@@ -428,6 +419,7 @@ impl ConnectorSqlStorage {
         if let Some(info) = room_row {
             let room_id = info.id;
             if info.last_peer_leaved_at.is_some() {
+                log::info!("[ConnectorSqlStorage] room {room} back to online => clear last_peer_leaved_at");
                 let mut model: entity::room::ActiveModel = info.into();
                 model.last_peer_leaved_at = Set(None);
                 model.save(&self.db).await?;
@@ -435,6 +427,7 @@ impl ConnectorSqlStorage {
 
             Ok(room_id)
         } else {
+            log::info!("[ConnectorSqlStorage] new room {room}");
             // new room created => fire event
             self.hook_events.push_back(HookEvent {
                 node: self.node,
@@ -465,6 +458,7 @@ impl ConnectorSqlStorage {
         if let Some(info) = peer_row {
             Ok(info.id)
         } else {
+            log::info!("[ConnectorSqlStorage] new peer {peer} joined internal_room_id {room}");
             entity::peer::ActiveModel {
                 room: Set(room),
                 peer: Set(peer.to_owned()),
@@ -481,6 +475,7 @@ impl ConnectorSqlStorage {
         let peer_row = entity::peer_session::Entity::find()
             .filter(entity::peer_session::Column::Session.eq(session))
             .filter(entity::peer_session::Column::Peer.eq(peer))
+            .filter(entity::peer_session::Column::LeavedAt.is_null())
             .one(&self.db)
             .await?;
         if let Some(info) = peer_row {
