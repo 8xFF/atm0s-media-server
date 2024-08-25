@@ -112,7 +112,7 @@ impl<ES: MediaEdgeSecure> MediaRuntimeWorker<ES> {
     fn process_out(&mut self, out: WorkerOutput) -> Output {
         match out {
             WorkerOutput::ExtRpc(req_id, res) => Output::Ext(true, ExtOut::Rpc(req_id, self.index, res)),
-            WorkerOutput::ExtSdn(out) => Output::Ext(false, ExtOut::Sdn(out)),
+            WorkerOutput::ExtSdn(out) => Output::Ext(true, ExtOut::Sdn(out)),
             WorkerOutput::Bus(event) => match &event {
                 SdnWorkerBusEvent::Control(_) => Output::Bus(BusControl::Channel(Owner::Sdn, BusChannelControl::Publish(Channel::Controller, true, event))),
                 SdnWorkerBusEvent::Workers(_) => Output::Bus(BusControl::Broadcast(true, event)),
