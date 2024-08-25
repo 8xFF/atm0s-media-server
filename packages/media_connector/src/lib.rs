@@ -32,6 +32,7 @@ pub struct RoomInfo {
     pub id: i32,
     pub room: String,
     pub created_at: u64,
+    pub destroyed_at: Option<u64>,
     pub peers: usize,
 }
 

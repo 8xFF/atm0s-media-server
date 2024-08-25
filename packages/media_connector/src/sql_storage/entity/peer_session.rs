@@ -6,6 +6,7 @@ pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub peer: i32,
+    pub room: i32,
     pub session: i64,
     pub created_at: i64,
     /// This is node timestamp
@@ -18,6 +19,8 @@ pub struct Model {
 pub enum Relation {
     #[sea_orm(belongs_to = "super::peer::Entity", from = "Column::Peer", to = "super::peer::Column::Id")]
     Peer,
+    #[sea_orm(belongs_to = "super::room::Entity", from = "Column::Room", to = "super::room::Column::Id")]
+    Room,
     #[sea_orm(belongs_to = "super::session::Entity", from = "Column::Session", to = "super::session::Column::Id")]
     Session,
 }
@@ -25,6 +28,12 @@ pub enum Relation {
 impl Related<super::peer::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Peer.def()
+    }
+}
+
+impl Related<super::room::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Room.def()
     }
 }
 

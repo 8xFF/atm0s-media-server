@@ -49,7 +49,7 @@ impl ConnectorSqlStorage {
             .idle_timeout(Duration::from_secs(8))
             .max_lifetime(Duration::from_secs(8))
             .sqlx_logging(false)
-            .sqlx_logging_level(log::LevelFilter::Warn); // Setting default PostgreSQL schema
+            .sqlx_logging_level(log::LevelFilter::Info); // Setting default PostgreSQL schema
 
         let db = Database::connect(opt).await.expect("Should connect to sql server");
         migration::Migrator::up(&db, None).await.expect("Should run migration success");
@@ -78,33 +78,30 @@ impl ConnectorSqlStorage {
     }
 
     async fn close_exited_rooms(&mut self, now_ms: u64) -> Result<(), DbErr> {
-        let rooms = entity::room::Entity::find().filter(entity::room::Column::DestroyedAt.is_null()).limit(10).all(&self.db).await?;
-        for room in rooms {
-            let online_peers = self.online_peers_count(room.id).await?;
-            if online_peers == 0 {
-                let time_pivot = match self.last_leaved_peer(room.id).await? {
-                    Some(peer) => peer.leaved_at.expect("Should have leaved_at"),
-                    None => room.created_at,
-                };
+        let rooms_wait_destroy = entity::room::Entity::find()
+            .filter(entity::room::Column::DestroyedAt.is_null())
+            .filter(entity::room::Column::LastPeerLeavedAt.lte(now_ms - self.room_destroy_after_ms))
+            .limit(100)
+            .all(&self.db)
+            .await?;
+        log::info!("[ConnectorSqlStorage] {} rooms without online sessions", rooms_wait_destroy.len());
 
-                if time_pivot as u64 + self.room_destroy_after_ms <= now_ms {
-                    log::info!("[ConnectorSqlStorage] room {} {} no-one online after {}ms => destroy", room.id, room.room, self.room_destroy_after_ms);
-                    let room_name = room.room.clone();
-                    let mut model: entity::room::ActiveModel = room.into();
-                    model.destroyed_at = Set(Some(now_ms as i64));
-                    model.save(&self.db).await?;
+        for room in rooms_wait_destroy {
+            log::info!("[ConnectorSqlStorage] room {} {} no-one online after {}ms => destroy", room.id, room.room, self.room_destroy_after_ms);
+            let room_name = room.room.clone();
+            let mut model: entity::room::ActiveModel = room.into();
+            model.destroyed_at = Set(Some(now_ms as i64));
+            model.save(&self.db).await?;
 
-                    // all peers leave room => fire event
-                    self.hook_events.push_back(HookEvent {
-                        node: self.node,
-                        ts: now_ms,
-                        event: Some(hook_event::Event::Room(RoomEvent {
-                            room: room_name,
-                            event: Some(room_event::Event::Stopped(RoomStopped {})),
-                        })),
-                    });
-                }
-            }
+            // all peers leave room => fire event
+            self.hook_events.push_back(HookEvent {
+                node: self.node,
+                ts: now_ms,
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: room_name,
+                    event: Some(room_event::Event::Stopped(RoomStopped {})),
+                })),
+            });
         }
 
         Ok(())
@@ -264,7 +261,7 @@ impl ConnectorSqlStorage {
             peer_event::Event::Join(params) => {
                 let room = self.upsert_room(now_ms, event_ts, &params.room).await?;
                 let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
-                let _peer_session = self.upsert_peer_session(now_ms, peer, session, event_ts).await?;
+                let _peer_session = self.upsert_peer_session(now_ms, room, peer, session, event_ts).await?;
 
                 // peer join room => fire event
                 self.hook_events.push_back(HookEvent {
@@ -316,6 +313,15 @@ impl ConnectorSqlStorage {
                 let online_peers = self.online_peers_count(room).await?;
 
                 if online_peers == 0 {
+                    entity::room::Entity::update(entity::room::ActiveModel {
+                        id: Set(room),
+                        last_peer_leaved_at: Set(Some(now_ms as i64)),
+                        ..Default::default()
+                    })
+                    .filter(entity::room::Column::Id.eq(room))
+                    .exec(&self.db)
+                    .await?;
+
                     // all peers leave room => fire event
                     self.hook_events.push_back(HookEvent {
                         node: self.node,
@@ -414,9 +420,20 @@ impl ConnectorSqlStorage {
     }
 
     async fn upsert_room(&mut self, now_ms: u64, event_ts: u64, room: &str) -> Result<i32, DbErr> {
-        let room_row = entity::room::Entity::find().filter(entity::room::Column::Room.eq(room)).one(&self.db).await?;
+        let room_row = entity::room::Entity::find()
+            .filter(entity::room::Column::Room.eq(room))
+            .filter(entity::room::Column::DestroyedAt.is_null())
+            .one(&self.db)
+            .await?;
         if let Some(info) = room_row {
-            Ok(info.id)
+            let room_id = info.id;
+            if info.last_peer_leaved_at.is_some() {
+                let mut model: entity::room::ActiveModel = info.into();
+                model.last_peer_leaved_at = Set(None);
+                model.save(&self.db).await?;
+            }
+
+            Ok(room_id)
         } else {
             // new room created => fire event
             self.hook_events.push_back(HookEvent {
@@ -460,7 +477,7 @@ impl ConnectorSqlStorage {
         }
     }
 
-    async fn upsert_peer_session(&self, now_ms: u64, peer: i32, session: u64, event_ts: u64) -> Result<i32, DbErr> {
+    async fn upsert_peer_session(&self, now_ms: u64, room: i32, peer: i32, session: u64, event_ts: u64) -> Result<i32, DbErr> {
         let peer_row = entity::peer_session::Entity::find()
             .filter(entity::peer_session::Column::Session.eq(session))
             .filter(entity::peer_session::Column::Peer.eq(peer))
@@ -472,6 +489,7 @@ impl ConnectorSqlStorage {
             entity::peer_session::ActiveModel {
                 session: Set(session as i64),
                 peer: Set(peer),
+                room: Set(room),
                 created_at: Set(now_ms as i64),
                 joined_at: Set(event_ts as i64),
                 ..Default::default()
@@ -494,20 +512,6 @@ impl ConnectorSqlStorage {
             .count(&self.db)
             .await
     }
-
-    async fn last_leaved_peer(&self, room: i32) -> Result<Option<entity::peer_session::Model>, DbErr> {
-        entity::peer_session::Entity::find()
-            .filter(entity::peer_session::Column::LeavedAt.is_not_null())
-            .join(
-                JoinType::InnerJoin,
-                entity::peer_session::Relation::Peer
-                    .def()
-                    .on_condition(move |_left, right| Expr::col((right, entity::peer::Column::Room)).is(room).into_condition()),
-            )
-            .order_by_desc(entity::peer_session::Column::LeavedAt)
-            .one(&self.db)
-            .await
-    }
 }
 
 impl Storage for ConnectorSqlStorage {
@@ -525,6 +529,7 @@ impl Storage for ConnectorSqlStorage {
             connector_request::Request::Peer(event) => {
                 if let Err(e) = self.on_peer_event(now_ms, from, event_ts, event.session_id, event.event.clone()?).await {
                     log::error!("[ConnectorSqlStorage] db error {e:?}");
+                    return None;
                 }
                 self.hook_events.push_back(HookEvent {
                     node: from,
@@ -561,6 +566,7 @@ struct RoomInfoAndPeersCount {
     pub id: i32,
     pub room: String,
     pub created_at: i64,
+    pub destroyed_at: Option<i64>,
     pub peers: i64,
 }
 
@@ -583,6 +589,7 @@ impl Querier for ConnectorSqlQuerier {
                 id: r.id,
                 room: r.room,
                 created_at: r.created_at as u64,
+                destroyed_at: r.destroyed_at.map(|t| t as u64),
                 peers: r.peers as usize,
             })
             .collect::<Vec<_>>();
@@ -1016,6 +1023,58 @@ mod tests {
             })
         );
         assert_eq!(storage.pop_hook_event(), None);
+
+        // now we will create new room
+        let ts = ts + 10000;
+        let join_event = PeerEvent {
+            session_id,
+            event: Some(Event::Join(Join {
+                room: "demo".to_string(),
+                peer: "peer".to_string(),
+            })),
+        };
+        storage.on_event(0, node, ts, connector_request::Request::Peer(join_event.clone())).await.expect("Should process event");
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: "demo".to_owned(),
+                    event: Some(room_event::Event::Started(RoomStarted {}))
+                }))
+            })
+        );
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Room(RoomEvent {
+                    room: "demo".to_owned(),
+                    event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
+                }))
+            })
+        );
+        assert_eq!(
+            storage.pop_hook_event(),
+            Some(HookEvent {
+                node,
+                ts,
+                event: Some(hook_event::Event::Peer(join_event))
+            })
+        );
+        assert_eq!(storage.pop_hook_event(), None);
+
+        let rooms = querier.rooms(0, 3).await.expect("Should got rooms");
+        assert_eq!(rooms.data.len(), 2);
+        assert_eq!(rooms.total, 1);
+        assert_eq!(rooms.current, 0);
+
+        let peers = querier.peers(None, 0, 3).await.expect("Should got peers");
+        assert_eq!(peers.data.len(), 2);
+        assert_eq!(peers.total, 1);
+        assert_eq!(peers.current, 0);
     }
 
     //TODO: test with record link generate
@@ -1027,7 +1086,4 @@ mod tests {
         assert_eq!(calc_page_num(99, 100), 1);
         assert_eq!(calc_page_num(100, 100), 1);
     }
-
-    #[tokio::test]
-    async fn room_hook_event() {}
 }
