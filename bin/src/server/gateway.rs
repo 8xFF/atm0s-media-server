@@ -76,6 +76,11 @@ pub struct Args {
     /// The port for binding the RTPengine command UDP socket.
     #[arg(env, long)]
     rtpengine_cmd_addr: Option<SocketAddr>,
+
+    /// External HTTP endpoint URI for third-party authentication and authorization.
+    /// The URI should be in the format of `http(s)://<host>:<port>` or `http(s)://example.com`, without the backslash at the end.
+    #[arg(env, long)]
+    ext_auth_uri: Option<String>,
 }
 
 pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -96,7 +101,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         let req_tx = req_tx.clone();
         let secure2 = edge_secure.clone();
         tokio::spawn(async move {
-            if let Err(e) = run_gateway_http_server(http_port, req_tx, secure2, gateway_secure).await {
+            if let Err(e) = run_gateway_http_server(http_port, req_tx, secure2, gateway_secure, args.ext_auth_uri).await {
                 log::error!("HTTP Error: {}", e);
             }
         });

@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 use media_server_protocol::{
     cluster::gen_cluster_session_id,
@@ -28,6 +28,7 @@ use super::utils::{ApplicationSdp, ApplicationSdpPatch, CustomHttpResponse, Prot
 pub struct MediaServerCtx<S: MediaEdgeSecure + Send + Sync> {
     pub(crate) sender: tokio::sync::mpsc::Sender<Rpc<RpcReq<ClusterConnId>, RpcRes<ClusterConnId>>>,
     pub(crate) secure: Arc<S>,
+    pub(crate) ext_auth_uri: Option<String>,
 }
 
 impl<S: MediaEdgeSecure + Send + Sync> Clone for MediaServerCtx<S> {
@@ -35,6 +36,7 @@ impl<S: MediaEdgeSecure + Send + Sync> Clone for MediaServerCtx<S> {
         Self {
             sender: self.sender.clone(),
             secure: self.secure.clone(),
+            ext_auth_uri: self.ext_auth_uri.clone(),
         }
     }
 }
@@ -60,7 +62,22 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let session_id = gen_cluster_session_id();
-        let token = ctx.secure.decode_obj::<WhipToken>("whip", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let token_str = &token.token;
+        let token = ctx.secure.decode_obj::<WhipToken>("whip", token_str).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        if let Some(auth_uri) = &ctx.ext_auth_uri {
+            log::info!(
+                "[MediaAPIs][whip/create] trying to authenticate peer {} for room {} using external URI provided: {}",
+                token.peer,
+                token.room,
+                auth_uri
+            );
+            let client = reqwest::Client::new();
+            let res = client.get(format!("{}/whip/create", auth_uri)).timeout(Duration::from_secs(5)).bearer_auth(token_str).send().await;
+            if res.is_err() || res.is_ok_and(|r| !r.status().is_success()) {
+                log::info!("[MediaAPIs] failed to authenticate user");
+                return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
+            }
+        }
         log::info!("[MediaAPIs] create whip endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::Connect(WhipConnectReq {
             session_id,
@@ -158,7 +175,22 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let session_id = gen_cluster_session_id();
-        let token = ctx.secure.decode_obj::<WhepToken>("whep", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let token_str = &token.token;
+        let token = ctx.secure.decode_obj::<WhepToken>("whep", token_str).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        if let Some(auth_uri) = &ctx.ext_auth_uri {
+            log::info!(
+                "[MediaAPIs][whep/create] trying to authenticate peer {:?} for room {} using external URI provided: {}",
+                token.peer,
+                token.room,
+                auth_uri
+            );
+            let client = reqwest::Client::new();
+            let res = client.get(format!("{}/whep/create", auth_uri)).timeout(Duration::from_secs(5)).bearer_auth(token_str).send().await;
+            if res.is_err() || res.is_ok_and(|r| !r.status().is_success()) {
+                log::info!("[MediaAPIs] failed to authenticate user");
+                return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
+            }
+        }
         log::info!("[MediaAPIs] create whep endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whep(whep::RpcReq::Connect(WhepConnectReq {
             session_id,
@@ -255,7 +287,22 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
         connect: Protobuf<ConnectRequest>,
     ) -> Result<HttpResponse<Protobuf<ConnectResponse>>> {
         let session_id = gen_cluster_session_id();
-        let token = ctx.secure.decode_obj::<WebrtcToken>("webrtc", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let token_str = &token.token;
+        let token = ctx.secure.decode_obj::<WebrtcToken>("webrtc", token_str).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        if let Some(auth_uri) = &ctx.ext_auth_uri {
+            log::info!(
+                "[MediaAPIs][webrtc/connect] trying to authenticate peer {:?} for room {:?} using external URI provided: {}",
+                token.peer,
+                token.room,
+                auth_uri
+            );
+            let client = reqwest::Client::new();
+            let res = client.get(format!("{}/webrtc/connect", auth_uri)).timeout(Duration::from_secs(5)).bearer_auth(token_str).send().await;
+            if res.is_err() || res.is_ok_and(|r| !r.status().is_success()) {
+                log::info!("[MediaAPIs] failed to authenticate user");
+                return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
+            }
+        }
         log::info!("[MediaAPIs] create webrtc with token {:?}, ip {}, user_agent {}, request {:?}", token, ip_addr, user_agent, connect);
         if let Some(join) = &connect.join {
             if token.room != Some(join.room.clone()) {
@@ -324,7 +371,27 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> MediaApis<S> {
         connect: Protobuf<ConnectRequest>,
     ) -> Result<HttpResponse<Protobuf<ConnectResponse>>> {
         let conn_id2 = conn_id.0.parse().map_err(|_e| poem::Error::from_status(StatusCode::BAD_REQUEST))?;
-        let token = ctx.secure.decode_obj::<WebrtcToken>("webrtc", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let token_str = &token.token;
+        let token = ctx.secure.decode_obj::<WebrtcToken>("webrtc", token_str).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        if let Some(auth_uri) = &ctx.ext_auth_uri {
+            log::info!(
+                "[MediaAPIs][webrtc/restart-ice] trying to authenticate peer {:?} for room {:?} using external URI provided: {}",
+                token.peer,
+                token.room,
+                auth_uri
+            );
+            let client = reqwest::Client::new();
+            let res = client
+                .get(format!("{}/webrtc/restart-ice", auth_uri))
+                .timeout(Duration::from_secs(5))
+                .bearer_auth(token_str)
+                .send()
+                .await;
+            if res.is_err() || res.is_ok_and(|r| !r.status().is_success()) {
+                log::info!("[MediaAPIs] failed to authenticate user");
+                return Err(poem::Error::from_status(StatusCode::UNAUTHORIZED));
+            }
+        }
         if let Some(join) = &connect.join {
             if token.room != Some(join.room.clone()) {
                 return Err(poem::Error::from_string("Wrong room".to_string(), StatusCode::FORBIDDEN));
