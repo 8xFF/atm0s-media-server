@@ -20,11 +20,14 @@ members = [
 [workspace.dependencies]
 sans-io-runtime = { version = "0.2", default-features = false }
 atm0s-sdn = { version = "0.2.2", default-features = false }
+tokio = "1.37"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
 convert-enum = "0.1"
+clap = "4.5"
 num_enum = "0.7"
 log = "0.4"
 smallmap = "1.4"
+serde = "1.0"
 derivative = "2.2"
 derive_more = "1.0"
 rand = "0.8"

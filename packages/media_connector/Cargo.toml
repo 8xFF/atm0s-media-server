@@ -5,11 +5,13 @@ edition = "2021"
 
 [dependencies]
 log = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
+clap = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 media-server-protocol = { path = "../protocol" }
 media-server-utils = { path = "../media_utils" }
 atm0s-sdn = { workspace = true }
 prost = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 lru = "0.12"
 async-trait = "0.1"
 sea-orm-migration = "1.1.0-rc.1"
@@ -19,9 +21,12 @@ sea-orm = { version = "1.1.0-rc.1", features = [
     "sqlx-mysql",
     "runtime-tokio-rustls",
 ] }
-sea-query = "0.31"
+sea-query = "0.32.0-rc.1"
 serde_json = "1.0"
 s3-presign = "0.0.2"
+uuid = {version = "1.10", features = ["fast-rng", "v7"]}
+reqwest = { version = "0.12", features = ["json"]}
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+tracing-subscriber = { workspace = true }

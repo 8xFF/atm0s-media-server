@@ -4,8 +4,7 @@ use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, service
 use clap::Parser;
 use media_server_connector::{
     handler_service::{self, ConnectorHandlerServiceBuilder},
-    sql_storage::ConnectorStorage,
-    Storage, HANDLER_SERVICE_ID,
+    ConnectorCfg, ConnectorStorage, HookBodyType, HANDLER_SERVICE_ID,
 };
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
@@ -13,6 +12,7 @@ use media_server_protocol::{
     protobuf::cluster_connector::{connector_response, MediaConnectorServiceServer},
     rpc::quinn::QuinnServer,
 };
+use media_server_utils::select2;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use tokio::sync::mpsc::channel;
 
@@ -48,12 +48,46 @@ pub struct Args {
     /// S3 Uri
     #[arg(env, long, default_value = "http://user:pass@localhost:9000/bucket/path/?path_style=true")]
     s3_uri: String,
+
+    /// Hook Uri.
+    /// If set, will send hook event to this uri. example: http://localhost:8080/hook
+    #[arg(env, long)]
+    hook_uri: Option<String>,
+
+    /// Hook workers
+    #[arg(env, long, default_value_t = 8)]
+    hook_workers: usize,
+
+    /// Hook body type
+    #[arg(env, long, default_value = "protobuf-json")]
+    hook_body_type: HookBodyType,
+
+    /// Destroy room after no-one online, default is 2 minutes
+    #[arg(env, long, default_value_t = 120_000)]
+    destroy_room_after_ms: u64,
+
+    /// Storage tick interval, default is 1 minute
+    /// This is used for clearing ended room
+    #[arg(env, long, default_value_t = 60_000)]
+    storage_tick_interval_ms: u64,
 }
 
 pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
-    let connector_storage = Arc::new(ConnectorStorage::new(&args.db_uri, &args.s3_uri).await);
+    let mut connector_storage = ConnectorStorage::new(
+        node.node_id,
+        ConnectorCfg {
+            sql_uri: args.db_uri,
+            s3_uri: args.s3_uri,
+            hook_url: args.hook_uri,
+            hook_workers: args.hook_workers,
+            hook_body_type: args.hook_body_type,
+            room_destroy_after_ms: args.destroy_room_after_ms,
+        },
+    )
+    .await;
+    let connector_querier = connector_storage.querier();
 
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
@@ -91,7 +125,7 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     let media_rpc_socket = vnet.udp_socket(CONNECTOR_RPC_PORT).await.expect("Should open virtual port for gateway rpc");
     let mut media_rpc_server = MediaConnectorServiceServer::new(
         QuinnServer::new(make_quinn_server(media_rpc_socket, default_cluster_key, default_cluster_cert.clone()).expect("Should create endpoint for media rpc server")),
-        remote_rpc_handler::Ctx { storage: connector_storage.clone() },
+        remote_rpc_handler::Ctx { storage: Arc::new(connector_querier) },
         remote_rpc_handler::ConnectorRemoteRpcHandlerImpl::default(),
     );
 
@@ -110,28 +144,39 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
 
     let (connector_storage_tx, mut connector_storage_rx) = channel(1024);
     let (connector_handler_control_tx, mut connector_handler_control_rx) = channel(1024);
+    let mut connector_storage_interval = tokio::time::interval(Duration::from_millis(args.storage_tick_interval_ms));
     tokio::task::spawn_local(async move {
-        while let Some((from, ts, req_id, event)) = connector_storage_rx.recv().await {
-            match connector_storage.on_event(from, ts, event).await {
-                Some(res) => {
-                    if let Err(e) = connector_handler_control_tx.send(handler_service::Control::Res(from, req_id, res)).await {
-                        log::error!("[Connector] send control to service error {:?}", e);
+        loop {
+            match select2::or(connector_storage_interval.tick(), connector_storage_rx.recv()).await {
+                select2::OrOutput::Left(_) => {
+                    connector_storage.on_tick().await;
+                }
+                select2::OrOutput::Right(Some((from, ts, req_id, event))) => {
+                    match connector_storage.on_event(from, ts, event).await {
+                        Some(res) => {
+                            if let Err(e) = connector_handler_control_tx.send(handler_service::Control::Res(from, req_id, res)).await {
+                                log::error!("[Connector] send control to service error {:?}", e);
+                            }
+                        }
+                        None => {
+                            if let Err(e) = connector_handler_control_tx
+                                .send(handler_service::Control::Res(
+                                    from,
+                                    req_id,
+                                    connector_response::Response::Error(connector_response::Error {
+                                        code: 0, //TODO return error from storage
+                                        message: "STORAGE_ERROR".to_string(),
+                                    }),
+                                ))
+                                .await
+                            {
+                                log::error!("[Connector] send control to service error {:?}", e);
+                            }
+                        }
                     }
                 }
-                None => {
-                    if let Err(e) = connector_handler_control_tx
-                        .send(handler_service::Control::Res(
-                            from,
-                            req_id,
-                            connector_response::Response::Error(connector_response::Error {
-                                code: 0, //TODO return error from storage
-                                message: "STORAGE_ERROR".to_string(),
-                            }),
-                        ))
-                        .await
-                    {
-                        log::error!("[Connector] send control to service error {:?}", e);
-                    }
+                select2::OrOutput::Right(None) => {
+                    break;
                 }
             }
         }

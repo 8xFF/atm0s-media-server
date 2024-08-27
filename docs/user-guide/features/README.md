@@ -10,3 +10,4 @@ In this document, we will explore the key features of atm0s-media-server. Curren
 | [Recording](./recording.md)                                 | TODO   |
 | [Cluster](./cluster.md)                                     | Alpha  |
 | [extra_data-metadata](./extra_data-metadata.md)                 | Alpha  |
+| [Third party event hook](./third-party-system-hook.md) | Alpha |

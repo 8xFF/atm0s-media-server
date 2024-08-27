@@ -381,15 +381,12 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
 impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     fn output_sdn(&mut self, now: Instant, out: SdnWorkerOutput<UserData, SC, SE, TC, TW>) -> Output {
         match out {
-            SdnWorkerOutput::Ext(out) => Output::ExtSdn(out),
-            SdnWorkerOutput::ExtWorker(out) => match out {
-                SdnExtOut::FeaturesEvent(UserData::Cluster, _event) => Output::Continue,
+            SdnWorkerOutput::Ext(out) | SdnWorkerOutput::ExtWorker(out) => match out {
                 SdnExtOut::FeaturesEvent(UserData::Room(room), event) => {
                     self.media_cluster.input(&mut self.switcher).on_sdn_event(now, room, event);
                     Output::Continue
                 }
-                SdnExtOut::FeaturesEvent(UserData::Record(..), ..) => Output::Continue,
-                SdnExtOut::ServicesEvent(..) => Output::Continue,
+                _ => Output::ExtSdn(out),
             },
             SdnWorkerOutput::Net(out) => match out {
                 NetOutput::UdpPacket(pair, data) => {

@@ -1,11 +1,17 @@
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response};
+use hooks::ConnectorHookSender;
+use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, HookEvent};
+use media_server_utils::now_ms;
 use serde_json::Value;
+use sql_storage::{ConnectorSqlQuerier, ConnectorSqlStorage};
 
 pub mod agent_service;
 pub mod handler_service;
+pub mod hooks;
 mod msg_queue;
-pub mod sql_storage;
+mod sql_storage;
+
+pub use hooks::HookBodyType;
 
 pub const DATA_PORT: u16 = 10002;
 
@@ -26,6 +32,7 @@ pub struct RoomInfo {
     pub id: i32,
     pub room: String,
     pub created_at: u64,
+    pub destroyed_at: Option<u64>,
     pub peers: usize,
 }
 
@@ -71,13 +78,66 @@ pub struct EventInfo {
     pub meta: Option<Value>,
 }
 
-pub trait Storage {
-    fn on_event(&self, from: NodeId, ts: u64, req: connector_request::Request) -> impl std::future::Future<Output = Option<connector_response::Response>> + Send;
+pub struct ConnectorCfg {
+    pub sql_uri: String,
+    pub s3_uri: String,
+    pub hook_url: Option<String>,
+    pub hook_workers: usize,
+    pub hook_body_type: HookBodyType,
+    pub room_destroy_after_ms: u64,
 }
 
+pub trait Storage {
+    type Q: Querier;
+    fn querier(&mut self) -> Self::Q;
+    fn on_tick(&mut self, now_ms: u64) -> impl std::future::Future<Output = ()> + Send;
+    fn on_event(&mut self, now_ms: u64, from: NodeId, req_ts: u64, req: connector_request::Request) -> impl std::future::Future<Output = Option<connector_response::Response>> + Send;
+    fn pop_hook_event(&mut self) -> Option<HookEvent>;
+}
+
+#[async_trait::async_trait]
 pub trait Querier {
-    fn rooms(&self, page: usize, count: usize) -> impl std::future::Future<Output = Result<PagingResponse<RoomInfo>, String>> + Send;
-    fn peers(&self, room: Option<i32>, page: usize, count: usize) -> impl std::future::Future<Output = Result<PagingResponse<PeerInfo>, String>> + Send;
-    fn sessions(&self, page: usize, count: usize) -> impl std::future::Future<Output = Result<PagingResponse<SessionInfo>, String>> + Send;
-    fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> impl std::future::Future<Output = Result<PagingResponse<EventInfo>, String>> + Send;
+    async fn rooms(&self, page: usize, count: usize) -> Result<PagingResponse<RoomInfo>, String>;
+    async fn peers(&self, room: Option<i32>, page: usize, count: usize) -> Result<PagingResponse<PeerInfo>, String>;
+    async fn sessions(&self, page: usize, count: usize) -> Result<PagingResponse<SessionInfo>, String>;
+    async fn events(&self, session: Option<u64>, from: Option<u64>, to: Option<u64>, page: usize, count: usize) -> Result<PagingResponse<EventInfo>, String>;
+}
+
+pub struct ConnectorStorage {
+    sql_storage: ConnectorSqlStorage,
+    hook: Option<ConnectorHookSender>,
+}
+
+impl ConnectorStorage {
+    pub async fn new(node: NodeId, cfg: ConnectorCfg) -> Self {
+        Self {
+            sql_storage: ConnectorSqlStorage::new(node, &cfg).await,
+            hook: cfg.hook_url.map(move |url| ConnectorHookSender::new(cfg.hook_workers, cfg.hook_body_type, &url)),
+        }
+    }
+
+    pub fn querier(&mut self) -> ConnectorSqlQuerier {
+        self.sql_storage.querier()
+    }
+
+    pub async fn on_tick(&mut self) {
+        self.sql_storage.on_tick(now_ms()).await;
+        while let Some(event) = self.sql_storage.pop_hook_event() {
+            if let Some(hook) = &self.hook {
+                hook.on_event(event);
+            }
+        }
+    }
+
+    pub async fn on_event(&mut self, from: NodeId, ts: u64, req: connector_request::Request) -> Option<connector_response::Response> {
+        let res = self.sql_storage.on_event(now_ms(), from, ts, req).await?;
+
+        while let Some(event) = self.sql_storage.pop_hook_event() {
+            if let Some(hook) = &self.hook {
+                hook.on_event(event);
+            }
+        }
+
+        Some(res)
+    }
 }

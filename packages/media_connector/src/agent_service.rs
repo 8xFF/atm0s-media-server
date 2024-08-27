@@ -57,7 +57,7 @@ impl<UserData, SC, SE, TC, TW> ConnectorAgentService<UserData, SC, SE, TC, TW> {
     }
 }
 
-impl<UserData: Copy + Eq, SC, SE, TC, TW> Service<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW> for ConnectorAgentService<UserData, SC, SE, TC, TW>
+impl<UserData: Copy + Debug + Eq, SC, SE, TC, TW> Service<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW> for ConnectorAgentService<UserData, SC, SE, TC, TW>
 where
     SC: From<Control> + TryInto<Control> + Debug,
     SE: From<Event> + TryInto<Event>,
@@ -114,10 +114,12 @@ where
                 data::Event::Recv(_port, _meta, buf) => match ConnectorResponse::decode(buf.as_slice()) {
                     Ok(msg) => {
                         if let Some(actor) = self.req_data.remove(&msg.req_id) {
-                            log::info!("[ConnectorAgent] on msg response {:?}", msg);
                             self.msg_queue.on_ack(msg.req_id);
                             if let Some(res) = msg.response {
+                                log::info!("[ConnectorAgent] on msg {} response {res:?}, feedback to {actor:?}", msg.req_id);
                                 self.queue.push_back(ServiceOutput::Event(actor, Event::Response(res).into()));
+                            } else {
+                                log::warn!("[ConnectorAgent] on msg {} response None", msg.req_id);
                             }
                         } else {
                             log::warn!("[ConnectorAgent] missing info for msg response {:?}", msg);

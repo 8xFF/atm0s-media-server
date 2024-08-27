@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use media_server_connector::{sql_storage, Querier};
+use media_server_connector::Querier;
 use media_server_protocol::protobuf::cluster_connector::{
     get_events::EventInfo, get_peers::PeerInfo, get_rooms::RoomInfo, get_sessions::SessionInfo, GetEventParams, GetEvents, GetParams, GetPeerParams, GetPeers, GetRooms, GetSessions,
     MediaConnectorServiceHandler, PeerSession,
@@ -9,7 +9,7 @@ use media_server_protocol::protobuf::shared::Pagination;
 
 #[derive(Clone)]
 pub struct Ctx {
-    pub storage: Arc<sql_storage::ConnectorStorage>, //TODO make it generic
+    pub storage: Arc<dyn Querier>, //TODO make it generic
 }
 
 #[derive(Default)]
