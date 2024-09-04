@@ -3001,6 +3001,7 @@ name = "media-server-codecs"
 version = "0.1.0"
 dependencies = [
  "libsoxr",
+ "log",
  "opusic-sys",
 ]
 

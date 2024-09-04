@@ -53,8 +53,12 @@ impl MediaWorkerRtpEngine {
         }
     }
 
-    pub fn spawn(&mut self, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: &str) -> RpcResult<(usize, String)> {
-        let (tran, answer) = TransportRtpEngine::new(room, peer, self.ip, offer).map_err(|e| RpcError::new(1000_u32, &e))?;
+    pub fn spawn(&mut self, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: Option<&str>) -> RpcResult<(usize, String)> {
+        let (tran, answer) = if let Some(offer) = offer {
+            TransportRtpEngine::new_answer(room, peer, self.ip, offer).map_err(|e| RpcError::new(1000_u32, &e))?
+        } else {
+            TransportRtpEngine::new_offer(room, peer, self.ip).map_err(|e| RpcError::new(1000_u32, &e))?
+        };
         let cfg = EndpointCfg {
             max_ingress_bitrate: 2_500_000,
             max_egress_bitrate: 2_500_000,
@@ -102,6 +106,9 @@ impl MediaWorkerRtpEngine {
             GroupInput::Ext(owner, ext) => {
                 log::info!("[MediaWorkerRtpEngine] on ext to owner {:?}", owner);
                 match ext {
+                    ExtIn::SetAnswer(req_id, sdp) => {
+                        self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ExtIn::SetAnswer(req_id, sdp)));
+                    }
                     ExtIn::Disconnect(req_id) => {
                         self.endpoints.on_event(now, owner.index(), EndpointInput::Ext(ExtIn::Disconnect(req_id)));
                     }

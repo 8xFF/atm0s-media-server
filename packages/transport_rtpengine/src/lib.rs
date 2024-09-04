@@ -9,4 +9,6 @@ pub use worker::{GroupInput, GroupOutput, MediaWorkerRtpEngine, RtpEngineSession
 pub enum RtpEngineError {
     InvalidSdp = 0x2000,
     InternalServerError = 0x2001,
+    SdpConnectionNotFound = 0x2002,
+    SdpMediaNotFound = 0x2003,
 }

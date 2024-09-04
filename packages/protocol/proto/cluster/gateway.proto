@@ -59,7 +59,9 @@ service MediaEdge {
     rpc WebrtcRemoteIce (WebrtcRemoteIceRequest) returns (WebrtcRemoteIceResponse);
     rpc WebrtcRestartIce (WebrtcRestartIceRequest) returns (WebrtcRestartIceResponse);
 
-    rpc RtpEngineConnect (RtpEngineConnectRequest) returns (RtpEngineConnectResponse);
+    rpc RtpEngineCreateOffer (RtpEngineCreateOfferRequest) returns (RtpEngineCreateOfferResponse);
+    rpc RtpEngineSetAnswer (RtpEngineSetAnswerRequest) returns (RtpEngineSetAnswerResponse);
+    rpc RtpEngineCreateAnswer (RtpEngineCreateAnswerRequest) returns (RtpEngineCreateAnswerResponse);
     rpc RtpEngineDelete (RtpEngineDeleteRequest) returns (RtpEngineDeleteResponse);
 }
 
@@ -167,7 +169,29 @@ message WebrtcRestartIceResponse {
 }
 
 //For RtpEngine
-message RtpEngineConnectRequest {
+message RtpEngineCreateOfferRequest {
+    uint64 session_id = 1;
+    string room = 2;
+    string peer = 3;
+    bool record = 5;
+    optional string extra_data = 6;
+}
+
+message RtpEngineCreateOfferResponse {
+    string conn = 1;
+    string sdp = 2;
+}
+
+message RtpEngineSetAnswerRequest {
+    string conn = 1;
+    string sdp = 4;
+}
+
+message RtpEngineSetAnswerResponse {
+    string conn = 1;
+}
+
+message RtpEngineCreateAnswerRequest {
     uint64 session_id = 1;
     string room = 2;
     string peer = 3;
@@ -176,7 +200,7 @@ message RtpEngineConnectRequest {
     optional string extra_data = 6;
 }
 
-message RtpEngineConnectResponse {
+message RtpEngineCreateAnswerResponse {
     string conn = 1;
     string sdp = 2;
 }

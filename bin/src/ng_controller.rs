@@ -50,7 +50,7 @@ impl<T: NgTransport, S: 'static + MediaEdgeSecure> NgControllerServer<T, S> {
             NgCommand::Offer { ref sdp, ref atm0s_token, .. } | NgCommand::Answer { ref sdp, ref atm0s_token, .. } => {
                 if let Some(token) = self.secure.decode_obj::<RtpEngineToken>(RTPENGINE_TOKEN, atm0s_token) {
                     let session_id = gen_cluster_session_id();
-                    rtpengine::RpcReq::Connect(rtpengine::RtpConnectRequest {
+                    rtpengine::RpcReq::CreateAnswer(rtpengine::RtpCreateAnswerRequest {
                         session_id,
                         room: RoomId(token.room),
                         peer: PeerId(token.peer),
@@ -93,13 +93,13 @@ impl<T: NgTransport, S: 'static + MediaEdgeSecure> NgControllerServer<T, S> {
 
     async fn process_res(&mut self, id: String, res: RpcRes<ClusterConnId>, dest: SocketAddr) -> Option<()> {
         let result = match res {
-            RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Ok((conn, sdp)))) => NgCmdResult::Answer {
+            RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(Ok((conn, sdp)))) => NgCmdResult::Answer {
                 result: "ok".to_string(),
                 conn: Some(conn.to_string()),
                 sdp: Some(sdp),
             },
             RpcRes::RtpEngine(rtpengine::RpcRes::Delete(Ok(_conn))) => NgCmdResult::Delete { result: "ok".to_string() },
-            RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Err(res))) | RpcRes::RtpEngine(rtpengine::RpcRes::Delete(Err(res))) => NgCmdResult::Error {
+            RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(Err(res))) | RpcRes::RtpEngine(rtpengine::RpcRes::Delete(Err(res))) => NgCmdResult::Error {
                 result: res.code.to_string(),
                 error_reason: res.message,
             },

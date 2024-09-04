@@ -9,7 +9,7 @@ edition = "2021"
 log = { workspace = true }
 num_enum = { workspace = true }
 smallmap = { workspace = true }
-derive_more = { workspace = true }
+derive_more = { workspace = true, features = ["full"] }
 sans-io-runtime = { workspace = true, default-features = false }
 prost = { workspace = true }
 media-server-utils = { path = "../media_utils" }

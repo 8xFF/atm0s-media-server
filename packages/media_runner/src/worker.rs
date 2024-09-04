@@ -492,6 +492,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     fn output_rtpengine(&mut self, now: Instant, out: transport_rtpengine::GroupOutput) -> Output {
         match out {
             transport_rtpengine::GroupOutput::Ext(session, ext) => match ext {
+                transport_rtpengine::ExtOut::SetAnswer(req_id, result) => Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::SetAnswer(result.map(|_| session.index())))),
                 transport_rtpengine::ExtOut::Disconnect(req_id) => Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::Delete(Ok(session.index())))),
             },
             transport_rtpengine::GroupOutput::Net(child, net) => Output::Net(Owner::RtpEngine(child), net),
@@ -625,15 +626,28 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 }
             },
             RpcReq::RtpEngine(req) => match req {
-                rtpengine::RpcReq::Connect(conn_req) => {
-                    log::info!("[MediaServerWorker] on rpc request {req_id}, rtpengine::RpcReq::Connect");
+                rtpengine::RpcReq::CreateOffer(conn_req) => {
+                    log::info!("[MediaServerWorker] on rpc request {req_id}, rtpengine::RpcReq::CreateOffer");
+                    match self.media_rtpengine.input(&mut self.switcher).spawn(conn_req.room, conn_req.peer, false, conn_req.session_id, None) {
+                        Ok((conn_id, sdp)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateOffer(Ok((conn_id, sdp)))))),
+                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateOffer(Err(e))))),
+                    }
+                }
+                rtpengine::RpcReq::SetAnswer(conn, answer_req) => {
+                    log::info!("[MediaServerWorker] on rpc request {req_id}, rtpengine::RpcReq::SetAnswer");
+                    self.media_rtpengine
+                        .input(&mut self.switcher)
+                        .on_event(now, transport_rtpengine::GroupInput::Ext(conn.into(), transport_rtpengine::ExtIn::SetAnswer(req_id, answer_req.sdp)));
+                }
+                rtpengine::RpcReq::CreateAnswer(conn_req) => {
+                    log::info!("[MediaServerWorker] on rpc request {req_id}, rtpengine::RpcReq::CreateAnswer");
                     match self
                         .media_rtpengine
                         .input(&mut self.switcher)
-                        .spawn(conn_req.room, conn_req.peer, false, conn_req.session_id, &conn_req.sdp)
+                        .spawn(conn_req.room, conn_req.peer, false, conn_req.session_id, Some(&conn_req.sdp))
                     {
-                        Ok((conn_id, sdp)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Ok((conn_id, sdp)))))),
-                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::Connect(Err(e))))),
+                        Ok((conn_id, sdp)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(Ok((conn_id, sdp)))))),
+                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(Err(e))))),
                     }
                 }
                 rtpengine::RpcReq::Delete(conn) => {

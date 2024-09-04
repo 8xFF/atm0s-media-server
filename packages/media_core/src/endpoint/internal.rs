@@ -286,6 +286,9 @@ impl EndpointInternal {
         let pre_state = self.state.take();
         self.state = Some((now, state));
         match &(self.state.as_ref().expect("Should have state").1) {
+            TransportState::New => {
+                log::info!("[EndpointInternal] new state");
+            }
             TransportState::Connecting(ip) => {
                 log::info!("[EndpointInternal] connecting");
                 self.queue
