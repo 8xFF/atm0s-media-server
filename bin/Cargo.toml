@@ -7,14 +7,14 @@ edition = "2021"
 
 [dependencies]
 tracing-subscriber = { workspace = true }
-clap = { workspace = true, features = ["env", "derive"] }
+clap = { version = "4.5", features = ["env", "derive"] }
 log = { workspace = true }
 rand = { workspace = true }
 prost = { workspace = true }
 poem = { version = "3.0", features = ["static-files"] }
 poem-openapi = { version = "5.0", features = ["swagger-ui"] }
 rust-embed = { version = "8.0", features = ["compression"], optional = true }
-tokio = { workspace = true, features = ["full"] }
+tokio = { version = "1.37", features = ["full"] }
 sans-io-runtime = { workspace = true }
 atm0s-sdn = { workspace = true }
 media-server-protocol = { path = "../packages/protocol", features = ["quinn-rpc"] }
