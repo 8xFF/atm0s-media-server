@@ -67,6 +67,7 @@ service MediaEdge {
 
 //For whip
 message WhipConnectRequest {
+    string app = 9;
     string user_agent = 1;
     string ip = 2;
     string sdp = 3;
@@ -101,13 +102,14 @@ message WhipCloseResponse {
 
 //For whep
 message WhepConnectRequest {
+    string app = 9;
     string user_agent = 1;
     string ip = 2;
     string sdp = 3;
     string room = 4;
     string peer = 5;
     uint64 session_id = 6;
-    optional string extra_data = 8;
+    optional string extra_data = 8;    
 }
 
 message WhepConnectResponse {
@@ -134,6 +136,7 @@ message WhepCloseResponse {
 
 //For SDK
 message WebrtcConnectRequest {
+    string app = 9;
     string user_agent = 1;
     string ip = 2;
     gateway.ConnectRequest req = 3;
@@ -157,6 +160,7 @@ message WebrtcRemoteIceResponse {
 
 message WebrtcRestartIceRequest {
     string conn = 1;
+    string app = 9;
     string user_agent = 2;
     string ip = 3;
     gateway.ConnectRequest req = 4;
@@ -170,6 +174,7 @@ message WebrtcRestartIceResponse {
 
 //For RtpEngine
 message RtpEngineCreateOfferRequest {
+    string app = 7;
     uint64 session_id = 1;
     string room = 2;
     string peer = 3;
@@ -192,6 +197,7 @@ message RtpEngineSetAnswerResponse {
 }
 
 message RtpEngineCreateAnswerRequest {
+    string app = 7;
     uint64 session_id = 1;
     string room = 2;
     string peer = 3;

@@ -31,6 +31,11 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> RtpengineApis<S> {
         Self { sender, secure }
     }
 
+    #[oai(path = "/ping", method = "get")]
+    async fn ping(&self) -> Result<PlainText<String>> {
+        Ok(PlainText("OK".to_string()))
+    }
+
     /// connect rtpengine endpoint with offer
     #[oai(path = "/offer", method = "post")]
     async fn create_offer(&self, RemoteIpAddr(ip_addr): RemoteIpAddr, TokenAuthorization(token): TokenAuthorization) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
@@ -42,6 +47,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> RtpengineApis<S> {
         log::info!("[MediaAPIs] create rtpengine endpoint with token {token:?}, ip {ip_addr}");
         let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::CreateOffer(RtpCreateOfferRequest {
             session_id,
+            app: token.app.unwrap_or_default().into(),
             room: token.room.into(),
             peer: token.peer.into(),
             record: token.record,
@@ -85,6 +91,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> RtpengineApis<S> {
         let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::CreateAnswer(RtpCreateAnswerRequest {
             session_id,
             sdp: body.0,
+            app: token.app.unwrap_or_default().into(),
             room: token.room.into(),
             peer: token.peer.into(),
             record: token.record,

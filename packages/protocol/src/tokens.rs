@@ -7,6 +7,7 @@ pub const RTPENGINE_TOKEN: &str = "rtpengine";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WhipToken {
+    pub app: Option<String>,
     pub room: String,
     pub peer: String,
     pub record: bool,
@@ -15,6 +16,7 @@ pub struct WhipToken {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WhepToken {
+    pub app: Option<String>,
     pub room: String,
     pub peer: Option<String>,
     pub extra_data: Option<String>,
@@ -22,6 +24,7 @@ pub struct WhepToken {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WebrtcToken {
+    pub app: Option<String>,
     pub room: Option<String>,
     pub peer: Option<String>,
     pub record: bool,
@@ -30,6 +33,7 @@ pub struct WebrtcToken {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RtpEngineToken {
+    pub app: Option<String>,
     pub room: String,
     pub peer: String,
     pub record: bool,

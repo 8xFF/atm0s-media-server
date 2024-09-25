@@ -386,15 +386,15 @@ impl EndpointInternal {
 
     #[allow(clippy::too_many_arguments)]
     fn join_room(&mut self, now: Instant, req_id: EndpointReqId, room: RoomId, peer: PeerId, meta: PeerMeta, publish: RoomInfoPublish, subscribe: RoomInfoSubscribe, mixer: Option<AudioMixerConfig>) {
-        let room_hash: ClusterRoomHash = (&room).into();
+        let room_hash: ClusterRoomHash = (&self.cfg.app, &room).into();
         log::info!("[EndpointInternal] join_room({room}, {peer}), room_hash {room_hash}");
         self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::JoinRoom(Ok(()))));
 
         self.leave_room(now);
 
-        self.joined = Some(((&room).into(), room.clone(), peer.clone(), mixer.as_ref().map(|m| m.mode)));
+        self.joined = Some((room_hash, room.clone(), peer.clone(), mixer.as_ref().map(|m| m.mode)));
         self.queue
-            .push_back(InternalOutput::Cluster((&room).into(), ClusterEndpointControl::Join(peer.clone(), meta, publish, subscribe, mixer)));
+            .push_back(InternalOutput::Cluster(room_hash, ClusterEndpointControl::Join(peer.clone(), meta, publish, subscribe, mixer)));
         if self.cfg.record {
             self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::JoinRoom(room.clone(), peer.clone())));
         }
@@ -581,7 +581,7 @@ mod tests {
         time::Instant,
     };
 
-    use media_server_protocol::protobuf::cluster_connector::peer_event;
+    use media_server_protocol::{endpoint::AppId, protobuf::cluster_connector::peer_event};
     use media_server_protocol::{
         endpoint::{PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta},
         protobuf::shared::Kind,
@@ -599,6 +599,7 @@ mod tests {
     #[test]
     fn test_join_leave_room_success() {
         let mut internal = EndpointInternal::new(EndpointCfg {
+            app: "app".into(),
             max_egress_bitrate: 2_000_000,
             max_ingress_bitrate: 2_000_000,
             record: false,
@@ -625,6 +626,7 @@ mod tests {
         );
         assert_eq!(internal.pop_output(now), None);
 
+        let app: AppId = "app".into();
         let room: RoomId = "room".into();
         let peer: PeerId = "peer".into();
         let meta = PeerMeta { metadata: None, extra_data: None };
@@ -632,7 +634,7 @@ mod tests {
         let subscribe = RoomInfoSubscribe { peers: true, tracks: true };
         internal.on_transport_rpc(now, 0.into(), EndpointReq::JoinRoom(room.clone(), peer.clone(), meta.clone(), publish.clone(), subscribe.clone(), None));
         assert_eq!(internal.pop_output(now), Some(InternalOutput::RpcRes(0.into(), EndpointRes::JoinRoom(Ok(())))));
-        let room_hash = ClusterRoomHash::from(&room);
+        let room_hash = ClusterRoomHash::from((&app, &room));
         assert_eq!(
             internal.pop_output(now),
             Some(InternalOutput::Cluster(room_hash, ClusterEndpointControl::Join(peer.clone(), meta, publish, subscribe, None)))
@@ -723,6 +725,7 @@ mod tests {
     #[test]
     fn test_join_overwrite_auto_leave() {
         let mut internal = EndpointInternal::new(EndpointCfg {
+            app: "app".into(),
             max_egress_bitrate: 2_000_000,
             max_ingress_bitrate: 2_000_000,
             record: false,
@@ -749,8 +752,9 @@ mod tests {
         );
         assert_eq!(internal.pop_output(now), None);
 
+        let app: AppId = "app".into();
         let room1: RoomId = "room1".into();
-        let room1_hash = ClusterRoomHash::from(&room1);
+        let room1_hash = ClusterRoomHash::from((&app, &room1));
         let peer: PeerId = "peer".into();
         let meta = PeerMeta { metadata: None, extra_data: None };
         let publish = RoomInfoPublish { peer: true, tracks: true };
@@ -783,7 +787,7 @@ mod tests {
 
         //now join other room should success
         let room2: RoomId = "room2".into();
-        let room2_hash = ClusterRoomHash::from(&room2);
+        let room2_hash = ClusterRoomHash::from((&app, &room2));
 
         internal.on_transport_rpc(
             now,

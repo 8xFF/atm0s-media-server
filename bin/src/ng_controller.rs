@@ -51,6 +51,7 @@ impl<T: NgTransport, S: 'static + MediaEdgeSecure> NgControllerServer<T, S> {
                 if let Some(token) = self.secure.decode_obj::<RtpEngineToken>(RTPENGINE_TOKEN, atm0s_token) {
                     let session_id = gen_cluster_session_id();
                     rtpengine::RpcReq::CreateAnswer(rtpengine::RtpCreateAnswerRequest {
+                        app: token.app.unwrap_or_default().into(),
                         session_id,
                         room: RoomId(token.room),
                         peer: PeerId(token.peer),

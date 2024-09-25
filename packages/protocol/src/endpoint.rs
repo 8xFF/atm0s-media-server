@@ -174,6 +174,21 @@ impl From<protobuf::shared::RoomInfoSubscribe> for RoomInfoSubscribe {
 }
 
 ///
+/// AppId type, we should use this type instead of direct String
+/// This is useful when we can validate
+///
+/// TODO: validate with uuid type (maybe max 32 bytes + [a-z]_- )
+///
+#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AppId(pub String);
+
+impl From<&str> for AppId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+///
 /// RoomId type, we should use this type instead of direct String
 /// This is useful when we can validate
 ///

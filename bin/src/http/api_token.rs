@@ -21,6 +21,7 @@ impl<S: MediaGatewaySecure + Send + Sync> Clone for TokenServerCtx<S> {
 
 #[derive(poem_openapi::Object)]
 struct WhipTokenReq {
+    app: Option<String>,
     room: String,
     peer: String,
     ttl: u64,
@@ -35,6 +36,7 @@ struct WhipTokenRes {
 
 #[derive(poem_openapi::Object)]
 struct WhepTokenReq {
+    app: Option<String>,
     room: String,
     peer: Option<String>,
     ttl: u64,
@@ -48,6 +50,7 @@ struct WhepTokenRes {
 
 #[derive(poem_openapi::Object)]
 struct WebrtcTokenReq {
+    app: Option<String>,
     room: Option<String>,
     peer: Option<String>,
     ttl: u64,
@@ -62,6 +65,7 @@ struct WebrtcTokenRes {
 
 #[derive(poem_openapi::Object)]
 struct RtpEngineTokenReq {
+    app: Option<String>,
     room: String,
     peer: String,
     ttl: u64,
@@ -95,6 +99,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                     token: ctx.secure.encode_obj(
                         WHIP_TOKEN,
                         WhipToken {
+                            app: body.app,
                             room: body.room,
                             peer: body.peer,
                             record: body.record.unwrap_or(false),
@@ -125,6 +130,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                     token: ctx.secure.encode_obj(
                         WHEP_TOKEN,
                         WhepToken {
+                            app: body.app,
                             room: body.room,
                             peer: body.peer,
                             extra_data: body.extra_data,
@@ -153,6 +159,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                     token: ctx.secure.encode_obj(
                         WEBRTC_TOKEN,
                         WebrtcToken {
+                            app: body.app,
                             room: body.room,
                             peer: body.peer,
                             record: body.record.unwrap_or(false),
@@ -183,6 +190,7 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
                     token: ctx.secure.encode_obj(
                         RTPENGINE_TOKEN,
                         RtpEngineToken {
+                            app: body.app,
                             room: body.room,
                             peer: body.peer,
                             record: body.record.unwrap_or(false),

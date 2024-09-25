@@ -16,7 +16,7 @@ use std::{
 
 use atm0s_sdn::features::{FeaturesControl, FeaturesEvent};
 use media_server_protocol::{
-    endpoint::{AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackSource},
+    endpoint::{AppId, AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackSource},
     media::MediaPacket,
 };
 
@@ -34,9 +34,10 @@ mod room;
 #[derive(Clone, Copy, From, AsRef, PartialEq, Eq, Debug, Display, Hash)]
 pub struct ClusterRoomHash(pub u64);
 
-impl From<&RoomId> for ClusterRoomHash {
-    fn from(room: &RoomId) -> Self {
+impl From<(&AppId, &RoomId)> for ClusterRoomHash {
+    fn from((app, room): (&AppId, &RoomId)) -> Self {
         let mut hash = std::hash::DefaultHasher::new();
+        app.as_ref().hash(&mut hash);
         room.as_ref().hash(&mut hash);
         Self(hash.finish())
     }

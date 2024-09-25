@@ -126,6 +126,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
         log::info!("On webrtc_connect from gateway");
         let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::Connect(
             req.session_id,
+            req.app.into(),
             req.ip.parse().ok()?,
             req.user_agent,
             req.req?,
@@ -158,6 +159,7 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRpcHandlerImpl {
         log::info!("On webrtc_restart_ice from gateway");
         let (req, rx) = Rpc::new(RpcReq::Webrtc(webrtc::RpcReq::RestartIce(
             req.conn.parse().ok()?,
+            req.app.into(),
             req.ip.parse().ok()?,
             req.user_agent,
             req.req?,

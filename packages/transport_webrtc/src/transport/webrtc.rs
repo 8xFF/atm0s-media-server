@@ -994,6 +994,7 @@ mod tests {
         let token = gateway_jwt.encode_obj(
             "webrtc",
             WebrtcToken {
+                app: Some("app".to_string()),
                 room: Some("demo".to_string()),
                 peer: Some("peer1".to_string()),
                 record: false,

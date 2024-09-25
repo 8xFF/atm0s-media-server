@@ -46,6 +46,7 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> WhipApis<S> {
         log::info!("[MediaAPIs] create whip endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::Connect(WhipConnectReq {
             session_id,
+            app: token.app.unwrap_or_default().into(),
             ip: ip_addr,
             sdp: body.0,
             room: token.room.into(),

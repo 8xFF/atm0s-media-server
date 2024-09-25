@@ -21,8 +21,8 @@ Supported token generation mechanisms:
 | Type               | Token                  | Status |
 | ------------------ | ---------------------- | ------ |
 | Static Secret      | [JWT](https://jwt.io/) | Done   |
-| Public Private Key | [JWT](https://jwt.io/) | TODO   |
-| Hierarchical Key   | [JWT](https://jwt.io/) | TODO   |
+| Public Private Key |                        | TODO   |
+| Hierarchical Key   |                        | TODO   |
 
 We can use token-generate APIS to generate tokens. To do this, you will need to start the `token-generate` service by:
 
