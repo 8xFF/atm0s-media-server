@@ -51,14 +51,14 @@ impl IngressBitrateAllocator {
             return;
         }
         self.changed = false;
-        let mut sum = TrackPriority(0);
+        let mut sum = TrackPriority::from(0);
         for (_track, priority) in self.tracks.iter() {
             sum += *priority;
         }
 
         if *(sum.as_ref()) != 0 {
             for (track, priority) in self.tracks.iter() {
-                let bitrate = (self.ingress_bitrate * priority.0 as u64) / sum.0 as u64;
+                let bitrate = (self.ingress_bitrate * (**priority) as u64) / *sum as u64;
                 log::debug!("[IngressBitrateAllocator] set track {track} with bitrate {bitrate}");
                 self.queue.push_back((*track, Action::SetBitrate(bitrate)));
             }

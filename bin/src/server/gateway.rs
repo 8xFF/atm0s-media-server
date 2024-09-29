@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
 use clap::Parser;
 use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
-use media_server_gateway::{store_service::GatewayStoreServiceBuilder, STORE_SERVICE_ID};
+use media_server_gateway::{store_service::GatewayStoreServiceBuilder, MultiTenancyStorage, MultiTenancySync, STORE_SERVICE_ID};
 use media_server_protocol::{
     cluster::{ClusterGatewayInfo, ClusterNodeGenericInfo, ClusterNodeInfo},
     gateway::{generate_gateway_zone_tag, GATEWAY_RPC_PORT},
@@ -76,6 +76,14 @@ pub struct Args {
     /// The port for binding the RTPengine command UDP socket.
     #[arg(env, long)]
     rtpengine_cmd_addr: Option<SocketAddr>,
+
+    /// multi-tenancy sync endpoint
+    #[arg(env, long)]
+    multi_tenancy_sync: Option<String>,
+
+    /// multi-tenancy sync endpoint
+    #[arg(env, long, default_value_t = 30_000)]
+    multi_tenancy_sync_interval_ms: u64,
 }
 
 pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -90,7 +98,17 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let (connector_agent_tx, mut connector_agent_rx) = tokio::sync::mpsc::channel::<media_server_connector::agent_service::Control>(1024);
 
     let edge_secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
-    let gateway_secure = Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes()));
+    let mut gateway_secure = MediaGatewaySecureJwt::from(node.secret.as_bytes());
+    if let Some(url) = args.multi_tenancy_sync {
+        let app_storage = Arc::new(MultiTenancyStorage::default());
+        gateway_secure.set_app_storage(app_storage.clone());
+        let mut app_sync = MultiTenancySync::new(app_storage, &url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
+        tokio::spawn(async move {
+            app_sync.run_loop().await;
+        });
+    }
+    let gateway_secure = Arc::new(gateway_secure);
+
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     if let Some(http_port) = http_port {
         let req_tx = req_tx.clone();

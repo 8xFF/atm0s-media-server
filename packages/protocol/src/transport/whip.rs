@@ -2,6 +2,7 @@ use std::net::IpAddr;
 
 use crate::{
     endpoint::{PeerId, RoomId},
+    multi_tenancy::AppContext,
     protobuf,
 };
 
@@ -9,6 +10,7 @@ use super::{ConnLayer, RpcResult};
 
 #[derive(Debug, Clone)]
 pub struct WhipConnectReq {
+    pub app: AppContext,
     pub session_id: u64,
     pub sdp: String,
     pub room: RoomId,
@@ -98,6 +100,7 @@ impl TryFrom<protobuf::cluster_gateway::WhipConnectRequest> for WhipConnectReq {
     type Error = ();
     fn try_from(value: protobuf::cluster_gateway::WhipConnectRequest) -> Result<Self, Self::Error> {
         Ok(Self {
+            app: value.app.into(),
             session_id: value.session_id,
             sdp: value.sdp,
             room: value.room.into(),
@@ -113,12 +116,13 @@ impl TryFrom<protobuf::cluster_gateway::WhipConnectRequest> for WhipConnectReq {
 impl From<WhipConnectReq> for protobuf::cluster_gateway::WhipConnectRequest {
     fn from(val: WhipConnectReq) -> Self {
         protobuf::cluster_gateway::WhipConnectRequest {
+            app: Some(val.app.into()),
             session_id: val.session_id,
             user_agent: val.user_agent,
             ip: val.ip.to_string(),
             sdp: val.sdp,
-            room: val.room.0,
-            peer: val.peer.0,
+            room: val.room.into(),
+            peer: val.peer.into(),
             record: val.record,
             extra_data: val.extra_data,
         }

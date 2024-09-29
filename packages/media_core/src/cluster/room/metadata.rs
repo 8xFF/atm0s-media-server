@@ -712,7 +712,7 @@ mod tests {
         );
         assert_eq!(room_meta.pop_output(()), None);
 
-        let track_id: RemoteTrackId = RemoteTrackId(1);
+        let track_id: RemoteTrackId = RemoteTrackId::from(1);
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         let peer_map = id_generator::peer_map(room, &peer_id);
@@ -758,7 +758,7 @@ mod tests {
         );
         assert_eq!(room_meta.pop_output(()), None);
 
-        let track_id: RemoteTrackId = RemoteTrackId(1);
+        let track_id: RemoteTrackId = RemoteTrackId::from(1);
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         room_meta.on_track_publish(endpoint, track_id, track_name, track_info.meta.clone());
@@ -793,7 +793,7 @@ mod tests {
         );
         assert_eq!(room_meta.pop_output(()), None);
 
-        let track_id: RemoteTrackId = RemoteTrackId(1);
+        let track_id: RemoteTrackId = RemoteTrackId::from(1);
         let track_name: TrackName = "audio_main".to_string().into();
         let track_info = TrackInfo::simple_audio(peer_id.clone());
         let peer_map = id_generator::peer_map(room, &peer_id);

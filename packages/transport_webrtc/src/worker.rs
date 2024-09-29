@@ -11,6 +11,7 @@ use media_server_core::{
 };
 use media_server_protocol::{
     cluster::gen_cluster_session_id,
+    multi_tenancy::AppContext,
     protobuf::cluster_connector::peer_event,
     record::SessionRecordEvent,
     transport::{RpcError, RpcResult},
@@ -74,19 +75,22 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
         }
     }
 
-    pub fn spawn(&mut self, remote: IpAddr, session_id: u64, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
+    pub fn spawn(&mut self, app: AppContext, remote: IpAddr, session_id: u64, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
         let cfg = match &variant {
             VariantParams::Whip(_, _, _, record) => EndpointCfg {
+                app,
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: *record,
             },
             VariantParams::Whep(_, _, _) => EndpointCfg {
+                app,
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: false,
             },
             VariantParams::Webrtc(_, _, _, record, _) => EndpointCfg {
+                app,
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: *record,
@@ -154,10 +158,10 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                             self.queue
                                 .push_back(GroupOutput::Ext(owner, ExtOut::RemoteIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
                         }
-                        ExtIn::RestartIce(req_id, variant, remote, useragent, req, extra_data, record) => {
+                        ExtIn::RestartIce(req_id, app, variant, remote, useragent, req, extra_data, record) => {
                             let sdp = req.sdp.clone();
                             let session_id = gen_cluster_session_id(); //TODO need to reuse old session_id
-                            if let Ok((ice_lite, sdp, index)) = self.spawn(remote, session_id, VariantParams::Webrtc(useragent, req, extra_data, record, self.secure.clone()), &sdp) {
+                            if let Ok((ice_lite, sdp, index)) = self.spawn(app, remote, session_id, VariantParams::Webrtc(useragent, req, extra_data, record, self.secure.clone()), &sdp) {
                                 self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));
                             } else {
                                 self.queue

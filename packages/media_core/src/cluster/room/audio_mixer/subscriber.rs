@@ -126,7 +126,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscr
                         ClusterEndpointEvent::LocalTrack(
                             track_id,
                             ClusterLocalTrackEvent::Media(
-                                (audio.peer.0 << 16) | (audio.track.0 as u64), //TODO better track UUID
+                                (audio.peer.0 << 16) | (*audio.track as u64), //TODO better track UUID
                                 MediaPacket {
                                     ts: audio.ts,
                                     seq: audio.seq,
@@ -230,7 +230,7 @@ mod test {
             seq: 1,
             opus_payload: vec![1, 2, 3, 4, 5, 6],
         };
-        let track_uuid = (mixer_pkt.peer.0 << 16) | (mixer_pkt.track.0 as u64);
+        let track_uuid = (mixer_pkt.peer.0 << 16) | (*mixer_pkt.track as u64);
         subscriber.on_channel_data(t0 + ms(100), node_id, &mixer_pkt.serialize());
 
         //sot 0 is set => fire AudioMixer::Set event

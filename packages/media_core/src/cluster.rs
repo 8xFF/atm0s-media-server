@@ -18,6 +18,7 @@ use atm0s_sdn::features::{FeaturesControl, FeaturesEvent};
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackSource},
     media::MediaPacket,
+    multi_tenancy::AppContext,
 };
 
 use crate::{
@@ -32,11 +33,12 @@ mod id_generator;
 mod room;
 
 #[derive(Clone, Copy, From, AsRef, PartialEq, Eq, Debug, Display, Hash)]
-pub struct ClusterRoomHash(pub u64);
+pub struct ClusterRoomHash(u64);
 
-impl From<&RoomId> for ClusterRoomHash {
-    fn from(room: &RoomId) -> Self {
+impl ClusterRoomHash {
+    pub fn generate(app: &AppContext, room: &RoomId) -> Self {
         let mut hash = std::hash::DefaultHasher::new();
+        app.app.as_ref().map(|app| app.as_str()).unwrap_or("").hash(&mut hash);
         room.as_ref().hash(&mut hash);
         Self(hash.finish())
     }
@@ -192,7 +194,10 @@ mod tests {
         dht_kv::{self, MapControl, MapEvent},
         FeaturesControl, FeaturesEvent,
     };
-    use media_server_protocol::endpoint::{PeerId, PeerInfo, PeerMeta, RoomInfoPublish, RoomInfoSubscribe};
+    use media_server_protocol::{
+        endpoint::{PeerId, PeerInfo, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
+        multi_tenancy::AppContext,
+    };
     use sans_io_runtime::TaskSwitcherChild;
 
     use crate::cluster::{
@@ -202,6 +207,23 @@ mod tests {
     };
 
     use super::{ClusterEndpointControl, ClusterRoomHash, MediaCluster, Output};
+
+    #[test]
+    fn multi_tenancy_room() {
+        let app_root = AppContext { app: None };
+        let app1 = AppContext { app: Some("app1".to_string()) };
+        let app2 = AppContext { app: Some("app2".to_string()) };
+
+        let room: RoomId = RoomId::from("same_room");
+
+        let app_root_room = ClusterRoomHash::generate(&app_root, &room);
+        let app1_room = ClusterRoomHash::generate(&app1, &room);
+        let app2_room = ClusterRoomHash::generate(&app2, &room);
+
+        assert_ne!(app_root_room, app1_room);
+        assert_ne!(app_root_room, app2_room);
+        assert_ne!(app1_room, app2_room);
+    }
 
     //TODO should create room when new room event arrived
     //TODO should route to correct room
@@ -213,7 +235,7 @@ mod tests {
         let endpoint = 1;
         let userdata = RoomUserData(ClusterRoomHash(1), RoomFeature::MetaData);
         let room_peers_map = id_generator::peers_map(userdata.0);
-        let peer = PeerId("peer1".to_string());
+        let peer = PeerId::from("peer1");
         let peer_key = id_generator::peers_key(&peer);
         let peer_info = PeerInfo::new(peer.clone(), PeerMeta { metadata: None, extra_data: None });
 

@@ -41,7 +41,7 @@ impl SessionRecord {
 
         match &event {
             SessionRecordEvent::JoinRoom(room, peer) => {
-                log::info!("[SessionRecord] {} join room {}/{}", self.session, room.0, peer.0);
+                log::info!("[SessionRecord] {} join room {}/{}", self.session, room, peer);
                 self.state = Some(RoomState {
                     index: 0,
                     room: room.clone(),
@@ -83,7 +83,7 @@ impl SessionRecord {
         }
 
         let queue = state.queue.take()?;
-        let mut chunk = RecordChunkWriter::new(&state.room.0, &state.peer.0, self.session, from_ts, to_ts);
+        let mut chunk = RecordChunkWriter::new(&state.room, &state.peer, self.session, from_ts, to_ts);
 
         for row in queue {
             chunk.push(row);
@@ -92,8 +92,8 @@ impl SessionRecord {
         state.index += 1;
         Some((
             RecordReq {
-                room: state.room.0.clone(),
-                peer: state.peer.0.clone(),
+                room: state.room.clone().into(),
+                peer: state.peer.clone().into(),
                 session: self.session,
                 index,
                 from_ts,

@@ -1,4 +1,7 @@
-use derive_more::{AsRef, From};
+use derive_more::{
+    derive::{Deref, Display, Into},
+    AsRef, From,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
@@ -179,8 +182,8 @@ impl From<protobuf::shared::RoomInfoSubscribe> for RoomInfoSubscribe {
 ///
 /// TODO: validate with uuid type (maybe max 32 bytes + [a-z]_- )
 ///
-#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct RoomId(pub String);
+#[derive(From, Into, AsRef, Deref, Debug, Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RoomId(String);
 
 impl From<&str> for RoomId {
     fn from(value: &str) -> Self {
@@ -194,8 +197,8 @@ impl From<&str> for RoomId {
 ///
 /// TODO: validate with uuid type (maybe max 32 bytes + [a-z]_- )
 ///
-#[derive(From, AsRef, Debug, derive_more::Display, derive_more::FromStr, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct PeerId(pub String);
+#[derive(From, Into, AsRef, Deref, Debug, Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PeerId(String);
 
 impl From<&str> for PeerId {
     fn from(value: &str) -> Self {

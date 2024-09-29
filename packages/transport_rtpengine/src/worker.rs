@@ -6,6 +6,7 @@ use media_server_core::{
 };
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
+    multi_tenancy::AppContext,
     protobuf::cluster_connector::peer_event,
     record::SessionRecordEvent,
     transport::{RpcError, RpcResult},
@@ -53,13 +54,14 @@ impl MediaWorkerRtpEngine {
         }
     }
 
-    pub fn spawn(&mut self, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: Option<&str>) -> RpcResult<(usize, String)> {
+    pub fn spawn(&mut self, app: AppContext, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: Option<&str>) -> RpcResult<(usize, String)> {
         let (tran, answer) = if let Some(offer) = offer {
             TransportRtpEngine::new_answer(room, peer, self.ip, offer).map_err(|e| RpcError::new(1000_u32, &e))?
         } else {
             TransportRtpEngine::new_offer(room, peer, self.ip).map_err(|e| RpcError::new(1000_u32, &e))?
         };
         let cfg = EndpointCfg {
+            app,
             max_ingress_bitrate: 2_500_000,
             max_egress_bitrate: 2_500_000,
             record,

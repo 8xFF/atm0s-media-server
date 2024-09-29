@@ -5,6 +5,7 @@ use std::{marker::PhantomData, time::Instant};
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority, TrackSource},
     media::MediaPacket,
+    multi_tenancy::AppContext,
     protobuf::{self, cluster_connector::peer_event},
     record::SessionRecordEvent,
     transport::RpcResult,
@@ -218,6 +219,7 @@ enum TaskType {
 
 #[derive(Debug)]
 pub struct EndpointCfg {
+    pub app: AppContext,
     pub max_egress_bitrate: u64,
     pub max_ingress_bitrate: u64,
     pub record: bool,

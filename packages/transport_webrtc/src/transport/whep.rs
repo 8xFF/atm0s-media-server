@@ -22,9 +22,9 @@ use str0m::{
 use super::{bwe_state::BweState, InternalOutput, TransportWebrtcInternal};
 
 const TIMEOUT_SEC: u64 = 10;
-const AUDIO_TRACK: LocalTrackId = LocalTrackId(0);
-const VIDEO_TRACK: LocalTrackId = LocalTrackId(1);
-const DEFAULT_PRIORITY: TrackPriority = TrackPriority(1);
+const AUDIO_TRACK: LocalTrackId = LocalTrackId::build(0);
+const VIDEO_TRACK: LocalTrackId = LocalTrackId::build(1);
+const DEFAULT_PRIORITY: TrackPriority = TrackPriority::build(1);
 
 #[derive(Debug)]
 enum State {

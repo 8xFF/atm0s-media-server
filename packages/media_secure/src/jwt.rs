@@ -1,5 +1,8 @@
-use crate::{MediaConsoleSecure, MediaEdgeSecure, MediaGatewaySecure};
+use std::sync::Arc;
+
+use crate::{AppStorage, MediaConsoleSecure, MediaEdgeSecure, MediaGatewaySecure, TokenObject};
 use jwt_simple::prelude::*;
+use media_server_protocol::multi_tenancy::AppContext;
 use serde::{de::DeserializeOwned, Serialize};
 
 const CONN_ID_TYPE: &str = "conn";
@@ -16,9 +19,9 @@ impl From<&[u8]> for MediaEdgeSecureJwt {
 }
 
 impl MediaEdgeSecure for MediaEdgeSecureJwt {
-    fn decode_obj<O: Serialize + DeserializeOwned>(&self, _type: &'static str, token: &str) -> Option<O> {
+    fn decode_token<O: TokenObject>(&self, token: &str) -> Option<(AppContext, O)> {
         let options = VerificationOptions {
-            allowed_issuers: Some(HashSet::from_strings(&[_type])),
+            allowed_issuers: Some(HashSet::from_strings(&[O::id()])),
             ..Default::default()
         };
         let claims = self.key.verify_token::<O>(token, Some(options)).ok()?;
@@ -28,7 +31,7 @@ impl MediaEdgeSecure for MediaEdgeSecureJwt {
                 return None;
             }
         }
-        Some(claims.custom)
+        Some((AppContext { app: claims.subject }, claims.custom))
     }
 
     fn encode_conn_id<C: Serialize + DeserializeOwned>(&self, conn: C, ttl_seconds: u64) -> String {
@@ -55,6 +58,7 @@ impl MediaEdgeSecure for MediaEdgeSecureJwt {
 pub struct MediaGatewaySecureJwt {
     key_str: String,
     key: HS256Key,
+    app_storage: Option<Arc<dyn AppStorage>>,
 }
 
 impl From<&[u8]> for MediaGatewaySecureJwt {
@@ -62,17 +66,31 @@ impl From<&[u8]> for MediaGatewaySecureJwt {
         Self {
             key_str: String::from_utf8_lossy(key).to_string(),
             key: HS256Key::from_bytes(key),
+            app_storage: None,
         }
     }
 }
 
+impl MediaGatewaySecureJwt {
+    pub fn set_app_storage(&mut self, app_storage: Arc<dyn AppStorage>) {
+        self.app_storage = Some(app_storage);
+    }
+}
+
 impl MediaGatewaySecure for MediaGatewaySecureJwt {
-    fn validate_app(&self, token: &str) -> bool {
-        self.key_str.eq(token)
+    fn validate_app(&self, secret: &str) -> Option<AppContext> {
+        if self.key_str.eq(secret) {
+            Some(AppContext { app: None })
+        } else {
+            self.app_storage.as_ref()?.validate_app(secret)
+        }
     }
 
-    fn encode_obj<O: Serialize + DeserializeOwned>(&self, _type: &'static str, ob: O, ttl_seconds: u64) -> String {
-        let claims = Claims::with_custom_claims(ob, Duration::from_secs(ttl_seconds)).with_issuer(_type);
+    fn encode_token<O: TokenObject>(&self, ctx: &AppContext, ob: O, ttl_seconds: u64) -> String {
+        let mut claims = Claims::with_custom_claims(ob, Duration::from_secs(ttl_seconds)).with_issuer(O::id());
+        if let Some(app) = &ctx.app {
+            claims = claims.with_subject(app);
+        }
         self.key.authenticate(claims).expect("Should create jwt")
     }
 
@@ -108,7 +126,7 @@ impl From<&[u8]> for MediaConsoleSecureJwt {
 }
 
 impl MediaConsoleSecure for MediaConsoleSecureJwt {
-    fn validate_secert(&self, secret: &str) -> bool {
+    fn validate_secret(&self, secret: &str) -> bool {
         self.key_str.eq(secret)
     }
 
@@ -134,31 +152,69 @@ mod tests {
 
     use crate::{
         jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt},
-        MediaEdgeSecure, MediaGatewaySecure,
+        AppContext, MediaEdgeSecure, MediaGatewaySecure, TokenObject,
     };
 
-    #[test]
-    fn object_test() {
-        #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
-        struct Test {
-            value: u8,
-        }
+    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+    struct Test1 {
+        value: u8,
+    }
 
+    impl TokenObject for Test1 {
+        fn id() -> &'static str {
+            "test1"
+        }
+    }
+
+    #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+    struct Test2 {
+        value: u8,
+    }
+
+    impl TokenObject for Test2 {
+        fn id() -> &'static str {
+            "test2"
+        }
+    }
+
+    #[test]
+    fn token_root_test() {
         let secure_key = b"12345678";
 
         let gateway_jwt = MediaGatewaySecureJwt::from(secure_key.as_slice());
         let edge_jwt = MediaEdgeSecureJwt::from(secure_key.as_slice());
 
-        let ob = Test { value: 1 };
-        let token = gateway_jwt.encode_obj("test_type", ob.clone(), 1);
+        let ctx = AppContext { app: None };
+        let ob = Test1 { value: 1 };
+        let token = gateway_jwt.encode_token(&ctx, ob.clone(), 1);
 
         //if wrong _type should error
-        assert_eq!(edge_jwt.decode_obj::<Test>("wrong_type", &token), None, "Should error if wrong type");
-        assert_eq!(edge_jwt.decode_obj::<Test>("test_type", &token), Some(ob), "Should decode ok");
+        assert_eq!(edge_jwt.decode_token::<Test2>(&token), None, "Should error if wrong type");
+        assert_eq!(edge_jwt.decode_token::<Test1>(&token), Some((ctx, ob)), "Should decode ok");
 
         // it should error after timeout 1s
         sleep(Duration::from_millis(1300));
-        assert_eq!(edge_jwt.decode_obj::<Test>("test_type", &token), None, "Should error after timeout");
+        assert_eq!(edge_jwt.decode_token::<Test1>(&token), None, "Should error after timeout");
+    }
+
+    #[test]
+    fn token_child_app_test() {
+        let secure_key = b"12345678";
+
+        let gateway_jwt = MediaGatewaySecureJwt::from(secure_key.as_slice());
+        let edge_jwt = MediaEdgeSecureJwt::from(secure_key.as_slice());
+
+        let ctx = AppContext { app: Some("app1".to_owned()) };
+        let ob = Test1 { value: 1 };
+        let token = gateway_jwt.encode_token(&ctx, ob.clone(), 1);
+
+        //if wrong _type should error
+        assert_eq!(edge_jwt.decode_token::<Test2>(&token), None, "Should error if wrong type");
+        assert_eq!(edge_jwt.decode_token::<Test1>(&token), Some((ctx, ob)), "Should decode ok");
+
+        // it should error after timeout 1s
+        sleep(Duration::from_millis(1300));
+        assert_eq!(edge_jwt.decode_token::<Test1>(&token), None, "Should error after timeout");
     }
 
     #[test]

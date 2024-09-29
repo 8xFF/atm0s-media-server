@@ -251,7 +251,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 log::info!("[TransportWebrtcSdk] peer {peer} joined");
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::PeerJoined(PeerJoined {
-                        peer: peer.0,
+                        peer: peer.into(),
                         metadata: meta.metadata,
                         extra_data: meta.extra_data,
                     })),
@@ -260,15 +260,15 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             EndpointEvent::PeerLeaved(peer, _meta) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} leaved");
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
-                    event: Some(ProtoRoomEvent2::PeerLeaved(PeerLeaved { peer: peer.0 })),
+                    event: Some(ProtoRoomEvent2::PeerLeaved(PeerLeaved { peer: peer.into() })),
                 }))
             }
             EndpointEvent::PeerTrackStarted(peer, track, meta) => {
                 log::info!("[TransportWebrtcSdk] peer {peer} track {track} started");
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::TrackStarted(TrackStarted {
-                        peer: peer.0,
-                        track: track.0,
+                        peer: peer.into(),
+                        track: track.into(),
                         kind: Kind::from(meta.kind) as i32,
                         metadata: meta.metadata,
                     })),
@@ -278,8 +278,8 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 log::info!("[TransportWebrtcSdk] peer {peer} track {track} stopped");
                 self.send_event(ProtoServerEvent::Room(ProtoRoomEvent {
                     event: Some(ProtoRoomEvent2::TrackStopped(TrackStopped {
-                        peer: peer.0,
-                        track: track.0,
+                        peer: peer.into(),
+                        track: track.into(),
                         kind: Kind::from(meta.kind) as i32,
                     })),
                 }));
@@ -291,7 +291,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                         event: Some(ProtoFeaturesEvent2::Mixer(ProtoFeatureMixerEvent {
                             event: Some(ProtoFeatureMixerEvent2::SlotSet(SlotSet {
                                 slot: slot as u32,
-                                source: Some(ProtoReceiverSource { peer: peer.0, track: track.0 }),
+                                source: Some(ProtoReceiverSource {
+                                    peer: peer.into(),
+                                    track: track.into(),
+                                }),
                             })),
                         })),
                     }))
@@ -356,7 +359,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 log::info!("[TransportWebrtcSdk] datachannel message {}", label.0);
                 self.send_event(ProtoServerEvent::MessageChannel(ProtoMessageChannelContainerEvent {
                     label: label.0,
-                    event: Some(ProtoMessageChannelEvent::Message(MessageChannelMessageEvent { peer: from.0, message })),
+                    event: Some(ProtoMessageChannelEvent::Message(MessageChannelMessageEvent { peer: from.into(), message })),
                 }));
             }
             EndpointEvent::GoAway(_, _) => {}
@@ -706,7 +709,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     metadata: info.metadata,
                     extra_data: self.extra_data.clone(),
                 };
-                if let Some(token) = self.secure.decode_obj::<WebrtcToken>("webrtc", &req.token) {
+                if let Some((_ctx, token)) = self.secure.decode_token::<WebrtcToken>(&req.token) {
                     if token.room == Some(info.room.clone()) && token.peer == Some(info.peer.clone()) {
                         let mixer_cfg = info.features.and_then(|f| {
                             f.mixer.map(|m| AudioMixerConfig {
@@ -890,6 +893,7 @@ mod tests {
     };
     use media_server_protocol::{
         endpoint::{PeerMeta, RoomInfoPublish, RoomInfoSubscribe},
+        multi_tenancy::AppContext,
         protobuf::{
             gateway,
             session::{self, client_event, ClientEvent},
@@ -991,8 +995,8 @@ mod tests {
         );
         assert_eq!(transport.pop_output(now), None);
 
-        let token = gateway_jwt.encode_obj(
-            "webrtc",
+        let token = gateway_jwt.encode_token(
+            &AppContext { app: None },
             WebrtcToken {
                 room: Some("demo".to_string()),
                 peer: Some("peer1".to_string()),

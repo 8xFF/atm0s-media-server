@@ -84,7 +84,7 @@ impl EndpointRemoteTrack {
         self.queue.push_back(Output::PeerEvent(
             now,
             peer_event::Event::RemoteTrackStarted(peer_event::RemoteTrackStarted {
-                track: name.0,
+                track: name.into(),
                 kind: Kind::from(self.meta.kind) as i32,
             }),
         ));
@@ -102,7 +102,7 @@ impl EndpointRemoteTrack {
         self.queue.push_back(Output::PeerEvent(
             now,
             peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
-                track: name.0,
+                track: name.into(),
                 kind: Kind::from(self.meta.kind) as i32,
             }),
         ));
@@ -128,8 +128,7 @@ impl EndpointRemoteTrack {
                 self.name = Some(name.clone().into());
                 let room = return_if_none!(self.room.as_ref());
                 log::info!("[EndpointRemoteTrack] started as name {name} in room {room}");
-                self.queue
-                    .push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Started(TrackName(name.clone()), self.meta.clone())));
+                self.queue.push_back(Output::Cluster(*room, ClusterRemoteTrackControl::Started(name.clone().into(), self.meta.clone())));
                 self.queue.push_back(Output::Started(self.meta.kind, priority));
                 if self.record {
                     self.queue
@@ -176,7 +175,7 @@ impl EndpointRemoteTrack {
                 self.queue.push_back(Output::PeerEvent(
                     now,
                     peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
-                        track: name.0,
+                        track: name.into(),
                         kind: Kind::from(self.meta.kind) as i32,
                     }),
                 ));
@@ -189,7 +188,7 @@ impl EndpointRemoteTrack {
     fn on_rpc_req(&mut self, _now: Instant, req_id: EndpointReqId, req: EndpointRemoteTrackReq) {
         match req {
             EndpointRemoteTrackReq::Config(config) => {
-                if config.priority.0 == 0 {
+                if *config.priority == 0 {
                     log::warn!("[EndpointRemoteTrack] view with invalid priority");
                     self.queue
                         .push_back(Output::RpcRes(req_id, EndpointRemoteTrackRes::Config(Err(RpcError::new2(EndpointErrors::RemoteTrackInvalidPriority)))));
@@ -272,7 +271,7 @@ mod tests {
     #[test]
     fn start_in_room() {
         let room = 0.into();
-        let track_name = TrackName("audio_main".to_string());
+        let track_name = TrackName::from("audio_main");
         let track_id = 1.into();
         let track_priority = 2.into();
         let meta = TrackMeta::default_audio();
@@ -283,7 +282,7 @@ mod tests {
         track.on_event(
             now,
             Input::Event(RemoteTrackEvent::Started {
-                name: track_name.0.clone(),
+                name: track_name.clone().into(),
                 priority: track_priority,
                 meta: meta.clone(),
             }),
@@ -296,7 +295,7 @@ mod tests {
             Some(Output::PeerEvent(
                 now,
                 peer_event::Event::RemoteTrackStarted(peer_event::RemoteTrackStarted {
-                    track: track_name.0.clone(),
+                    track: track_name.clone().into(),
                     kind: Kind::from(meta.kind) as i32,
                 }),
             ))
@@ -313,7 +312,7 @@ mod tests {
             Some(Output::PeerEvent(
                 now,
                 peer_event::Event::RemoteTrackEnded(peer_event::RemoteTrackEnded {
-                    track: track_name.0.clone(),
+                    track: track_name.clone().into(),
                     kind: Kind::from(meta.kind) as i32,
                 }),
             ))

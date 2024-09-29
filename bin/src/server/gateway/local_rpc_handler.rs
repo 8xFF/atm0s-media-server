@@ -9,6 +9,7 @@ use media_server_gateway::ServiceKind;
 use media_server_protocol::{
     endpoint::ClusterConnId,
     gateway::GATEWAY_RPC_PORT,
+    multi_tenancy::AppContext,
     protobuf::{
         cluster_connector::peer_event::RouteBegin,
         cluster_gateway::MediaEdgeServiceClient,
@@ -127,12 +128,12 @@ impl MediaLocalRpcHandler {
                 whep::RpcReq::Delete(param) => RpcRes::Whep(whep::RpcRes::Delete(self.whep_delete(conn_part, param).await)),
             },
             RpcReq::Webrtc(param) => match param {
-                webrtc::RpcReq::Connect(session_id, ip, user_agent, param, extra_data, record) => {
-                    RpcRes::Webrtc(webrtc::RpcRes::Connect(self.webrtc_connect(session_id, ip, user_agent, param, extra_data, record).await))
+                webrtc::RpcReq::Connect(app, session_id, ip, user_agent, param, extra_data, record) => {
+                    RpcRes::Webrtc(webrtc::RpcRes::Connect(self.webrtc_connect(session_id, app, ip, user_agent, param, extra_data, record).await))
                 }
                 webrtc::RpcReq::RemoteIce(conn, param) => RpcRes::Webrtc(webrtc::RpcRes::RemoteIce(self.webrtc_remote_ice(conn_part, conn, param).await)),
-                webrtc::RpcReq::RestartIce(conn, ip, user_agent, req, extra_data, record) => {
-                    RpcRes::Webrtc(webrtc::RpcRes::RestartIce(self.webrtc_restart_ice(conn_part, conn, ip, user_agent, req, extra_data, record).await))
+                webrtc::RpcReq::RestartIce(conn, app, ip, user_agent, req, extra_data, record) => {
+                    RpcRes::Webrtc(webrtc::RpcRes::RestartIce(self.webrtc_restart_ice(conn_part, conn, app, ip, user_agent, req, extra_data, record).await))
                 }
                 webrtc::RpcReq::Delete(_) => {
                     //TODO implement delete webrtc conn
@@ -286,7 +287,16 @@ impl MediaLocalRpcHandler {
     Webrtc part
     */
 
-    async fn webrtc_connect(&self, session_id: u64, ip: IpAddr, user_agent: String, req: ConnectRequest, extra_data: Option<String>, record: bool) -> RpcResult<(ClusterConnId, ConnectResponse)> {
+    async fn webrtc_connect(
+        &self,
+        session_id: u64,
+        app: AppContext,
+        ip: IpAddr,
+        user_agent: String,
+        req: ConnectRequest,
+        extra_data: Option<String>,
+        record: bool,
+    ) -> RpcResult<(ClusterConnId, ConnectResponse)> {
         let started_at = now_ms();
         self.feedback_route_begin(session_id, ip).await;
 
@@ -294,6 +304,7 @@ impl MediaLocalRpcHandler {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             log::info!("[Gateway] selected node {node_id}");
             let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcConnectRequest {
+                app: Some(app.into()),
                 session_id,
                 user_agent,
                 ip: ip.to_string(),
@@ -344,6 +355,7 @@ impl MediaLocalRpcHandler {
         &self,
         conn_part: Option<(NodeId, u64)>,
         conn: ClusterConnId,
+        app: AppContext,
         ip: IpAddr,
         user_agent: String,
         req: ConnectRequest,
@@ -366,6 +378,7 @@ impl MediaLocalRpcHandler {
         };
         log::info!("[Gateway] selected dest node {dest} with provided node {node}");
         let rpc_req = media_server_protocol::protobuf::cluster_gateway::WebrtcRestartIceRequest {
+            app: Some(app.into()),
             conn: conn.to_string(),
             ip: ip.to_string(),
             user_agent,
