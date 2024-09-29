@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::protobuf;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AppContext {
     pub app: Option<String>, //if it is none that mean root app
 }
@@ -17,12 +17,6 @@ impl Display for AppContext {
     }
 }
 
-impl Default for AppContext {
-    fn default() -> Self {
-        Self { app: None }
-    }
-}
-
 impl From<protobuf::shared::AppContext> for AppContext {
     fn from(value: protobuf::shared::AppContext) -> Self {
         Self { app: value.app }
@@ -31,7 +25,7 @@ impl From<protobuf::shared::AppContext> for AppContext {
 
 impl From<Option<protobuf::shared::AppContext>> for AppContext {
     fn from(value: Option<protobuf::shared::AppContext>) -> Self {
-        Self { app: value.map(|v| v.app).flatten() }
+        Self { app: value.and_then(|v| v.app) }
     }
 }
 
