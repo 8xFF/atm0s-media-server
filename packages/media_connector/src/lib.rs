@@ -30,10 +30,12 @@ pub struct PagingResponse<T> {
 #[derive(Debug)]
 pub struct RoomInfo {
     pub id: i32,
+    pub app: String,
     pub room: String,
     pub created_at: u64,
     pub destroyed_at: Option<u64>,
     pub peers: usize,
+    pub record: Option<String>,
 }
 
 #[derive(Debug)]
@@ -60,6 +62,7 @@ pub struct PeerInfo {
 #[derive(Debug)]
 pub struct SessionInfo {
     pub id: u64,
+    pub app: String,
     pub created_at: u64,
     pub ip: Option<String>,
     pub user_agent: Option<String>,

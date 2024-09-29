@@ -118,6 +118,7 @@ pub struct TransportWebrtc<ES> {
 }
 
 impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         app: AppContext,
         remote: IpAddr,

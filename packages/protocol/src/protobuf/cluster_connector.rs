@@ -75,6 +75,8 @@ pub mod connector_response {
 #[derive(serde::Serialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PeerEvent {
+    #[prost(string, tag = "19")]
+    pub app: ::prost::alloc::string::String,
     #[prost(uint64, tag = "1")]
     pub session_id: u64,
     #[prost(
@@ -212,8 +214,6 @@ pub mod peer_event {
     #[derive(serde::Serialize)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Join {
-        #[prost(string, tag = "3")]
-        pub app: ::prost::alloc::string::String,
         #[prost(string, tag = "1")]
         pub room: ::prost::alloc::string::String,
         #[prost(string, tag = "2")]
@@ -222,8 +222,6 @@ pub mod peer_event {
     #[derive(serde::Serialize)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Leave {
-        #[prost(string, tag = "3")]
-        pub app: ::prost::alloc::string::String,
         #[prost(string, tag = "1")]
         pub room: ::prost::alloc::string::String,
         #[prost(string, tag = "2")]
@@ -402,6 +400,8 @@ pub struct PeerRes {}
 #[derive(serde::Serialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RoomEvent {
+    #[prost(string, tag = "7")]
+    pub app: ::prost::alloc::string::String,
     #[prost(string, tag = "1")]
     pub room: ::prost::alloc::string::String,
     #[prost(oneof = "room_event::Event", tags = "2, 3, 4, 5, 6")]
@@ -448,6 +448,8 @@ pub mod room_event {
 #[derive(serde::Serialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RecordEvent {
+    #[prost(string, tag = "4")]
+    pub app: ::prost::alloc::string::String,
     #[prost(string, tag = "1")]
     pub room: ::prost::alloc::string::String,
     #[prost(oneof = "record_event::Event", tags = "2, 3")]
@@ -525,12 +527,16 @@ pub mod get_rooms {
     pub struct RoomInfo {
         #[prost(int32, tag = "1")]
         pub id: i32,
+        #[prost(string, tag = "5")]
+        pub app: ::prost::alloc::string::String,
         #[prost(string, tag = "2")]
         pub room: ::prost::alloc::string::String,
         #[prost(uint64, tag = "3")]
         pub created_at: u64,
         #[prost(uint32, tag = "4")]
         pub peers: u32,
+        #[prost(string, optional, tag = "6")]
+        pub record: ::core::option::Option<::prost::alloc::string::String>,
     }
 }
 #[derive(serde::Serialize)]
@@ -601,6 +607,8 @@ pub mod get_sessions {
     #[derive(serde::Serialize)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct SessionInfo {
+        #[prost(string, tag = "7")]
+        pub app: ::prost::alloc::string::String,
         #[prost(uint64, tag = "1")]
         pub id: u64,
         #[prost(string, optional, tag = "2")]

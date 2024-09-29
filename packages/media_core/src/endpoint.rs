@@ -5,7 +5,7 @@ use std::{marker::PhantomData, time::Instant};
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, BitrateControlMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe, TrackMeta, TrackName, TrackPriority, TrackSource},
     media::MediaPacket,
-    multi_tenancy::AppContext,
+    multi_tenancy::{AppContext, AppId},
     protobuf::{self, cluster_connector::peer_event},
     record::SessionRecordEvent,
     transport::RpcResult,
@@ -203,7 +203,7 @@ pub enum EndpointInput<Ext> {
 pub enum EndpointOutput<Ext> {
     Net(BackendOutgoing),
     Cluster(ClusterRoomHash, ClusterEndpointControl),
-    PeerEvent(u64, Instant, peer_event::Event),
+    PeerEvent(AppId, u64, Instant, peer_event::Event),
     RecordEvent(u64, Instant, SessionRecordEvent),
     Ext(Ext),
     Continue,
@@ -226,6 +226,7 @@ pub struct EndpointCfg {
 }
 
 pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
+    app: AppId,
     session_id: u64,
     transport: TaskSwitcherBranch<T, TransportOutput<ExtOut>>,
     internal: TaskSwitcherBranch<EndpointInternal, InternalOutput>,
@@ -236,6 +237,7 @@ pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
 impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
     pub fn new(session_id: u64, cfg: EndpointCfg, transport: T) -> Self {
         Self {
+            app: cfg.app.app.clone(),
             session_id,
             transport: TaskSwitcherBranch::new(transport, TaskType::Transport),
             internal: TaskSwitcherBranch::new(EndpointInternal::new(cfg), TaskType::Internal),
@@ -324,7 +326,7 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
             }
             InternalOutput::Cluster(room, control) => Some(EndpointOutput::Cluster(room, control)),
             InternalOutput::Destroy => Some(EndpointOutput::Destroy),
-            InternalOutput::PeerEvent(ts, event) => Some(EndpointOutput::PeerEvent(self.session_id, ts, event)),
+            InternalOutput::PeerEvent(ts, event) => Some(EndpointOutput::PeerEvent(self.app.clone(), self.session_id, ts, event)),
             InternalOutput::RecordEvent(ts, event) => Some(EndpointOutput::RecordEvent(self.session_id, ts, event)),
         }
     }

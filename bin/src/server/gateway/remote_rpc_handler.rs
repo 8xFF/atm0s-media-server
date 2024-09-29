@@ -9,6 +9,7 @@ use media_server_gateway::ServiceKind;
 use media_server_protocol::{
     endpoint::ClusterConnId,
     gateway::GATEWAY_RPC_PORT,
+    multi_tenancy::AppContext,
     protobuf::{
         cluster_connector::{
             connector_request::Request as ConnectorRequest,
@@ -45,11 +46,12 @@ pub struct Ctx {
 pub struct MediaRemoteRpcHandlerImpl {}
 
 impl MediaRemoteRpcHandlerImpl {
-    async fn feedback_route_begin(ctx: &Ctx, session_id: u64, remote_ip: String) {
+    async fn feedback_route_begin(ctx: &Ctx, app: &str, session_id: u64, remote_ip: String) {
         ctx.connector_agent_tx
             .send(ConnectorControl::Request(
                 now_ms(),
                 ConnectorRequest::Peer(PeerEvent {
+                    app: app.to_owned(),
                     session_id,
                     event: Some(PeerEvent2::RouteBegin(RouteBegin { remote_ip })),
                 }),
@@ -58,11 +60,12 @@ impl MediaRemoteRpcHandlerImpl {
             .expect("Should send");
     }
 
-    async fn feedback_route_success(ctx: &Ctx, session_id: u64, after_ms: u64, node: NodeId) {
+    async fn feedback_route_success(ctx: &Ctx, app: &str, session_id: u64, after_ms: u64, node: NodeId) {
         ctx.connector_agent_tx
             .send(ConnectorControl::Request(
                 now_ms(),
                 ConnectorRequest::Peer(PeerEvent {
+                    app: app.to_owned(),
                     session_id,
                     event: Some(PeerEvent2::RouteSuccess(RouteSuccess {
                         after_ms: after_ms as u32,
@@ -74,11 +77,12 @@ impl MediaRemoteRpcHandlerImpl {
             .expect("Should send");
     }
 
-    async fn feedback_route_error(ctx: &Ctx, session_id: u64, after_ms: u64, node: Option<NodeId>, error: ErrorType) {
+    async fn feedback_route_error(ctx: &Ctx, app: &str, session_id: u64, after_ms: u64, node: Option<NodeId>, error: ErrorType) {
         ctx.connector_agent_tx
             .send(ConnectorControl::Request(
                 now_ms(),
                 ConnectorRequest::Peer(PeerEvent {
+                    app: app.to_owned(),
                     session_id,
                     event: Some(PeerEvent2::RouteError(RouteError {
                         after_ms: after_ms as u32,
@@ -97,19 +101,20 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         let started_at = now_ms();
         let session_id = req.session_id;
         log::info!("On whip_connect from other gateway");
-        Self::feedback_route_begin(ctx, session_id, req.ip.clone()).await;
+        let app = req.app.clone().map(|a| a.into()).unwrap_or_else(AppContext::root_app);
+        Self::feedback_route_begin(ctx, &app.app, session_id, req.ip.clone()).await;
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let node_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             if let Some(res) = ctx.client.whip_connect(node_addr, req).await {
-                Self::feedback_route_success(ctx, session_id, now_ms() - started_at, node_id).await;
+                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
                 Some(res)
             } else {
-                Self::feedback_route_error(ctx, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
                 None
             }
         } else {
-            Self::feedback_route_error(ctx, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
+            Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
             None
         }
     }
@@ -134,19 +139,20 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         let started_at = now_ms();
         let session_id = req.session_id;
         log::info!("On whep_connect from other gateway");
-        Self::feedback_route_begin(ctx, session_id, req.ip.clone()).await;
+        let app = req.app.clone().map(|a| a.into()).unwrap_or_else(AppContext::root_app);
+        Self::feedback_route_begin(ctx, &app.app, session_id, req.ip.clone()).await;
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             if let Some(res) = ctx.client.whep_connect(dest_addr, req).await {
-                Self::feedback_route_success(ctx, session_id, now_ms() - started_at, node_id).await;
+                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
                 Some(res)
             } else {
-                Self::feedback_route_error(ctx, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
                 None
             }
         } else {
-            Self::feedback_route_error(ctx, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
+            Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
             None
         }
     }
@@ -170,20 +176,21 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
     async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
         let started_at = now_ms();
         let session_id = req.session_id;
+        let app = req.app.clone().map(|a| a.into()).unwrap_or_else(AppContext::root_app);
         log::info!("On webrtc_connect from other gateway");
-        Self::feedback_route_begin(ctx, session_id, req.ip.clone()).await;
+        Self::feedback_route_begin(ctx, &app.app, session_id, req.ip.clone()).await;
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             if let Some(res) = ctx.client.webrtc_connect(dest_addr, req).await {
-                Self::feedback_route_success(ctx, session_id, now_ms() - started_at, node_id).await;
+                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
                 Some(res)
             } else {
-                Self::feedback_route_error(ctx, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
                 None
             }
         } else {
-            Self::feedback_route_error(ctx, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
+            Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
             None
         }
     }
@@ -208,20 +215,21 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         let started_at = now_ms();
         let session_id = req.session_id;
         log::info!("On rtp_engine_connect from other gateway");
+        let app = req.app.clone().map(|a| a.into()).unwrap_or_else(AppContext::root_app);
         // TODO get ip
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
-        Self::feedback_route_begin(ctx, session_id, ip.to_string()).await;
+        Self::feedback_route_begin(ctx, &app.app, session_id, ip.to_string()).await;
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, None).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             if let Some(res) = ctx.client.rtp_engine_create_offer(dest_addr, req).await {
-                Self::feedback_route_success(ctx, session_id, now_ms() - started_at, node_id).await;
+                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
                 Some(res)
             } else {
-                Self::feedback_route_error(ctx, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
                 None
             }
         } else {
-            Self::feedback_route_error(ctx, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
+            Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
             None
         }
     }
@@ -237,21 +245,22 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
     async fn rtp_engine_create_answer(&self, ctx: &Ctx, req: RtpEngineCreateAnswerRequest) -> Option<RtpEngineCreateAnswerResponse> {
         let started_at = now_ms();
         let session_id = req.session_id;
+        let app = req.app.clone().map(|a| a.into()).unwrap_or_else(AppContext::root_app);
         log::info!("On rtp_engine_connect from other gateway");
         // TODO get ip
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
-        Self::feedback_route_begin(ctx, session_id, ip.to_string()).await;
+        Self::feedback_route_begin(ctx, &app.app, session_id, ip.to_string()).await;
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, None).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             if let Some(res) = ctx.client.rtp_engine_create_answer(dest_addr, req).await {
-                Self::feedback_route_success(ctx, session_id, now_ms() - started_at, node_id).await;
+                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
                 Some(res)
             } else {
-                Self::feedback_route_error(ctx, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
                 None
             }
         } else {
-            Self::feedback_route_error(ctx, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
+            Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
             None
         }
     }

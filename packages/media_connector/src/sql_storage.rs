@@ -89,6 +89,7 @@ impl ConnectorSqlStorage {
 
         for room in rooms_wait_destroy {
             log::info!("[ConnectorSqlStorage] room {} {} no-one online after {}ms => destroy", room.id, room.room, self.room_destroy_after_ms);
+            let app_id = room.app.clone();
             let room_name = room.room.clone();
             let mut model: entity::room::ActiveModel = room.into();
             model.destroyed_at = Set(Some(now_ms as i64));
@@ -99,6 +100,7 @@ impl ConnectorSqlStorage {
                 node: self.node,
                 ts: now_ms,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app_id,
                     room: room_name,
                     event: Some(room_event::Event::Stopped(RoomStopped {})),
                 })),
@@ -108,10 +110,11 @@ impl ConnectorSqlStorage {
         Ok(())
     }
 
-    async fn on_peer_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, session: u64, event: peer_event::Event) -> Result<(), DbErr> {
+    async fn on_peer_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, app: &str, session: u64, event: peer_event::Event) -> Result<(), DbErr> {
         if entity::session::Entity::find_by_id(session as i64).one(&self.db).await?.is_none() {
             log::info!("[ConnectorSqlStorage] new session {session} from node {from}");
             entity::session::Entity::insert(entity::session::ActiveModel {
+                app: Set(app.to_owned()),
                 id: Set(session as i64),
                 created_at: Set(now_ms as i64),
                 ip: ActiveValue::NotSet,
@@ -252,7 +255,7 @@ impl ConnectorSqlStorage {
                 Ok(())
             }
             peer_event::Event::Join(params) => {
-                let room = self.upsert_room(now_ms, event_ts, &params.app, &params.room).await?;
+                let room = self.upsert_room(now_ms, event_ts, app, &params.room).await?;
                 let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
                 let _peer_session = self.upsert_peer_session(now_ms, room, peer, session, event_ts).await?;
 
@@ -261,6 +264,7 @@ impl ConnectorSqlStorage {
                     node: self.node,
                     ts: event_ts,
                     event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
                         room: params.room.clone(),
                         event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: params.peer.clone() })),
                     })),
@@ -285,12 +289,13 @@ impl ConnectorSqlStorage {
                     node: self.node,
                     ts: event_ts,
                     event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
                         room: params.room.clone(),
                         event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: params.peer.clone() })),
                     })),
                 });
 
-                let room = self.upsert_room(now_ms, event_ts, &params.app, &params.room).await?;
+                let room = self.upsert_room(now_ms, event_ts, app, &params.room).await?;
                 let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
                 let peer_session = entity::peer_session::Entity::find()
                     .filter(entity::peer_session::Column::Peer.eq(peer))
@@ -321,6 +326,7 @@ impl ConnectorSqlStorage {
                         node: self.node,
                         ts: event_ts,
                         event: Some(hook_event::Event::Room(RoomEvent {
+                            app: app.to_owned(),
                             room: params.room.clone(),
                             event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {})),
                         })),
@@ -437,6 +443,7 @@ impl ConnectorSqlStorage {
                 node: self.node,
                 ts: event_ts,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app.to_owned(),
                     room: room.to_owned(),
                     event: Some(room_event::Event::Started(RoomStarted {})),
                 })),
@@ -531,7 +538,7 @@ impl Storage for ConnectorSqlStorage {
     async fn on_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, event: connector_request::Request) -> Option<connector_response::Response> {
         match event {
             connector_request::Request::Peer(event) => {
-                if let Err(e) = self.on_peer_event(now_ms, from, event_ts, event.session_id, event.event.clone()?).await {
+                if let Err(e) = self.on_peer_event(now_ms, from, event_ts, &event.app, event.session_id, event.event.clone()?).await {
                     log::error!("[ConnectorSqlStorage] db error {e:?}");
                     return None;
                 }
@@ -560,6 +567,7 @@ impl Storage for ConnectorSqlStorage {
                         node: from,
                         ts: event_ts,
                         event: Some(hook_event::Event::Record(RecordEvent {
+                            app: req.app.clone(),
                             room: req.room.clone(),
                             event: Some(record_event::Event::Started(RecordStarted { path: room_path.clone() })),
                         })),
@@ -587,6 +595,7 @@ impl Storage for ConnectorSqlStorage {
                         node: from,
                         ts: event_ts,
                         event: Some(hook_event::Event::Record(RecordEvent {
+                            app: req.app.clone(),
                             room: req.room.clone(),
                             event: Some(record_event::Event::PeerJoined(RecordPeerJoined {
                                 peer: req.peer.clone(),
@@ -624,10 +633,12 @@ pub struct ConnectorSqlQuerier {
 #[derive(FromQueryResult)]
 struct RoomInfoAndPeersCount {
     pub id: i32,
+    pub app: String,
     pub room: String,
     pub created_at: i64,
     pub destroyed_at: Option<i64>,
     pub peers: i64,
+    pub record: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -647,10 +658,12 @@ impl Querier for ConnectorSqlQuerier {
             .into_iter()
             .map(|r| RoomInfo {
                 id: r.id,
+                app: r.app,
                 room: r.room,
                 created_at: r.created_at as u64,
                 destroyed_at: r.destroyed_at.map(|t| t as u64),
                 peers: r.peers as usize,
+                record: r.record,
             })
             .collect::<Vec<_>>();
         let total = entity::room::Entity::find().count(&self.db).await.map_err(|e| e.to_string())?;
@@ -756,6 +769,7 @@ impl Querier for ConnectorSqlQuerier {
                 .into_iter()
                 .map(|(r, peers)| SessionInfo {
                     id: r.id as u64,
+                    app: r.app,
                     created_at: r.created_at as u64,
                     ip: r.ip,
                     user_agent: r.user_agent,
@@ -850,6 +864,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event() {
+        let app = "app1";
         let session_id = 10000;
         let node = 1;
         let ts = 1000;
@@ -865,6 +880,7 @@ mod tests {
         let mut storage = ConnectorSqlStorage::new(node, &cfg).await;
         let querier = storage.querier();
         let event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::RouteBegin(RouteBegin { remote_ip: remote_ip.clone() })),
         };
@@ -898,6 +914,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_room() {
+        let app = "app1";
         let session_id = 10000;
         let node = 1;
         let ts = 1000;
@@ -913,6 +930,7 @@ mod tests {
         let mut storage = ConnectorSqlStorage::new(node, &cfg).await;
         let querier = storage.querier();
         let connecting_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Connecting(Connecting { remote_ip: remote_ip.clone() })),
         };
@@ -947,6 +965,7 @@ mod tests {
         assert_eq!(session_events.current, 0);
 
         let connected_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Connected(Connected {
                 after_ms: 10,
@@ -973,9 +992,9 @@ mod tests {
         assert_eq!(rooms.current, 0);
 
         let join_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Join(Join {
-                app: "app1".to_string(),
                 room: "demo".to_string(),
                 peer: "peer".to_string(),
             })),
@@ -988,6 +1007,7 @@ mod tests {
                 node,
                 ts,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app.to_owned(),
                     room: "demo".to_owned(),
                     event: Some(room_event::Event::Started(RoomStarted {}))
                 }))
@@ -999,6 +1019,7 @@ mod tests {
                 node,
                 ts,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app.to_owned(),
                     room: "demo".to_owned(),
                     event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
                 }))
@@ -1026,9 +1047,9 @@ mod tests {
 
         // now leave room
         let leave_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Leave(Leave {
-                app: "app1".to_string(),
                 room: "demo".to_string(),
                 peer: "peer".to_string(),
             })),
@@ -1044,6 +1065,7 @@ mod tests {
                 node,
                 ts,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app.to_owned(),
                     room: "demo".to_string(),
                     event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: "peer".to_string() }))
                 }))
@@ -1055,6 +1077,7 @@ mod tests {
                 node,
                 ts,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app.to_owned(),
                     room: "demo".to_owned(),
                     event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {}))
                 }))
@@ -1079,6 +1102,7 @@ mod tests {
                 node,
                 ts: 1000 + cfg.room_destroy_after_ms,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app.to_owned(),
                     room: "demo".to_owned(),
                     event: Some(room_event::Event::Stopped(RoomStopped {}))
                 }))
@@ -1089,9 +1113,9 @@ mod tests {
         // now we will create new room
         let ts = ts + 10000;
         let join_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Join(Join {
-                app: "app1".to_string(),
                 room: "demo".to_string(),
                 peer: "peer".to_string(),
             })),
@@ -1103,6 +1127,7 @@ mod tests {
                 node,
                 ts,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app.to_owned(),
                     room: "demo".to_owned(),
                     event: Some(room_event::Event::Started(RoomStarted {}))
                 }))
@@ -1114,6 +1139,7 @@ mod tests {
                 node,
                 ts,
                 event: Some(hook_event::Event::Room(RoomEvent {
+                    app: app.to_owned(),
                     room: "demo".to_owned(),
                     event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
                 }))

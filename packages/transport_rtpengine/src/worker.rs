@@ -6,7 +6,7 @@ use media_server_core::{
 };
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
-    multi_tenancy::AppContext,
+    multi_tenancy::{AppContext, AppId},
     protobuf::cluster_connector::peer_event,
     record::SessionRecordEvent,
     transport::{RpcError, RpcResult},
@@ -31,7 +31,7 @@ pub enum GroupInput {
 pub enum GroupOutput {
     Net(usize, BackendOutgoing),
     Cluster(RtpEngineSession, ClusterRoomHash, ClusterEndpointControl),
-    PeerEvent(RtpEngineSession, u64, Instant, peer_event::Event),
+    PeerEvent(RtpEngineSession, AppId, u64, Instant, peer_event::Event),
     RecordEvent(RtpEngineSession, u64, Instant, SessionRecordEvent),
     Ext(RtpEngineSession, ExtOut),
     Shutdown(RtpEngineSession),
@@ -75,7 +75,7 @@ impl MediaWorkerRtpEngine {
         match out {
             EndpointOutput::Net(net) => GroupOutput::Net(index, net),
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(RtpEngineSession(index), room, control),
-            EndpointOutput::PeerEvent(session_id, ts, event) => GroupOutput::PeerEvent(RtpEngineSession(index), session_id, ts, event),
+            EndpointOutput::PeerEvent(app, session_id, ts, event) => GroupOutput::PeerEvent(RtpEngineSession(index), app, session_id, ts, event),
             EndpointOutput::RecordEvent(session_id, ts, event) => GroupOutput::RecordEvent(RtpEngineSession(index), session_id, ts, event),
             EndpointOutput::Destroy => {
                 log::info!("[TransportRtpEngine] destroy endpoint {index}");

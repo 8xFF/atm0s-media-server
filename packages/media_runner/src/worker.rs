@@ -446,14 +446,22 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 self.media_cluster.input(&mut self.switcher).on_endpoint_control(now, session.into(), room, control);
                 Output::Continue
             }
-            transport_webrtc::GroupOutput::PeerEvent(_, session_id, ts, event) => {
+            transport_webrtc::GroupOutput::PeerEvent(_, app, session_id, ts, event) => {
                 let now_ms = self.timer.timestamp_ms(now);
                 self.sdn_worker.input(&mut self.switcher).on_event(
                     now_ms,
                     SdnWorkerInput::ExtWorker(SdnExtIn::ServicesControl(
                         media_server_connector::AGENT_SERVICE_ID.into(),
                         UserData::Cluster,
-                        media_server_connector::agent_service::Control::Request(self.timer.timestamp_ms(ts), connector_request::Request::Peer(PeerEvent { session_id, event: Some(event) })).into(),
+                        media_server_connector::agent_service::Control::Request(
+                            self.timer.timestamp_ms(ts),
+                            connector_request::Request::Peer(PeerEvent {
+                                app: app.into(),
+                                session_id,
+                                event: Some(event),
+                            }),
+                        )
+                        .into(),
                     )),
                 );
                 Output::Continue
@@ -500,14 +508,22 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 self.media_cluster.input(&mut self.switcher).on_endpoint_control(now, session.into(), room, control);
                 Output::Continue
             }
-            transport_rtpengine::GroupOutput::PeerEvent(_, session_id, ts, event) => {
+            transport_rtpengine::GroupOutput::PeerEvent(_, app, session_id, ts, event) => {
                 let now_ms = self.timer.timestamp_ms(now);
                 self.sdn_worker.input(&mut self.switcher).on_event(
                     now_ms,
                     SdnWorkerInput::ExtWorker(SdnExtIn::ServicesControl(
                         media_server_connector::AGENT_SERVICE_ID.into(),
                         UserData::Cluster,
-                        media_server_connector::agent_service::Control::Request(self.timer.timestamp_ms(ts), connector_request::Request::Peer(PeerEvent { session_id, event: Some(event) })).into(),
+                        media_server_connector::agent_service::Control::Request(
+                            self.timer.timestamp_ms(ts),
+                            connector_request::Request::Peer(PeerEvent {
+                                app: app.into(),
+                                session_id,
+                                event: Some(event),
+                            }),
+                        )
+                        .into(),
                     )),
                 );
                 Output::Continue

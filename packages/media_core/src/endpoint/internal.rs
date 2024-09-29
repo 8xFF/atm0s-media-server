@@ -399,14 +399,8 @@ impl EndpointInternal {
             self.queue
                 .push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::JoinRoom(self.cfg.app.app.clone(), room.clone(), peer.clone())));
         }
-        self.queue.push_back(InternalOutput::PeerEvent(
-            now,
-            peer_event::Event::Join(peer_event::Join {
-                app: self.cfg.app.app.clone().into(),
-                room: room.into(),
-                peer: peer.into(),
-            }),
-        ));
+        self.queue
+            .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Join(peer_event::Join { room: room.into(), peer: peer.into() })));
 
         for (_track_id, index) in self.local_tracks_id.pairs() {
             self.local_tracks.input(&mut self.switcher).on_event(now, index, local_track::Input::JoinRoom(room_hash));
@@ -441,14 +435,8 @@ impl EndpointInternal {
         if self.cfg.record {
             self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::LeaveRoom));
         }
-        self.queue.push_back(InternalOutput::PeerEvent(
-            now,
-            peer_event::Event::Leave(peer_event::Leave {
-                app: self.cfg.app.app.clone().into(),
-                room: room.into(),
-                peer: peer.into(),
-            }),
-        ));
+        self.queue
+            .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.into(), peer: peer.into() })));
     }
 }
 
@@ -657,7 +645,6 @@ mod tests {
             Some(InternalOutput::PeerEvent(
                 now,
                 peer_event::Event::Join(peer_event::Join {
-                    app: app.app.clone().into(),
                     room: room.clone().into(),
                     peer: peer.clone().into()
                 })
@@ -725,14 +712,7 @@ mod tests {
         assert_eq!(internal.pop_output(now), Some(InternalOutput::Cluster(room_hash, ClusterEndpointControl::Leave)));
         assert_eq!(
             internal.pop_output(now),
-            Some(InternalOutput::PeerEvent(
-                now,
-                peer_event::Event::Leave(peer_event::Leave {
-                    app: app.app.clone().into(),
-                    room: room.into(),
-                    peer: peer.into()
-                })
-            ))
+            Some(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.into(), peer: peer.into() })))
         );
         assert_eq!(internal.pop_output(now), None);
     }
@@ -793,7 +773,6 @@ mod tests {
             Some(InternalOutput::PeerEvent(
                 now,
                 peer_event::Event::Join(peer_event::Join {
-                    app: app.app.clone().into(),
                     room: room1.clone().into(),
                     peer: peer.clone().into(),
                 })
@@ -818,7 +797,6 @@ mod tests {
             Some(InternalOutput::PeerEvent(
                 now,
                 peer_event::Event::Leave(peer_event::Leave {
-                    app: app.app.clone().into(),
                     room: room1.clone().into(),
                     peer: peer.clone().into(),
                 })
@@ -838,7 +816,6 @@ mod tests {
             Some(InternalOutput::PeerEvent(
                 now,
                 peer_event::Event::Join(peer_event::Join {
-                    app: app.app.clone().into(),
                     room: room2.into(),
                     peer: peer.into(),
                 })

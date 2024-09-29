@@ -10,18 +10,32 @@ impl MigrationTrait for Migration {
             .alter_table(Table::alter().table(Room::Table).add_column(ColumnDef::new(Room::App).string().default("")).to_owned())
             .await?;
         manager.create_index(Index::create().name("room_app").table(Room::Table).col(Room::App).to_owned()).await?;
+        manager
+            .alter_table(Table::alter().table(Session::Table).add_column(ColumnDef::new(Session::App).string().default("")).to_owned())
+            .await?;
+        manager.create_index(Index::create().name("session_app").table(Session::Table).col(Session::App).to_owned()).await?;
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager.drop_index(Index::drop().name("room_app").table(Room::Table).to_owned()).await?;
         manager.alter_table(Table::alter().table(Room::Table).drop_column(Room::App).to_owned()).await?;
+
+        manager.drop_index(Index::drop().name("session_app").table(Session::Table).to_owned()).await?;
+        manager.alter_table(Table::alter().table(Session::Table).drop_column(Session::App).to_owned()).await?;
+
         Ok(())
     }
 }
 
 #[derive(Iden)]
 enum Room {
+    Table,
+    App,
+}
+
+#[derive(Iden)]
+enum Session {
     Table,
     App,
 }
