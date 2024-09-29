@@ -13,8 +13,8 @@ use media_server_protocol::protobuf::cluster_connector::{
 use media_server_utils::CustomUri;
 use s3_presign::{Credentials, Presigner};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
-    Set,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectOptions, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait, Set,
 };
 use sea_orm_migration::MigratorTrait;
 use sea_query::{Expr, IntoCondition};
@@ -114,7 +114,9 @@ impl ConnectorSqlStorage {
             entity::session::Entity::insert(entity::session::ActiveModel {
                 id: Set(session as i64),
                 created_at: Set(now_ms as i64),
-                ..Default::default()
+                ip: ActiveValue::NotSet,
+                sdk: ActiveValue::NotSet,
+                user_agent: ActiveValue::NotSet,
             })
             .exec(&self.db)
             .await?;
@@ -123,13 +125,13 @@ impl ConnectorSqlStorage {
         match event {
             peer_event::Event::RouteBegin(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RouteBegin".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -138,13 +140,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::RouteSuccess(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RouteSuccess".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -152,13 +154,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::RouteError(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RouteError".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -166,13 +168,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Connecting(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Connecting".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -180,13 +182,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Connected(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Connected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -194,13 +196,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::ConnectError(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("ConnectError".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -209,13 +211,13 @@ impl ConnectorSqlStorage {
             peer_event::Event::Stats(_) => todo!(),
             peer_event::Event::Reconnect(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Reconnect".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -223,13 +225,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Reconnected(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Reconnected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -237,20 +239,20 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Disconnected(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Disconnected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
                 Ok(())
             }
             peer_event::Event::Join(params) => {
-                let room = self.upsert_room(now_ms, event_ts, &params.room).await?;
+                let room = self.upsert_room(now_ms, event_ts, &params.app, &params.room).await?;
                 let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
                 let _peer_session = self.upsert_peer_session(now_ms, room, peer, session, event_ts).await?;
 
@@ -265,13 +267,13 @@ impl ConnectorSqlStorage {
                 });
 
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Join".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -288,7 +290,7 @@ impl ConnectorSqlStorage {
                     })),
                 });
 
-                let room = self.upsert_room(now_ms, event_ts, &params.room).await?;
+                let room = self.upsert_room(now_ms, event_ts, &params.app, &params.room).await?;
                 let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
                 let peer_session = entity::peer_session::Entity::find()
                     .filter(entity::peer_session::Column::Peer.eq(peer))
@@ -326,13 +328,13 @@ impl ConnectorSqlStorage {
                 }
 
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Leave".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -340,13 +342,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::RemoteTrackStarted(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RemoteTrackStarted".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -354,13 +356,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::RemoteTrackEnded(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RemoteTrackEnded".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -368,13 +370,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::LocalTrack(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("LocalTrack".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -382,13 +384,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::LocalTrackAttach(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("LocalTrackAttach".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -396,13 +398,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::LocalTrackDetach(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("LocalTrackDetach".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -411,8 +413,9 @@ impl ConnectorSqlStorage {
         }
     }
 
-    async fn upsert_room(&mut self, now_ms: u64, event_ts: u64, room: &str) -> Result<i32, DbErr> {
+    async fn upsert_room(&mut self, now_ms: u64, event_ts: u64, app: &str, room: &str) -> Result<i32, DbErr> {
         let room_row = entity::room::Entity::find()
+            .filter(entity::room::Column::App.eq(app))
             .filter(entity::room::Column::Room.eq(room))
             .filter(entity::room::Column::DestroyedAt.is_null())
             .one(&self.db)
@@ -440,6 +443,8 @@ impl ConnectorSqlStorage {
             });
 
             entity::room::ActiveModel {
+                id: ActiveValue::NotSet,
+                app: Set(app.to_owned()),
                 room: Set(room.to_owned()),
                 created_at: Set(now_ms as i64),
                 ..Default::default()
@@ -461,10 +466,10 @@ impl ConnectorSqlStorage {
         } else {
             log::info!("[ConnectorSqlStorage] new peer {peer} joined internal_room_id {room}");
             entity::peer::ActiveModel {
+                id: ActiveValue::NotSet,
                 room: Set(room),
                 peer: Set(peer.to_owned()),
                 created_at: Set(now_ms as i64),
-                ..Default::default()
             }
             .insert(&self.db)
             .await
@@ -484,12 +489,14 @@ impl ConnectorSqlStorage {
         } else {
             log::info!("[ConnectorSqlStorage] new peer_session {peer} for internal_room_id {room}");
             entity::peer_session::ActiveModel {
+                id: ActiveValue::NotSet,
                 session: Set(session as i64),
                 peer: Set(peer),
                 room: Set(room),
                 created_at: Set(now_ms as i64),
                 joined_at: Set(event_ts as i64),
-                ..Default::default()
+                leaved_at: ActiveValue::NotSet,
+                record: ActiveValue::NotSet,
             }
             .insert(&self.db)
             .await
@@ -537,6 +544,7 @@ impl Storage for ConnectorSqlStorage {
             }
             connector_request::Request::Record(req) => {
                 let room = entity::room::Entity::find()
+                    .filter(entity::room::Column::App.eq(&req.app))
                     .filter(entity::room::Column::Room.eq(&req.room))
                     .filter(entity::room::Column::DestroyedAt.is_null())
                     .one(&self.db)
@@ -546,7 +554,7 @@ impl Storage for ConnectorSqlStorage {
                 let room_path = if let Some(path) = room.record {
                     path
                 } else {
-                    let room_path = std::path::Path::new(&self.s3_sub_folder).join(&req.room).join(room_id.to_string()).to_str()?.to_string();
+                    let room_path = std::path::Path::new(&self.s3_sub_folder).join(&req.app).join(&req.room).join(room_id.to_string()).to_str()?.to_string();
                     log::info!("[ConnectorSqlStorage] room {} record started in path: {room_path}", req.room);
                     self.hook_events.push_back(HookEvent {
                         node: from,
@@ -967,6 +975,7 @@ mod tests {
         let join_event = PeerEvent {
             session_id,
             event: Some(Event::Join(Join {
+                app: "app1".to_string(),
                 room: "demo".to_string(),
                 peer: "peer".to_string(),
             })),
@@ -1019,6 +1028,7 @@ mod tests {
         let leave_event = PeerEvent {
             session_id,
             event: Some(Event::Leave(Leave {
+                app: "app1".to_string(),
                 room: "demo".to_string(),
                 peer: "peer".to_string(),
             })),
@@ -1081,6 +1091,7 @@ mod tests {
         let join_event = PeerEvent {
             session_id,
             event: Some(Event::Join(Join {
+                app: "app1".to_string(),
                 room: "demo".to_string(),
                 peer: "peer".to_string(),
             })),

@@ -4,7 +4,6 @@ use std::{collections::VecDeque, time::Instant};
 
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, AudioMixerMode, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
-    multi_tenancy::AppContext,
     protobuf::{cluster_connector::peer_event, shared::Kind},
     record::SessionRecordEvent,
     transport::RpcError,
@@ -387,8 +386,7 @@ impl EndpointInternal {
 
     #[allow(clippy::too_many_arguments)]
     fn join_room(&mut self, now: Instant, req_id: EndpointReqId, room: RoomId, peer: PeerId, meta: PeerMeta, publish: RoomInfoPublish, subscribe: RoomInfoSubscribe, mixer: Option<AudioMixerConfig>) {
-        let app = AppContext::default();
-        let room_hash = ClusterRoomHash::generate(&app, &room);
+        let room_hash = ClusterRoomHash::generate(&self.cfg.app, &room);
         log::info!("[EndpointInternal] join_room({room}, {peer}), room_hash {room_hash}");
         self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::JoinRoom(Ok(()))));
 
@@ -398,10 +396,17 @@ impl EndpointInternal {
         self.queue
             .push_back(InternalOutput::Cluster(room_hash, ClusterEndpointControl::Join(peer.clone(), meta, publish, subscribe, mixer)));
         if self.cfg.record {
-            self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::JoinRoom(room.clone(), peer.clone())));
+            self.queue
+                .push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::JoinRoom(self.cfg.app.app.clone(), room.clone(), peer.clone())));
         }
-        self.queue
-            .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Join(peer_event::Join { room: room.into(), peer: peer.into() })));
+        self.queue.push_back(InternalOutput::PeerEvent(
+            now,
+            peer_event::Event::Join(peer_event::Join {
+                app: self.cfg.app.app.clone().into(),
+                room: room.into(),
+                peer: peer.into(),
+            }),
+        ));
 
         for (_track_id, index) in self.local_tracks_id.pairs() {
             self.local_tracks.input(&mut self.switcher).on_event(now, index, local_track::Input::JoinRoom(room_hash));
@@ -436,8 +441,14 @@ impl EndpointInternal {
         if self.cfg.record {
             self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::LeaveRoom));
         }
-        self.queue
-            .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.into(), peer: peer.into() })));
+        self.queue.push_back(InternalOutput::PeerEvent(
+            now,
+            peer_event::Event::Leave(peer_event::Leave {
+                app: self.cfg.app.app.clone().into(),
+                room: room.into(),
+                peer: peer.into(),
+            }),
+        ));
     }
 }
 
@@ -600,9 +611,9 @@ mod tests {
 
     #[test]
     fn test_join_leave_room_success() {
-        let app = AppContext::default();
+        let app = AppContext::root_app();
         let mut internal = EndpointInternal::new(EndpointCfg {
-            app: Default::default(),
+            app: app.clone(),
             max_egress_bitrate: 2_000_000,
             max_ingress_bitrate: 2_000_000,
             record: false,
@@ -646,6 +657,7 @@ mod tests {
             Some(InternalOutput::PeerEvent(
                 now,
                 peer_event::Event::Join(peer_event::Join {
+                    app: app.app.clone().into(),
                     room: room.clone().into(),
                     peer: peer.clone().into()
                 })
@@ -713,16 +725,23 @@ mod tests {
         assert_eq!(internal.pop_output(now), Some(InternalOutput::Cluster(room_hash, ClusterEndpointControl::Leave)));
         assert_eq!(
             internal.pop_output(now),
-            Some(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.into(), peer: peer.into() })))
+            Some(InternalOutput::PeerEvent(
+                now,
+                peer_event::Event::Leave(peer_event::Leave {
+                    app: app.app.clone().into(),
+                    room: room.into(),
+                    peer: peer.into()
+                })
+            ))
         );
         assert_eq!(internal.pop_output(now), None);
     }
 
     #[test]
     fn test_join_overwrite_auto_leave() {
-        let app = AppContext::default();
+        let app = AppContext::root_app();
         let mut internal = EndpointInternal::new(EndpointCfg {
-            app: Default::default(),
+            app: app.clone(),
             max_egress_bitrate: 2_000_000,
             max_ingress_bitrate: 2_000_000,
             record: false,
@@ -774,6 +793,7 @@ mod tests {
             Some(InternalOutput::PeerEvent(
                 now,
                 peer_event::Event::Join(peer_event::Join {
+                    app: app.app.clone().into(),
                     room: room1.clone().into(),
                     peer: peer.clone().into(),
                 })
@@ -798,6 +818,7 @@ mod tests {
             Some(InternalOutput::PeerEvent(
                 now,
                 peer_event::Event::Leave(peer_event::Leave {
+                    app: app.app.clone().into(),
                     room: room1.clone().into(),
                     peer: peer.clone().into(),
                 })
@@ -817,6 +838,7 @@ mod tests {
             Some(InternalOutput::PeerEvent(
                 now,
                 peer_event::Event::Join(peer_event::Join {
+                    app: app.app.clone().into(),
                     room: room2.into(),
                     peer: peer.into(),
                 })

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{AppStorage, MediaConsoleSecure, MediaEdgeSecure, MediaGatewaySecure, TokenObject};
 use jwt_simple::prelude::*;
-use media_server_protocol::multi_tenancy::AppContext;
+use media_server_protocol::multi_tenancy::{AppContext, AppId};
 use serde::{de::DeserializeOwned, Serialize};
 
 const CONN_ID_TYPE: &str = "conn";
@@ -31,7 +31,12 @@ impl MediaEdgeSecure for MediaEdgeSecureJwt {
                 return None;
             }
         }
-        Some((AppContext { app: claims.subject }, claims.custom))
+        Some((
+            AppContext {
+                app: claims.subject.map(|s| s.into()).unwrap_or_else(AppId::root_app),
+            },
+            claims.custom,
+        ))
     }
 
     fn encode_conn_id<C: Serialize + DeserializeOwned>(&self, conn: C, ttl_seconds: u64) -> String {
@@ -80,7 +85,7 @@ impl MediaGatewaySecureJwt {
 impl MediaGatewaySecure for MediaGatewaySecureJwt {
     fn validate_app(&self, secret: &str) -> Option<AppContext> {
         if self.key_str.eq(secret) {
-            Some(AppContext { app: None })
+            Some(AppContext { app: AppId::root_app() })
         } else {
             self.app_storage.as_ref()?.validate_app(secret)
         }
@@ -88,8 +93,8 @@ impl MediaGatewaySecure for MediaGatewaySecureJwt {
 
     fn encode_token<O: TokenObject>(&self, ctx: &AppContext, ob: O, ttl_seconds: u64) -> String {
         let mut claims = Claims::with_custom_claims(ob, Duration::from_secs(ttl_seconds)).with_issuer(O::id());
-        if let Some(app) = &ctx.app {
-            claims = claims.with_subject(app);
+        if !ctx.app.is_empty() {
+            claims = claims.with_subject(&ctx.app);
         }
         self.key.authenticate(claims).expect("Should create jwt")
     }
@@ -148,6 +153,7 @@ impl MediaConsoleSecure for MediaConsoleSecureJwt {
 mod tests {
     use std::{thread::sleep, time::Duration};
 
+    use media_server_protocol::multi_tenancy::AppId;
     use serde::{Deserialize, Serialize};
 
     use crate::{
@@ -184,7 +190,7 @@ mod tests {
         let gateway_jwt = MediaGatewaySecureJwt::from(secure_key.as_slice());
         let edge_jwt = MediaEdgeSecureJwt::from(secure_key.as_slice());
 
-        let ctx = AppContext { app: None };
+        let ctx = AppContext { app: AppId::root_app() };
         let ob = Test1 { value: 1 };
         let token = gateway_jwt.encode_token(&ctx, ob.clone(), 1);
 
@@ -204,7 +210,7 @@ mod tests {
         let gateway_jwt = MediaGatewaySecureJwt::from(secure_key.as_slice());
         let edge_jwt = MediaEdgeSecureJwt::from(secure_key.as_slice());
 
-        let ctx = AppContext { app: Some("app1".to_owned()) };
+        let ctx = AppContext { app: AppId::from("app1") };
         let ob = Test1 { value: 1 };
         let token = gateway_jwt.encode_token(&ctx, ob.clone(), 1);
 

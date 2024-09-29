@@ -996,7 +996,7 @@ mod tests {
         assert_eq!(transport.pop_output(now), None);
 
         let token = gateway_jwt.encode_token(
-            &AppContext { app: None },
+            &AppContext::root_app(),
             WebrtcToken {
                 room: Some("demo".to_string()),
                 peer: Some("peer1".to_string()),

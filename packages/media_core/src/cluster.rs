@@ -38,7 +38,7 @@ pub struct ClusterRoomHash(u64);
 impl ClusterRoomHash {
     pub fn generate(app: &AppContext, room: &RoomId) -> Self {
         let mut hash = std::hash::DefaultHasher::new();
-        app.app.as_ref().map(|app| app.as_str()).unwrap_or("").hash(&mut hash);
+        app.app.hash(&mut hash);
         room.as_ref().hash(&mut hash);
         Self(hash.finish())
     }
@@ -196,7 +196,7 @@ mod tests {
     };
     use media_server_protocol::{
         endpoint::{PeerId, PeerInfo, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
-        multi_tenancy::AppContext,
+        multi_tenancy::{AppContext, AppId},
     };
     use sans_io_runtime::TaskSwitcherChild;
 
@@ -210,9 +210,9 @@ mod tests {
 
     #[test]
     fn multi_tenancy_room() {
-        let app_root = AppContext { app: None };
-        let app1 = AppContext { app: Some("app1".to_string()) };
-        let app2 = AppContext { app: Some("app2".to_string()) };
+        let app_root = AppContext { app: AppId::root_app() };
+        let app1 = AppContext { app: AppId::from("app1") };
+        let app2 = AppContext { app: AppId::from("app2") };
 
         let room: RoomId = RoomId::from("same_room");
 

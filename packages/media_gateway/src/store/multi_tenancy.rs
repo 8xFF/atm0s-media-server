@@ -1,16 +1,9 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use derive_more::derive::{Deref, From, FromStr};
-use media_server_protocol::multi_tenancy::AppContext;
+use media_server_protocol::multi_tenancy::{AppContext, AppId, AppSecret};
 use media_server_secure::AppStorage;
 use serde::{Deserialize, Serialize};
 use spin::rwlock::RwLock;
-
-#[derive(FromStr, From, Deref, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct AppId(String);
-
-#[derive(FromStr, From, Deref, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct AppSecret(String);
 
 struct AppSlot {
     app_id: AppId,
@@ -44,9 +37,7 @@ impl AppStorage for MultiTenancyStorage {
         let secret: AppSecret = secret.to_owned().into();
         let apps = self.apps.read();
         let slot = apps.get(&secret)?;
-        Some(AppContext {
-            app: Some(slot.app_id.as_str().to_owned()),
-        })
+        Some(AppContext { app: slot.app_id.clone() })
     }
 }
 
@@ -126,8 +117,7 @@ mod tests {
         storage.sync(vec![("app1".to_string(), app_info.clone())].into_iter());
 
         let context = storage.validate_app("secret1");
-        assert!(context.is_some());
-        assert_eq!(context.unwrap().app.unwrap(), "app1");
+        assert_eq!(context, Some(AppContext { app: AppId::from("app1") }));
     }
 
     fn mockhttp<'a>(server: &'a MockServer, data: Result<&MultiTenancySyncResponse, StatusCode>) -> Mock<'a> {
@@ -163,7 +153,7 @@ mod tests {
         sync.sync().await.expect("Should sync ok");
 
         assert_eq!(storage.len(), 1);
-        assert_eq!(storage.validate_app("secret1"), Some(AppContext { app: Some("app1".to_owned()) }));
+        assert_eq!(storage.validate_app("secret1"), Some(AppContext { app: AppId::from("app1") }));
     }
 
     #[tokio::test]

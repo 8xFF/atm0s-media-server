@@ -75,11 +75,13 @@ message PeerEvent {
     }
 
     message Join {
+        string app = 3;
         string room = 1;
         string peer = 2;
     }
 
     message Leave {
+        string app = 3;
         string room = 1;
         string peer = 2;
     }
@@ -217,13 +219,14 @@ message RecordEvent {
     }
 }
 
-message RecordReq {
+message RecordReq {    
     string room = 1;
     string peer = 2;
     uint64 session = 3;
     uint32 index = 4;
     uint64 from_ts = 5;
     uint64 to_ts = 6;
+    string app = 7;
 }
 
 message RecordRes {

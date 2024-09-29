@@ -212,6 +212,8 @@ pub mod peer_event {
     #[derive(serde::Serialize)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Join {
+        #[prost(string, tag = "3")]
+        pub app: ::prost::alloc::string::String,
         #[prost(string, tag = "1")]
         pub room: ::prost::alloc::string::String,
         #[prost(string, tag = "2")]
@@ -220,6 +222,8 @@ pub mod peer_event {
     #[derive(serde::Serialize)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Leave {
+        #[prost(string, tag = "3")]
+        pub app: ::prost::alloc::string::String,
         #[prost(string, tag = "1")]
         pub room: ::prost::alloc::string::String,
         #[prost(string, tag = "2")]
@@ -489,6 +493,8 @@ pub struct RecordReq {
     pub from_ts: u64,
     #[prost(uint64, tag = "6")]
     pub to_ts: u64,
+    #[prost(string, tag = "7")]
+    pub app: ::prost::alloc::string::String,
 }
 #[derive(serde::Serialize)]
 #[derive(Clone, PartialEq, ::prost::Message)]
