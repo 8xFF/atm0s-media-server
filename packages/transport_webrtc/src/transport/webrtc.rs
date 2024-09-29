@@ -13,6 +13,7 @@ use media_server_core::{
 };
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, PeerId, PeerMeta, RoomId, RoomInfoPublish, RoomInfoSubscribe},
+    multi_tenancy::AppContext,
     protobuf::{
         self,
         features::{
@@ -82,6 +83,7 @@ enum TransportWebrtcError {
 }
 
 pub struct TransportWebrtcSdk<ES> {
+    app: AppContext,
     remote: IpAddr,
     extra_data: Option<String>,
     join: Option<(RoomId, PeerId, Option<String>, RoomInfoPublish, RoomInfoSubscribe)>,
@@ -98,12 +100,13 @@ pub struct TransportWebrtcSdk<ES> {
 }
 
 impl<ES> TransportWebrtcSdk<ES> {
-    pub fn new(req: ConnectRequest, extra_data: Option<String>, secure: Arc<ES>, remote: IpAddr) -> Self {
+    pub fn new(app: AppContext, req: ConnectRequest, extra_data: Option<String>, secure: Arc<ES>, remote: IpAddr) -> Self {
         let tracks = req.tracks.unwrap_or_default();
         let local_tracks: Vec<LocalTrack> = tracks.receivers.into_iter().enumerate().map(|(index, r)| LocalTrack::new((index as u16).into(), r)).collect();
         let remote_tracks: Vec<RemoteTrack> = tracks.senders.into_iter().enumerate().map(|(index, s)| RemoteTrack::new((index as u16).into(), s)).collect();
         if let Some(j) = req.join {
             Self {
+                app,
                 remote,
                 extra_data,
                 join: Some((j.room.into(), j.peer.into(), j.metadata, j.publish.unwrap_or_default().into(), j.subscribe.unwrap_or_default().into())),
@@ -130,6 +133,7 @@ impl<ES> TransportWebrtcSdk<ES> {
             }
         } else {
             Self {
+                app,
                 remote,
                 extra_data,
                 join: None,
@@ -709,8 +713,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                     metadata: info.metadata,
                     extra_data: self.extra_data.clone(),
                 };
-                if let Some((_ctx, token)) = self.secure.decode_token::<WebrtcToken>(&req.token) {
-                    if token.room == Some(info.room.clone()) && token.peer == Some(info.peer.clone()) {
+                if let Some((ctx, token)) = self.secure.decode_token::<WebrtcToken>(&req.token) {
+                    if ctx.app != self.app.app {
+                        self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcTokenAppNotMatch));
+                    } else if token.room == Some(info.room.clone()) && token.peer == Some(info.peer.clone()) {
                         let mixer_cfg = info.features.and_then(|f| {
                             f.mixer.map(|m| AudioMixerConfig {
                                 mode: m.mode().into(),
@@ -893,21 +899,26 @@ mod tests {
     };
     use media_server_protocol::{
         endpoint::{PeerMeta, RoomInfoPublish, RoomInfoSubscribe},
-        multi_tenancy::AppContext,
+        multi_tenancy::{AppContext, AppId},
         protobuf::{
-            gateway,
+            self, gateway,
             session::{self, client_event, ClientEvent},
             shared,
         },
         tokens::WebrtcToken,
+        transport::RpcError,
     };
     use media_server_secure::{
         jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt},
         MediaGatewaySecure,
     };
+    use prost::Message;
     use str0m::channel::ChannelId;
 
-    use crate::transport::{InternalOutput, TransportWebrtcInternal};
+    use crate::{
+        transport::{InternalOutput, TransportWebrtcInternal},
+        WebrtcError,
+    };
 
     use super::TransportWebrtcSdk;
 
@@ -918,6 +929,7 @@ mod tests {
 
     #[test]
     fn join_room_first() {
+        let app = AppContext::root_app();
         let req = gateway::ConnectRequest {
             join: Some(session::RoomJoin {
                 room: "room".to_string(),
@@ -935,7 +947,7 @@ mod tests {
         let now = Instant::now();
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
-        let mut transport = TransportWebrtcSdk::new(req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
+        let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
         assert_eq!(transport.pop_output(now), None);
 
         transport.on_tick(now);
@@ -971,6 +983,7 @@ mod tests {
 
     #[test]
     fn join_room_lazy() {
+        let app = AppContext::root_app();
         let req = gateway::ConnectRequest::default();
 
         let channel_id = create_channel_id();
@@ -979,7 +992,7 @@ mod tests {
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         let gateway_jwt = MediaGatewaySecureJwt::from(b"1234".as_slice());
         let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
-        let mut transport = TransportWebrtcSdk::new(req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
+        let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
         assert_eq!(transport.pop_output(now), None);
 
         transport.on_tick(now);
@@ -1042,6 +1055,71 @@ mod tests {
                 )
             )))
         );
+        assert_eq!(transport.pop_output(now), None);
+    }
+
+    #[test]
+    fn join_room_lazy_wrong_app() {
+        let app = AppContext::root_app();
+        let req = gateway::ConnectRequest::default();
+
+        let channel_id = create_channel_id();
+
+        let now = Instant::now();
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let gateway_jwt = MediaGatewaySecureJwt::from(b"1234".as_slice());
+        let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
+        let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
+        assert_eq!(transport.pop_output(now), None);
+
+        transport.on_tick(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(ip)))))
+        );
+
+        transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(ip)))))
+        );
+        assert_eq!(transport.pop_output(now), None);
+
+        let token = gateway_jwt.encode_token(
+            &AppContext { app: AppId::from("app1") },
+            WebrtcToken {
+                room: Some("demo".to_string()),
+                peer: Some("peer1".to_string()),
+                record: false,
+                extra_data: Some("extra_data".to_string()),
+            },
+            10000,
+        );
+        transport.on_str0m_channel_event(ClientEvent {
+            seq: 0,
+            event: Some(client_event::Event::Request(session::Request {
+                req_id: 1,
+                request: Some(session::request::Request::Session(session::request::Session {
+                    request: Some(session::request::session::Request::Join(session::request::session::Join {
+                        info: Some(session::RoomJoin {
+                            room: "demo".to_string(),
+                            peer: "peer1".to_string(),
+                            metadata: None,
+                            publish: None,
+                            subscribe: None,
+                            features: None,
+                        }),
+                        token: token.clone(),
+                    })),
+                })),
+            })),
+        });
+
+        let response = protobuf::session::response::Response::Error(RpcError::new2(WebrtcError::RpcTokenAppNotMatch).into());
+        let event = protobuf::session::server_event::Event::Response(protobuf::session::Response { req_id: 1, response: Some(response) });
+        let event_buf = protobuf::session::ServerEvent { seq: 0, event: Some(event) }.encode_to_vec();
+
+        assert_eq!(transport.pop_output(now), Some(InternalOutput::Str0mSendData(channel_id, event_buf)));
         assert_eq!(transport.pop_output(now), None);
     }
 

@@ -119,6 +119,7 @@ pub struct TransportWebrtc<ES> {
 
 impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
     pub fn new(
+        app: AppContext,
         remote: IpAddr,
         variant: VariantParams<ES>,
         offer: &str,
@@ -164,7 +165,7 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
                 // we need to start sctp as client side for handling restart-ice in new server
                 // if not, datachannel will not connect successful after reconnect to new server
                 rtc.direct_api().start_sctp(true);
-                Box::new(webrtc::TransportWebrtcSdk::new(req, extra_data, secure, remote))
+                Box::new(webrtc::TransportWebrtcSdk::new(app, req, extra_data, secure, remote))
             }
         };
 

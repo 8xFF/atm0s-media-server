@@ -78,25 +78,25 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
     pub fn spawn(&mut self, app: AppContext, remote: IpAddr, session_id: u64, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
         let cfg = match &variant {
             VariantParams::Whip(_, _, _, record) => EndpointCfg {
-                app,
+                app: app.clone(),
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: *record,
             },
             VariantParams::Whep(_, _, _) => EndpointCfg {
-                app,
+                app: app.clone(),
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: false,
             },
             VariantParams::Webrtc(_, _, _, record, _) => EndpointCfg {
-                app,
+                app: app.clone(),
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: *record,
             },
         };
-        let (tran, ufrag, sdp) = TransportWebrtc::new(remote, variant, offer, self.dtls_cert.clone(), &self.addrs, &self.addrs_alt, self.ice_lite)?;
+        let (tran, ufrag, sdp) = TransportWebrtc::new(app, remote, variant, offer, self.dtls_cert.clone(), &self.addrs, &self.addrs_alt, self.ice_lite)?;
         log::info!("[TransportWebrtc] create endpoint with config {:?}", cfg);
         let endpoint = Endpoint::new(session_id, cfg, tran);
         let index = self.endpoints.add_task(endpoint);
