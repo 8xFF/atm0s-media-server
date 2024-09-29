@@ -69,14 +69,14 @@ impl EgressBitrateAllocator {
         }
         self.changed = false;
         let use_bitrate = self.egress_bitrate.min(self.max_egress_bitrate);
-        let mut sum = TrackPriority(0);
+        let mut sum = TrackPriority::from(0);
         for (_track, priority) in self.tracks.iter() {
             sum += *priority;
         }
 
         if *(sum.as_ref()) != 0 {
             for (track, priority) in self.tracks.iter() {
-                let bitrate = (use_bitrate * priority.0 as u64) / sum.0 as u64;
+                let bitrate = (use_bitrate * (**priority) as u64) / *sum as u64;
                 log::debug!("[EgressBitrateAllocator] set track {track} with bitrate {bitrate}");
                 self.queue.push_back(Output::Track(*track, Action::SetBitrate(bitrate)));
             }

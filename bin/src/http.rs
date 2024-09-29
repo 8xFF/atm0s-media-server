@@ -18,7 +18,6 @@ use tokio::sync::mpsc::Sender;
 #[cfg(feature = "embed_static")]
 use utils::EmbeddedFilesEndpoint;
 
-mod api_connector;
 mod api_console;
 mod api_media;
 mod api_token;

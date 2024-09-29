@@ -1,29 +1,32 @@
 use std::net::IpAddr;
 
 use super::{ConnLayer, RpcResult};
-use crate::protobuf::gateway::{ConnectRequest, ConnectResponse, RemoteIceRequest, RemoteIceResponse};
+use crate::{
+    multi_tenancy::AppContext,
+    protobuf::gateway::{ConnectRequest, ConnectResponse, RemoteIceRequest, RemoteIceResponse},
+};
 
 #[derive(Debug, Clone)]
 pub enum RpcReq<Conn> {
     /// Ip, Agent, Req, Userdata, Record
-    Connect(u64, IpAddr, String, ConnectRequest, Option<String>, bool),
+    Connect(AppContext, u64, IpAddr, String, ConnectRequest, Option<String>, bool),
     RemoteIce(Conn, RemoteIceRequest),
     /// ConnId, Ip, Agent, Req, Userdata, Record
-    RestartIce(Conn, IpAddr, String, ConnectRequest, Option<String>, bool),
+    RestartIce(Conn, AppContext, IpAddr, String, ConnectRequest, Option<String>, bool),
     Delete(Conn),
 }
 
 impl<Conn: ConnLayer> RpcReq<Conn> {
     pub fn down(self) -> (RpcReq<Conn::Down>, Option<Conn::DownRes>) {
         match self {
-            RpcReq::Connect(session_id, ip_addr, user_agent, req, extra_data, record) => (RpcReq::Connect(session_id, ip_addr, user_agent, req, extra_data, record), None),
+            RpcReq::Connect(app, session_id, ip_addr, user_agent, req, extra_data, record) => (RpcReq::Connect(app, session_id, ip_addr, user_agent, req, extra_data, record), None),
             RpcReq::RemoteIce(conn, req) => {
                 let (down, layer) = conn.down();
                 (RpcReq::RemoteIce(down, req), Some(layer))
             }
-            RpcReq::RestartIce(conn, ip_addr, user_agent, req, extra_data, record) => {
+            RpcReq::RestartIce(conn, app, ip_addr, user_agent, req, extra_data, record) => {
                 let (down, layer) = conn.down();
-                (RpcReq::RestartIce(down, ip_addr, user_agent, req, extra_data, record), Some(layer))
+                (RpcReq::RestartIce(down, app, ip_addr, user_agent, req, extra_data, record), Some(layer))
             }
             RpcReq::Delete(conn) => {
                 let (down, layer) = conn.down();

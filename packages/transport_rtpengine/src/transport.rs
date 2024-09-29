@@ -29,10 +29,10 @@ use crate::RtpEngineError;
 
 const TIMEOUT_DURATION_MS: u64 = 60_000;
 
-const REMOTE_AUDIO_TRACK: RemoteTrackId = RemoteTrackId(0);
-const LOCAL_AUDIO_TRACK: LocalTrackId = LocalTrackId(0);
+const REMOTE_AUDIO_TRACK: RemoteTrackId = RemoteTrackId::build(0);
+const LOCAL_AUDIO_TRACK: LocalTrackId = LocalTrackId::build(0);
 const AUDIO_NAME: &str = "audio_main";
-const DEFAULT_PRIORITY: TrackPriority = TrackPriority(1);
+const DEFAULT_PRIORITY: TrackPriority = TrackPriority::build(1);
 
 #[allow(clippy::large_enum_variant)]
 pub enum ExtIn {
@@ -232,7 +232,7 @@ impl TransportRtpEngine {
                                     REMOTE_AUDIO_TRACK,
                                     RemoteTrackEvent::Started {
                                         name: AUDIO_NAME.to_string(),
-                                        priority: TrackPriority(100),
+                                        priority: TrackPriority::from(100),
                                         meta: TrackMeta::default_audio(),
                                     },
                                 )));

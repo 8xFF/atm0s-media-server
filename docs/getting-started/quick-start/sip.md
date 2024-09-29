@@ -1,5 +1,7 @@
 # SIP integrate
 
+`We are developing a pure Rust SIP-Gateway, then this document will be updated soon.`
+
 To avoid complexity, atm0s-media-server only works as an rtpengine replacement. To enable SIP, we need a signaling system that supports the rtpengine ng_control protocol (UDP) with an injected authentication token.
 
 To demonstrate how it works, we created a simple SIP call integration in [8xFF/atm0s-media-sip-call-sample](https://github.com/8xFF/atm0s-media-sip-call-sample). In this sample:

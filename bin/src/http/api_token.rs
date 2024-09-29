@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use super::{utils::TokenAuthorization, Response};
-use media_server_protocol::tokens::{RtpEngineToken, WebrtcToken, WhepToken, WhipToken, RTPENGINE_TOKEN, WEBRTC_TOKEN, WHEP_TOKEN, WHIP_TOKEN};
+use media_server_protocol::tokens::{RtpEngineToken, WebrtcToken, WhepToken, WhipToken};
 use media_server_secure::MediaGatewaySecure;
 use poem::{web::Data, Result};
 use poem_openapi::{payload::Json, OpenApi};
@@ -87,13 +87,13 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
     /// create whip session token
     #[oai(path = "/whip", method = "post")]
     async fn whip_token(&self, Data(ctx): Data<&TokenServerCtx<S>>, body: Json<WhipTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Result<Json<Response<WhipTokenRes>>> {
-        if ctx.secure.validate_app(&token.token) {
+        if let Some(app_ctx) = ctx.secure.validate_app(&token.token) {
             let body = body.0;
             Ok(Json(Response {
                 status: true,
                 data: Some(WhipTokenRes {
-                    token: ctx.secure.encode_obj(
-                        WHIP_TOKEN,
+                    token: ctx.secure.encode_token(
+                        &app_ctx,
                         WhipToken {
                             room: body.room,
                             peer: body.peer,
@@ -117,13 +117,13 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
     /// create whep session token
     #[oai(path = "/whep", method = "post")]
     async fn whep_token(&self, Data(ctx): Data<&TokenServerCtx<S>>, body: Json<WhepTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Json<Response<WhepTokenRes>> {
-        if ctx.secure.validate_app(&token.token) {
+        if let Some(app_ctx) = ctx.secure.validate_app(&token.token) {
             let body = body.0;
             Json(Response {
                 status: true,
                 data: Some(WhepTokenRes {
-                    token: ctx.secure.encode_obj(
-                        WHEP_TOKEN,
+                    token: ctx.secure.encode_token(
+                        &app_ctx,
                         WhepToken {
                             room: body.room,
                             peer: body.peer,
@@ -145,13 +145,13 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
 
     #[oai(path = "/webrtc", method = "post")]
     async fn webrtc_token(&self, Data(ctx): Data<&TokenServerCtx<S>>, body: Json<WebrtcTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Json<Response<WebrtcTokenRes>> {
-        if ctx.secure.validate_app(&token.token) {
+        if let Some(app_ctx) = ctx.secure.validate_app(&token.token) {
             let body = body.0;
             Json(Response {
                 status: true,
                 data: Some(WebrtcTokenRes {
-                    token: ctx.secure.encode_obj(
-                        WEBRTC_TOKEN,
+                    token: ctx.secure.encode_token(
+                        &app_ctx,
                         WebrtcToken {
                             room: body.room,
                             peer: body.peer,
@@ -175,13 +175,13 @@ impl<S: 'static + MediaGatewaySecure + Send + Sync> TokenApis<S> {
     /// create rtpengine session token
     #[oai(path = "/rtpengine", method = "post")]
     async fn rtpengine_token(&self, Data(ctx): Data<&TokenServerCtx<S>>, body: Json<RtpEngineTokenReq>, TokenAuthorization(token): TokenAuthorization) -> Result<Json<Response<RtpEngineTokenRes>>> {
-        if ctx.secure.validate_app(&token.token) {
+        if let Some(app_ctx) = ctx.secure.validate_app(&token.token) {
             let body = body.0;
             Ok(Json(Response {
                 status: true,
                 data: Some(RtpEngineTokenRes {
-                    token: ctx.secure.encode_obj(
-                        RTPENGINE_TOKEN,
+                    token: ctx.secure.encode_token(
+                        &app_ctx,
                         RtpEngineToken {
                             room: body.room,
                             peer: body.peer,

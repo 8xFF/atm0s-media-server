@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     endpoint::{PeerId, RoomId, TrackMeta, TrackName},
     media::MediaPacket,
+    multi_tenancy::AppId,
     transport::RemoteTrackId,
 };
 
@@ -33,7 +34,7 @@ impl SessionRecordHeader {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub enum SessionRecordEvent {
-    JoinRoom(RoomId, PeerId),
+    JoinRoom(AppId, RoomId, PeerId),
     LeaveRoom,
     TrackStarted(RemoteTrackId, TrackName, TrackMeta),
     TrackStopped(RemoteTrackId),

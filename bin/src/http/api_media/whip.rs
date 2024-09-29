@@ -42,9 +42,10 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> WhipApis<S> {
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let session_id = gen_cluster_session_id();
-        let token = self.secure.decode_obj::<WhipToken>("whip", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let (app_ctx, token) = self.secure.decode_token::<WhipToken>(&token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create whip endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whip(whip::RpcReq::Connect(WhipConnectReq {
+            app: app_ctx,
             session_id,
             ip: ip_addr,
             sdp: body.0,

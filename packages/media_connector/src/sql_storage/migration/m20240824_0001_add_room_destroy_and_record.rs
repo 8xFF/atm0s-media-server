@@ -16,7 +16,7 @@ impl MigrationTrait for Migration {
             .alter_table(Table::alter().table(Room::Table).add_column(ColumnDef::new(Room::Record).string()).to_owned())
             .await?;
         manager
-            .alter_table(Table::alter().table(PeerSession::Table).add_column(ColumnDef::new(PeerSession::Room).big_integer()).to_owned())
+            .alter_table(Table::alter().table(PeerSession::Table).add_column(ColumnDef::new(PeerSession::Room).integer().not_null()).to_owned())
             .await?;
         manager
             .alter_table(Table::alter().table(PeerSession::Table).add_column(ColumnDef::new(PeerSession::Record).string()).to_owned())

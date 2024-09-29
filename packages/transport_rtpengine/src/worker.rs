@@ -6,6 +6,7 @@ use media_server_core::{
 };
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
+    multi_tenancy::{AppContext, AppId},
     protobuf::cluster_connector::peer_event,
     record::SessionRecordEvent,
     transport::{RpcError, RpcResult},
@@ -30,7 +31,7 @@ pub enum GroupInput {
 pub enum GroupOutput {
     Net(usize, BackendOutgoing),
     Cluster(RtpEngineSession, ClusterRoomHash, ClusterEndpointControl),
-    PeerEvent(RtpEngineSession, u64, Instant, peer_event::Event),
+    PeerEvent(RtpEngineSession, AppId, u64, Instant, peer_event::Event),
     RecordEvent(RtpEngineSession, u64, Instant, SessionRecordEvent),
     Ext(RtpEngineSession, ExtOut),
     Shutdown(RtpEngineSession),
@@ -53,13 +54,14 @@ impl MediaWorkerRtpEngine {
         }
     }
 
-    pub fn spawn(&mut self, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: Option<&str>) -> RpcResult<(usize, String)> {
+    pub fn spawn(&mut self, app: AppContext, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: Option<&str>) -> RpcResult<(usize, String)> {
         let (tran, answer) = if let Some(offer) = offer {
             TransportRtpEngine::new_answer(room, peer, self.ip, offer).map_err(|e| RpcError::new(1000_u32, &e))?
         } else {
             TransportRtpEngine::new_offer(room, peer, self.ip).map_err(|e| RpcError::new(1000_u32, &e))?
         };
         let cfg = EndpointCfg {
+            app,
             max_ingress_bitrate: 2_500_000,
             max_egress_bitrate: 2_500_000,
             record,
@@ -73,7 +75,7 @@ impl MediaWorkerRtpEngine {
         match out {
             EndpointOutput::Net(net) => GroupOutput::Net(index, net),
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(RtpEngineSession(index), room, control),
-            EndpointOutput::PeerEvent(session_id, ts, event) => GroupOutput::PeerEvent(RtpEngineSession(index), session_id, ts, event),
+            EndpointOutput::PeerEvent(app, session_id, ts, event) => GroupOutput::PeerEvent(RtpEngineSession(index), app, session_id, ts, event),
             EndpointOutput::RecordEvent(session_id, ts, event) => GroupOutput::RecordEvent(RtpEngineSession(index), session_id, ts, event),
             EndpointOutput::Destroy => {
                 log::info!("[TransportRtpEngine] destroy endpoint {index}");
