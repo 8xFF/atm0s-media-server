@@ -27,6 +27,10 @@ impl MultiTenancyStorage {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.apps.read().is_empty()
+    }
+
     pub fn len(&self) -> usize {
         self.apps.read().len()
     }

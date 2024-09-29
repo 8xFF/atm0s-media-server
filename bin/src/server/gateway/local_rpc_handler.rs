@@ -287,6 +287,7 @@ impl MediaLocalRpcHandler {
     Webrtc part
     */
 
+    #[allow(clippy::too_many_arguments)]
     async fn webrtc_connect(
         &self,
         session_id: u64,
