@@ -96,7 +96,11 @@ impl TransportRtpEngine {
 
     pub fn new_answer(room: RoomId, peer: PeerId, ip: IpAddr, offer: &str) -> Result<(Self, String), String> {
         let mut offer = SessionDescription::try_from(offer.to_string()).map_err(|e| e.to_string())?;
-        let dest_ip: IpAddr = offer.connection.ok_or("CONNECTION_NOT_FOUND".to_string())?.connection_address.base;
+        let dest_ip: IpAddr = if let Some(conn) = offer.connection {
+            conn.connection_address.base
+        } else {
+            offer.origin.unicast_address
+        };
         let dest_port = offer.media_descriptions.pop().ok_or("MEDIA_NOT_FOUND".to_string())?.media.port;
         let remote = SocketAddr::new(dest_ip, dest_port);
 

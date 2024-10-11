@@ -549,8 +549,14 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         transport_webrtc::VariantParams::Whip(req.room, req.peer, req.extra_data, req.record),
                         &req.sdp,
                     ) {
-                        Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp }))))),
-                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e))))),
+                        Ok((_ice_lite, sdp, conn_id)) => {
+                            log::info!("[MediaServerWorker] rpc request {req_id}, whip::RpcReq::Connect => created conn {conn_id}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Ok(WhipConnectRes { conn_id, sdp })))))
+                        }
+                        Err(e) => {
+                            log::error!("[MediaServerWorker] rpc request {req_id}, whip::RpcReq::Connect => error {e:?}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whip(whip::RpcRes::Connect(Err(e)))))
+                        }
                     }
                 }
                 whip::RpcReq::RemoteIce(req) => {
@@ -579,8 +585,14 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         transport_webrtc::VariantParams::Whep(req.room, peer_id.into(), req.extra_data),
                         &req.sdp,
                     ) {
-                        Ok((_ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp }))))),
-                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Err(e))))),
+                        Ok((_ice_lite, sdp, conn_id)) => {
+                            log::info!("[MediaServerWorker] rpc request {req_id}, whep::RpcReq::Connect => created conn {conn_id}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Ok(WhepConnectRes { conn_id, sdp })))))
+                        }
+                        Err(e) => {
+                            log::info!("[MediaServerWorker] rpc request {req_id}, whep::RpcReq::Connect => error {e:?}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Whep(whep::RpcRes::Connect(Err(e)))))
+                        }
                     }
                 }
                 whep::RpcReq::RemoteIce(req) => {
@@ -606,18 +618,24 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         .input(&mut self.switcher)
                         .spawn(app, ip, session_id, VariantParams::Webrtc(user_agent, req.clone(), extra_data, record, self.secure.clone()), &req.sdp)
                     {
-                        Ok((ice_lite, sdp, conn_id)) => self.queue.push_back(Output::ExtRpc(
-                            req_id,
-                            RpcRes::Webrtc(webrtc::RpcRes::Connect(Ok((
-                                conn_id,
-                                ConnectResponse {
-                                    conn_id: "".to_string(),
-                                    sdp,
-                                    ice_lite,
-                                },
-                            )))),
-                        )),
-                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::Connect(Err(e))))),
+                        Ok((ice_lite, sdp, conn_id)) => {
+                            log::info!("[MediaServerWorker] rpc request {req_id}, webrtc::RpcReq::Connect => created conn {conn_id}");
+                            self.queue.push_back(Output::ExtRpc(
+                                req_id,
+                                RpcRes::Webrtc(webrtc::RpcRes::Connect(Ok((
+                                    conn_id,
+                                    ConnectResponse {
+                                        conn_id: "".to_string(),
+                                        sdp,
+                                        ice_lite,
+                                    },
+                                )))),
+                            ))
+                        }
+                        Err(e) => {
+                            log::error!("[MediaServerWorker] rpc request {req_id}, webrtc::RpcReq::Connect => error {e:?}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::Connect(Err(e)))))
+                        }
                     }
                 }
                 webrtc::RpcReq::RemoteIce(conn, ice) => {
@@ -653,8 +671,14 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         .input(&mut self.switcher)
                         .spawn(conn_req.app, conn_req.room, conn_req.peer, false, conn_req.session_id, None)
                     {
-                        Ok((conn_id, sdp)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateOffer(Ok((conn_id, sdp)))))),
-                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateOffer(Err(e))))),
+                        Ok((conn_id, sdp)) => {
+                            log::info!("[MediaServerWorker] rpc request {req_id}, rtpengine::RpcReq::CreateOffer => created conn {conn_id}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateOffer(Ok((conn_id, sdp))))))
+                        }
+                        Err(e) => {
+                            log::error!("[MediaServerWorker] rpc request {req_id}, rtpengine::RpcReq::CreateOffer => error {e:?}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateOffer(Err(e)))))
+                        }
                     }
                 }
                 rtpengine::RpcReq::SetAnswer(conn, answer_req) => {
@@ -670,8 +694,14 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         .input(&mut self.switcher)
                         .spawn(conn_req.app, conn_req.room, conn_req.peer, false, conn_req.session_id, Some(&conn_req.sdp))
                     {
-                        Ok((conn_id, sdp)) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(Ok((conn_id, sdp)))))),
-                        Err(e) => self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(Err(e))))),
+                        Ok((conn_id, sdp)) => {
+                            log::info!("[MediaServerWorker] rpc request {req_id}, rtpengine::RpcReq::CreateAnswer => created conn {conn_id}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(Ok((conn_id, sdp))))))
+                        }
+                        Err(e) => {
+                            log::error!("[MediaServerWorker] rpc request {req_id}, rtpengine::RpcReq::CreateAnswer => error {e:?}");
+                            self.queue.push_back(Output::ExtRpc(req_id, RpcRes::RtpEngine(rtpengine::RpcRes::CreateAnswer(Err(e)))))
+                        }
                     }
                 }
                 rtpengine::RpcReq::Delete(conn) => {
