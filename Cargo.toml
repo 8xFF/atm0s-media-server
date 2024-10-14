@@ -14,6 +14,7 @@ members = [
     "packages/media_connector",
     "packages/media_record",
     "packages/media_codecs",
+    "packages/multi_tenancy",
     "packages/rtpengine_ngcontrol",
 ]
 

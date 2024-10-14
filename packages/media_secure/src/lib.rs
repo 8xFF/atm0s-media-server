@@ -59,3 +59,12 @@ impl TokenObject for RtpEngineToken {
         "rtp"
     }
 }
+
+#[derive(Default)]
+pub struct DumpAppStorage {}
+
+impl AppStorage for DumpAppStorage {
+    fn validate_app(&self, _secret: &str) -> Option<AppContext> {
+        None
+    }
+}

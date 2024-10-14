@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 log = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 media-server-protocol = { path = "../protocol" }
 media-server-utils = { path = "../media_utils" }
 media-server-secure = { path = "../media_secure", default-features = false }
@@ -15,7 +15,6 @@ atm0s-sdn = { workspace = true }
 prost = { workspace = true }
 spin = { workspace = true }
 derive_more = { workspace = true }
-reqwest = { version = "0.12", features = ["json"]}
 tokio = { workspace = true, features = ["time"] }
 
 [dev-dependencies]

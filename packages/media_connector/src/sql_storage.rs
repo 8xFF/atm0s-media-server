@@ -4,11 +4,14 @@ use std::{
 };
 
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_connector::{
-    connector_request, connector_response, hook_event, peer_event,
-    record_event::{self, RecordPeerJoined, RecordStarted},
-    room_event::{self, RoomAllPeersLeaved, RoomPeerJoined, RoomPeerLeaved, RoomStarted, RoomStopped},
-    HookEvent, PeerRes, RecordEvent, RecordRes, RoomEvent,
+use media_server_protocol::{
+    multi_tenancy::AppId,
+    protobuf::cluster_connector::{
+        connector_request, connector_response, hook_event, peer_event,
+        record_event::{self, RecordPeerJoined, RecordStarted},
+        room_event::{self, RoomAllPeersLeaved, RoomPeerJoined, RoomPeerLeaved, RoomStarted, RoomStopped},
+        HookEvent, PeerRes, RecordEvent, RecordRes, RoomEvent,
+    },
 };
 use media_server_utils::CustomUri;
 use s3_presign::{Credentials, Presigner};
@@ -37,7 +40,7 @@ pub struct ConnectorSqlStorage {
     s3: Presigner,
     s3_sub_folder: String,
     room_destroy_after_ms: u64,
-    hook_events: VecDeque<HookEvent>,
+    hook_events: VecDeque<(AppId, HookEvent)>,
 }
 
 impl ConnectorSqlStorage {
@@ -96,15 +99,18 @@ impl ConnectorSqlStorage {
             model.save(&self.db).await?;
 
             // all peers leave room => fire event
-            self.hook_events.push_back(HookEvent {
-                node: self.node,
-                ts: now_ms,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app_id,
-                    room: room_name,
-                    event: Some(room_event::Event::Stopped(RoomStopped {})),
-                })),
-            });
+            self.hook_events.push_back((
+                app_id.clone().into(),
+                HookEvent {
+                    node: self.node,
+                    ts: now_ms,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app_id,
+                        room: room_name,
+                        event: Some(room_event::Event::Stopped(RoomStopped {})),
+                    })),
+                },
+            ));
         }
 
         Ok(())
@@ -260,15 +266,18 @@ impl ConnectorSqlStorage {
                 let _peer_session = self.upsert_peer_session(now_ms, room, peer, session, event_ts).await?;
 
                 // peer join room => fire event
-                self.hook_events.push_back(HookEvent {
-                    node: self.node,
-                    ts: event_ts,
-                    event: Some(hook_event::Event::Room(RoomEvent {
-                        app: app.to_owned(),
-                        room: params.room.clone(),
-                        event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: params.peer.clone() })),
-                    })),
-                });
+                self.hook_events.push_back((
+                    app.to_owned().into(),
+                    HookEvent {
+                        node: self.node,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Room(RoomEvent {
+                            app: app.to_owned(),
+                            room: params.room.clone(),
+                            event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: params.peer.clone() })),
+                        })),
+                    },
+                ));
 
                 entity::event::ActiveModel {
                     id: ActiveValue::NotSet,
@@ -285,15 +294,18 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Leave(params) => {
                 // peer leave room => fire event
-                self.hook_events.push_back(HookEvent {
-                    node: self.node,
-                    ts: event_ts,
-                    event: Some(hook_event::Event::Room(RoomEvent {
-                        app: app.to_owned(),
-                        room: params.room.clone(),
-                        event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: params.peer.clone() })),
-                    })),
-                });
+                self.hook_events.push_back((
+                    app.to_owned().into(),
+                    HookEvent {
+                        node: self.node,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Room(RoomEvent {
+                            app: app.to_owned(),
+                            room: params.room.clone(),
+                            event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: params.peer.clone() })),
+                        })),
+                    },
+                ));
 
                 let room = self.upsert_room(now_ms, event_ts, app, &params.room).await?;
                 let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
@@ -322,15 +334,18 @@ impl ConnectorSqlStorage {
                     .await?;
 
                     // all peers leave room => fire event
-                    self.hook_events.push_back(HookEvent {
-                        node: self.node,
-                        ts: event_ts,
-                        event: Some(hook_event::Event::Room(RoomEvent {
-                            app: app.to_owned(),
-                            room: params.room.clone(),
-                            event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {})),
-                        })),
-                    });
+                    self.hook_events.push_back((
+                        app.to_owned().into(),
+                        HookEvent {
+                            node: self.node,
+                            ts: event_ts,
+                            event: Some(hook_event::Event::Room(RoomEvent {
+                                app: app.to_owned(),
+                                room: params.room.clone(),
+                                event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {})),
+                            })),
+                        },
+                    ));
                 }
 
                 entity::event::ActiveModel {
@@ -439,15 +454,18 @@ impl ConnectorSqlStorage {
         } else {
             log::info!("[ConnectorSqlStorage] new room {room}");
             // new room created => fire event
-            self.hook_events.push_back(HookEvent {
-                node: self.node,
-                ts: event_ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app.to_owned(),
-                    room: room.to_owned(),
-                    event: Some(room_event::Event::Started(RoomStarted {})),
-                })),
-            });
+            self.hook_events.push_back((
+                app.to_owned().into(),
+                HookEvent {
+                    node: self.node,
+                    ts: event_ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: room.to_owned(),
+                        event: Some(room_event::Event::Started(RoomStarted {})),
+                    })),
+                },
+            ));
 
             entity::room::ActiveModel {
                 id: ActiveValue::NotSet,
@@ -542,11 +560,14 @@ impl Storage for ConnectorSqlStorage {
                     log::error!("[ConnectorSqlStorage] db error {e:?}");
                     return None;
                 }
-                self.hook_events.push_back(HookEvent {
-                    node: from,
-                    ts: event_ts,
-                    event: Some(hook_event::Event::Peer(event)),
-                });
+                self.hook_events.push_back((
+                    event.app.clone().into(),
+                    HookEvent {
+                        node: from,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Peer(event)),
+                    },
+                ));
                 Some(connector_response::Response::Peer(PeerRes {}))
             }
             connector_request::Request::Record(req) => {
@@ -563,15 +584,18 @@ impl Storage for ConnectorSqlStorage {
                 } else {
                     let room_path = std::path::Path::new(&self.s3_sub_folder).join(&req.app).join(&req.room).join(room_id.to_string()).to_str()?.to_string();
                     log::info!("[ConnectorSqlStorage] room {} record started in path: {room_path}", req.room);
-                    self.hook_events.push_back(HookEvent {
-                        node: from,
-                        ts: event_ts,
-                        event: Some(hook_event::Event::Record(RecordEvent {
-                            app: req.app.clone(),
-                            room: req.room.clone(),
-                            event: Some(record_event::Event::Started(RecordStarted { path: room_path.clone() })),
-                        })),
-                    });
+                    self.hook_events.push_back((
+                        req.app.clone().into(),
+                        HookEvent {
+                            node: from,
+                            ts: event_ts,
+                            event: Some(hook_event::Event::Record(RecordEvent {
+                                app: req.app.clone(),
+                                room: req.room.clone(),
+                                event: Some(record_event::Event::Started(RecordStarted { path: room_path.clone() })),
+                            })),
+                        },
+                    ));
 
                     let mut model: entity::room::ActiveModel = room.into();
                     model.record = Set(Some(room_path.clone()));
@@ -591,18 +615,21 @@ impl Storage for ConnectorSqlStorage {
                 } else {
                     let peer_path = std::path::Path::new(&req.peer).join(peer_session.id.to_string()).to_str()?.to_string();
                     log::info!("[ConnectorSqlStorage] room {} peer {} record started in path: {peer_path}", req.room, req.peer);
-                    self.hook_events.push_back(HookEvent {
-                        node: from,
-                        ts: event_ts,
-                        event: Some(hook_event::Event::Record(RecordEvent {
-                            app: req.app.clone(),
-                            room: req.room.clone(),
-                            event: Some(record_event::Event::PeerJoined(RecordPeerJoined {
-                                peer: req.peer.clone(),
-                                path: peer_path.clone(),
+                    self.hook_events.push_back((
+                        req.app.clone().into(),
+                        HookEvent {
+                            node: from,
+                            ts: event_ts,
+                            event: Some(hook_event::Event::Record(RecordEvent {
+                                app: req.app.clone(),
+                                room: req.room.clone(),
+                                event: Some(record_event::Event::PeerJoined(RecordPeerJoined {
+                                    peer: req.peer.clone(),
+                                    path: peer_path.clone(),
+                                })),
                             })),
-                        })),
-                    });
+                        },
+                    ));
 
                     let mut model: entity::peer_session::ActiveModel = peer_session.into();
                     model.record = Set(Some(peer_path.clone()));
@@ -621,7 +648,7 @@ impl Storage for ConnectorSqlStorage {
         }
     }
 
-    fn pop_hook_event(&mut self) -> Option<HookEvent> {
+    fn pop_hook_event(&mut self) -> Option<(AppId, HookEvent)> {
         self.hook_events.pop_front()
     }
 }
@@ -872,7 +899,6 @@ mod tests {
         let cfg = ConnectorCfg {
             sql_uri: "sqlite::memory:".to_owned(),
             s3_uri: "http://user:pass@localhost:9000/bucket".to_owned(),
-            hook_url: None,
             hook_workers: 0,
             hook_body_type: HookBodyType::ProtobufJson,
             room_destroy_after_ms: 300_000,
@@ -888,11 +914,14 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -922,7 +951,6 @@ mod tests {
         let cfg = ConnectorCfg {
             sql_uri: "sqlite::memory:".to_owned(),
             s3_uri: "http://user:pass@localhost:9000/bucket".to_owned(),
-            hook_url: None,
             hook_workers: 0,
             hook_body_type: HookBodyType::ProtobufJson,
             room_destroy_after_ms: 300_000,
@@ -941,11 +969,14 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(connecting_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(connecting_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -978,11 +1009,14 @@ mod tests {
             .expect("Should process event");
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(connected_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(connected_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -1003,35 +1037,44 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app.to_owned(),
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::Started(RoomStarted {}))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::Started(RoomStarted {}))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app.to_owned(),
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(join_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(join_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -1061,35 +1104,44 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app.to_owned(),
-                    room: "demo".to_string(),
-                    event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: "peer".to_string() }))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_string(),
+                        event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: "peer".to_string() }))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app.to_owned(),
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {}))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {}))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(leave_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(leave_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -1098,15 +1150,18 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts: 1000 + cfg.room_destroy_after_ms,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app.to_owned(),
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::Stopped(RoomStopped {}))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts: 1000 + cfg.room_destroy_after_ms,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::Stopped(RoomStopped {}))
+                    }))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -1123,35 +1178,44 @@ mod tests {
         storage.on_event(0, node, ts, connector_request::Request::Peer(join_event.clone())).await.expect("Should process event");
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app.to_owned(),
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::Started(RoomStarted {}))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::Started(RoomStarted {}))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    app: app.to_owned(),
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(join_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(join_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 

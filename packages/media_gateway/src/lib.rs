@@ -2,8 +2,6 @@ pub mod agent_service;
 mod store;
 pub mod store_service;
 
-pub use store::{MultiTenancyStorage, MultiTenancySync};
-
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum ServiceKind {
     Webrtc,

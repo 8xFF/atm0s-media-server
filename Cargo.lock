@@ -475,6 +475,7 @@ dependencies = [
  "maxminddb",
  "media-server-connector",
  "media-server-gateway",
+ "media-server-multi-tenancy",
  "media-server-protocol",
  "media-server-record",
  "media-server-runner",
@@ -3224,6 +3225,7 @@ dependencies = [
  "clap",
  "log",
  "lru",
+ "media-server-multi-tenancy",
  "media-server-protocol",
  "media-server-utils",
  "prost",
@@ -3270,6 +3272,19 @@ dependencies = [
  "media-server-secure",
  "media-server-utils",
  "prost",
+ "serde",
+ "spin",
+ "tokio",
+]
+
+[[package]]
+name = "media-server-multi-tenancy"
+version = "0.1.0"
+dependencies = [
+ "httpmock",
+ "log",
+ "media-server-protocol",
+ "media-server-secure",
  "reqwest",
  "serde",
  "spin",

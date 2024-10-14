@@ -6,6 +6,7 @@ use media_server_connector::{
     handler_service::{self, ConnectorHandlerServiceBuilder},
     ConnectorCfg, ConnectorStorage, HookBodyType, HANDLER_SERVICE_ID,
 };
+use media_server_multi_tenancy::{MultiTenancyStorage, MultiTenancySync};
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
     connector::CONNECTOR_RPC_PORT,
@@ -70,17 +71,33 @@ pub struct Args {
     /// This is used for clearing ended room
     #[arg(env, long, default_value_t = 60_000)]
     storage_tick_interval_ms: u64,
+
+    /// multi-tenancy sync endpoint
+    #[arg(env, long)]
+    multi_tenancy_sync: Option<String>,
+
+    /// multi-tenancy sync endpoint
+    #[arg(env, long, default_value_t = 30_000)]
+    multi_tenancy_sync_interval_ms: u64,
 }
 
 pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
+    let app_storage = Arc::new(MultiTenancyStorage::new("not-use-this", None));
+    if let Some(url) = args.multi_tenancy_sync {
+        let mut app_sync = MultiTenancySync::new(app_storage.clone(), &url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
+        tokio::spawn(async move {
+            app_sync.run_loop().await;
+        });
+    }
+
     let mut connector_storage = ConnectorStorage::new(
         node.node_id,
+        app_storage,
         ConnectorCfg {
             sql_uri: args.db_uri,
             s3_uri: args.s3_uri,
-            hook_url: args.hook_uri,
             hook_workers: args.hook_workers,
             hook_body_type: args.hook_body_type,
             room_destroy_after_ms: args.destroy_room_after_ms,

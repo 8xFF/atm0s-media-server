@@ -1,58 +1,112 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
 
 use media_server_protocol::multi_tenancy::{AppContext, AppId, AppSecret};
 use media_server_secure::AppStorage;
 use serde::{Deserialize, Serialize};
 use spin::rwlock::RwLock;
 
-struct AppSlot {
-    app_id: AppId,
-}
-
-#[derive(Default)]
 pub struct MultiTenancyStorage {
-    apps: Arc<RwLock<HashMap<AppSecret, AppSlot>>>,
+    internal: RwLock<MultiTenancyStorageInternal>,
 }
 
 impl MultiTenancyStorage {
-    pub fn sync(&self, new_apps: impl Iterator<Item = (String, AppInfo)>) {
-        let mut apps = self.apps.write();
-        let pre_len = apps.len();
-        apps.clear();
-        for (app_id, info) in new_apps {
-            apps.insert(info.secret.into(), AppSlot { app_id: app_id.into() });
+    pub fn new(secret: &str, hook: Option<&str>) -> Self {
+        Self {
+            internal: RwLock::new(MultiTenancyStorageInternal::new(secret, hook)),
         }
-        if pre_len != apps.len() {
-            log::info!("[MultiTenancyStorage] updated with {} apps", apps.len());
-        }
+    }
+
+    pub fn sync(&self, new_apps: impl Iterator<Item = AppInfo>) {
+        self.internal.write().sync(new_apps);
+    }
+
+    pub fn get_app(&self, app: &AppId) -> Option<AppInfo> {
+        self.internal.read().get_app(app)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.apps.read().is_empty()
+        self.internal.read().is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.apps.read().len()
+        self.internal.read().len()
     }
 }
 
 impl AppStorage for MultiTenancyStorage {
     fn validate_app(&self, secret: &str) -> Option<AppContext> {
         let secret: AppSecret = secret.to_owned().into();
-        let apps = self.apps.read();
-        let slot = apps.get(&secret)?;
-        Some(AppContext { app: slot.app_id.clone() })
+        let apps = self.internal.read().get_secret(&secret)?;
+        Some(AppContext { app: apps.app_id.into() })
+    }
+}
+
+struct MultiTenancyStorageInternal {
+    root_app: AppInfo,
+    secrets: HashMap<AppSecret, AppInfo>,
+    apps: HashMap<AppId, AppInfo>,
+}
+
+impl MultiTenancyStorageInternal {
+    pub fn new(secret: &str, hook: Option<&str>) -> Self {
+        Self {
+            secrets: Default::default(),
+            apps: Default::default(),
+            root_app: AppInfo {
+                app_id: AppId::root_app().into(),
+                app_secret: secret.to_owned(),
+                hook: hook.map(|h| h.to_owned()),
+            },
+        }
+    }
+
+    fn sync(&mut self, new_apps: impl Iterator<Item = AppInfo>) {
+        let pre_len = self.apps.len();
+        self.apps.clear();
+        self.secrets.clear();
+        for info in new_apps {
+            self.apps.insert(info.app_id.clone().into(), info.clone());
+            self.secrets.insert(info.app_secret.clone().into(), info);
+        }
+        if pre_len != self.apps.len() {
+            log::info!("[MultiTenancyStorage] updated with {} apps", self.apps.len());
+        }
+    }
+
+    fn get_app(&self, app: &AppId) -> Option<AppInfo> {
+        if app.deref().is_empty() {
+            Some(self.root_app.clone())
+        } else {
+            self.apps.get(app).cloned()
+        }
+    }
+
+    fn get_secret(&self, secret: &AppSecret) -> Option<AppInfo> {
+        if self.root_app.app_secret.eq(secret.deref()) {
+            return Some(self.root_app.clone());
+        }
+        self.secrets.get(secret).cloned()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.apps.is_empty()
+    }
+
+    fn len(&self) -> usize {
+        self.apps.len()
     }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct AppInfo {
-    pub secret: String,
+    pub app_id: String,
+    pub app_secret: String,
+    pub hook: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct MultiTenancySyncResponse {
-    apps: HashMap<String, AppInfo>,
+    apps: Vec<AppInfo>,
 }
 
 pub struct MultiTenancySync {
@@ -105,10 +159,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_sync() {
-        let storage = Arc::new(MultiTenancyStorage::default());
-        let app_info = AppInfo { secret: "secret1".to_string() };
-        let new_apps = vec![("app1".to_string(), app_info)];
-
+        let storage = Arc::new(MultiTenancyStorage::new("aaaa", None));
+        let app_info = AppInfo {
+            app_id: "app1".to_owned(),
+            app_secret: "secret1".to_string(),
+            hook: None,
+        };
+        let new_apps = vec![app_info];
         storage.sync(new_apps.into_iter());
 
         assert_eq!(storage.len(), 1);
@@ -116,9 +173,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_validate_app() {
-        let storage = Arc::new(MultiTenancyStorage::default());
-        let app_info = AppInfo { secret: "secret1".to_string() };
-        storage.sync(vec![("app1".to_string(), app_info.clone())].into_iter());
+        let storage = Arc::new(MultiTenancyStorage::new("aaaa", None));
+        let app_info = AppInfo {
+            app_id: "app1".to_owned(),
+            app_secret: "secret1".to_string(),
+            hook: None,
+        };
+        let new_apps = vec![app_info];
+        storage.sync(new_apps.into_iter());
 
         let context = storage.validate_app("secret1");
         assert_eq!(context, Some(AppContext { app: AppId::from("app1") }));
@@ -148,11 +210,15 @@ mod tests {
         mockhttp(
             &server,
             Ok(&MultiTenancySyncResponse {
-                apps: HashMap::from([("app1".to_owned(), AppInfo { secret: "secret1".to_owned() })]),
+                apps: vec![AppInfo {
+                    app_id: "app1".to_owned(),
+                    app_secret: "secret1".to_string(),
+                    hook: None,
+                }],
             }),
         );
 
-        let storage = Arc::new(MultiTenancyStorage::default());
+        let storage = Arc::new(MultiTenancyStorage::new("aaaa", None));
         let mut sync = MultiTenancySync::new(storage.clone(), &server.url("/sync"), Duration::from_secs(100));
         sync.sync().await.expect("Should sync ok");
 
@@ -166,7 +232,7 @@ mod tests {
         let server = MockServer::start();
         mockhttp(&server, Err(StatusCode::BAD_GATEWAY));
 
-        let storage = Arc::new(MultiTenancyStorage::default());
+        let storage = Arc::new(MultiTenancyStorage::new("aaaa", None));
         let mut sync = MultiTenancySync::new(storage.clone(), &server.url("/sync"), Duration::from_secs(100));
         sync.sync().await.expect_err("Should sync error because of http error");
 

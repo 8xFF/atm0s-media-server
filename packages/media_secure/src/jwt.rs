@@ -61,34 +61,22 @@ impl MediaEdgeSecure for MediaEdgeSecureJwt {
 }
 
 pub struct MediaGatewaySecureJwt {
-    key_str: String,
     key: HS256Key,
-    app_storage: Option<Arc<dyn AppStorage>>,
-}
-
-impl From<&[u8]> for MediaGatewaySecureJwt {
-    fn from(key: &[u8]) -> Self {
-        Self {
-            key_str: String::from_utf8_lossy(key).to_string(),
-            key: HS256Key::from_bytes(key),
-            app_storage: None,
-        }
-    }
+    app_storage: Arc<dyn AppStorage>,
 }
 
 impl MediaGatewaySecureJwt {
-    pub fn set_app_storage(&mut self, app_storage: Arc<dyn AppStorage>) {
-        self.app_storage = Some(app_storage);
+    pub fn new(key: &[u8], app_storage: Arc<dyn AppStorage>) -> Self {
+        Self {
+            key: HS256Key::from_bytes(key),
+            app_storage,
+        }
     }
 }
 
 impl MediaGatewaySecure for MediaGatewaySecureJwt {
     fn validate_app(&self, secret: &str) -> Option<AppContext> {
-        if self.key_str.eq(secret) {
-            Some(AppContext { app: AppId::root_app() })
-        } else {
-            self.app_storage.as_ref()?.validate_app(secret)
-        }
+        self.app_storage.validate_app(secret)
     }
 
     fn encode_token<O: TokenObject>(&self, ctx: &AppContext, ob: O, ttl_seconds: u64) -> String {
@@ -151,14 +139,14 @@ impl MediaConsoleSecure for MediaConsoleSecureJwt {
 
 #[cfg(test)]
 mod tests {
-    use std::{thread::sleep, time::Duration};
+    use std::{sync::Arc, thread::sleep, time::Duration};
 
     use media_server_protocol::multi_tenancy::AppId;
     use serde::{Deserialize, Serialize};
 
     use crate::{
         jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt},
-        AppContext, MediaEdgeSecure, MediaGatewaySecure, TokenObject,
+        AppContext, DumpAppStorage, MediaEdgeSecure, MediaGatewaySecure, TokenObject,
     };
 
     #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -187,7 +175,7 @@ mod tests {
     fn token_root_test() {
         let secure_key = b"12345678";
 
-        let gateway_jwt = MediaGatewaySecureJwt::from(secure_key.as_slice());
+        let gateway_jwt = MediaGatewaySecureJwt::new(secure_key.as_slice(), Arc::new(DumpAppStorage::default()));
         let edge_jwt = MediaEdgeSecureJwt::from(secure_key.as_slice());
 
         let ctx = AppContext { app: AppId::root_app() };
@@ -207,7 +195,7 @@ mod tests {
     fn token_child_app_test() {
         let secure_key = b"12345678";
 
-        let gateway_jwt = MediaGatewaySecureJwt::from(secure_key.as_slice());
+        let gateway_jwt = MediaGatewaySecureJwt::new(secure_key.as_slice(), Arc::new(DumpAppStorage::default()));
         let edge_jwt = MediaEdgeSecureJwt::from(secure_key.as_slice());
 
         let ctx = AppContext { app: AppId::from("app1") };
@@ -232,7 +220,7 @@ mod tests {
 
         let secure_key = b"12345678";
 
-        let gateway_jwt = MediaGatewaySecureJwt::from(secure_key.as_slice());
+        let gateway_jwt = MediaGatewaySecureJwt::new(secure_key.as_slice(), Arc::new(DumpAppStorage::default()));
         let edge_jwt = MediaEdgeSecureJwt::from(secure_key.as_slice());
 
         let ob = Test { value: 1 };

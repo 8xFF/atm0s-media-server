@@ -24,6 +24,7 @@ media-server-gateway = { path = "../packages/media_gateway", optional = true }
 media-server-connector = { path = "../packages/media_connector", optional = true }
 media-server-record = { path = "../packages/media_record", default-features=false, optional = true }
 media-server-utils = { path = "../packages/media_utils", optional = true }
+media-server-multi-tenancy = { path = "../packages/multi_tenancy", optional = true }
 rtpengine-ngcontrol = { path = "../packages/rtpengine_ngcontrol", optional = true }
 local-ip-address = "0.6"
 serde = { version = "1.0", features = ["derive"] }
@@ -41,10 +42,10 @@ sentry = "0.34"
 
 [features]
 default = ["console", "gateway", "media", "connector", "cert_utils"]
-gateway = ["media-server-gateway", "media-server-connector", "quinn_vnet", "node_metrics", "maxminddb", "rust-embed"]
+gateway = ["media-server-gateway", "media-server-connector", "quinn_vnet", "node_metrics", "maxminddb", "rust-embed", "media-server-multi-tenancy"]
 media = ["media-server-runner", "media-server-record", "quinn_vnet", "node_metrics", "rtpengine-ngcontrol"]
 console = []
-connector = ["quinn_vnet", "media-server-connector", "media-server-utils"]
+connector = ["quinn_vnet", "media-server-connector", "media-server-utils", "media-server-multi-tenancy"]
 cert_utils = ["rcgen", "rustls"]
 quinn_vnet = ["rustls", "quinn"]
 node_metrics = ["sysinfo"]

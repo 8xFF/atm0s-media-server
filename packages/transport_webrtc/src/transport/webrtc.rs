@@ -910,7 +910,7 @@ mod tests {
     };
     use media_server_secure::{
         jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt},
-        MediaGatewaySecure,
+        DumpAppStorage, MediaGatewaySecure,
     };
     use prost::Message;
     use str0m::channel::ChannelId;
@@ -990,7 +990,7 @@ mod tests {
 
         let now = Instant::now();
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
-        let gateway_jwt = MediaGatewaySecureJwt::from(b"1234".as_slice());
+        let gateway_jwt = MediaGatewaySecureJwt::new(b"1234".as_slice(), Arc::new(DumpAppStorage::default()));
         let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
         let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
         assert_eq!(transport.pop_output(now), None);
@@ -1067,7 +1067,7 @@ mod tests {
 
         let now = Instant::now();
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
-        let gateway_jwt = MediaGatewaySecureJwt::from(b"1234".as_slice());
+        let gateway_jwt = MediaGatewaySecureJwt::new(b"1234".as_slice(), Arc::new(DumpAppStorage::default()));
         let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
         let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
         assert_eq!(transport.pop_output(now), None);

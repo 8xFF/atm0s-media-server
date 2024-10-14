@@ -1,6 +1,12 @@
+use std::sync::Arc;
+
 use atm0s_sdn::NodeId;
 use hooks::ConnectorHookSender;
-use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, HookEvent};
+use media_server_multi_tenancy::MultiTenancyStorage;
+use media_server_protocol::{
+    multi_tenancy::AppId,
+    protobuf::cluster_connector::{connector_request, connector_response, HookEvent},
+};
 use media_server_utils::now_ms;
 use serde_json::Value;
 use sql_storage::{ConnectorSqlQuerier, ConnectorSqlStorage};
@@ -84,7 +90,6 @@ pub struct EventInfo {
 pub struct ConnectorCfg {
     pub sql_uri: String,
     pub s3_uri: String,
-    pub hook_url: Option<String>,
     pub hook_workers: usize,
     pub hook_body_type: HookBodyType,
     pub room_destroy_after_ms: u64,
@@ -95,7 +100,7 @@ pub trait Storage {
     fn querier(&mut self) -> Self::Q;
     fn on_tick(&mut self, now_ms: u64) -> impl std::future::Future<Output = ()> + Send;
     fn on_event(&mut self, now_ms: u64, from: NodeId, req_ts: u64, req: connector_request::Request) -> impl std::future::Future<Output = Option<connector_response::Response>> + Send;
-    fn pop_hook_event(&mut self) -> Option<HookEvent>;
+    fn pop_hook_event(&mut self) -> Option<(AppId, HookEvent)>;
 }
 
 #[async_trait::async_trait]
@@ -108,14 +113,14 @@ pub trait Querier {
 
 pub struct ConnectorStorage {
     sql_storage: ConnectorSqlStorage,
-    hook: Option<ConnectorHookSender>,
+    hook: ConnectorHookSender,
 }
 
 impl ConnectorStorage {
-    pub async fn new(node: NodeId, cfg: ConnectorCfg) -> Self {
+    pub async fn new(node: NodeId, app_storage: Arc<MultiTenancyStorage>, cfg: ConnectorCfg) -> Self {
         Self {
             sql_storage: ConnectorSqlStorage::new(node, &cfg).await,
-            hook: cfg.hook_url.map(move |url| ConnectorHookSender::new(cfg.hook_workers, cfg.hook_body_type, &url)),
+            hook: ConnectorHookSender::new(cfg.hook_workers, cfg.hook_body_type, app_storage),
         }
     }
 
@@ -125,20 +130,16 @@ impl ConnectorStorage {
 
     pub async fn on_tick(&mut self) {
         self.sql_storage.on_tick(now_ms()).await;
-        while let Some(event) = self.sql_storage.pop_hook_event() {
-            if let Some(hook) = &self.hook {
-                hook.on_event(event);
-            }
+        while let Some((app, event)) = self.sql_storage.pop_hook_event() {
+            self.hook.on_event(app, event);
         }
     }
 
     pub async fn on_event(&mut self, from: NodeId, ts: u64, req: connector_request::Request) -> Option<connector_response::Response> {
         let res = self.sql_storage.on_event(now_ms(), from, ts, req).await?;
 
-        while let Some(event) = self.sql_storage.pop_hook_event() {
-            if let Some(hook) = &self.hook {
-                hook.on_event(event);
-            }
+        while let Some((app, event)) = self.sql_storage.pop_hook_event() {
+            self.hook.on_event(app, event);
         }
 
         Some(res)

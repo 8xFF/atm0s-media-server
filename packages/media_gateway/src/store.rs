@@ -8,10 +8,7 @@ use crate::{NodeMetrics, ServiceKind};
 
 use self::service::ServiceStore;
 
-mod multi_tenancy;
 mod service;
-
-pub use multi_tenancy::{MultiTenancyStorage, MultiTenancySync};
 
 #[derive(Debug, PartialEq)]
 pub struct PingEvent {
