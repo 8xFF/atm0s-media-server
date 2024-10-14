@@ -59,18 +59,18 @@ impl SessionMediaWriter {
                     if let Some((name, _meta)) = self.tracks_meta.get(&id) {
                         let (file_path, writer): (String, Box<dyn TrackWriter + Send>) = match &media.meta {
                             media_server_protocol::media::MediaMeta::Opus { .. } => {
-                                let file_path = format!("{}-opus-{}-{}.webm", self.path, name.0, event.ts);
+                                let file_path = format!("{}-opus-{}-{}.webm", self.path, name, event.ts);
                                 let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
                                 (file_path, writer)
                             }
                             media_server_protocol::media::MediaMeta::H264 { .. } => todo!(),
                             media_server_protocol::media::MediaMeta::Vp8 { .. } => {
-                                let file_path = format!("{}-vp8-{}-{}.webm", self.path, name.0, event.ts);
+                                let file_path = format!("{}-vp8-{}-{}.webm", self.path, name, event.ts);
                                 let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
                                 (file_path, writer)
                             }
                             media_server_protocol::media::MediaMeta::Vp9 { .. } => {
-                                let file_path = format!("{}-vp9-{}-{}.webm", self.path, name.0, event.ts);
+                                let file_path = format!("{}-vp9-{}-{}.webm", self.path, name, event.ts);
                                 let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
                                 (file_path, writer)
                             }

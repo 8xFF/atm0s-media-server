@@ -7,6 +7,7 @@ edition = "2021"
 log = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+media-server-multi-tenancy = { path = "../multi_tenancy" }
 media-server-protocol = { path = "../protocol" }
 media-server-utils = { path = "../media_utils" }
 atm0s-sdn = { workspace = true }

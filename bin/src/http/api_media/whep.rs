@@ -43,9 +43,10 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> WhepApis<S> {
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let session_id = gen_cluster_session_id();
-        let token = self.secure.decode_obj::<WhepToken>("whep", &token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let (app_ctx, token) = self.secure.decode_token::<WhepToken>(&token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create whep endpoint with token {:?}, ip {}, user_agent {}", token, ip_addr, user_agent);
         let (req, rx) = Rpc::new(RpcReq::Whep(whep::RpcReq::Connect(WhepConnectReq {
+            app: app_ctx,
             session_id,
             ip: ip_addr,
             sdp: body.0,

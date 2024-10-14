@@ -1,10 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub const WHIP_TOKEN: &str = "whip";
-pub const WHEP_TOKEN: &str = "whep";
-pub const WEBRTC_TOKEN: &str = "webrtc";
-pub const RTPENGINE_TOKEN: &str = "rtpengine";
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WhipToken {
     pub room: String,

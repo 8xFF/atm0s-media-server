@@ -177,7 +177,7 @@ mod tests {
         let mut publisher = RoomChannelPublisher::<u8>::new(room);
 
         let endpoint = 2;
-        let track = RemoteTrackId(3);
+        let track = RemoteTrackId::from(3);
         let peer = "peer1".to_string().into();
         let name = "audio_main".to_string().into();
         let channel_id = gen_track_channel_id(room, &peer, &name);
@@ -204,7 +204,7 @@ mod tests {
         let mut publisher = RoomChannelPublisher::<u8>::new(room);
 
         let endpoint = 2;
-        let track = RemoteTrackId(3);
+        let track = RemoteTrackId::from(3);
         let peer = "peer1".to_string().into();
         let name = "audio_main".to_string().into();
         let channel_id = gen_track_channel_id(room, &peer, &name);
@@ -241,7 +241,7 @@ mod tests {
 
         let endpoint1 = 1;
         let endpoint2 = 2;
-        let track = RemoteTrackId(3);
+        let track = RemoteTrackId::from(3);
         let peer: PeerId = "peer1".to_string().into();
         let name: TrackName = "audio_main".to_string().into();
 

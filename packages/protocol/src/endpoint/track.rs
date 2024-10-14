@@ -1,4 +1,7 @@
-use derive_more::{AsRef, From};
+use derive_more::{
+    derive::{Add, AddAssign, Deref, Display, Into},
+    AsRef, From,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -14,8 +17,8 @@ use super::{BitrateControlMode, PeerId};
 ///
 /// TODO: validate with uuid type (maybe max 32 bytes + [a-z]_- )
 ///
-#[derive(From, AsRef, Debug, derive_more::Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct TrackName(pub String);
+#[derive(From, Into, Deref, AsRef, Debug, Display, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TrackName(String);
 
 impl From<&str> for TrackName {
     fn from(value: &str) -> Self {
@@ -23,8 +26,14 @@ impl From<&str> for TrackName {
     }
 }
 
-#[derive(From, AsRef, Debug, derive_more::Display, derive_more::Add, derive_more::AddAssign, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct TrackPriority(pub u32);
+#[derive(From, Deref, AsRef, Debug, Display, Add, AddAssign, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TrackPriority(u32);
+
+impl TrackPriority {
+    pub const fn build(v: u32) -> Self {
+        TrackPriority(v)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrackMeta {

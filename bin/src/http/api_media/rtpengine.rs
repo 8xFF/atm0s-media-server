@@ -3,7 +3,7 @@ use std::sync::Arc;
 use media_server_protocol::{
     cluster::gen_cluster_session_id,
     endpoint::ClusterConnId,
-    tokens::{RtpEngineToken, RTPENGINE_TOKEN},
+    tokens::RtpEngineToken,
     transport::{
         rtpengine::{self, RtpCreateAnswerRequest, RtpCreateOfferRequest, RtpSetAnswerRequest},
         RpcReq, RpcRes, RpcResult,
@@ -35,12 +35,10 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> RtpengineApis<S> {
     #[oai(path = "/offer", method = "post")]
     async fn create_offer(&self, RemoteIpAddr(ip_addr): RemoteIpAddr, TokenAuthorization(token): TokenAuthorization) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let session_id = gen_cluster_session_id();
-        let token = self
-            .secure
-            .decode_obj::<RtpEngineToken>(RTPENGINE_TOKEN, &token.token)
-            .ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let (app_ctx, token) = self.secure.decode_token::<RtpEngineToken>(&token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create rtpengine endpoint with token {token:?}, ip {ip_addr}");
         let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::CreateOffer(RtpCreateOfferRequest {
+            app: app_ctx,
             session_id,
             room: token.room.into(),
             peer: token.peer.into(),
@@ -77,12 +75,10 @@ impl<S: 'static + MediaEdgeSecure + Send + Sync> RtpengineApis<S> {
         body: ApplicationSdp<String>,
     ) -> Result<CustomHttpResponse<ApplicationSdp<String>>> {
         let session_id = gen_cluster_session_id();
-        let token = self
-            .secure
-            .decode_obj::<RtpEngineToken>(RTPENGINE_TOKEN, &token.token)
-            .ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
+        let (app_ctx, token) = self.secure.decode_token::<RtpEngineToken>(&token.token).ok_or(poem::Error::from_status(StatusCode::BAD_REQUEST))?;
         log::info!("[MediaAPIs] create rtpengine endpoint with token {token:?}, ip {ip_addr}");
         let (req, rx) = Rpc::new(RpcReq::RtpEngine(rtpengine::RpcReq::CreateAnswer(RtpCreateAnswerRequest {
+            app: app_ctx,
             session_id,
             sdp: body.0,
             room: token.room.into(),

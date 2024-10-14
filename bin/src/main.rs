@@ -81,15 +81,15 @@ async fn main() {
 
     assert!(args.sdn_zone_id < MAX_ZONE_ID, "sdn_zone_id must < {MAX_ZONE_ID}");
 
-    if let Some(sentry_endpoint) = args.sentry_endpoint {
-        let _guard = sentry::init((
+    let _guard = args.sentry_endpoint.map(|sentry_endpoint| {
+        sentry::init((
             sentry_endpoint.as_str(),
             sentry::ClientOptions {
                 release: sentry::release_name!(),
                 ..Default::default()
             },
-        ));
-    }
+        ))
+    });
 
     let http_port = args.http_port;
     let sdn_port = if args.sdn_port > 0 {

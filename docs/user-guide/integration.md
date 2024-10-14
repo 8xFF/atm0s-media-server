@@ -5,72 +5,56 @@
 We support integration with other systems through the following methods:
 
 - **Token generation logic and client SDK**: Generate and validate tokens for authentication.
-- **HTTP API**: Manage, kick, and make calls using HTTP endpoints.
-- **Message queue**: Handle events using a message queue. Currently, only Nats is supported, but it can easily be expanded to support more types.
-- **SIP integration with Hooks**: Handle SIP integration with Hooks for authentication, registration, unregistration, and invitation.
+- **HTTP API**: Create tokens and manage sessions using HTTP endpoints.
+- **Hooks**: Trigger events to external logic via HTTP Hooks.
+- **SIP integration with SIP-Gateway**: The atm0s-media-server supports RTP transport, allowing integration with external SIP-Gateways. We provide a simple SIP-Gateway for basic call flows, including outgoing and incoming calls.
 
 ## Token Generation and Validation
 
+| Type          | Token                  | Status |
+| ------------- | ---------------------- | ------ |
+| Static Secret | [JWT](https://jwt.io/) | Done   |
+
 The media server employs an efficient and secure approach for token generation and validation. It does not store any token information in its database and does not rely on external services for token validation. Instead, each node in the cluster validates tokens based on its configuration.
 
-Currently, the media server uses JWT with a static cluster secret for token generation. However, there are plans to expand this functionality in the future, including options such as public-private key and hierarchical key (bip32).
-To learn more about token generation mechanisms, refer to the table in the section above.
-
-Supported token generation mechanisms:
-
-| Type               | Token                  | Status |
-| ------------------ | ---------------------- | ------ |
-| Static Secret      | [JWT](https://jwt.io/) | Done   |
-| Public Private Key | [JWT](https://jwt.io/) | TODO   |
-| Hierarchical Key   | [JWT](https://jwt.io/) | TODO   |
-
-We can use token-generate APIS to generate tokens. To do this, you will need to start the `token-generate` service by:
-
-```bash
-atm0s-media-server --http-port 3100 token-generate
-```
-
-And access to the Swagger dashboard at http://localhost:3100/ui/ for expolering APIS.
-
-Or you can generate by any JWT library with body:
+Currently, the media server uses JWT with a static cluster secret for token generation. It also supports multi-tenancy applications by synchronizing data from an external HTTP source that responds with a JSON structure like:
 
 ```json
 {
-  "sub": "app1",
-  "exp": 1703752294122,
-  "room": "room1",
-  "peer": "user1",
-  "protocol": "webrtc",
-  "publish": true,
-  "subscribe": true
+  "apps": {
+    "app1": {
+      "secret": "secret1"
+    },
+    "app2": {
+      "secret": "secret2"
+    }
+  }
 }
 ```
 
-In there:
+The synchronization endpoint can be used with the `--multi-tenancy-sync` option of the gateway node. Instead of using the root secret, we can use the app secret to create tokens specific to that app.
 
-- `sub`: subject, it is optional, it is used to identify the application.
-- `exp`: expiration time, it is optional, if not defined the token will be valid forever.
-- `room`: room name, it is optional, if not defined the token will be valid for all rooms.
-- `peer`: peer name, it is optional, if not defined the token will be valid for all peers.
-- `protocol`: protocol name, required, it can be `webrtc`, `sip`, `rtmp`, `whip`, `whep`.
-- `publish`: publish permission, required.
-- `subscribe`: subscribe permission, required.
+We can use token generation APIs to create tokens. For more information, please refer to the HTTP APIs section below.
 
 ## HTTP APIs
 
-We have some HTTP APIs for managing, sessions. The APIs are defined as below:
+We provide several HTTP APIs for managing sessions. The APIs are defined in an OpenAPI documentation page:
 
-| Method | Endpoint                     | Body | Response              | Description  |
-| ------ | ---------------------------- | ---- | --------------------- | ------------ |
-| DELETE | GATEWAY/webrtc/conn/:conn_id | none | `{ status: boolean }` | Close a peer |
-| DELETE | GATEWAY/whip/conn/:conn_id   | none | `{ status: boolean }` | Close a peer |
-| DELETE | GATEWAY/whep/conn/:conn_id   | none | `{ status: boolean }` | Close a peer |
+| Feature                 | Docs                     |
+| ----------------------- | ------------------------ |
+| Console Panel/User      | CONSOLE/api/user/ui      |
+| Console Panel/Cluster   | CONSOLE/api/cluster/ui   |
+| Console Panel/Connector | CONSOLE/api/connector/ui |
+| Gateway Token           | GATEWAY/token/ui         |
+| Gateway WebRTC          | GATEWAY/webrtc/ui        |
+| Gateway WHIP            | GATEWAY/whip/ui          |
+| Gateway WHEP            | GATEWAY/whep/ui          |
+| Gateway RTP Engine      | GATEWAY/rtpengine/ui     |
 
-## External event handling with message queue
+## External Event Handling with Message Queue
 
-For processing events, we use a message queue. Currently, only Nats is supported, but it can easily be expanded to support more types. Each time a room or peer event occurs, it will be sent to the message queue and processed by the connector node.
-Supported events please see [Protobuf](/packages/protocol/src/media_endpoint_log.proto))
+For processing events, we utilize the HTTP Hooks mechanism.
 
-## SIP integration with RtpEngine protocol
+## SIP Integration with RTP Engine Protocol
 
 [SIP Integration](../getting-started/quick-start/sip.md)

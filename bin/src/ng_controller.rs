@@ -1,6 +1,6 @@
 use media_server_protocol::cluster::gen_cluster_session_id;
-use media_server_protocol::endpoint::{ClusterConnId, PeerId, RoomId};
-use media_server_protocol::tokens::{RtpEngineToken, RTPENGINE_TOKEN};
+use media_server_protocol::endpoint::ClusterConnId;
+use media_server_protocol::tokens::RtpEngineToken;
 use media_server_protocol::transport::{rtpengine, RpcReq, RpcRes};
 use media_server_secure::MediaEdgeSecure;
 use media_server_utils::select2;
@@ -48,12 +48,13 @@ impl<T: NgTransport, S: 'static + MediaEdgeSecure> NgControllerServer<T, S> {
                 return Some(());
             }
             NgCommand::Offer { ref sdp, ref atm0s_token, .. } | NgCommand::Answer { ref sdp, ref atm0s_token, .. } => {
-                if let Some(token) = self.secure.decode_obj::<RtpEngineToken>(RTPENGINE_TOKEN, atm0s_token) {
+                if let Some((app_ctx, token)) = self.secure.decode_token::<RtpEngineToken>(atm0s_token) {
                     let session_id = gen_cluster_session_id();
                     rtpengine::RpcReq::CreateAnswer(rtpengine::RtpCreateAnswerRequest {
+                        app: app_ctx,
                         session_id,
-                        room: RoomId(token.room),
-                        peer: PeerId(token.peer),
+                        room: token.room.into(),
+                        peer: token.peer.into(),
                         sdp: sdp.clone(),
                         record: token.record,
                         extra_data: token.extra_data,

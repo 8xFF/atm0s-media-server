@@ -4,17 +4,20 @@ use std::{
 };
 
 use atm0s_sdn::NodeId;
-use media_server_protocol::protobuf::cluster_connector::{
-    connector_request, connector_response, hook_event, peer_event,
-    record_event::{self, RecordPeerJoined, RecordStarted},
-    room_event::{self, RoomAllPeersLeaved, RoomPeerJoined, RoomPeerLeaved, RoomStarted, RoomStopped},
-    HookEvent, PeerRes, RecordEvent, RecordRes, RoomEvent,
+use media_server_protocol::{
+    multi_tenancy::AppId,
+    protobuf::cluster_connector::{
+        connector_request, connector_response, hook_event, peer_event,
+        record_event::{self, RecordPeerJoined, RecordStarted},
+        room_event::{self, RoomAllPeersLeaved, RoomPeerJoined, RoomPeerLeaved, RoomStarted, RoomStopped},
+        HookEvent, PeerRes, RecordEvent, RecordRes, RoomEvent,
+    },
 };
 use media_server_utils::CustomUri;
 use s3_presign::{Credentials, Presigner};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectOptions, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
-    Set,
+    ActiveModelTrait, ActiveValue, ColumnTrait, ConnectOptions, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+    RelationTrait, Set,
 };
 use sea_orm_migration::MigratorTrait;
 use sea_query::{Expr, IntoCondition};
@@ -37,7 +40,7 @@ pub struct ConnectorSqlStorage {
     s3: Presigner,
     s3_sub_folder: String,
     room_destroy_after_ms: u64,
-    hook_events: VecDeque<HookEvent>,
+    hook_events: VecDeque<(AppId, HookEvent)>,
 }
 
 impl ConnectorSqlStorage {
@@ -89,32 +92,40 @@ impl ConnectorSqlStorage {
 
         for room in rooms_wait_destroy {
             log::info!("[ConnectorSqlStorage] room {} {} no-one online after {}ms => destroy", room.id, room.room, self.room_destroy_after_ms);
+            let app_id = room.app.clone();
             let room_name = room.room.clone();
             let mut model: entity::room::ActiveModel = room.into();
             model.destroyed_at = Set(Some(now_ms as i64));
             model.save(&self.db).await?;
 
             // all peers leave room => fire event
-            self.hook_events.push_back(HookEvent {
-                node: self.node,
-                ts: now_ms,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: room_name,
-                    event: Some(room_event::Event::Stopped(RoomStopped {})),
-                })),
-            });
+            self.hook_events.push_back((
+                app_id.clone().into(),
+                HookEvent {
+                    node: self.node,
+                    ts: now_ms,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app_id,
+                        room: room_name,
+                        event: Some(room_event::Event::Stopped(RoomStopped {})),
+                    })),
+                },
+            ));
         }
 
         Ok(())
     }
 
-    async fn on_peer_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, session: u64, event: peer_event::Event) -> Result<(), DbErr> {
+    async fn on_peer_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, app: &str, session: u64, event: peer_event::Event) -> Result<(), DbErr> {
         if entity::session::Entity::find_by_id(session as i64).one(&self.db).await?.is_none() {
             log::info!("[ConnectorSqlStorage] new session {session} from node {from}");
             entity::session::Entity::insert(entity::session::ActiveModel {
+                app: Set(app.to_owned()),
                 id: Set(session as i64),
                 created_at: Set(now_ms as i64),
-                ..Default::default()
+                ip: ActiveValue::NotSet,
+                sdk: ActiveValue::NotSet,
+                user_agent: ActiveValue::NotSet,
             })
             .exec(&self.db)
             .await?;
@@ -123,13 +134,13 @@ impl ConnectorSqlStorage {
         match event {
             peer_event::Event::RouteBegin(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RouteBegin".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -138,13 +149,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::RouteSuccess(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RouteSuccess".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -152,13 +163,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::RouteError(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RouteError".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -166,13 +177,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Connecting(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Connecting".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -180,13 +191,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Connected(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Connected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -194,13 +205,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::ConnectError(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("ConnectError".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -209,13 +220,13 @@ impl ConnectorSqlStorage {
             peer_event::Event::Stats(_) => todo!(),
             peer_event::Event::Reconnect(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Reconnect".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -223,13 +234,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Reconnected(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Reconnected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -237,41 +248,45 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Disconnected(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Disconnected".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
                 Ok(())
             }
             peer_event::Event::Join(params) => {
-                let room = self.upsert_room(now_ms, event_ts, &params.room).await?;
+                let room = self.upsert_room(now_ms, event_ts, app, &params.room).await?;
                 let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
                 let _peer_session = self.upsert_peer_session(now_ms, room, peer, session, event_ts).await?;
 
                 // peer join room => fire event
-                self.hook_events.push_back(HookEvent {
-                    node: self.node,
-                    ts: event_ts,
-                    event: Some(hook_event::Event::Room(RoomEvent {
-                        room: params.room.clone(),
-                        event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: params.peer.clone() })),
-                    })),
-                });
+                self.hook_events.push_back((
+                    app.to_owned().into(),
+                    HookEvent {
+                        node: self.node,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Room(RoomEvent {
+                            app: app.to_owned(),
+                            room: params.room.clone(),
+                            event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: params.peer.clone() })),
+                        })),
+                    },
+                ));
 
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Join".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -279,16 +294,20 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::Leave(params) => {
                 // peer leave room => fire event
-                self.hook_events.push_back(HookEvent {
-                    node: self.node,
-                    ts: event_ts,
-                    event: Some(hook_event::Event::Room(RoomEvent {
-                        room: params.room.clone(),
-                        event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: params.peer.clone() })),
-                    })),
-                });
+                self.hook_events.push_back((
+                    app.to_owned().into(),
+                    HookEvent {
+                        node: self.node,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Room(RoomEvent {
+                            app: app.to_owned(),
+                            room: params.room.clone(),
+                            event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: params.peer.clone() })),
+                        })),
+                    },
+                ));
 
-                let room = self.upsert_room(now_ms, event_ts, &params.room).await?;
+                let room = self.upsert_room(now_ms, event_ts, app, &params.room).await?;
                 let peer = self.upsert_peer(now_ms, room, &params.peer).await?;
                 let peer_session = entity::peer_session::Entity::find()
                     .filter(entity::peer_session::Column::Peer.eq(peer))
@@ -315,24 +334,28 @@ impl ConnectorSqlStorage {
                     .await?;
 
                     // all peers leave room => fire event
-                    self.hook_events.push_back(HookEvent {
-                        node: self.node,
-                        ts: event_ts,
-                        event: Some(hook_event::Event::Room(RoomEvent {
-                            room: params.room.clone(),
-                            event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {})),
-                        })),
-                    });
+                    self.hook_events.push_back((
+                        app.to_owned().into(),
+                        HookEvent {
+                            node: self.node,
+                            ts: event_ts,
+                            event: Some(hook_event::Event::Room(RoomEvent {
+                                app: app.to_owned(),
+                                room: params.room.clone(),
+                                event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {})),
+                            })),
+                        },
+                    ));
                 }
 
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("Leave".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -340,13 +363,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::RemoteTrackStarted(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RemoteTrackStarted".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -354,13 +377,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::RemoteTrackEnded(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("RemoteTrackEnded".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -368,13 +391,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::LocalTrack(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("LocalTrack".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -382,13 +405,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::LocalTrackAttach(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("LocalTrackAttach".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -396,13 +419,13 @@ impl ConnectorSqlStorage {
             }
             peer_event::Event::LocalTrackDetach(params) => {
                 entity::event::ActiveModel {
+                    id: ActiveValue::NotSet,
                     node: Set(from as i64),
                     node_ts: Set(event_ts as i64),
                     session: Set(session as i64),
                     created_at: Set(now_ms as i64),
                     event: Set("LocalTrackDetach".to_owned()),
                     meta: Set(Some(serde_json::to_value(params).expect("Should convert params to Json"))),
-                    ..Default::default()
                 }
                 .insert(&self.db)
                 .await?;
@@ -411,8 +434,9 @@ impl ConnectorSqlStorage {
         }
     }
 
-    async fn upsert_room(&mut self, now_ms: u64, event_ts: u64, room: &str) -> Result<i32, DbErr> {
+    async fn upsert_room(&mut self, now_ms: u64, event_ts: u64, app: &str, room: &str) -> Result<i32, DbErr> {
         let room_row = entity::room::Entity::find()
+            .filter(entity::room::Column::App.eq(app))
             .filter(entity::room::Column::Room.eq(room))
             .filter(entity::room::Column::DestroyedAt.is_null())
             .one(&self.db)
@@ -430,16 +454,22 @@ impl ConnectorSqlStorage {
         } else {
             log::info!("[ConnectorSqlStorage] new room {room}");
             // new room created => fire event
-            self.hook_events.push_back(HookEvent {
-                node: self.node,
-                ts: event_ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: room.to_owned(),
-                    event: Some(room_event::Event::Started(RoomStarted {})),
-                })),
-            });
+            self.hook_events.push_back((
+                app.to_owned().into(),
+                HookEvent {
+                    node: self.node,
+                    ts: event_ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: room.to_owned(),
+                        event: Some(room_event::Event::Started(RoomStarted {})),
+                    })),
+                },
+            ));
 
             entity::room::ActiveModel {
+                id: ActiveValue::NotSet,
+                app: Set(app.to_owned()),
                 room: Set(room.to_owned()),
                 created_at: Set(now_ms as i64),
                 ..Default::default()
@@ -461,10 +491,10 @@ impl ConnectorSqlStorage {
         } else {
             log::info!("[ConnectorSqlStorage] new peer {peer} joined internal_room_id {room}");
             entity::peer::ActiveModel {
+                id: ActiveValue::NotSet,
                 room: Set(room),
                 peer: Set(peer.to_owned()),
                 created_at: Set(now_ms as i64),
-                ..Default::default()
             }
             .insert(&self.db)
             .await
@@ -484,12 +514,14 @@ impl ConnectorSqlStorage {
         } else {
             log::info!("[ConnectorSqlStorage] new peer_session {peer} for internal_room_id {room}");
             entity::peer_session::ActiveModel {
+                id: ActiveValue::NotSet,
                 session: Set(session as i64),
                 peer: Set(peer),
                 room: Set(room),
                 created_at: Set(now_ms as i64),
                 joined_at: Set(event_ts as i64),
-                ..Default::default()
+                leaved_at: ActiveValue::NotSet,
+                record: ActiveValue::NotSet,
             }
             .insert(&self.db)
             .await
@@ -524,19 +556,23 @@ impl Storage for ConnectorSqlStorage {
     async fn on_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, event: connector_request::Request) -> Option<connector_response::Response> {
         match event {
             connector_request::Request::Peer(event) => {
-                if let Err(e) = self.on_peer_event(now_ms, from, event_ts, event.session_id, event.event.clone()?).await {
+                if let Err(e) = self.on_peer_event(now_ms, from, event_ts, &event.app, event.session_id, event.event.clone()?).await {
                     log::error!("[ConnectorSqlStorage] db error {e:?}");
                     return None;
                 }
-                self.hook_events.push_back(HookEvent {
-                    node: from,
-                    ts: event_ts,
-                    event: Some(hook_event::Event::Peer(event)),
-                });
+                self.hook_events.push_back((
+                    event.app.clone().into(),
+                    HookEvent {
+                        node: from,
+                        ts: event_ts,
+                        event: Some(hook_event::Event::Peer(event)),
+                    },
+                ));
                 Some(connector_response::Response::Peer(PeerRes {}))
             }
             connector_request::Request::Record(req) => {
                 let room = entity::room::Entity::find()
+                    .filter(entity::room::Column::App.eq(&req.app))
                     .filter(entity::room::Column::Room.eq(&req.room))
                     .filter(entity::room::Column::DestroyedAt.is_null())
                     .one(&self.db)
@@ -546,16 +582,20 @@ impl Storage for ConnectorSqlStorage {
                 let room_path = if let Some(path) = room.record {
                     path
                 } else {
-                    let room_path = std::path::Path::new(&self.s3_sub_folder).join(&req.room).join(room_id.to_string()).to_str()?.to_string();
+                    let room_path = std::path::Path::new(&self.s3_sub_folder).join(&req.app).join(&req.room).join(room_id.to_string()).to_str()?.to_string();
                     log::info!("[ConnectorSqlStorage] room {} record started in path: {room_path}", req.room);
-                    self.hook_events.push_back(HookEvent {
-                        node: from,
-                        ts: event_ts,
-                        event: Some(hook_event::Event::Record(RecordEvent {
-                            room: req.room.clone(),
-                            event: Some(record_event::Event::Started(RecordStarted { path: room_path.clone() })),
-                        })),
-                    });
+                    self.hook_events.push_back((
+                        req.app.clone().into(),
+                        HookEvent {
+                            node: from,
+                            ts: event_ts,
+                            event: Some(hook_event::Event::Record(RecordEvent {
+                                app: req.app.clone(),
+                                room: req.room.clone(),
+                                event: Some(record_event::Event::Started(RecordStarted { path: room_path.clone() })),
+                            })),
+                        },
+                    ));
 
                     let mut model: entity::room::ActiveModel = room.into();
                     model.record = Set(Some(room_path.clone()));
@@ -575,17 +615,21 @@ impl Storage for ConnectorSqlStorage {
                 } else {
                     let peer_path = std::path::Path::new(&req.peer).join(peer_session.id.to_string()).to_str()?.to_string();
                     log::info!("[ConnectorSqlStorage] room {} peer {} record started in path: {peer_path}", req.room, req.peer);
-                    self.hook_events.push_back(HookEvent {
-                        node: from,
-                        ts: event_ts,
-                        event: Some(hook_event::Event::Record(RecordEvent {
-                            room: req.room.clone(),
-                            event: Some(record_event::Event::PeerJoined(RecordPeerJoined {
-                                peer: req.peer.clone(),
-                                path: peer_path.clone(),
+                    self.hook_events.push_back((
+                        req.app.clone().into(),
+                        HookEvent {
+                            node: from,
+                            ts: event_ts,
+                            event: Some(hook_event::Event::Record(RecordEvent {
+                                app: req.app.clone(),
+                                room: req.room.clone(),
+                                event: Some(record_event::Event::PeerJoined(RecordPeerJoined {
+                                    peer: req.peer.clone(),
+                                    path: peer_path.clone(),
+                                })),
                             })),
-                        })),
-                    });
+                        },
+                    ));
 
                     let mut model: entity::peer_session::ActiveModel = peer_session.into();
                     model.record = Set(Some(peer_path.clone()));
@@ -604,7 +648,7 @@ impl Storage for ConnectorSqlStorage {
         }
     }
 
-    fn pop_hook_event(&mut self) -> Option<HookEvent> {
+    fn pop_hook_event(&mut self) -> Option<(AppId, HookEvent)> {
         self.hook_events.pop_front()
     }
 }
@@ -616,10 +660,12 @@ pub struct ConnectorSqlQuerier {
 #[derive(FromQueryResult)]
 struct RoomInfoAndPeersCount {
     pub id: i32,
+    pub app: String,
     pub room: String,
     pub created_at: i64,
     pub destroyed_at: Option<i64>,
     pub peers: i64,
+    pub record: Option<String>,
 }
 
 #[async_trait::async_trait]
@@ -639,10 +685,12 @@ impl Querier for ConnectorSqlQuerier {
             .into_iter()
             .map(|r| RoomInfo {
                 id: r.id,
+                app: r.app,
                 room: r.room,
                 created_at: r.created_at as u64,
                 destroyed_at: r.destroyed_at.map(|t| t as u64),
                 peers: r.peers as usize,
+                record: r.record,
             })
             .collect::<Vec<_>>();
         let total = entity::room::Entity::find().count(&self.db).await.map_err(|e| e.to_string())?;
@@ -748,6 +796,7 @@ impl Querier for ConnectorSqlQuerier {
                 .into_iter()
                 .map(|(r, peers)| SessionInfo {
                     id: r.id as u64,
+                    app: r.app,
                     created_at: r.created_at as u64,
                     ip: r.ip,
                     user_agent: r.user_agent,
@@ -842,6 +891,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_event() {
+        let app = "app1";
         let session_id = 10000;
         let node = 1;
         let ts = 1000;
@@ -849,7 +899,6 @@ mod tests {
         let cfg = ConnectorCfg {
             sql_uri: "sqlite::memory:".to_owned(),
             s3_uri: "http://user:pass@localhost:9000/bucket".to_owned(),
-            hook_url: None,
             hook_workers: 0,
             hook_body_type: HookBodyType::ProtobufJson,
             room_destroy_after_ms: 300_000,
@@ -857,6 +906,7 @@ mod tests {
         let mut storage = ConnectorSqlStorage::new(node, &cfg).await;
         let querier = storage.querier();
         let event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::RouteBegin(RouteBegin { remote_ip: remote_ip.clone() })),
         };
@@ -864,11 +914,14 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -890,6 +943,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_room() {
+        let app = "app1";
         let session_id = 10000;
         let node = 1;
         let ts = 1000;
@@ -897,7 +951,6 @@ mod tests {
         let cfg = ConnectorCfg {
             sql_uri: "sqlite::memory:".to_owned(),
             s3_uri: "http://user:pass@localhost:9000/bucket".to_owned(),
-            hook_url: None,
             hook_workers: 0,
             hook_body_type: HookBodyType::ProtobufJson,
             room_destroy_after_ms: 300_000,
@@ -905,6 +958,7 @@ mod tests {
         let mut storage = ConnectorSqlStorage::new(node, &cfg).await;
         let querier = storage.querier();
         let connecting_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Connecting(Connecting { remote_ip: remote_ip.clone() })),
         };
@@ -915,11 +969,14 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(connecting_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(connecting_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -939,6 +996,7 @@ mod tests {
         assert_eq!(session_events.current, 0);
 
         let connected_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Connected(Connected {
                 after_ms: 10,
@@ -951,11 +1009,14 @@ mod tests {
             .expect("Should process event");
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(connected_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(connected_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -965,6 +1026,7 @@ mod tests {
         assert_eq!(rooms.current, 0);
 
         let join_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Join(Join {
                 room: "demo".to_string(),
@@ -975,33 +1037,44 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::Started(RoomStarted {}))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::Started(RoomStarted {}))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(join_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(join_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -1017,6 +1090,7 @@ mod tests {
 
         // now leave room
         let leave_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Leave(Leave {
                 room: "demo".to_string(),
@@ -1030,33 +1104,44 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: "demo".to_string(),
-                    event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: "peer".to_string() }))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_string(),
+                        event: Some(room_event::Event::PeerLeaved(RoomPeerLeaved { peer: "peer".to_string() }))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {}))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::AllPeersLeaved(RoomAllPeersLeaved {}))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(leave_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(leave_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
@@ -1065,20 +1150,25 @@ mod tests {
 
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts: 1000 + cfg.room_destroy_after_ms,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::Stopped(RoomStopped {}))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts: 1000 + cfg.room_destroy_after_ms,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::Stopped(RoomStopped {}))
+                    }))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 
         // now we will create new room
         let ts = ts + 10000;
         let join_event = PeerEvent {
+            app: app.to_owned(),
             session_id,
             event: Some(Event::Join(Join {
                 room: "demo".to_string(),
@@ -1088,33 +1178,44 @@ mod tests {
         storage.on_event(0, node, ts, connector_request::Request::Peer(join_event.clone())).await.expect("Should process event");
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::Started(RoomStarted {}))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::Started(RoomStarted {}))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Room(RoomEvent {
-                    room: "demo".to_owned(),
-                    event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
-                }))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Room(RoomEvent {
+                        app: app.to_owned(),
+                        room: "demo".to_owned(),
+                        event: Some(room_event::Event::PeerJoined(RoomPeerJoined { peer: "peer".to_owned() }))
+                    }))
+                }
+            ))
         );
         assert_eq!(
             storage.pop_hook_event(),
-            Some(HookEvent {
-                node,
-                ts,
-                event: Some(hook_event::Event::Peer(join_event))
-            })
+            Some((
+                app.to_owned().into(),
+                HookEvent {
+                    node,
+                    ts,
+                    event: Some(hook_event::Event::Peer(join_event))
+                }
+            ))
         );
         assert_eq!(storage.pop_hook_event(), None);
 

@@ -93,3 +93,7 @@ enum BitrateControlMode {
     DYNAMIC_CONSUMERS = 0;
     MAX_BITRATE = 1;
 }
+
+message AppContext {
+    optional string app = 1;
+}

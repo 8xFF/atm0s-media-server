@@ -1,5 +1,6 @@
 use crate::{
     endpoint::{PeerId, RoomId},
+    multi_tenancy::AppContext,
     protobuf,
 };
 
@@ -7,6 +8,7 @@ use super::{ConnLayer, RpcResult};
 
 #[derive(Debug, Clone)]
 pub struct RtpCreateOfferRequest {
+    pub app: AppContext,
     pub session_id: u64,
     pub room: RoomId,
     pub peer: PeerId,
@@ -21,6 +23,7 @@ pub struct RtpSetAnswerRequest {
 
 #[derive(Debug, Clone)]
 pub struct RtpCreateAnswerRequest {
+    pub app: AppContext,
     pub session_id: u64,
     pub room: RoomId,
     pub peer: PeerId,
@@ -86,6 +89,7 @@ impl TryFrom<protobuf::cluster_gateway::RtpEngineCreateOfferRequest> for RtpCrea
     type Error = ();
     fn try_from(value: protobuf::cluster_gateway::RtpEngineCreateOfferRequest) -> Result<Self, Self::Error> {
         Ok(Self {
+            app: value.app.into(),
             session_id: value.session_id,
             room: value.room.into(),
             peer: value.peer.into(),
@@ -98,9 +102,10 @@ impl TryFrom<protobuf::cluster_gateway::RtpEngineCreateOfferRequest> for RtpCrea
 impl From<RtpCreateOfferRequest> for protobuf::cluster_gateway::RtpEngineCreateOfferRequest {
     fn from(val: RtpCreateOfferRequest) -> Self {
         protobuf::cluster_gateway::RtpEngineCreateOfferRequest {
+            app: Some(val.app.into()),
             session_id: val.session_id,
-            room: val.room.0,
-            peer: val.peer.0,
+            room: val.room.into(),
+            peer: val.peer.into(),
             record: val.record,
             extra_data: val.extra_data,
         }
@@ -111,6 +116,7 @@ impl TryFrom<protobuf::cluster_gateway::RtpEngineCreateAnswerRequest> for RtpCre
     type Error = ();
     fn try_from(value: protobuf::cluster_gateway::RtpEngineCreateAnswerRequest) -> Result<Self, Self::Error> {
         Ok(Self {
+            app: value.app.into(),
             session_id: value.session_id,
             sdp: value.sdp,
             room: value.room.into(),
@@ -124,10 +130,11 @@ impl TryFrom<protobuf::cluster_gateway::RtpEngineCreateAnswerRequest> for RtpCre
 impl From<RtpCreateAnswerRequest> for protobuf::cluster_gateway::RtpEngineCreateAnswerRequest {
     fn from(val: RtpCreateAnswerRequest) -> Self {
         protobuf::cluster_gateway::RtpEngineCreateAnswerRequest {
+            app: Some(val.app.into()),
             session_id: val.session_id,
             sdp: val.sdp,
-            room: val.room.0,
-            peer: val.peer.0,
+            room: val.room.into(),
+            peer: val.peer.into(),
             record: val.record,
             extra_data: val.extra_data,
         }

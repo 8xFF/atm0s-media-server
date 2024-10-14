@@ -29,10 +29,10 @@ use crate::RtpEngineError;
 
 const TIMEOUT_DURATION_MS: u64 = 60_000;
 
-const REMOTE_AUDIO_TRACK: RemoteTrackId = RemoteTrackId(0);
-const LOCAL_AUDIO_TRACK: LocalTrackId = LocalTrackId(0);
+const REMOTE_AUDIO_TRACK: RemoteTrackId = RemoteTrackId::build(0);
+const LOCAL_AUDIO_TRACK: LocalTrackId = LocalTrackId::build(0);
 const AUDIO_NAME: &str = "audio_main";
-const DEFAULT_PRIORITY: TrackPriority = TrackPriority(1);
+const DEFAULT_PRIORITY: TrackPriority = TrackPriority::build(1);
 
 #[allow(clippy::large_enum_variant)]
 pub enum ExtIn {
@@ -96,7 +96,11 @@ impl TransportRtpEngine {
 
     pub fn new_answer(room: RoomId, peer: PeerId, ip: IpAddr, offer: &str) -> Result<(Self, String), String> {
         let mut offer = SessionDescription::try_from(offer.to_string()).map_err(|e| e.to_string())?;
-        let dest_ip: IpAddr = offer.connection.ok_or("CONNECTION_NOT_FOUND".to_string())?.connection_address.base;
+        let dest_ip: IpAddr = if let Some(conn) = offer.connection {
+            conn.connection_address.base
+        } else {
+            offer.origin.unicast_address
+        };
         let dest_port = offer.media_descriptions.pop().ok_or("MEDIA_NOT_FOUND".to_string())?.media.port;
         let remote = SocketAddr::new(dest_ip, dest_port);
 
@@ -232,7 +236,7 @@ impl TransportRtpEngine {
                                     REMOTE_AUDIO_TRACK,
                                     RemoteTrackEvent::Started {
                                         name: AUDIO_NAME.to_string(),
-                                        priority: TrackPriority(100),
+                                        priority: TrackPriority::from(100),
                                         meta: TrackMeta::default_audio(),
                                     },
                                 )));

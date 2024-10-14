@@ -5,6 +5,7 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
+    pub app: String,
     pub created_at: i64,
     pub ip: Option<String>,
     pub user_agent: Option<String>,
