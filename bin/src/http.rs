@@ -104,7 +104,7 @@ pub async fn run_console_http_server(
         .nest("/api/connector/ui", connector_ui)
         .at("/api/connector/spec", poem::endpoint::make_sync(move |_| connector_spec.clone()))
         .with(Cors::new())
-        .with(Tracing::default());
+        .with(Tracing);
 
     Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
     Ok(())
