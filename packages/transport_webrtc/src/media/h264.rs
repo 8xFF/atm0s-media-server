@@ -5,7 +5,6 @@ const H264_NALU_TTYPE_SPS: u32 = 7;
 const H264_NALU_TYPE_BITMASK: u32 = 0x1F;
 
 pub fn parse_rtp(payload: &[u8], profile: H264Profile, rid: Option<u8>) -> Option<MediaMeta> {
-    let rid = rid?;
     if payload.len() < 4 {
         None
     } else {
@@ -16,7 +15,7 @@ pub fn parse_rtp(payload: &[u8], profile: H264Profile, rid: Option<u8>) -> Optio
         Some(MediaMeta::H264 {
             key,
             profile,
-            sim: Some(H264Sim { spatial: rid }),
+            sim: rid.map(|rid| H264Sim { spatial: rid }),
         })
     }
 }
