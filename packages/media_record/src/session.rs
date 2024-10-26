@@ -1,5 +1,6 @@
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
+    multi_tenancy::AppId,
     protobuf::cluster_connector::RecordReq,
     record::{SessionRecordEvent, SessionRecordRow},
 };
@@ -10,6 +11,7 @@ const MAX_FILE_LEN_MS: u64 = 60_000;
 
 struct RoomState {
     index: u32,
+    app: AppId,
     room: RoomId,
     peer: PeerId,
     queue: Option<Vec<SessionRecordRow>>,
@@ -40,10 +42,11 @@ impl SessionRecord {
         }
 
         match &event {
-            SessionRecordEvent::JoinRoom(room, peer) => {
-                log::info!("[SessionRecord] {} join room {}/{}", self.session, room.0, peer.0);
+            SessionRecordEvent::JoinRoom(app, room, peer) => {
+                log::info!("[SessionRecord] {} join room {}/{}", self.session, room, peer);
                 self.state = Some(RoomState {
                     index: 0,
+                    app: app.clone(),
                     room: room.clone(),
                     peer: peer.clone(),
                     queue: Some(vec![SessionRecordRow { ts: event_ts, event }]),
@@ -83,7 +86,7 @@ impl SessionRecord {
         }
 
         let queue = state.queue.take()?;
-        let mut chunk = RecordChunkWriter::new(&state.room.0, &state.peer.0, self.session, from_ts, to_ts);
+        let mut chunk = RecordChunkWriter::new(&state.room, &state.peer, self.session, from_ts, to_ts);
 
         for row in queue {
             chunk.push(row);
@@ -92,8 +95,9 @@ impl SessionRecord {
         state.index += 1;
         Some((
             RecordReq {
-                room: state.room.0.clone(),
-                peer: state.peer.0.clone(),
+                app: state.app.clone().into(),
+                room: state.room.clone().into(),
+                peer: state.peer.clone().into(),
                 session: self.session,
                 index,
                 from_ts,

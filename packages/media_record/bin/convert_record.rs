@@ -132,11 +132,11 @@ async fn main() {
         let session = peer.sessions.entry(session_id).or_default();
         match event {
             media_server_record::Event::TrackStart(name, ts, path) => {
-                let track = session.track.entry(name.0).or_default();
+                let track = session.track.entry(name.into()).or_default();
                 track.timeline.push(TrackTimeline { path, start: ts, end: None });
             }
             media_server_record::Event::TrackStop(name, ts) => {
-                if let Some(track) = session.track.get_mut(&name.0) {
+                if let Some(track) = session.track.get_mut(name.as_str()) {
                     if let Some(timeline) = track.timeline.last_mut() {
                         if timeline.end.is_none() {
                             timeline.end = Some(ts);

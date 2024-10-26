@@ -13,6 +13,7 @@ use media_server_core::{
 use media_server_protocol::{
     endpoint::{PeerId, RoomId},
     media::MediaPacket,
+    multi_tenancy::AppContext,
     protobuf::gateway::ConnectRequest,
     transport::{RpcError, RpcResult},
 };
@@ -60,7 +61,7 @@ pub enum Variant {
 pub enum ExtIn {
     RemoteIce(u64, Variant, Vec<String>),
     /// Last option<string>, bool is extra_data and record flag
-    RestartIce(u64, Variant, IpAddr, String, ConnectRequest, Option<String>, bool),
+    RestartIce(u64, AppContext, Variant, IpAddr, String, ConnectRequest, Option<String>, bool),
     Disconnect(u64, Variant),
 }
 
@@ -117,7 +118,9 @@ pub struct TransportWebrtc<ES> {
 }
 
 impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
+        app: AppContext,
         remote: IpAddr,
         variant: VariantParams<ES>,
         offer: &str,
@@ -163,7 +166,7 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
                 // we need to start sctp as client side for handling restart-ice in new server
                 // if not, datachannel will not connect successful after reconnect to new server
                 rtc.direct_api().start_sctp(true);
-                Box::new(webrtc::TransportWebrtcSdk::new(req, extra_data, secure, remote))
+                Box::new(webrtc::TransportWebrtcSdk::new(app, req, extra_data, secure, remote))
             }
         };
 
@@ -316,7 +319,7 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                     }
                     self.queue.push_back(TransportOutput::Ext(ExtOut::RemoteIce(req_id, variant, Ok(success_count))));
                 }
-                ExtIn::RestartIce(req_id, variant, _ip, _useragent, req, _extra_data, _record) => {
+                ExtIn::RestartIce(req_id, _app, variant, _ip, _useragent, req, _extra_data, _record) => {
                     if let Ok(offer) = SdpOffer::from_sdp_string(&req.sdp) {
                         if let Ok(answer) = self.rtc.sdp_api().accept_offer(offer) {
                             self.internal.on_codec_config(self.rtc.codec_config());

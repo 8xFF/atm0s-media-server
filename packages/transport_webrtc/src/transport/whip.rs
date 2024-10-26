@@ -24,9 +24,9 @@ use crate::media::RemoteMediaConvert;
 use super::{InternalOutput, TransportWebrtcInternal};
 
 const TIMEOUT_SEC: u64 = 10;
-const AUDIO_TRACK: RemoteTrackId = RemoteTrackId(0);
+const AUDIO_TRACK: RemoteTrackId = RemoteTrackId::build(0);
 const AUDIO_NAME: &str = "audio_main";
-const VIDEO_TRACK: RemoteTrackId = RemoteTrackId(1);
+const VIDEO_TRACK: RemoteTrackId = RemoteTrackId::build(1);
 const VIDEO_NAME: &str = "video_main";
 
 #[derive(Debug)]
@@ -260,7 +260,7 @@ impl TransportWebrtcWhip {
                         control: BitrateControlMode::MaxBitrate,
                         metadata: None,
                     },
-                    priority: TrackPriority(1),
+                    priority: TrackPriority::from(1),
                 },
             ))));
         } else {
@@ -283,7 +283,7 @@ impl TransportWebrtcWhip {
                         control: BitrateControlMode::MaxBitrate,
                         metadata: None,
                     },
-                    priority: TrackPriority(1),
+                    priority: TrackPriority::from(1),
                 },
             ))));
         }

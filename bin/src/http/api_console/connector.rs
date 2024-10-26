@@ -16,9 +16,11 @@ use poem_openapi::{
 #[derive(poem_openapi::Object)]
 pub struct RoomInfo {
     pub id: i32,
+    pub app: String,
     pub room: String,
     pub created_at: u64,
     pub peers: usize,
+    pub record: Option<String>,
 }
 
 #[derive(poem_openapi::Object)]
@@ -47,6 +49,7 @@ pub struct PeerInfo {
 pub struct SessionInfo {
     /// u64 cause wrong parse in js, so we convert it to string
     pub id: String,
+    pub app: String,
     pub ip: Option<String>,
     pub user_agent: Option<String>,
     pub sdk: Option<String>,
@@ -81,9 +84,11 @@ impl Apis {
                         .into_iter()
                         .map(|e| RoomInfo {
                             id: e.id,
+                            app: e.app,
                             room: e.room,
                             created_at: e.created_at,
                             peers: e.peers as usize,
+                            record: e.record,
                         })
                         .collect::<Vec<_>>(),
                 ),
@@ -172,6 +177,7 @@ impl Apis {
                         .into_iter()
                         .map(|p| SessionInfo {
                             id: p.id.to_string(),
+                            app: p.app,
                             ip: p.ip,
                             user_agent: p.user_agent,
                             sdk: p.sdk,

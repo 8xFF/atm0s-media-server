@@ -99,9 +99,9 @@ impl EndpointLocalTrack {
         self.queue.push_back(Output::PeerEvent(
             now,
             peer_event::Event::LocalTrackDetach(peer_event::LocalTrackDetach {
-                track: self.track.0 as i32,
-                remote_peer: peer.0,
-                remote_track: track.0,
+                track: *self.track as i32,
+                remote_peer: peer.into(),
+                remote_track: track.into(),
             }),
         ));
     }
@@ -165,7 +165,7 @@ impl EndpointLocalTrack {
     fn on_rpc_req(&mut self, now: Instant, req_id: EndpointReqId, req: EndpointLocalTrackReq) {
         match req {
             EndpointLocalTrackReq::Attach(source, config) => {
-                if config.priority.0 == 0 {
+                if *config.priority == 0 {
                     log::warn!("[EndpointLocalTrack] view with invalid priority");
                     self.queue
                         .push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Attach(Err(RpcError::new2(EndpointErrors::LocalTrackInvalidPriority)))));
@@ -190,9 +190,9 @@ impl EndpointLocalTrack {
                     self.queue.push_back(Output::PeerEvent(
                         now,
                         peer_event::Event::LocalTrackAttach(peer_event::LocalTrackAttach {
-                            track: self.track.0 as i32,
-                            remote_peer: peer.0,
-                            remote_track: track.0,
+                            track: *self.track as i32,
+                            remote_peer: peer.into(),
+                            remote_track: track.into(),
                         }),
                     ));
                     self.selector.reset();
@@ -213,9 +213,9 @@ impl EndpointLocalTrack {
                         self.queue.push_back(Output::PeerEvent(
                             now,
                             peer_event::Event::LocalTrackDetach(peer_event::LocalTrackDetach {
-                                track: self.track.0 as i32,
-                                remote_peer: peer.0,
-                                remote_track: track.0,
+                                track: *self.track as i32,
+                                remote_peer: peer.into(),
+                                remote_track: track.into(),
                             }),
                         ));
                     } else {

@@ -32,9 +32,11 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
             .into_iter()
             .map(|e| RoomInfo {
                 id: e.id,
+                app: e.app,
                 room: e.room,
                 created_at: e.created_at,
                 peers: e.peers as u32,
+                record: e.record,
             })
             .collect::<Vec<_>>();
 
@@ -108,6 +110,7 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
             .into_iter()
             .map(|e| SessionInfo {
                 id: e.id,
+                app: e.app,
                 ip: e.ip,
                 sdk: e.sdk,
                 user_agent: e.user_agent,

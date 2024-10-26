@@ -11,6 +11,7 @@ use media_server_core::{
 };
 use media_server_protocol::{
     cluster::gen_cluster_session_id,
+    multi_tenancy::{AppContext, AppId},
     protobuf::cluster_connector::peer_event,
     record::SessionRecordEvent,
     transport::{RpcError, RpcResult},
@@ -41,7 +42,7 @@ pub enum GroupInput {
 pub enum GroupOutput {
     Net(BackendOutgoing),
     Cluster(WebrtcSession, ClusterRoomHash, ClusterEndpointControl),
-    PeerEvent(WebrtcSession, u64, Instant, peer_event::Event),
+    PeerEvent(WebrtcSession, AppId, u64, Instant, peer_event::Event),
     RecordEvent(WebrtcSession, u64, Instant, SessionRecordEvent),
     Ext(WebrtcSession, ExtOut),
     Shutdown(WebrtcSession),
@@ -74,25 +75,28 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
         }
     }
 
-    pub fn spawn(&mut self, remote: IpAddr, session_id: u64, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
+    pub fn spawn(&mut self, app: AppContext, remote: IpAddr, session_id: u64, variant: VariantParams<ES>, offer: &str) -> RpcResult<(bool, String, usize)> {
         let cfg = match &variant {
             VariantParams::Whip(_, _, _, record) => EndpointCfg {
+                app: app.clone(),
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: *record,
             },
             VariantParams::Whep(_, _, _) => EndpointCfg {
+                app: app.clone(),
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: false,
             },
             VariantParams::Webrtc(_, _, _, record, _) => EndpointCfg {
+                app: app.clone(),
                 max_ingress_bitrate: 2_500_000,
                 max_egress_bitrate: 2_500_000,
                 record: *record,
             },
         };
-        let (tran, ufrag, sdp) = TransportWebrtc::new(remote, variant, offer, self.dtls_cert.clone(), &self.addrs, &self.addrs_alt, self.ice_lite)?;
+        let (tran, ufrag, sdp) = TransportWebrtc::new(app, remote, variant, offer, self.dtls_cert.clone(), &self.addrs, &self.addrs_alt, self.ice_lite)?;
         log::info!("[TransportWebrtc] create endpoint with config {:?}", cfg);
         let endpoint = Endpoint::new(session_id, cfg, tran);
         let index = self.endpoints.add_task(endpoint);
@@ -104,7 +108,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
         match out {
             EndpointOutput::Net(net) => GroupOutput::Net(net),
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcSession(index), room, control),
-            EndpointOutput::PeerEvent(session_id, ts, event) => GroupOutput::PeerEvent(WebrtcSession(index), session_id, ts, event),
+            EndpointOutput::PeerEvent(app, session_id, ts, event) => GroupOutput::PeerEvent(WebrtcSession(index), app, session_id, ts, event),
             EndpointOutput::RecordEvent(session_id, ts, event) => GroupOutput::RecordEvent(WebrtcSession(index), session_id, ts, event),
             EndpointOutput::Destroy => {
                 log::info!("[TransportWebrtc] destroy endpoint {index}");
@@ -154,10 +158,10 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
                             self.queue
                                 .push_back(GroupOutput::Ext(owner, ExtOut::RemoteIce(req_id, variant, Err(RpcError::new2(WebrtcError::RpcEndpointNotFound)))));
                         }
-                        ExtIn::RestartIce(req_id, variant, remote, useragent, req, extra_data, record) => {
+                        ExtIn::RestartIce(req_id, app, variant, remote, useragent, req, extra_data, record) => {
                             let sdp = req.sdp.clone();
                             let session_id = gen_cluster_session_id(); //TODO need to reuse old session_id
-                            if let Ok((ice_lite, sdp, index)) = self.spawn(remote, session_id, VariantParams::Webrtc(useragent, req, extra_data, record, self.secure.clone()), &sdp) {
+                            if let Ok((ice_lite, sdp, index)) = self.spawn(app, remote, session_id, VariantParams::Webrtc(useragent, req, extra_data, record, self.secure.clone()), &sdp) {
                                 self.queue.push_back(GroupOutput::Ext(index.into(), ExtOut::RestartIce(req_id, variant, Ok((ice_lite, sdp)))));
                             } else {
                                 self.queue

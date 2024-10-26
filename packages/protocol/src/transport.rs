@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use derive_more::{Display, From};
+use derive_more::{derive::Deref, Display, From};
 use serde::{Deserialize, Serialize};
 
 use crate::protobuf;
@@ -11,8 +11,14 @@ pub mod whep;
 pub mod whip;
 
 /// RemoteTrackId is used for track which received media from client
-#[derive(From, Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
-pub struct RemoteTrackId(pub u16);
+#[derive(From, Deref, Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
+pub struct RemoteTrackId(u16);
+
+impl RemoteTrackId {
+    pub const fn build(value: u16) -> Self {
+        Self(value)
+    }
+}
 
 impl Hash for RemoteTrackId {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -21,8 +27,14 @@ impl Hash for RemoteTrackId {
 }
 
 /// LocalTrackId is used for track which send media to client
-#[derive(From, Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
-pub struct LocalTrackId(pub u16);
+#[derive(From, Deref, Debug, Clone, Copy, PartialEq, Eq, Display, Serialize, Deserialize)]
+pub struct LocalTrackId(u16);
+
+impl LocalTrackId {
+    pub const fn build(value: u16) -> Self {
+        Self(value)
+    }
+}
 
 impl Hash for LocalTrackId {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

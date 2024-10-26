@@ -142,6 +142,7 @@ message PeerEvent {
         string remote_track = 3;
     }
 
+    string app = 19;
     uint64 session_id = 1;
 
     oneof event {
@@ -190,6 +191,7 @@ message RoomEvent {
 
     }
 
+    string app = 7;
     string room = 1;
     oneof event {
         RoomStarted started = 2;
@@ -210,6 +212,7 @@ message RecordEvent {
         string path = 2;
     }
 
+    string app = 4;
     string room = 1;
     oneof event {
         RecordStarted started = 2;
@@ -217,13 +220,14 @@ message RecordEvent {
     }
 }
 
-message RecordReq {
+message RecordReq {    
     string room = 1;
     string peer = 2;
     uint64 session = 3;
     uint32 index = 4;
     uint64 from_ts = 5;
     uint64 to_ts = 6;
+    string app = 7;
 }
 
 message RecordRes {
@@ -238,9 +242,11 @@ message GetParams {
 message GetRooms {
     message RoomInfo {
         int32 id = 1;
+        string app = 5;
         string room = 2;
         uint64 created_at = 3;
         uint32 peers = 4;
+        optional string record = 6;
     }
 
     repeated RoomInfo rooms = 1;
@@ -279,6 +285,7 @@ message GetPeers {
 
 message GetSessions {
     message SessionInfo {
+        string app = 7;
         uint64 id = 1;
         optional string ip = 2;
         optional string user_agent = 3;

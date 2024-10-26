@@ -8,6 +8,7 @@ use std::{
 use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut, TimePivot, TimeTicker};
 use clap::Parser;
 use media_server_gateway::ServiceKind;
+use media_server_multi_tenancy::MultiTenancyStorage;
 use media_server_protocol::{
     gateway::GATEWAY_RPC_PORT,
     protobuf::{
@@ -92,7 +93,8 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     if let Some(http_port) = http_port {
-        let secure2 = args.enable_token_api.then(|| Arc::new(MediaGatewaySecureJwt::from(node.secret.as_bytes())));
+        let app_storage = Arc::new(MultiTenancyStorage::new(&node.secret, None));
+        let secure2 = args.enable_token_api.then(|| Arc::new(MediaGatewaySecureJwt::new(node.secret.as_bytes(), app_storage)));
         let req_tx = req_tx.clone();
         let secure = secure.clone();
         tokio::spawn(async move {

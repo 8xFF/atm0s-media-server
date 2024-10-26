@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "sdk/gateway.proto";
+import "shared.proto";
 
 package cluster_gateway;
 
@@ -75,6 +76,7 @@ message WhipConnectRequest {
     uint64 session_id = 6;
     bool record = 7;
     optional string extra_data = 8;
+    shared.AppContext app = 9;
 }
 
 message WhipConnectResponse {
@@ -108,6 +110,7 @@ message WhepConnectRequest {
     string peer = 5;
     uint64 session_id = 6;
     optional string extra_data = 8;
+    shared.AppContext app = 9;
 }
 
 message WhepConnectResponse {
@@ -140,6 +143,7 @@ message WebrtcConnectRequest {
     uint64 session_id = 4;
     bool record = 5;
     optional string extra_data = 8;
+    shared.AppContext app = 9;
 }
 
 message WebrtcConnectResponse {
@@ -162,6 +166,7 @@ message WebrtcRestartIceRequest {
     gateway.ConnectRequest req = 4;
     bool record = 5;
     optional string extra_data = 8;
+    shared.AppContext app = 9;
 }
 
 message WebrtcRestartIceResponse {
@@ -175,6 +180,7 @@ message RtpEngineCreateOfferRequest {
     string peer = 3;
     bool record = 5;
     optional string extra_data = 6;
+    shared.AppContext app = 7;
 }
 
 message RtpEngineCreateOfferResponse {
@@ -198,6 +204,7 @@ message RtpEngineCreateAnswerRequest {
     string sdp = 4;
     bool record = 5;
     optional string extra_data = 6;
+    shared.AppContext app = 7;
 }
 
 message RtpEngineCreateAnswerResponse {

@@ -18,7 +18,6 @@ use tokio::sync::mpsc::Sender;
 #[cfg(feature = "embed_static")]
 use utils::EmbeddedFilesEndpoint;
 
-mod api_connector;
 mod api_console;
 mod api_media;
 mod api_token;
@@ -69,6 +68,8 @@ pub async fn run_console_http_server(
     storage: crate::server::console_storage::StorageShared,
     connector: MediaConnectorServiceClient<SocketAddr, QuinnClient, QuinnStream>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    use poem::middleware::Tracing;
+
     let user_service: OpenApiService<_, ()> = OpenApiService::new(api_console::user::Apis, "Console User APIs", env!("CARGO_PKG_VERSION")).server("/api/user/");
     let user_ui = user_service.swagger_ui();
     let user_spec = user_service.spec();
@@ -102,7 +103,8 @@ pub async fn run_console_http_server(
         .nest("/api/connector/", connector_service.data(ctx.clone()))
         .nest("/api/connector/ui", connector_ui)
         .at("/api/connector/spec", poem::endpoint::make_sync(move |_| connector_spec.clone()))
-        .with(Cors::new());
+        .with(Cors::new())
+        .with(Tracing);
 
     Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
     Ok(())
