@@ -84,13 +84,16 @@ pub struct Args {
 pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
 
-    let app_storage = Arc::new(MultiTenancyStorage::new("not-use-this", None));
-    if let Some(url) = args.multi_tenancy_sync {
-        let mut app_sync = MultiTenancySync::new(app_storage.clone(), &url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
+    let app_storage = if let Some(url) = args.multi_tenancy_sync {
+        let app_storage = Arc::new(MultiTenancyStorage::new());
+        let mut app_sync = MultiTenancySync::new(app_storage.clone(), url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
         tokio::spawn(async move {
             app_sync.run_loop().await;
         });
-    }
+        app_storage
+    } else {
+        Arc::new(MultiTenancyStorage::new_with_single(&node.secret, args.hook_uri.as_deref()))
+    };
 
     let mut connector_storage = ConnectorStorage::new(
         node.node_id,
