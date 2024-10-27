@@ -1,4 +1,31 @@
 //! RemoteTrack take care about publish local media to sdn, and react with feedback from consumers
+//!
+//! State Machine Diagram:
+//! ```ascii
+//!                        JoinRoom
+//!     ┌─────────────────────────────────┐
+//!     │                                 ▼
+//! ┌───────────┐                    ┌─────────┐
+//! │  Waiting  │                    │         │
+//! │  JoinRoom │◄───────────────────│ InRoom  │
+//! └───────────┘     LeaveRoom      │         │
+//!       │                          └─────────┘
+//!       │                               │
+//!       │           TrackEnded         │
+//!       │                              │
+//!       │           ┌─────────┐        │
+//!       └──────────►│         │◄───────┘
+//!                   │ Stopped │
+//!                   │         │
+//!                   └─────────┘
+//! ```
+//!
+//! State Transitions:
+//! - WaitingJoinRoom -> InRoom: via JoinRoom event
+//! - InRoom -> WaitingJoinRoom: via LeaveRoom event
+//! - WaitingJoinRoom/InRoom -> Stopped: via TrackEnded event
+//! - Stopped: Terminal state, no transitions out
+//!
 
 use std::{collections::VecDeque, time::Instant};
 

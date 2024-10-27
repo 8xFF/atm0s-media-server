@@ -338,6 +338,7 @@ impl EndpointInternal {
             TransportState::Disconnected(err) => {
                 log::info!("[EndpointInternal] disconnected {:?}", err);
                 self.leave_room(now);
+                self.clear_tracks();
                 self.queue.push_back(InternalOutput::PeerEvent(
                     now,
                     peer_event::Event::Disconnected(peer_event::Disconnected { duration_ms: 0, reason: 0 }), //TODO provide correct reason
@@ -440,6 +441,17 @@ impl EndpointInternal {
         }
         self.queue
             .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.into(), peer: peer.into() })));
+    }
+
+    /// only call when endpoint shutdown or disconnect
+    fn clear_tracks(&mut self) {
+        for (_track_id, index) in self.local_tracks_id.pairs() {
+            self.local_tracks.input(&mut self.switcher).remove_task(index);
+        }
+
+        for (_track_id, index) in self.remote_tracks_id.pairs() {
+            self.remote_tracks.input(&mut self.switcher).remove_task(index);
+        }
     }
 }
 
