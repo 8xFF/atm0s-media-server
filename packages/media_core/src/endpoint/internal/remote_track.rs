@@ -36,6 +36,7 @@ use media_server_protocol::{
     record::SessionRecordEvent,
     transport::{RemoteTrackId, RpcError},
 };
+use media_server_utils::Count;
 use sans_io_runtime::{Task, TaskSwitcherChild};
 
 use crate::{
@@ -462,6 +463,7 @@ impl StateLogic for Stopped {
 }
 
 pub struct EndpointRemoteTrack {
+    _c: Count<Self>,
     ctx: StateContext,
     state: State,
 }
@@ -470,6 +472,7 @@ impl EndpointRemoteTrack {
     pub fn new(room: Option<ClusterRoomHash>, id: RemoteTrackId, name: TrackName, priority: TrackPriority, meta: TrackMeta, record: bool) -> Self {
         log::info!("[EndpointRemoteTrack] created with room {:?} meta {:?}", room, meta);
         Self {
+            _c: Default::default(),
             ctx: StateContext {
                 id,
                 name,

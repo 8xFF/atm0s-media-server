@@ -15,6 +15,7 @@ use media_server_protocol::{
     media::{MediaMeta, MediaPacket},
     transport::LocalTrackId,
 };
+use media_server_utils::Count;
 use sans_io_runtime::{collections::DynamicDeque, Task, TaskSwitcherChild};
 
 use crate::cluster::{id_generator, ClusterAudioMixerEvent, ClusterEndpointEvent, ClusterLocalTrackEvent, ClusterRoomHash};
@@ -30,6 +31,7 @@ pub enum Input {
 }
 
 pub struct ManualMixer<Endpoint> {
+    _c: Count<Self>,
     endpoint: Endpoint,
     room: ClusterRoomHash,
     outputs: Vec<LocalTrackId>,
@@ -41,6 +43,7 @@ pub struct ManualMixer<Endpoint> {
 impl<Endpoint: Clone> ManualMixer<Endpoint> {
     pub fn new(room: ClusterRoomHash, endpoint: Endpoint, outputs: Vec<LocalTrackId>) -> Self {
         Self {
+            _c: Default::default(),
             endpoint,
             room,
             mixer: audio_mixer::AudioMixer::new(outputs.len()),

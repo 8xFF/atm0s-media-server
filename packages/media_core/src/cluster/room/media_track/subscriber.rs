@@ -18,6 +18,7 @@ use media_server_protocol::{
     endpoint::{PeerId, TrackName},
     media::MediaPacket,
 };
+use media_server_utils::Count;
 use sans_io_runtime::{return_if_none, TaskSwitcherChild};
 
 use crate::{
@@ -44,6 +45,7 @@ struct ChannelContainer<Endpoint> {
 }
 
 pub struct RoomChannelSubscribe<Endpoint> {
+    _c: Count<Self>,
     room: ClusterRoomHash,
     channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
     subscribers: HashMap<(Endpoint, LocalTrackId), (ChannelId, PeerId, TrackName)>,
@@ -53,6 +55,7 @@ pub struct RoomChannelSubscribe<Endpoint> {
 impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
+            _c: Default::default(),
             room,
             channels: HashMap::new(),
             subscribers: HashMap::new(),

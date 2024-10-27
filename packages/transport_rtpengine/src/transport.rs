@@ -18,6 +18,7 @@ use media_server_protocol::{
     media::{MediaKind, MediaMeta, MediaPacket},
     transport::{RpcError, RpcResult},
 };
+use media_server_utils::Count;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     collections::DynamicDeque,
@@ -47,6 +48,7 @@ pub enum ExtOut {
 }
 
 pub struct TransportRtpEngine {
+    _c: Count<Self>,
     remote: Option<SocketAddr>,
     room: RoomId,
     peer: PeerId,
@@ -70,6 +72,7 @@ impl TransportRtpEngine {
 
         Ok((
             Self {
+                _c: Default::default(),
                 remote: None,
                 room,
                 peer,
@@ -112,6 +115,7 @@ impl TransportRtpEngine {
 
         Ok((
             Self {
+                _c: Default::default(),
                 remote: Some(remote),
                 room,
                 peer,

@@ -18,7 +18,7 @@ use media_server_protocol::{
     transport::{RpcError, RpcResult},
 };
 use media_server_secure::MediaEdgeSecure;
-use media_server_utils::{RtpSeqExtend, Small2dMap};
+use media_server_utils::{Count, RtpSeqExtend, Small2dMap};
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     collections::DynamicDeque,
@@ -106,6 +106,7 @@ trait TransportWebrtcInternal {
 }
 
 pub struct TransportWebrtc<ES> {
+    _c: Count<Self>,
     next_tick: Option<Instant>,
     rtc: Rtc,
     rtc_ice_lite: bool,
@@ -186,6 +187,7 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
 
         Ok((
             Self {
+                _c: Default::default(),
                 next_tick: None,
                 internal,
                 rtc,

@@ -10,6 +10,7 @@ use media_server_protocol::{
     media::{MediaMeta, MediaPacket},
     transport::LocalTrackId,
 };
+use media_server_utils::Count;
 use sans_io_runtime::{collections::DynamicDeque, return_if_none, TaskSwitcherChild};
 
 use crate::cluster::{ClusterAudioMixerEvent, ClusterEndpointEvent, ClusterLocalTrackEvent};
@@ -27,6 +28,7 @@ struct OutputSlot {
 }
 
 pub struct AudioMixerSubscriber<Endpoint, const OUTPUTS: usize> {
+    _c: Count<Self>,
     channel_id: ChannelId,
     queue: DynamicDeque<Output<Endpoint>, 16>,
     endpoints: IndexMap<Endpoint, EndpointSlot>,
@@ -37,6 +39,7 @@ pub struct AudioMixerSubscriber<Endpoint, const OUTPUTS: usize> {
 impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscriber<Endpoint, OUTPUTS> {
     pub fn new(channel_id: ChannelId) -> Self {
         Self {
+            _c: Default::default(),
             channel_id,
             queue: Default::default(),
             endpoints: IndexMap::new(),

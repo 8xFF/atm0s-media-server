@@ -22,8 +22,7 @@ use crate::{
 use self::{bitrate_allocator::BitrateAllocator, local_track::EndpointLocalTrack, remote_track::EndpointRemoteTrack};
 
 use super::{
-    middleware::EndpointMiddleware, EndpointAudioMixerEvent, EndpointAudioMixerReq, EndpointAudioMixerRes, EndpointCfg, EndpointEvent, EndpointMessageChannelReq, EndpointMessageChannelRes,
-    EndpointReq, EndpointReqId, EndpointRes,
+    EndpointAudioMixerEvent, EndpointAudioMixerReq, EndpointAudioMixerRes, EndpointCfg, EndpointEvent, EndpointMessageChannelReq, EndpointMessageChannelRes, EndpointReq, EndpointReqId, EndpointRes,
 };
 
 mod bitrate_allocator;
@@ -60,7 +59,6 @@ pub struct EndpointInternal {
     local_tracks: TaskSwitcherBranch<TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>, (usize, local_track::Output)>,
     remote_tracks: TaskSwitcherBranch<TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>, (usize, remote_track::Output)>,
     bitrate_allocator: TaskSwitcherBranch<BitrateAllocator, bitrate_allocator::Output>,
-    _middlewares: Vec<Box<dyn EndpointMiddleware>>,
     queue: VecDeque<InternalOutput>,
     switcher: TaskSwitcher,
 }
@@ -76,7 +74,6 @@ impl EndpointInternal {
             local_tracks: TaskSwitcherBranch::default(TaskType::LocalTracks),
             remote_tracks: TaskSwitcherBranch::default(TaskType::RemoteTracks),
             bitrate_allocator: TaskSwitcherBranch::new(BitrateAllocator::new(cfg.max_ingress_bitrate, cfg.max_ingress_bitrate), TaskType::BitrateAllocator),
-            _middlewares: Default::default(),
             queue: Default::default(),
             switcher: TaskSwitcher::new(3),
             cfg,

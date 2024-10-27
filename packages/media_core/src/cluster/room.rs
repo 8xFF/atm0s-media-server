@@ -12,6 +12,7 @@ use std::{fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::features::{dht_kv, FeaturesControl, FeaturesEvent};
 use media_server_protocol::message_channel::MessageChannelPacket;
+use media_server_utils::Count;
 use message_channel::RoomMessageChannel;
 use sans_io_runtime::{return_if_none, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
@@ -64,6 +65,7 @@ enum TaskType {
 }
 
 pub struct ClusterRoom<Endpoint: Debug + Copy + Clone + Hash + Eq> {
+    _c: Count<Self>,
     room: ClusterRoomHash,
     metadata: TaskSwitcherBranch<RoomMetadata<Endpoint>, metadata::Output<Endpoint>>,
     media_track: TaskSwitcherBranch<MediaTrack<Endpoint>, media_track::Output<Endpoint>>,
@@ -153,6 +155,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         let mixer_channel_id = id_generator::gen_mixer_auto_channel_id(room);
         Self {
+            _c: Default::default(),
             room,
             metadata: TaskSwitcherBranch::new(RoomMetadata::new(room), TaskType::Metadata),
             media_track: TaskSwitcherBranch::new(MediaTrack::new(room), TaskType::MediaTrack),
