@@ -119,7 +119,7 @@ pub enum EndpointMessageChannelRes {
     PublishData(RpcResult<()>),
 }
 
-#[derive(Debug, PartialEq, Eq, derive_more::From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::From)]
 pub struct EndpointReqId(pub u32);
 
 #[derive(Debug, PartialEq, Eq, Clone, derive_more::From)]

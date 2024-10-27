@@ -351,10 +351,13 @@ impl EndpointInternal {
     }
 
     fn on_transport_remote_track(&mut self, now: Instant, track: RemoteTrackId, event: RemoteTrackEvent) {
-        if let Some(meta) = event.need_create() {
+        if let Some((name, priority, meta)) = event.need_create() {
             log::info!("[EndpointInternal] create remote track {:?}", track);
             let room = self.joined.as_ref().map(|j| j.0);
-            let index = self.remote_tracks.input(&mut self.switcher).add_task(EndpointRemoteTrack::new(room, track, meta, self.cfg.record));
+            let index = self
+                .remote_tracks
+                .input(&mut self.switcher)
+                .add_task(EndpointRemoteTrack::new(room, track, name, priority, meta, self.cfg.record));
             self.remote_tracks_id.insert(track, index);
         }
         let index = return_if_none!(self.remote_tracks_id.get1(&track));

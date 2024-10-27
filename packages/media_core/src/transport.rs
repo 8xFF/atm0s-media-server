@@ -2,7 +2,7 @@ use derive_more::{Display, From};
 use std::{net::IpAddr, time::Instant};
 
 use media_server_protocol::{
-    endpoint::{TrackMeta, TrackPriority},
+    endpoint::{TrackMeta, TrackName, TrackPriority},
     media::{MediaKind, MediaPacket},
 };
 use media_server_utils::F16u;
@@ -70,9 +70,9 @@ pub enum RemoteTrackEvent {
 }
 
 impl RemoteTrackEvent {
-    pub fn need_create(&self) -> Option<TrackMeta> {
-        if let RemoteTrackEvent::Started { meta, .. } = self {
-            Some(meta.clone())
+    pub fn need_create(&self) -> Option<(TrackName, TrackPriority, TrackMeta)> {
+        if let RemoteTrackEvent::Started { name, priority, meta, .. } = self {
+            Some((name.clone().into(), *priority, meta.clone()))
         } else {
             None
         }
