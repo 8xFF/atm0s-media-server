@@ -100,14 +100,17 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     let edge_secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
 
-    let app_storage = Arc::new(MultiTenancyStorage::new(&node.secret, None));
-    let gateway_secure = MediaGatewaySecureJwt::new(node.secret.as_bytes(), app_storage.clone());
-    if let Some(url) = args.multi_tenancy_sync {
-        let mut app_sync = MultiTenancySync::new(app_storage, &url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
+    let app_storage = if let Some(url) = args.multi_tenancy_sync {
+        let app_storage = Arc::new(MultiTenancyStorage::new());
+        let mut app_sync = MultiTenancySync::new(app_storage.clone(), url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
         tokio::spawn(async move {
             app_sync.run_loop().await;
         });
-    }
+        app_storage
+    } else {
+        Arc::new(MultiTenancyStorage::new_with_single(&node.secret, None))
+    };
+    let gateway_secure = MediaGatewaySecureJwt::new(node.secret.as_bytes(), app_storage.clone());
     let gateway_secure = Arc::new(gateway_secure);
 
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
