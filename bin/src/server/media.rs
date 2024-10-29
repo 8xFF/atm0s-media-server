@@ -94,7 +94,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     if let Some(http_port) = http_port {
         let secure_gateway = args.enable_token_api.then(|| {
-            let app_storage = Arc::new(MultiTenancyStorage::new(&node.secret, None));
+            let app_storage = Arc::new(MultiTenancyStorage::new_with_single(&node.secret, None));
             Arc::new(MediaGatewaySecureJwt::new(node.secret.as_bytes(), app_storage))
         });
         let req_tx = req_tx.clone();

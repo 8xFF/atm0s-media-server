@@ -17,22 +17,25 @@ We support integration with other systems through the following methods:
 
 The media server employs an efficient and secure approach for token generation and validation. It does not store any token information in its database and does not rely on external services for token validation. Instead, each node in the cluster validates tokens based on its configuration.
 
-Currently, the media server uses JWT with a static cluster secret for token generation. It also supports multi-tenancy applications by synchronizing data from an external HTTP source that responds with a JSON structure like:
+Currently, the media server uses JWT with a static cluster secret for token generation. It also supports multi-tenancy mode by synchronizing data from an external HTTP source that responds with a JSON structure like:
 
 ```json
 {
-  "apps": {
-    "app1": {
-      "secret": "secret1"
+  "apps": [
+    {
+      "app_id": "app1",
+      "app_secret": "secret1",
+      "hook": "http://hook_endpoint?params=what_ever_ouwant"
     },
-    "app2": {
-      "secret": "secret2"
+    {
+      "app_id": "app2",
+      "app_secret": "secret2"
     }
-  }
+  ]
 }
 ```
 
-The synchronization endpoint can be used with the `--multi-tenancy-sync` option of the gateway node. Instead of using the root secret, we can use the app secret to create tokens specific to that app.
+The synchronization endpoint can be used with the --multi-tenancy-sync option of the gateway node. There are two separate modes: multi-tenancy and fixed secret. In multi-tenancy mode, you use the app secret to create tokens specific to each app. Once --multi-tenancy-sync is set, the default secret becomes unusable, and you can only use secrets from the list of apps provided in the --multi-tenancy-sync response. In fixed secret mode, the root secret is used for token creation.
 
 We can use token generation APIs to create tokens. For more information, please refer to the HTTP APIs section below.
 
