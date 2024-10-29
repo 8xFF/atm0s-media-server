@@ -442,12 +442,14 @@ impl EndpointInternal {
 
     /// only call when endpoint shutdown or disconnect
     fn clear_tracks(&mut self) {
-        for (_track_id, index) in self.local_tracks_id.pairs() {
+        for (id, index) in self.local_tracks_id.pairs() {
             self.local_tracks.input(&mut self.switcher).remove_task(index);
+            self.local_tracks_id.remove1(&id);
         }
 
-        for (_track_id, index) in self.remote_tracks_id.pairs() {
+        for (id, index) in self.remote_tracks_id.pairs() {
             self.remote_tracks.input(&mut self.switcher).remove_task(index);
+            self.remote_tracks_id.remove1(&id);
         }
     }
 }
@@ -514,6 +516,7 @@ impl EndpointInternal {
                     self.bitrate_allocator.input(&mut self.switcher).del_ingress_video_track(id);
                 }
                 self.remote_tracks.input(&mut self.switcher).remove_task(index);
+                self.remote_tracks_id.remove1(&id);
             }
             remote_track::Output::PeerEvent(ts, event) => {
                 self.queue.push_back(InternalOutput::PeerEvent(ts, event));
