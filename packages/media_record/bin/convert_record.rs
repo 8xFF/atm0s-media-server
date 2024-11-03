@@ -7,6 +7,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use clap::Parser;
+use media_server_protocol::media::MediaKind;
 use media_server_record::{RoomReader, SessionMediaWriter};
 use media_server_utils::CustomUri;
 use rusty_s3::{Bucket, Credentials, S3Action, UrlStyle};
@@ -61,8 +62,9 @@ struct TrackTimeline {
     end: Option<u64>,
 }
 
-#[derive(Default, Serialize)]
+#[derive(Serialize)]
 struct TrackSummary {
+    kind: MediaKind,
     timeline: Vec<TrackTimeline>,
 }
 
@@ -131,11 +133,11 @@ async fn main() {
         let peer = record_summary.peers.entry(peer_id).or_default();
         let session = peer.sessions.entry(session_id).or_default();
         match event {
-            media_server_record::Event::TrackStart(name, ts, path) => {
-                let track = session.track.entry(name.into()).or_default();
+            media_server_record::Event::TrackStart(name, kind, ts, path) => {
+                let track = session.track.entry(name.into()).or_insert_with(|| TrackSummary { kind, timeline: vec![] });
                 track.timeline.push(TrackTimeline { path, start: ts, end: None });
             }
-            media_server_record::Event::TrackStop(name, ts) => {
+            media_server_record::Event::TrackStop(name, _kind, ts) => {
                 if let Some(track) = session.track.get_mut(name.as_str()) {
                     if let Some(timeline) = track.timeline.last_mut() {
                         if timeline.end.is_none() {

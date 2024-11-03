@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs::File};
 
 use media_server_protocol::{
     endpoint::{TrackMeta, TrackName},
-    media::MediaPacket,
+    media::{MediaKind, MediaPacket},
     record::{SessionRecordEvent, SessionRecordRow},
     transport::RemoteTrackId,
 };
@@ -16,8 +16,8 @@ trait TrackWriter {
 }
 
 pub enum Event {
-    TrackStart(TrackName, u64, String),
-    TrackStop(TrackName, u64),
+    TrackStart(TrackName, MediaKind, u64, String),
+    TrackStop(TrackName, MediaKind, u64),
 }
 
 pub struct SessionMediaWriter {
@@ -45,9 +45,9 @@ impl SessionMediaWriter {
             }
             SessionRecordEvent::TrackStopped(id) => {
                 log::info!("track {:?} stopped", id);
-                let (name, _) = self.tracks_meta.remove(&id)?;
+                let (name, meta) = self.tracks_meta.remove(&id)?;
                 self.tracks_writer.remove(&id)?;
-                Some(Event::TrackStop(name, event.ts))
+                Some(Event::TrackStop(name, meta.kind, event.ts))
             }
             SessionRecordEvent::TrackMedia(id, media) => {
                 // We allow clippy::map_entry because the suggestion provided by clippy has a bug:
@@ -56,7 +56,7 @@ impl SessionMediaWriter {
                 // https://github.com/rust-lang/rust-clippy/issues/11976
                 #[allow(clippy::map_entry)]
                 let out = if !self.tracks_writer.contains_key(&id) {
-                    if let Some((name, _meta)) = self.tracks_meta.get(&id) {
+                    if let Some((name, meta)) = self.tracks_meta.get(&id) {
                         let (file_path, writer): (String, Box<dyn TrackWriter + Send>) = match &media.meta {
                             media_server_protocol::media::MediaMeta::Opus { .. } => {
                                 let file_path = format!("{}-opus-{}-{}.webm", self.path, name, event.ts);
@@ -77,7 +77,7 @@ impl SessionMediaWriter {
                         };
                         log::info!("create writer for track {name}");
                         self.tracks_writer.insert(id, writer);
-                        Some(Event::TrackStart(name.clone(), event.ts, file_path))
+                        Some(Event::TrackStart(name.clone(), meta.kind, event.ts, file_path))
                     } else {
                         log::warn!("missing track info for pkt  form track {:?}", id);
                         return None;
