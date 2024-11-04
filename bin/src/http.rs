@@ -20,6 +20,7 @@ use utils::EmbeddedFilesEndpoint;
 
 mod api_console;
 mod api_media;
+mod api_metrics;
 mod api_token;
 mod utils;
 
@@ -70,6 +71,10 @@ pub async fn run_console_http_server(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use poem::middleware::Tracing;
 
+    let metrics_service: OpenApiService<_, ()> = OpenApiService::new(api_metrics::Apis, "Console Metrics APIs", env!("CARGO_PKG_VERSION")).server("/api/metrics/");
+    let metrics_ui = metrics_service.swagger_ui();
+    let metrics_spec = metrics_service.spec();
+
     let user_service: OpenApiService<_, ()> = OpenApiService::new(api_console::user::Apis, "Console User APIs", env!("CARGO_PKG_VERSION")).server("/api/user/");
     let user_ui = user_service.swagger_ui();
     let user_spec = user_service.spec();
@@ -91,6 +96,10 @@ pub async fn run_console_http_server(
 
     let route = Route::new()
         .nest("/", console_panel)
+        //metrics
+        .nest("/api/metrics/", metrics_service)
+        .nest("/api/metrics/ui", metrics_ui)
+        .at("/api/metrics/spec", poem::endpoint::make_sync(move |_| metrics_spec.clone()))
         //user
         .nest("/api/user/", user_service.data(ctx.clone()))
         .nest("/api/user/ui", user_ui)
@@ -120,6 +129,10 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     let token_service: OpenApiService<_, ()> = OpenApiService::new(api_token::TokenApis::<GS>::new(), "App APIs", env!("CARGO_PKG_VERSION")).server("/token/");
     let token_ui = token_service.swagger_ui();
     let token_spec = token_service.spec();
+
+    let metrics_service: OpenApiService<_, ()> = OpenApiService::new(api_metrics::Apis, "Console Metrics APIs", env!("CARGO_PKG_VERSION")).server("/api/metrics/");
+    let metrics_ui = metrics_service.swagger_ui();
+    let metrics_spec = metrics_service.spec();
 
     let webrtc_service: OpenApiService<_, ()> = OpenApiService::new(
         api_media::WebrtcApis::<ES>::new(sender.clone(), edge_secure.clone()),
@@ -164,18 +177,27 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
 
     let route = Route::new()
         .nest("/samples", samples)
+        //token
         .nest("/token/", token_service.data(api_token::TokenServerCtx { secure: gateway_secure }))
         .nest("/token/ui", token_ui)
         .at("/token/spec", poem::endpoint::make_sync(move |_| token_spec.clone()))
+        //metrics
+        .nest("/api/metrics/", metrics_service)
+        .nest("/api/metrics/ui", metrics_ui)
+        .at("/api/metrics/spec", poem::endpoint::make_sync(move |_| metrics_spec.clone()))
+        //webrtc
         .nest("/webrtc/", webrtc_service)
         .nest("/webrtc/ui", webrtc_ui)
         .at("/webrtc/spec", poem::endpoint::make_sync(move |_| webrtc_spec.clone()))
+        //whip
         .nest("/whip/", whip_service)
         .nest("/whip/ui", whip_ui)
         .at("/whip/spec", poem::endpoint::make_sync(move |_| whip_spec.clone()))
+        //whep
         .nest("/whep/", whep_service)
         .nest("/whep/ui", whep_ui)
         .at("/whep/spec", poem::endpoint::make_sync(move |_| whep_spec.clone()))
+        //rtpengine
         .nest("/rtpengine/", rtpengine_service)
         .nest("/rtpengine/ui", rtpengine_ui)
         .at("/rtpengine/spec", poem::endpoint::make_sync(move |_| rtpengine_spec.clone()))
@@ -193,6 +215,10 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
     gateway_secure: Option<Arc<GS>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut route = Route::new();
+
+    let metrics_service: OpenApiService<_, ()> = OpenApiService::new(api_metrics::Apis, "Console Metrics APIs", env!("CARGO_PKG_VERSION")).server("/api/metrics/");
+    let metrics_ui = metrics_service.swagger_ui();
+    let metrics_spec = metrics_service.spec();
 
     if let Some(gateway_secure) = gateway_secure {
         let token_service: OpenApiService<_, ()> = OpenApiService::new(api_token::TokenApis::<GS>::new(), "App APIs", env!("CARGO_PKG_VERSION")).server("/token/");
@@ -247,15 +273,23 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
 
     let route = route
         .nest("/samples", samples)
+        //metrics
+        .nest("/api/metrics/", metrics_service)
+        .nest("/api/metrics/ui", metrics_ui)
+        .at("/api/metrics/spec", poem::endpoint::make_sync(move |_| metrics_spec.clone()))
+        //webrtc
         .nest("/webrtc/", webrtc_service)
         .nest("/webrtc/ui", webrtc_ui)
         .at("/webrtc/spec", poem::endpoint::make_sync(move |_| webrtc_spec.clone()))
+        //whip
         .nest("/whip/", whip_service)
         .nest("/whip/ui", whip_ui)
         .at("/whip/spec", poem::endpoint::make_sync(move |_| whip_spec.clone()))
+        //whep
         .nest("/whep/", whep_service)
         .nest("/whep/ui", whep_ui)
         .at("/whep/spec", poem::endpoint::make_sync(move |_| whep_spec.clone()))
+        //rtpengine
         .nest("/rtpengine/", rtpengine_service)
         .nest("/rtpengine/ui", rtpengine_ui)
         .at("/rtpengine/spec", poem::endpoint::make_sync(move |_| rtpengine_spec.clone()))

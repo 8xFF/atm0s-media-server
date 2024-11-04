@@ -3351,11 +3351,13 @@ name = "media-server-utils"
 version = "0.1.0"
 dependencies = [
  "log",
+ "once_cell",
  "pin-project-lite",
  "serde",
  "serde-querystring",
  "smallmap",
  "sorted-vec",
+ "spin",
  "uriparse",
 ]
 

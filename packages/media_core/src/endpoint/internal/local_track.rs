@@ -11,6 +11,7 @@ use media_server_protocol::{
     protobuf::{cluster_connector::peer_event, shared::receiver::Status as ProtoStatus},
     transport::{LocalTrackId, RpcError},
 };
+use media_server_utils::Count;
 use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
 use crate::{
@@ -57,6 +58,7 @@ enum Status {
 }
 
 pub struct EndpointLocalTrack {
+    _c: Count<Self>,
     track: LocalTrackId,
     kind: MediaKind,
     room: Option<ClusterRoomHash>,
@@ -71,6 +73,7 @@ impl EndpointLocalTrack {
     pub fn new(track: LocalTrackId, kind: MediaKind, room: Option<ClusterRoomHash>) -> Self {
         log::info!("[EndpointLocalTrack] track {kind}, room {:?}", room);
         Self {
+            _c: Default::default(),
             track,
             kind,
             room,

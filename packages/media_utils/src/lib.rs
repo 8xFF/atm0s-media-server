@@ -1,3 +1,4 @@
+mod count;
 mod f16;
 mod select;
 mod seq_extend;
@@ -7,6 +8,7 @@ mod time;
 mod ts_rewrite;
 mod uri;
 
+pub use count::{get_all_counts, Count};
 pub use f16::{F16i, F16u};
 pub use select::*;
 pub use seq_extend::RtpSeqExtend;

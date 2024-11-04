@@ -13,6 +13,7 @@ use media_server_protocol::{
     endpoint::{PeerId, TrackName},
     media::MediaPacket,
 };
+use media_server_utils::Count;
 use sans_io_runtime::{return_if_err, return_if_none, TaskSwitcherChild};
 
 use crate::{
@@ -39,6 +40,7 @@ impl TryFrom<Feedback> for FeedbackKind {
 }
 
 pub struct RoomChannelPublisher<Endpoint> {
+    _c: Count<Self>,
     room: ClusterRoomHash,
     tracks: HashMap<(Endpoint, RemoteTrackId), (PeerId, TrackName, ChannelId)>,
     tracks_source: HashMap<ChannelId, HashSet<(Endpoint, RemoteTrackId)>>, // We allow multi sources here for avoiding crash
@@ -48,6 +50,7 @@ pub struct RoomChannelPublisher<Endpoint> {
 impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
+            _c: Default::default(),
             room,
             tracks: HashMap::new(),
             tracks_source: HashMap::new(),

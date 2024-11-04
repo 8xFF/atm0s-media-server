@@ -10,6 +10,7 @@ use media_server_protocol::{
     record::SessionRecordEvent,
     transport::RpcResult,
 };
+use media_server_utils::Count;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     return_if_some, Task, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild,
@@ -25,7 +26,6 @@ use internal::EndpointInternal;
 use self::internal::InternalOutput;
 
 mod internal;
-mod middleware;
 
 pub struct EndpointSession(pub u64);
 
@@ -119,7 +119,7 @@ pub enum EndpointMessageChannelRes {
     PublishData(RpcResult<()>),
 }
 
-#[derive(Debug, PartialEq, Eq, derive_more::From)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::From)]
 pub struct EndpointReqId(pub u32);
 
 #[derive(Debug, PartialEq, Eq, Clone, derive_more::From)]
@@ -226,6 +226,7 @@ pub struct EndpointCfg {
 }
 
 pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
+    _c: Count<Self>,
     app: AppId,
     session_id: u64,
     transport: TaskSwitcherBranch<T, TransportOutput<ExtOut>>,
@@ -237,6 +238,7 @@ pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
 impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
     pub fn new(session_id: u64, cfg: EndpointCfg, transport: T) -> Self {
         Self {
+            _c: Default::default(),
             app: cfg.app.app.clone(),
             session_id,
             transport: TaskSwitcherBranch::new(transport, TaskType::Transport),

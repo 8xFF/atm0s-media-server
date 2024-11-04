@@ -10,6 +10,7 @@ use media_server_protocol::{
     endpoint::{AudioMixerPkt, PeerHashCode, PeerId, TrackName},
     media::{MediaMeta, MediaPacket},
 };
+use media_server_utils::Count;
 use sans_io_runtime::{collections::DynamicDeque, TaskSwitcherChild};
 
 use crate::transport::RemoteTrackId;
@@ -29,6 +30,7 @@ struct OutputSlot {
 }
 
 pub struct AudioMixerPublisher<Endpoint> {
+    _c: Count<Self>,
     channel_id: pubsub::ChannelId,
     tracks: HashMap<(Endpoint, RemoteTrackId), TrackSlot>,
     mixer: audio_mixer::AudioMixer<(Endpoint, RemoteTrackId)>,
@@ -39,6 +41,7 @@ pub struct AudioMixerPublisher<Endpoint> {
 impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
     pub fn new(channel_id: ChannelId) -> Self {
         Self {
+            _c: Default::default(),
             tracks: Default::default(),
             channel_id,
             mixer: audio_mixer::AudioMixer::new(3),

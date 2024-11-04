@@ -6,6 +6,7 @@ use std::{
 
 use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId};
 use media_server_protocol::message_channel::MessageChannelPacket;
+use media_server_utils::Count;
 use sans_io_runtime::{return_if_none, TaskSwitcherChild};
 
 use super::Output;
@@ -20,6 +21,7 @@ struct ChannelContainer<Endpoint> {
 }
 
 pub struct MessageChannelSubscriber<Endpoint> {
+    _c: Count<Self>,
     room: ClusterRoomHash,
     channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
     subscriptions: HashMap<Endpoint, HashSet<ChannelId>>,
@@ -29,6 +31,7 @@ pub struct MessageChannelSubscriber<Endpoint> {
 impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelSubscriber<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
+            _c: Default::default(),
             room,
             queue: VecDeque::new(),
             channels: HashMap::new(),

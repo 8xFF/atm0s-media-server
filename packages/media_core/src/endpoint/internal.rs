@@ -22,8 +22,7 @@ use crate::{
 use self::{bitrate_allocator::BitrateAllocator, local_track::EndpointLocalTrack, remote_track::EndpointRemoteTrack};
 
 use super::{
-    middleware::EndpointMiddleware, EndpointAudioMixerEvent, EndpointAudioMixerReq, EndpointAudioMixerRes, EndpointCfg, EndpointEvent, EndpointMessageChannelReq, EndpointMessageChannelRes,
-    EndpointReq, EndpointReqId, EndpointRes,
+    EndpointAudioMixerEvent, EndpointAudioMixerReq, EndpointAudioMixerRes, EndpointCfg, EndpointEvent, EndpointMessageChannelReq, EndpointMessageChannelRes, EndpointReq, EndpointReqId, EndpointRes,
 };
 
 mod bitrate_allocator;
@@ -60,7 +59,6 @@ pub struct EndpointInternal {
     local_tracks: TaskSwitcherBranch<TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>, (usize, local_track::Output)>,
     remote_tracks: TaskSwitcherBranch<TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>, (usize, remote_track::Output)>,
     bitrate_allocator: TaskSwitcherBranch<BitrateAllocator, bitrate_allocator::Output>,
-    _middlewares: Vec<Box<dyn EndpointMiddleware>>,
     queue: VecDeque<InternalOutput>,
     switcher: TaskSwitcher,
 }
@@ -76,7 +74,6 @@ impl EndpointInternal {
             local_tracks: TaskSwitcherBranch::default(TaskType::LocalTracks),
             remote_tracks: TaskSwitcherBranch::default(TaskType::RemoteTracks),
             bitrate_allocator: TaskSwitcherBranch::new(BitrateAllocator::new(cfg.max_ingress_bitrate, cfg.max_ingress_bitrate), TaskType::BitrateAllocator),
-            _middlewares: Default::default(),
             queue: Default::default(),
             switcher: TaskSwitcher::new(3),
             cfg,
@@ -338,6 +335,7 @@ impl EndpointInternal {
             TransportState::Disconnected(err) => {
                 log::info!("[EndpointInternal] disconnected {:?}", err);
                 self.leave_room(now);
+                self.clear_tracks();
                 self.queue.push_back(InternalOutput::PeerEvent(
                     now,
                     peer_event::Event::Disconnected(peer_event::Disconnected { duration_ms: 0, reason: 0 }), //TODO provide correct reason
@@ -351,10 +349,13 @@ impl EndpointInternal {
     }
 
     fn on_transport_remote_track(&mut self, now: Instant, track: RemoteTrackId, event: RemoteTrackEvent) {
-        if let Some(meta) = event.need_create() {
+        if let Some((name, priority, meta)) = event.need_create() {
             log::info!("[EndpointInternal] create remote track {:?}", track);
             let room = self.joined.as_ref().map(|j| j.0);
-            let index = self.remote_tracks.input(&mut self.switcher).add_task(EndpointRemoteTrack::new(room, track, meta, self.cfg.record));
+            let index = self
+                .remote_tracks
+                .input(&mut self.switcher)
+                .add_task(EndpointRemoteTrack::new(room, track, name, priority, meta, self.cfg.record));
             self.remote_tracks_id.insert(track, index);
         }
         let index = return_if_none!(self.remote_tracks_id.get1(&track));
@@ -438,6 +439,19 @@ impl EndpointInternal {
         self.queue
             .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.into(), peer: peer.into() })));
     }
+
+    /// only call when endpoint shutdown or disconnect
+    fn clear_tracks(&mut self) {
+        for (id, index) in self.local_tracks_id.pairs() {
+            self.local_tracks.input(&mut self.switcher).remove_task(index);
+            self.local_tracks_id.remove1(&id);
+        }
+
+        for (id, index) in self.remote_tracks_id.pairs() {
+            self.remote_tracks.input(&mut self.switcher).remove_task(index);
+            self.remote_tracks_id.remove1(&id);
+        }
+    }
 }
 
 /// This block is for cluster related events
@@ -502,6 +516,7 @@ impl EndpointInternal {
                     self.bitrate_allocator.input(&mut self.switcher).del_ingress_video_track(id);
                 }
                 self.remote_tracks.input(&mut self.switcher).remove_task(index);
+                self.remote_tracks_id.remove1(&id);
             }
             remote_track::Output::PeerEvent(ts, event) => {
                 self.queue.push_back(InternalOutput::PeerEvent(ts, event));
