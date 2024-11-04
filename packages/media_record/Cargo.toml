@@ -30,6 +30,6 @@ convert_record = ["tokio/full", "tracing-subscriber", "webm", "rtp", "clap", "se
 tokio = { version = "1", features = ["full"] }
 
 [[bin]]
-name = "convert_record"
-path = "./bin/convert_record.rs"
+name = "convert_record_cli"
+path = "./bin/convert_record_cli.rs"
 required-features = ["convert_record"]

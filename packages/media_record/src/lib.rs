@@ -10,14 +10,12 @@ use tokio::sync::mpsc::Sender;
 use worker::UploadWorker;
 
 #[cfg(feature = "convert_record")]
-mod media;
+pub mod convert;
 mod raw_record;
 mod session;
 mod storage;
 mod worker;
 
-#[cfg(feature = "convert_record")]
-pub use media::*;
 pub use raw_record::*;
 
 //TODO: generate MediaRecordStats

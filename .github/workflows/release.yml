@@ -217,7 +217,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --verbose --release --package media-server-record --target ${{ matrix.target }} --bin convert_record
+          args: --verbose --release --package media-server-record --target ${{ matrix.target }} --bin convert_record_cli
 
       - name: Rename server
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
@@ -227,7 +227,7 @@ jobs:
       - name: Rename record
         if: ${{ matrix.build_record_tool && matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
         run: |
-          mv ./target/${{ matrix.target }}/release/convert_record${{ matrix.extension }} convert_record-${{ matrix.target }}${{ matrix.extension }}
+          mv ./target/${{ matrix.target }}/release/convert_record_cli${{ matrix.extension }} convert_record_cli-${{ matrix.target }}${{ matrix.extension }}
 
       - name: Upload Artifact to Summary
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
@@ -237,7 +237,7 @@ jobs:
           path: |
             *-${{ matrix.target }}${{ matrix.extension }}
 
-      - name: Upload server binarie to release
+      - name: Upload server binary to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: svenstaro/upload-release-action@v2
         with:
@@ -247,13 +247,13 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
 
-      - name: Upload record_tool binarie to release
+      - name: Upload convert_record_cli binary to release
         if: startsWith(github.ref, 'refs/tags/') && matrix.build_record_tool
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: convert_record-${{ matrix.target }}${{ matrix.extension }}
-          asset_name: convert_record-${{ matrix.target }}${{ matrix.extension }}
+          file: convert_record_cli-${{ matrix.target }}${{ matrix.extension }}
+          asset_name: convert_record_cli-${{ matrix.target }}${{ matrix.extension }}
           tag: ${{ github.ref }}
           overwrite: true
 
