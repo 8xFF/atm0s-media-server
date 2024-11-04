@@ -11,6 +11,7 @@ message HookEvent {
         RoomEvent room = 3;
         PeerEvent peer = 4;
         RecordEvent record = 5;
+        ComposeEvent compose = 6;
     }
 }
 
@@ -217,6 +218,53 @@ message RecordEvent {
     oneof event {
         RecordStarted started = 2;
         RecordPeerJoined peer_joined = 3;
+    }
+}
+
+message ComposeEvent {
+    message RecordJobStarted {
+        
+    }
+
+    message RecordJobFailed {
+        string error = 2;
+    }
+
+    message RecordJobCompleted {
+        message TrackTimeline {
+            string path = 1;
+            uint64 start = 2;
+            uint64 end = 3; // Optional field, can be omitted
+        }
+
+        message TrackSummary {
+            shared.Kind kind = 1;
+            repeated TrackTimeline timeline = 2;
+        }
+
+        message SessionSummary {
+            map<string, TrackSummary> track = 1;
+        }
+
+        message PeerSummary {
+            map<uint64, SessionSummary> sessions = 1;
+        }
+
+        message RecordSummary {
+            map<string, PeerSummary> peers = 1;
+        }
+
+        RecordSummary summary = 1;
+        string summary_uri = 2;
+    }
+
+    string app = 1;
+    string job_id = 2;
+
+    oneof event {
+        RecordJobStarted started = 10;
+        RecordJobFailed failed = 11;
+        RecordJobCompleted completed = 12;
     }
 }
 

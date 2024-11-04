@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::File};
+use std::{collections::HashMap, fs::File, path::PathBuf};
 
 use media_server_protocol::{
     endpoint::{TrackMeta, TrackName},
@@ -21,16 +21,18 @@ pub enum Event {
 }
 
 pub struct SessionMediaWriter {
-    path: String,
+    folder: PathBuf,
+    prefix: String,
     tracks_meta: HashMap<RemoteTrackId, (TrackName, TrackMeta)>,
     tracks_writer: HashMap<RemoteTrackId, Box<dyn TrackWriter + Send>>,
 }
 
 impl SessionMediaWriter {
-    pub fn new(path: &str) -> Self {
-        log::info!("new session media writer {path}");
+    pub fn new(folder: PathBuf, prefix: &str) -> Self {
+        log::info!("new session media writer {folder:?}/{prefix}");
         Self {
-            path: path.to_string(),
+            folder,
+            prefix: prefix.to_string(),
             tracks_meta: HashMap::new(),
             tracks_writer: HashMap::new(),
         }
@@ -57,27 +59,33 @@ impl SessionMediaWriter {
                 #[allow(clippy::map_entry)]
                 let out = if !self.tracks_writer.contains_key(&id) {
                     if let Some((name, meta)) = self.tracks_meta.get(&id) {
-                        let (file_path, writer): (String, Box<dyn TrackWriter + Send>) = match &media.meta {
+                        let (file_name, writer): (String, Box<dyn TrackWriter + Send>) = match &media.meta {
                             media_server_protocol::media::MediaMeta::Opus { .. } => {
-                                let file_path = format!("{}-opus-{}-{}.webm", self.path, name, event.ts);
+                                let file_name = format!("{}-opus-{}-{}.webm", self.prefix, name, event.ts);
+                                let file_path = self.folder.join(&file_name);
+                                log::info!("create writer for track {name} => file {file_path:?}");
                                 let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
-                                (file_path, writer)
+                                (file_name, writer)
                             }
                             media_server_protocol::media::MediaMeta::H264 { .. } => todo!(),
                             media_server_protocol::media::MediaMeta::Vp8 { .. } => {
-                                let file_path = format!("{}-vp8-{}-{}.webm", self.path, name, event.ts);
+                                let file_name = format!("{}-vp8-{}-{}.webm", self.prefix, name, event.ts);
+                                let file_path = self.folder.join(&file_name);
+                                log::info!("create writer for track {name} => file {file_path:?}");
                                 let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
-                                (file_path, writer)
+                                (file_name, writer)
                             }
                             media_server_protocol::media::MediaMeta::Vp9 { .. } => {
-                                let file_path = format!("{}-vp9-{}-{}.webm", self.path, name, event.ts);
+                                let file_name = format!("{}-vp9-{}-{}.webm", self.prefix, name, event.ts);
+                                let file_path = self.folder.join(&file_name);
+                                log::info!("create writer for track {name} => file {file_path:?}");
                                 let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
-                                (file_path, writer)
+                                (file_name, writer)
                             }
                         };
-                        log::info!("create writer for track {name}");
+                        log::info!("create writer for track {name} => file {file_name}");
                         self.tracks_writer.insert(id, writer);
-                        Some(Event::TrackStart(name.clone(), meta.kind, event.ts, file_path))
+                        Some(Event::TrackStart(name.clone(), meta.kind, event.ts, file_name))
                     } else {
                         log::warn!("missing track info for pkt  form track {:?}", id);
                         return None;

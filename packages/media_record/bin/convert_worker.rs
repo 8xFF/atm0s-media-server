@@ -1,0 +1,228 @@
+use std::{sync::Arc, time::Duration};
+
+use clap::Parser;
+use media_server_connector::{hooks::ConnectorHookSender, HookBodyType};
+use media_server_multi_tenancy::{MultiTenancyStorage, MultiTenancySync};
+use media_server_protocol::protobuf::cluster_connector::{
+    compose_event::{self, RecordJobCompleted, RecordJobFailed},
+    hook_event, ComposeEvent, HookEvent,
+};
+use media_server_record::convert::{RecordConverter, RecordConverterOutput};
+use media_server_secure::AppStorage;
+use media_server_utils::now_ms;
+use poem::{
+    listener::TcpListener,
+    middleware::{Cors, Tracing},
+    EndpointExt, Route,
+};
+use poem_openapi::{auth::Bearer, SecurityScheme};
+use poem_openapi::{
+    payload::Json,
+    types::{ParseFromJSON, ToJSON, Type},
+    Object, OpenApi, OpenApiService,
+};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+macro_rules! try_opt {
+    ($self:ident, $token:ident, $err:expr) => {
+        match $self.apps.validate_app(&$token.token) {
+            Some(app) => app,
+            None => {
+                return Json(Response {
+                    status: false,
+                    error: Some($err.to_owned()),
+                    data: None,
+                })
+            }
+        }
+    };
+}
+
+#[derive(SecurityScheme)]
+#[oai(rename = "Token Authorization", ty = "bearer", key_in = "header", key_name = "Authorization")]
+pub struct TokenAuthorization(pub Bearer);
+
+/// Record convert worker for atm0s-media-server.
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Http listen address
+    #[arg(env, long, default_value = "0.0.0.0:3200")]
+    http_addr: String,
+
+    /// S3 uri for raw file
+    #[arg(env, long)]
+    record_s3_uri: String,
+
+    /// S3 uri for composed file
+    #[arg(env, long)]
+    composed_s3_uri: Option<String>,
+
+    /// Hook Uri.
+    /// If set, will send hook event to this uri. example: http://localhost:8080/hook
+    #[arg(env, long)]
+    hook_uri: Option<String>,
+
+    /// Hook workers
+    #[arg(env, long, default_value_t = 8)]
+    hook_workers: usize,
+
+    /// Hook body type
+    #[arg(env, long, default_value = "protobuf-json")]
+    hook_body_type: HookBodyType,
+
+    /// multi-tenancy sync endpoint
+    #[arg(env, long)]
+    multi_tenancy_sync: Option<String>,
+
+    /// multi-tenancy sync endpoint
+    #[arg(env, long, default_value_t = 30_000)]
+    multi_tenancy_sync_interval_ms: u64,
+
+    /// Cluster secret key used for secure communication between nodes.
+    #[arg(env, long, default_value = "insecure")]
+    secret: String,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), std::io::Error> {
+    if std::env::var_os("RUST_LOG").is_none() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+    if std::env::var_os("RUST_BACKTRACE").is_none() {
+        std::env::set_var("RUST_BACKTRACE", "1");
+    }
+    let args: Args = Args::parse();
+    tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
+
+    let apps = if let Some(url) = args.multi_tenancy_sync {
+        let apps = Arc::new(MultiTenancyStorage::new());
+        let mut sync = MultiTenancySync::new(apps.clone(), url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
+        tokio::spawn(async move {
+            sync.run_loop().await;
+        });
+        apps
+    } else {
+        Arc::new(MultiTenancyStorage::new_with_single(args.secret.as_str(), args.hook_uri.as_deref()))
+    };
+
+    let hook = Arc::new(ConnectorHookSender::new(args.hook_workers, args.hook_body_type, apps.clone()));
+
+    let apis = OpenApiService::new(
+        HttpApis {
+            apps,
+            hook,
+            composed_s3_uri: args.composed_s3_uri.unwrap_or_else(|| args.record_s3_uri.clone()),
+            record_s3_uri: args.record_s3_uri,
+        },
+        "Convert Worker APIs",
+        env!("CARGO_PKG_VERSION"),
+    )
+    .server("/api/");
+    let apis_ui = apis.swagger_ui();
+    let apis_spec = apis.spec();
+
+    let app = Route::new()
+        .nest("/api/", apis)
+        .nest("/api/ui", apis_ui)
+        .at("/api/spec", poem::endpoint::make_sync(move |_| apis_spec.clone()))
+        .with(Cors::new())
+        .with(Tracing::default());
+
+    log::info!("Starting convert worker on {}", args.http_addr);
+    poem::Server::new(TcpListener::bind(args.http_addr)).run(app).await
+}
+
+#[derive(Debug, Object)]
+struct ConvetJobRequest {
+    record_path: String,
+    custom_s3_output: Option<String>,
+}
+
+#[derive(Debug, Object)]
+struct ConvertJobResponse {
+    job_id: String,
+}
+
+#[derive(Debug, Object)]
+pub struct Response<T: ParseFromJSON + ToJSON + Type + Send + Sync> {
+    pub status: bool,
+    #[oai(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[oai(skip_serializing_if = "Option::is_none")]
+    pub data: Option<T>,
+}
+
+struct HttpApis {
+    apps: Arc<MultiTenancyStorage>,
+    hook: Arc<ConnectorHookSender>,
+    record_s3_uri: String,
+    composed_s3_uri: String,
+}
+
+#[OpenApi]
+impl HttpApis {
+    #[oai(path = "/convert/job", method = "post")]
+    async fn create_job(&self, TokenAuthorization(token): TokenAuthorization, Json(body): Json<ConvetJobRequest>) -> Json<Response<ConvertJobResponse>> {
+        let app = try_opt!(self, token, "Invalid token");
+        let job_id = rand::random::<u64>().to_string();
+        let record_s3_uri = self.record_s3_uri.clone();
+        let composed_s3_uri = self.composed_s3_uri.clone();
+        let job_id_c = job_id.clone();
+        let hook = self.hook.clone();
+
+        tokio::spawn(async move {
+            log::info!("Convert job {job_id_c} started");
+            hook.on_event(
+                app.app.clone(),
+                HookEvent {
+                    node: 0,
+                    ts: now_ms(),
+                    event: Some(hook_event::Event::Compose(ComposeEvent {
+                        app: app.app.clone().into(),
+                        job_id: job_id_c.clone(),
+                        event: Some(compose_event::Event::Started(Default::default())),
+                    })),
+                },
+            );
+
+            // TODO: output s3 is custom or generate from composed/yyyy/mm/dd/job_id
+            let input_s3 = format!("{}/{}?path_style=true", record_s3_uri, body.record_path);
+            let output_s3 = body
+                .custom_s3_output
+                .unwrap_or_else(|| format!("{}/{}/composed/{}?path_style=true", composed_s3_uri, app.app, job_id_c));
+            let converter = RecordConverter::new(input_s3, RecordConverterOutput::S3(output_s3));
+            let result = match converter.convert().await {
+                Ok(summary) => {
+                    log::info!("Convert job {job_id_c} completed");
+                    compose_event::Event::Completed(RecordJobCompleted {
+                        summary: Some(summary.1.into()),
+                        summary_uri: summary.0,
+                    })
+                }
+                Err(e) => {
+                    log::error!("Convert job {job_id_c} failed: {e}");
+                    compose_event::Event::Failed(RecordJobFailed { error: e.to_string() })
+                }
+            };
+
+            hook.on_event(
+                app.app.clone(),
+                HookEvent {
+                    node: 0,
+                    ts: now_ms(),
+                    event: Some(hook_event::Event::Compose(ComposeEvent {
+                        app: app.app.into(),
+                        job_id: job_id_c,
+                        event: Some(result),
+                    })),
+                },
+            );
+        });
+        Json(Response {
+            status: true,
+            error: None,
+            data: Some(ConvertJobResponse { job_id }),
+        })
+    }
+}
