@@ -1,5 +1,5 @@
 use clap::Parser;
-use media_server_record::convert::{RecordConverter, RecordConverterOutput};
+use media_server_record::convert::{RecordComposerConfig, RecordConvert, RecordConvertConfig, RecordConvertOutputLocaltion};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Record file converter for atm0s-media-server.
@@ -11,13 +11,33 @@ struct Args {
     #[arg(env, long)]
     in_s3: String,
 
-    /// S3 Dest
+    /// Transmux
     #[arg(env, long)]
-    out_s3: Option<String>,
+    transmux: bool,
 
-    /// Folder Dest
+    /// Transmux S3 Dest
     #[arg(env, long)]
-    out_path: Option<String>,
+    transmux_out_s3: Option<String>,
+
+    /// Transmux Folder Dest
+    #[arg(env, long)]
+    transmux_out_path: Option<String>,
+
+    /// Compose audio
+    #[arg(env, long)]
+    compose_audio: bool,
+
+    /// Compose video
+    #[arg(env, long)]
+    compose_video: bool,
+
+    /// Compose S3 URL
+    #[arg(env, long)]
+    compose_out_s3: Option<String>,
+
+    /// Compose File Path
+    #[arg(env, long)]
+    compose_out_path: Option<String>,
 }
 
 #[tokio::main]
@@ -30,14 +50,32 @@ async fn main() -> Result<(), String> {
     }
     let args: Args = Args::parse();
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
-    let output = if let Some(out_path) = args.out_s3 {
-        RecordConverterOutput::S3(out_path)
-    } else if let Some(out_path) = args.out_path {
-        RecordConverterOutput::Local(out_path)
-    } else {
-        panic!("No output path or s3 uri");
-    };
-    let convert = RecordConverter::new(args.in_s3, output);
+    let convert = RecordConvert::new(RecordConvertConfig {
+        in_s3: args.in_s3,
+        transmux: Some(if let Some(out_path) = args.transmux_out_s3 {
+            RecordConvertOutputLocaltion::S3(out_path)
+        } else if let Some(out_path) = args.transmux_out_path {
+            RecordConvertOutputLocaltion::Local(out_path)
+        } else {
+            panic!("No output path or s3 uri");
+        }),
+        compose: if args.compose_audio || args.compose_video {
+            Some(RecordComposerConfig {
+                audio: args.compose_audio,
+                video: args.compose_video,
+                output_relative: "".to_string(),
+                output: if let Some(out_path) = args.compose_out_s3 {
+                    RecordConvertOutputLocaltion::S3(out_path)
+                } else if let Some(out_path) = args.compose_out_path {
+                    RecordConvertOutputLocaltion::Local(out_path)
+                } else {
+                    panic!("No output path or s3 uri");
+                },
+            })
+        } else {
+            None
+        },
+    });
     let summary = convert.convert().await?;
     println!("{:?}", summary);
     Ok(())

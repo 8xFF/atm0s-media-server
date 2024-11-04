@@ -42,11 +42,17 @@ pub struct RecordChunkReader<R> {
     source: R,
     buf: [u8; 1500],
     header: Option<SessionRecordHeader>,
+    peek: Option<SessionRecordRow>,
 }
 
 impl<R: AsyncRead + Unpin> RecordChunkReader<R> {
     pub async fn new(source: R) -> std::io::Result<Self> {
-        Ok(Self { source, buf: [0; 1500], header: None })
+        Ok(Self {
+            source,
+            buf: [0; 1500],
+            header: None,
+            peek: None,
+        })
     }
 
     pub async fn connect(&mut self) -> std::io::Result<()> {
@@ -58,7 +64,18 @@ impl<R: AsyncRead + Unpin> RecordChunkReader<R> {
         Ok(())
     }
 
+    pub async fn peek_ts(&mut self) -> Option<u64> {
+        if self.peek.is_none() {
+            self.peek = self.pop().await.ok()?;
+        }
+        self.peek.as_ref().map(|row| row.ts)
+    }
+
     pub async fn pop(&mut self) -> std::io::Result<Option<SessionRecordRow>> {
+        if let Some(row) = self.peek.take() {
+            return Ok(Some(row));
+        }
+
         let chunk_len = match self.source.read_u32().await {
             Ok(len) => len,
             Err(err) => {

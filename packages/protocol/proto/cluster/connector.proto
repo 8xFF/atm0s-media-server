@@ -250,12 +250,17 @@ message ComposeEvent {
             map<uint64, SessionSummary> sessions = 1;
         }
 
-        message RecordSummary {
-            map<string, PeerSummary> peers = 1;
+        message TransmuxSummary {
+            string metadata_json = 1;
+            map<string, PeerSummary> peers = 2;
         }
 
-        RecordSummary summary = 1;
-        string summary_uri = 2;
+        message ComposeSummary {
+            string media_uri = 1;
+        }
+
+        TransmuxSummary transmux = 1;
+        ComposeSummary compose = 2;
     }
 
     string app = 1;

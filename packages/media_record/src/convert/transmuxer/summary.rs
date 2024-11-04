@@ -6,31 +6,32 @@ use media_server_protocol::{
 };
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TrackTimeline {
     pub path: String,
     pub start: u64,
     pub end: Option<u64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TrackSummary {
     pub kind: MediaKind,
     pub timeline: Vec<TrackTimeline>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct SessionSummary {
     pub track: HashMap<String, TrackSummary>,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct PeerSummary {
     pub sessions: HashMap<u64, SessionSummary>,
 }
 
-#[derive(Debug, Default, Serialize)]
-pub struct RecordSummary {
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct TransmuxSummary {
+    pub metadata_json: String,
     pub peers: HashMap<String, PeerSummary>,
 }
 
@@ -69,9 +70,10 @@ impl From<PeerSummary> for record_job_completed::PeerSummary {
     }
 }
 
-impl From<RecordSummary> for record_job_completed::RecordSummary {
-    fn from(value: RecordSummary) -> Self {
-        record_job_completed::RecordSummary {
+impl From<TransmuxSummary> for record_job_completed::TransmuxSummary {
+    fn from(value: TransmuxSummary) -> Self {
+        record_job_completed::TransmuxSummary {
+            metadata_json: value.metadata_json,
             peers: value.peers.into_iter().map(|(k, v)| (k, v.into())).collect(),
         }
     }

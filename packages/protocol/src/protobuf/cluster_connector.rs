@@ -507,9 +507,9 @@ pub mod compose_event {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct RecordJobCompleted {
         #[prost(message, optional, tag = "1")]
-        pub summary: ::core::option::Option<record_job_completed::RecordSummary>,
-        #[prost(string, tag = "2")]
-        pub summary_uri: ::prost::alloc::string::String,
+        pub transmux: ::core::option::Option<record_job_completed::TransmuxSummary>,
+        #[prost(message, optional, tag = "2")]
+        pub compose: ::core::option::Option<record_job_completed::ComposeSummary>,
     }
     /// Nested message and enum types in `RecordJobCompleted`.
     pub mod record_job_completed {
@@ -549,12 +549,20 @@ pub mod compose_event {
         }
         #[derive(serde::Serialize)]
         #[derive(Clone, PartialEq, ::prost::Message)]
-        pub struct RecordSummary {
-            #[prost(map = "string, message", tag = "1")]
+        pub struct TransmuxSummary {
+            #[prost(string, tag = "1")]
+            pub metadata_json: ::prost::alloc::string::String,
+            #[prost(map = "string, message", tag = "2")]
             pub peers: ::std::collections::HashMap<
                 ::prost::alloc::string::String,
                 PeerSummary,
             >,
+        }
+        #[derive(serde::Serialize)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct ComposeSummary {
+            #[prost(string, tag = "1")]
+            pub media_uri: ::prost::alloc::string::String,
         }
     }
     #[derive(serde::Serialize)]

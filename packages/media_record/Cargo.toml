@@ -9,6 +9,7 @@ media-server-multi-tenancy = { path = "../multi_tenancy", optional = true }
 media-server-utils = { path = "../media_utils" }
 media-server-connector = { path = "../media_connector", optional = true }
 media-server-secure = { path = "../media_secure", optional = true }
+media-server-codecs = { path = "../media_codecs", optional = true }
 log = { workspace = true }
 tokio = { version = "1", features = ["sync", "fs"] }
 rand = { workspace = true }
@@ -26,11 +27,12 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = "1.0.120"
 poem = { version = "3.0", features = ["static-files"], optional = true }
 poem-openapi = { version = "5.0", features = ["swagger-ui"], optional = true }
+chrono = { version = "0.4", optional = true }
 
 [features]
 default = ["convert_record", "convert_worker"]
-convert_record = ["tokio/full", "tracing-subscriber", "webm", "rtp", "clap", "serde"]
-convert_worker = ["tokio/full", "tracing-subscriber", "clap", "convert_record", "poem", "poem-openapi", "media-server-multi-tenancy", "media-server-connector", "media-server-secure"]
+convert_record = ["tokio/full", "tracing-subscriber", "webm", "rtp", "clap", "serde", "chrono"]
+convert_worker = ["tokio/full", "tracing-subscriber", "clap", "convert_record", "poem", "poem-openapi", "media-server-multi-tenancy", "media-server-connector", "media-server-secure", "media-server-codecs"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

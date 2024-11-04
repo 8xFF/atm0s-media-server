@@ -17,6 +17,7 @@ mod storage;
 mod worker;
 
 pub use raw_record::*;
+pub use storage::convert_s3_uri;
 
 //TODO: generate MediaRecordStats
 pub struct MediaRecordStats {

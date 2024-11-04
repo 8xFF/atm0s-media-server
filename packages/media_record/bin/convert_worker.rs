@@ -1,13 +1,16 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
 use media_server_connector::{hooks::ConnectorHookSender, HookBodyType};
 use media_server_multi_tenancy::{MultiTenancyStorage, MultiTenancySync};
 use media_server_protocol::protobuf::cluster_connector::{
-    compose_event::{self, RecordJobCompleted, RecordJobFailed},
+    compose_event::{self, record_job_completed::ComposeSummary, RecordJobCompleted, RecordJobFailed},
     hook_event, ComposeEvent, HookEvent,
 };
-use media_server_record::convert::{RecordConverter, RecordConverterOutput};
+use media_server_record::{
+    convert::{RecordComposerConfig, RecordConvert, RecordConvertConfig, RecordConvertOutputLocaltion},
+    convert_s3_uri,
+};
 use media_server_secure::AppStorage;
 use media_server_utils::now_ms;
 use poem::{
@@ -21,6 +24,7 @@ use poem_openapi::{
     types::{ParseFromJSON, ToJSON, Type},
     Object, OpenApi, OpenApiService,
 };
+use rusty_s3::S3Action;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 macro_rules! try_opt {
@@ -52,11 +56,15 @@ struct Args {
 
     /// S3 uri for raw file
     #[arg(env, long)]
-    record_s3_uri: String,
+    input_s3_uri: String,
+
+    /// S3 uri for transmux file
+    #[arg(env, long)]
+    transmux_s3_uri: Option<String>,
 
     /// S3 uri for composed file
     #[arg(env, long)]
-    composed_s3_uri: Option<String>,
+    compose_s3_uri: Option<String>,
 
     /// Hook Uri.
     /// If set, will send hook event to this uri. example: http://localhost:8080/hook
@@ -112,8 +120,9 @@ async fn main() -> Result<(), std::io::Error> {
         HttpApis {
             apps,
             hook,
-            composed_s3_uri: args.composed_s3_uri.unwrap_or_else(|| args.record_s3_uri.clone()),
-            record_s3_uri: args.record_s3_uri,
+            transmux_s3_uri: args.transmux_s3_uri.unwrap_or_else(|| args.input_s3_uri.clone()),
+            compose_s3_uri: args.compose_s3_uri.unwrap_or_else(|| args.input_s3_uri.clone()),
+            input_s3_uri: args.input_s3_uri,
         },
         "Convert Worker APIs",
         env!("CARGO_PKG_VERSION"),
@@ -134,9 +143,22 @@ async fn main() -> Result<(), std::io::Error> {
 }
 
 #[derive(Debug, Object)]
-struct ConvetJobRequest {
+struct TransmuxConfig {
+    custom_s3: Option<String>,
+}
+
+#[derive(Debug, Object)]
+struct ComposeConfig {
+    audio: bool,
+    video: bool,
+    custom_s3: Option<String>,
+}
+
+#[derive(Debug, Object)]
+struct ConvertJobRequest {
     record_path: String,
-    custom_s3_output: Option<String>,
+    transmux: Option<TransmuxConfig>,
+    compose: Option<ComposeConfig>,
 }
 
 #[derive(Debug, Object)]
@@ -156,18 +178,20 @@ pub struct Response<T: ParseFromJSON + ToJSON + Type + Send + Sync> {
 struct HttpApis {
     apps: Arc<MultiTenancyStorage>,
     hook: Arc<ConnectorHookSender>,
-    record_s3_uri: String,
-    composed_s3_uri: String,
+    input_s3_uri: String,
+    transmux_s3_uri: String,
+    compose_s3_uri: String,
 }
 
 #[OpenApi]
 impl HttpApis {
     #[oai(path = "/convert/job", method = "post")]
-    async fn create_job(&self, TokenAuthorization(token): TokenAuthorization, Json(body): Json<ConvetJobRequest>) -> Json<Response<ConvertJobResponse>> {
+    async fn create_job(&self, TokenAuthorization(token): TokenAuthorization, Json(body): Json<ConvertJobRequest>) -> Json<Response<ConvertJobResponse>> {
         let app = try_opt!(self, token, "Invalid token");
         let job_id = rand::random::<u64>().to_string();
-        let record_s3_uri = self.record_s3_uri.clone();
-        let composed_s3_uri = self.composed_s3_uri.clone();
+        let input_s3 = format!("{}/{}/?path_style=true", self.input_s3_uri, body.record_path);
+        let transmux_s3_uri = self.transmux_s3_uri.clone();
+        let compose_s3_uri = self.compose_s3_uri.clone();
         let job_id_c = job_id.clone();
         let hook = self.hook.clone();
 
@@ -186,18 +210,46 @@ impl HttpApis {
                 },
             );
 
-            // TODO: output s3 is custom or generate from composed/yyyy/mm/dd/job_id
-            let input_s3 = format!("{}/{}?path_style=true", record_s3_uri, body.record_path);
-            let output_s3 = body
-                .custom_s3_output
-                .unwrap_or_else(|| format!("{}/{}/composed/{}?path_style=true", composed_s3_uri, app.app, job_id_c));
-            let converter = RecordConverter::new(input_s3, RecordConverterOutput::S3(output_s3));
+            // get yyyy/mm/dd with chrono
+            let current_date_path = chrono::Utc::now().format("%Y/%m/%d").to_string();
+            let converter = RecordConvert::new(RecordConvertConfig {
+                in_s3: input_s3,
+                transmux: body.transmux.map(|t| {
+                    let uri = t
+                        .custom_s3
+                        .unwrap_or_else(|| format!("{transmux_s3_uri}/{}/transmux/{current_date_path}/{job_id_c}?path_style=true", app.app));
+                    RecordConvertOutputLocaltion::S3(uri)
+                }),
+                compose: body.compose.map(|c| {
+                    let (uri, relative) = c
+                        .custom_s3
+                        .map(|u| {
+                            let relative = u.split('?').collect::<Vec<_>>()[0].to_string();
+                            (u, relative)
+                        })
+                        .unwrap_or_else(|| {
+                            let compose_s3_uri = format!("{compose_s3_uri}?path_style=true");
+                            let (s3, credentials, s3_sub_folder) = convert_s3_uri(&compose_s3_uri).expect("should convert compose_s3_uri");
+                            let relative = format!("{}/compose/{current_date_path}/{job_id_c}.webm", app.app);
+                            let path = PathBuf::from(s3_sub_folder).join(&relative);
+                            let put = s3.put_object(Some(&credentials), path.to_str().expect("should convert to path"));
+                            let uri = put.sign(Duration::from_secs(3600)).to_string();
+                            (uri, relative)
+                        });
+                    RecordComposerConfig {
+                        audio: c.audio,
+                        video: c.video,
+                        output_relative: relative,
+                        output: RecordConvertOutputLocaltion::S3(uri),
+                    }
+                }),
+            });
             let result = match converter.convert().await {
                 Ok(summary) => {
                     log::info!("Convert job {job_id_c} completed");
                     compose_event::Event::Completed(RecordJobCompleted {
-                        summary: Some(summary.1.into()),
-                        summary_uri: summary.0,
+                        transmux: summary.transmux.map(|s| s.into()),
+                        compose: summary.compose.map(|s| ComposeSummary { media_uri: s }),
                     })
                 }
                 Err(e) => {

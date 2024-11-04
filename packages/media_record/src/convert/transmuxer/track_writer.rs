@@ -2,32 +2,26 @@ use std::{collections::HashMap, fs::File, path::PathBuf};
 
 use media_server_protocol::{
     endpoint::{TrackMeta, TrackName},
-    media::{MediaKind, MediaPacket},
+    media::MediaKind,
     record::{SessionRecordEvent, SessionRecordRow},
     transport::RemoteTrackId,
 };
-use vpx_writer::VpxWriter;
 
-mod vpx_demuxer;
-mod vpx_writer;
-
-trait TrackWriter {
-    fn push_media(&mut self, pkt_ms: u64, pkt: MediaPacket);
-}
+use crate::convert::codec::{CodecWriter, VpxWriter};
 
 pub enum Event {
     TrackStart(TrackName, MediaKind, u64, String),
     TrackStop(TrackName, MediaKind, u64),
 }
 
-pub struct SessionMediaWriter {
+pub struct TrackWriter {
     folder: PathBuf,
     prefix: String,
     tracks_meta: HashMap<RemoteTrackId, (TrackName, TrackMeta)>,
-    tracks_writer: HashMap<RemoteTrackId, Box<dyn TrackWriter + Send>>,
+    tracks_writer: HashMap<RemoteTrackId, Box<dyn CodecWriter + Send>>,
 }
 
-impl SessionMediaWriter {
+impl TrackWriter {
     pub fn new(folder: PathBuf, prefix: &str) -> Self {
         log::info!("new session media writer {folder:?}/{prefix}");
         Self {
@@ -59,7 +53,7 @@ impl SessionMediaWriter {
                 #[allow(clippy::map_entry)]
                 let out = if !self.tracks_writer.contains_key(&id) {
                     if let Some((name, meta)) = self.tracks_meta.get(&id) {
-                        let (file_name, writer): (String, Box<dyn TrackWriter + Send>) = match &media.meta {
+                        let (file_name, writer): (String, Box<dyn CodecWriter + Send>) = match &media.meta {
                             media_server_protocol::media::MediaMeta::Opus { .. } => {
                                 let file_name = format!("{}-opus-{}-{}.webm", self.prefix, name, event.ts);
                                 let file_path = self.folder.join(&file_name);

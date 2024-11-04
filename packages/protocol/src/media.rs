@@ -218,6 +218,10 @@ impl MediaMeta {
         matches!(self, MediaMeta::Opus { .. })
     }
 
+    pub fn is_video(&self) -> bool {
+        !matches!(self, MediaMeta::Opus { .. })
+    }
+
     pub fn is_video_key(&self) -> bool {
         match self {
             Self::H264 { key, .. } | Self::Vp8 { key, .. } | Self::Vp9 { key, .. } => *key,
@@ -255,5 +259,17 @@ impl MediaPacket {
 
     pub fn deserialize(data: &[u8]) -> Option<MediaPacket> {
         bincode::deserialize::<Self>(data).ok()
+    }
+
+    pub fn build_audio(ts: u32, seq: u16, audio_level: Option<i8>, data: Vec<u8>) -> Self {
+        Self {
+            ts,
+            seq,
+            marker: true,
+            nackable: false,
+            layers: None,
+            meta: MediaMeta::Opus { audio_level },
+            data,
+        }
     }
 }
