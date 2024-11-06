@@ -43,6 +43,6 @@ path = "./bin/convert_record_cli.rs"
 required-features = ["convert_record"]
 
 [[bin]]
-name = "convert_worker"
-path = "./bin/convert_worker.rs"
+name = "convert_record_worker"
+path = "./bin/convert_record_worker.rs"
 required-features = ["convert_record", "convert_worker"]
