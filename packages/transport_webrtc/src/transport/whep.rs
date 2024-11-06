@@ -218,10 +218,14 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
     }
 
     fn close(&mut self, _now: Instant) {
-        log::info!("[TransportWebrtcWhep] switched to disconnected with close action");
-        self.state = State::Disconnected;
-        self.queue
-            .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+        if !matches!(self.state, State::Disconnected) {
+            log::info!("[TransportWebrtcWhep] switched to disconnected with close action");
+            self.state = State::Disconnected;
+            self.queue
+                .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+        } else {
+            log::warn!("[TransportWebrtcWhep] already disconnected, ignore close action");
+        }
     }
 
     fn pop_output(&mut self, _now: Instant) -> Option<InternalOutput> {

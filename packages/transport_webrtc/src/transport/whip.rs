@@ -200,10 +200,14 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
     }
 
     fn close(&mut self, _now: Instant) {
-        log::info!("[TransportWebrtcWhip] switched to disconnected with close action");
-        self.state = State::Disconnected;
-        self.queue
-            .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+        if !matches!(self.state, State::Disconnected) {
+            log::info!("[TransportWebrtcWhip] switched to disconnected with close action");
+            self.state = State::Disconnected;
+            self.queue
+                .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+        } else {
+            log::warn!("[TransportWebrtcWhip] already disconnected, ignore close action");
+        }
     }
 
     fn pop_output(&mut self, _now: Instant) -> Option<InternalOutput> {
