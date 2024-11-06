@@ -31,7 +31,7 @@ impl RecordTransmuxer {
             RecordConvertOutputLocaltion::S3(s3) => Self {
                 in_s3,
                 out_s3: Some(s3),
-                local_folder: format!("/tmp/media-record/{}", rand::random::<u64>()),
+                local_folder: format!("/tmp/media-record-transmuxer-{}", rand::random::<u64>()),
             },
             RecordConvertOutputLocaltion::Local(local) => Self {
                 in_s3,

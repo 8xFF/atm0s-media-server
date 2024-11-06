@@ -89,7 +89,7 @@ impl RecordComposer {
                 video: cfg.video,
                 in_s3,
                 out_s3: Some(s3),
-                out_local_path: format!("/tmp/media-record/{}.vpx", rand::random::<u64>()),
+                out_local_path: format!("/tmp/media-record-{}.vpx", rand::random::<u64>()),
                 sessions: Default::default(),
                 audio_mixer: cfg.audio.then_some(AudioMixer::new()),
                 video_composer: cfg.video.then_some(VideoComposer::default()),
