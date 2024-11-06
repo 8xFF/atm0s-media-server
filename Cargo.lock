@@ -3086,9 +3086,9 @@ dependencies = [
 [[package]]
 name = "libsoxr-sys"
 version = "0.1.4"
-source = "git+https://github.com/giangndm/libsoxr-sys.git?rev=3154931420e385ef2d9d707755412f4fbfb7519a#3154931420e385ef2d9d707755412f4fbfb7519a"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cffdc8b3b64759d2e95e3236fa6bf85fef226bf57023fa9273ec60edea8fbce"
 dependencies = [
- "cmake",
  "pkg-config",
 ]
 
