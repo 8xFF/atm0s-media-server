@@ -15,5 +15,5 @@ pre-build = [
 [target.aarch64-unknown-linux-musl]
 pre-build = [
     "dpkg --add-architecture $CROSS_DEB_ARCH",
-    "apt-get update && apt-get --assume-yes install protobuf-compiler libssl-dev:$CROSS_DEB_ARCH"
+    "apt-get update && apt-get --assume-yes install protobuf-compiler libssl-dev"
 ]
