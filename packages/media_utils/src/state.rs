@@ -1,4 +1,4 @@
-//! This module implements the state machine patten for easy state transition
+//! This module implements the state machine pattern for easy state transition
 //!
 
 use derive_more::From;
