@@ -92,7 +92,7 @@ impl<TID: Hash + Eq + Copy> MixerBuffer<TID> {
     /// otherwise returns `None`
     pub fn push(&mut self, ts: u64, track_id: TID, data: &[i16]) -> Option<(u64, Vec<i16>)> {
         let frame_idx = self.push_data_to_frame(ts, track_id, data)?;
-        log::trace!("push data to frame: {}", frame_idx);
+        log::debug!("push data to frame: {}", frame_idx);
         // we pop front frame if all tracks are mixed or the frame is too old
         if self.frames.len() > FRAME_QUEUE_LIMIT {
             self.force_pop()

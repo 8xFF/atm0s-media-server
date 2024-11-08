@@ -43,7 +43,7 @@ impl AudioMixer {
         }
         let decoder = self.tracks.get_mut(&(session_id, remote_track_id))?;
         let len = decoder.decode(&media_packet.data, &mut self.audio_tmp)?;
-        log::trace!("decode {} {} {} {} => {}", session_id, remote_track_id, media_packet.seq, media_packet.data.len(), len);
+        log::debug!("decode {} {} {} {} => {}", session_id, remote_track_id, media_packet.seq, media_packet.data.len(), len);
         if let Some((ts, frame)) = self.mixer.push(ts, (session_id, remote_track_id), &self.audio_tmp[..len]) {
             let len = self.encoder.encode(&frame, &mut self.audio_encoded)?;
             let media = MediaPacket::build_audio(0, 0, None, self.audio_encoded[..len].to_vec());
