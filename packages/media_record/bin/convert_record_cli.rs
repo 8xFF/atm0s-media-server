@@ -52,13 +52,13 @@ async fn main() -> Result<(), String> {
     tracing_subscriber::registry().with(fmt::layer()).with(EnvFilter::from_default_env()).init();
     let convert = RecordConvert::new(RecordConvertConfig {
         in_s3: args.in_s3,
-        transmux: Some(if let Some(out_path) = args.transmux_out_s3 {
-            RecordConvertOutputLocaltion::S3(out_path)
+        transmux: if let Some(out_path) = args.transmux_out_s3 {
+            Some(RecordConvertOutputLocaltion::S3(out_path))
         } else if let Some(out_path) = args.transmux_out_path {
-            RecordConvertOutputLocaltion::Local(out_path)
+            Some(RecordConvertOutputLocaltion::Local(out_path))
         } else {
-            panic!("No output path or s3 uri");
-        }),
+            None
+        },
         compose: if args.compose_audio || args.compose_video {
             Some(RecordComposerConfig {
                 audio: args.compose_audio,
