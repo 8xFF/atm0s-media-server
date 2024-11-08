@@ -52,7 +52,7 @@ pub enum Input<Endpoint> {
 pub enum Output<Endpoint> {
     Sdn(RoomUserData, FeaturesControl),
     Endpoint(Vec<Endpoint>, ClusterEndpointEvent),
-    Destroy(ClusterRoomHash),
+    OnResourceEmpty(ClusterRoomHash),
 }
 
 #[derive(num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
@@ -86,11 +86,22 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Task<Input<Endpoint>, Output<En
         }
     }
 
-    fn on_shutdown(&mut self, _now: Instant) {}
+    fn on_shutdown(&mut self, _now: Instant) {
+        // we don't need to do anything here, need to wait for all resources to be empty by endpoints
+    }
 }
 
 impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for ClusterRoom<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.metadata.is_empty() && self.media_track.is_empty() && self.audio_mixer.is_empty() && self.message_channel.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty(self.room)
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
@@ -100,9 +111,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                             metadata::Output::Kv(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MetaData), FeaturesControl::DhtKv(control))),
                             metadata::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
                             metadata::Output::OnResourceEmpty => {
-                                if self.is_empty() {
-                                    break Some(Output::Destroy(self.room));
-                                }
+                                log::info!("[ClusterRoom] on metadata empty");
                             }
                         }
                     }
@@ -113,9 +122,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                             media_track::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
                             media_track::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MediaTrack), FeaturesControl::PubSub(control))),
                             media_track::Output::OnResourceEmpty => {
-                                if self.is_empty() {
-                                    break Some(Output::Destroy(self.room));
-                                }
+                                log::info!("[ClusterRoom] on media track empty");
                             }
                         }
                     }
@@ -126,9 +133,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                             audio_mixer::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
                             audio_mixer::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::AudioMixer), FeaturesControl::PubSub(control))),
                             audio_mixer::Output::OnResourceEmpty => {
-                                if self.is_empty() {
-                                    break Some(Output::Destroy(self.room));
-                                }
+                                log::info!("[ClusterRoom] on audio mixer empty");
                             }
                         }
                     }
@@ -139,9 +144,7 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoi
                             message_channel::Output::Endpoint(endpoints, event) => break Some(Output::Endpoint(endpoints, event)),
                             message_channel::Output::Pubsub(control) => break Some(Output::Sdn(RoomUserData(self.room, RoomFeature::MessageChannel), FeaturesControl::PubSub(control))),
                             message_channel::Output::OnResourceEmpty => {
-                                if self.is_empty() {
-                                    break Some(Output::Destroy(self.room));
-                                }
+                                log::info!("[ClusterRoom] on message channel empty");
                             }
                         }
                     }
@@ -163,10 +166,6 @@ impl<Endpoint: Debug + Copy + Clone + Hash + Eq> ClusterRoom<Endpoint> {
             message_channel: TaskSwitcherBranch::new(RoomMessageChannel::new(room), TaskType::MessageChannel),
             switcher: TaskSwitcher::new(4),
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.metadata.is_empty() && self.media_track.is_empty() && self.audio_mixer.is_empty() && self.message_channel.is_empty()
     }
 
     fn on_sdn_event(&mut self, now: Instant, userdata: RoomUserData, event: FeaturesEvent) {
@@ -377,7 +376,7 @@ mod tests {
                 FeaturesControl::PubSub(pubsub::Control(room_mixer_auto_channel, pubsub::ChannelControl::UnsubAuto))
             ))
         );
-        assert_eq!(room.pop_output(()), Some(Output::Destroy(room_id)));
         assert_eq!(room.pop_output(()), None);
+        assert_eq!(room.is_empty(), true);
     }
 }

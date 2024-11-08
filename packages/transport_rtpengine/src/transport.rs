@@ -62,6 +62,7 @@ pub struct TransportRtpEngine {
     pcma_to_opus: AudioTranscoder<PcmaDecoder, OpusEncoder>,
     opus_to_pcma: AudioTranscoder<OpusDecoder, PcmaEncoder>,
     tmp_buf: [u8; 1500],
+    shutdown: bool,
 }
 
 impl TransportRtpEngine {
@@ -92,6 +93,7 @@ impl TransportRtpEngine {
                 pcma_to_opus: AudioTranscoder::new(PcmaDecoder::default(), OpusEncoder::default()),
                 opus_to_pcma: AudioTranscoder::new(OpusDecoder::default(), PcmaEncoder::default()),
                 tmp_buf: [0; 1500],
+                shutdown: false,
             },
             answer,
         ))
@@ -135,6 +137,7 @@ impl TransportRtpEngine {
                 pcma_to_opus: AudioTranscoder::new(PcmaDecoder::default(), OpusEncoder::default()),
                 opus_to_pcma: AudioTranscoder::new(OpusDecoder::default(), PcmaEncoder::default()),
                 tmp_buf: [0; 1500],
+                shutdown: false,
             },
             answer,
         ))
@@ -171,6 +174,7 @@ impl Transport<ExtIn, ExtOut> for TransportRtpEngine {
             log::warn!("[TransportRtpEngine] timeout after {TIMEOUT_DURATION_MS} ms don't has activity");
             self.queue
                 .push_back(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(TransportError::Timeout)))));
+            self.shutdown = true;
         }
     }
 
@@ -196,9 +200,13 @@ impl Transport<ExtIn, ExtOut> for TransportRtpEngine {
                     self.queue.push_back(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None))));
                 }
             },
-            TransportInput::SystemClose => {
-                self.queue.push_back(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None))));
-            }
+        }
+    }
+
+    fn on_shutdown(&mut self, _now: Instant) {
+        if !self.shutdown {
+            log::info!("[TransportRtpEngine] shutdown request");
+            self.shutdown = true;
         }
     }
 }
@@ -352,6 +360,14 @@ impl TransportRtpEngine {
 
 impl TaskSwitcherChild<TransportOutput<ExtOut>> for TransportRtpEngine {
     type Time = Instant;
+
+    fn is_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
+    }
+
+    fn empty_event(&self) -> TransportOutput<ExtOut> {
+        TransportOutput::OnResourceEmpty
+    }
 
     fn pop_output(&mut self, _now: Instant) -> Option<TransportOutput<ExtOut>> {
         self.queue.pop_front()

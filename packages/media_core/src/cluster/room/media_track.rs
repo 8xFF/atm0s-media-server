@@ -32,7 +32,7 @@ pub enum Output<Endpoint> {
     OnResourceEmpty,
 }
 
-pub struct MediaTrack<Endpoint> {
+pub struct MediaTrack<Endpoint: Debug + Hash + Eq + Copy> {
     room: ClusterRoomHash,
     publisher: TaskSwitcherBranch<RoomChannelPublisher<Endpoint>, Output<Endpoint>>,
     subscriber: TaskSwitcherBranch<RoomChannelSubscribe<Endpoint>, Output<Endpoint>>,
@@ -47,10 +47,6 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MediaTrack<Endpoint> {
             subscriber: TaskSwitcherBranch::new(RoomChannelSubscribe::new(room), TaskType::Subscriber),
             switcher: TaskSwitcher::new(2),
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.publisher.is_empty() && self.subscriber.is_empty()
     }
 
     pub fn on_pubsub_event(&mut self, event: pubsub::Event) {
@@ -100,15 +96,21 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MediaTrack<Endpoint> {
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for MediaTrack<Endpoint> {
     type Time = ();
 
+    fn is_empty(&self) -> bool {
+        self.publisher.is_empty() && self.subscriber.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Publisher => {
                     if let Some(out) = self.publisher.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
@@ -117,9 +119,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
                 TaskType::Subscriber => {
                     if let Some(out) = self.subscriber.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
@@ -130,8 +130,10 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
     }
 }
 
-impl<Endpoint> Drop for MediaTrack<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq + Copy> Drop for MediaTrack<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoomMediaTrack] Drop {}", self.room);
+        assert!(self.publisher.is_empty(), "Publisher not empty on drop");
+        assert!(self.subscriber.is_empty(), "Subscriber not empty on drop");
     }
 }

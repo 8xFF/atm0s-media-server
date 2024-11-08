@@ -31,6 +31,7 @@ pub struct ConnectorHandlerService<UserData, SC, SE, TC, TW> {
     lru: LruCache<ReqUuid, ()>,
     subscriber: Option<ServiceControlActor<UserData>>,
     queue: VecDeque<ServiceOutput<UserData, FeaturesControl, SE, TW>>,
+    shutdown: bool,
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
@@ -46,6 +47,7 @@ impl<UserData, SC, SE, TC, TW> ConnectorHandlerService<UserData, SC, SE, TC, TW>
             subscriber: None,
             lru: LruCache::new(NonZeroUsize::new(10000).expect("should be non-zero")),
             queue: VecDeque::from([ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())]),
+            shutdown: false,
             _tmp: std::marker::PhantomData,
         }
     }
@@ -62,6 +64,10 @@ where
 
     fn service_name(&self) -> &str {
         HANDLER_SERVICE_NAME
+    }
+
+    fn is_service_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
     }
 
     fn on_shared_input<'a>(&mut self, _ctx: &ServiceCtx, _now: u64, _input: ServiceSharedInput) {}
@@ -116,6 +122,10 @@ where
         }
     }
 
+    fn on_shutdown(&mut self, _ctx: &ServiceCtx, _now: u64) {
+        self.shutdown = true;
+    }
+
     fn pop_output2(&mut self, _now: u64) -> Option<ServiceOutput<UserData, FeaturesControl, SE, TW>> {
         self.queue.pop_front()
     }
@@ -123,6 +133,7 @@ where
 
 pub struct ConnectorHandlerServiceWorker<UserData, SC, SE, TC> {
     queue: VecDeque<ServiceWorkerOutput<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC>>,
+    shutdown: bool,
 }
 
 impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW> for ConnectorHandlerServiceWorker<UserData, SC, SE, TC> {
@@ -134,6 +145,10 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
         HANDLER_SERVICE_NAME
     }
 
+    fn is_service_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
+    }
+
     fn on_tick(&mut self, _ctx: &ServiceWorkerCtx, _now: u64, _tick_count: u64) {}
 
     fn on_input(&mut self, _ctx: &ServiceWorkerCtx, _now: u64, input: ServiceWorkerInput<UserData, FeaturesEvent, SC, TW>) {
@@ -142,6 +157,10 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
             ServiceWorkerInput::FromController(_) => {}
             ServiceWorkerInput::FeatureEvent(event) => self.queue.push_back(ServiceWorkerOutput::ForwardFeatureEventToController(event)),
         }
+    }
+
+    fn on_shutdown(&mut self, _ctx: &ServiceWorkerCtx, _now: u64) {
+        self.shutdown = true;
     }
 
     fn pop_output2(&mut self, _now: u64) -> Option<ServiceWorkerOutput<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC>> {
@@ -190,6 +209,9 @@ where
     }
 
     fn create_worker(&self) -> Box<dyn ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {
-        Box::new(ConnectorHandlerServiceWorker { queue: Default::default() })
+        Box::new(ConnectorHandlerServiceWorker {
+            queue: Default::default(),
+            shutdown: false,
+        })
     }
 }

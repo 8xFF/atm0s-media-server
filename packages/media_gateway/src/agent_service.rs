@@ -49,6 +49,7 @@ pub struct GatewayAgentService<UserData, SC, SE, TC, TW> {
     seq: u16,
     node: NodeMetrics,
     services: HashMap<ServiceKind, ServiceWorkersStats>,
+    shutdown: bool,
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
@@ -59,6 +60,7 @@ impl<UserData, SC, SE, TC, TW> GatewayAgentService<UserData, SC, SE, TC, TW> {
             seq: 0,
             node: Default::default(),
             services: HashMap::from_iter(max.into_iter().map(|(k, v)| (k, ServiceWorkersStats { max: v, workers: HashMap::new() }))),
+            shutdown: false,
             _tmp: std::marker::PhantomData,
         }
     }
@@ -69,6 +71,10 @@ where
     SC: From<Control> + TryInto<Control> + Debug,
     SE: From<Event> + TryInto<Event>,
 {
+    fn is_service_empty(&self) -> bool {
+        self.shutdown && self.output.is_none()
+    }
+
     fn service_id(&self) -> u8 {
         AGENT_SERVICE_ID
     }
@@ -121,6 +127,10 @@ where
         }
     }
 
+    fn on_shutdown(&mut self, _ctx: &ServiceCtx, _now: u64) {
+        self.shutdown = true;
+    }
+
     fn pop_output2(&mut self, _now: u64) -> Option<ServiceOutput<UserData, FeaturesControl, SE, TW>> {
         self.output.take()
     }
@@ -128,6 +138,7 @@ where
 
 pub struct GatewayAgentServiceWorker<UserData, SC, SE, TC> {
     queue: VecDeque<ServiceWorkerOutput<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC>>,
+    shutdown: bool,
 }
 
 impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW> for GatewayAgentServiceWorker<UserData, SC, SE, TC> {
@@ -137,6 +148,10 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
 
     fn service_name(&self) -> &str {
         AGENT_SERVICE_NAME
+    }
+
+    fn is_service_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
     }
 
     fn on_tick(&mut self, _ctx: &ServiceWorkerCtx, _now: u64, _tick_count: u64) {}
@@ -151,6 +166,10 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
 
     fn pop_output2(&mut self, _now: u64) -> Option<ServiceWorkerOutput<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC>> {
         self.queue.pop_front()
+    }
+
+    fn on_shutdown(&mut self, _ctx: &ServiceWorkerCtx, _now: u64) {
+        self.shutdown = true;
     }
 }
 
@@ -190,6 +209,9 @@ where
     }
 
     fn create_worker(&self) -> Box<dyn ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {
-        Box::new(GatewayAgentServiceWorker { queue: Default::default() })
+        Box::new(GatewayAgentServiceWorker {
+            queue: Default::default(),
+            shutdown: false,
+        })
     }
 }

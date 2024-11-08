@@ -45,10 +45,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMessageChannel<Endpoint> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.publisher.is_empty() && self.subscriber.is_empty()
-    }
-
     pub fn on_pubsub_event(&mut self, event: pubsub::Event) {
         let channel_id = event.0;
         if let pubsub::ChannelEvent::SourceData(_, data) = event.1 {
@@ -85,15 +81,21 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMessageChannel<Endpoint> {
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomMessageChannel<Endpoint> {
     type Time = ();
 
+    fn is_empty(&self) -> bool {
+        self.publisher.is_empty() && self.subscriber.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Publisher => {
                     if let Some(out) = self.publisher.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
@@ -102,9 +104,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
                 TaskType::Subscriber => {
                     if let Some(out) = self.subscriber.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }

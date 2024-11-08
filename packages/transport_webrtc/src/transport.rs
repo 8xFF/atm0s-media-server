@@ -101,7 +101,8 @@ trait TransportWebrtcInternal {
     fn on_transport_rpc_res(&mut self, now: Instant, req_id: EndpointReqId, res: EndpointRes);
     fn on_endpoint_event(&mut self, now: Instant, input: EndpointEvent);
     fn on_str0m_event(&mut self, now: Instant, event: str0m::Event);
-    fn close(&mut self, now: Instant);
+    fn is_empty(&self) -> bool;
+    fn on_shutdown(&mut self, now: Instant);
     fn pop_output(&mut self, now: Instant) -> Option<InternalOutput>;
 }
 
@@ -337,20 +338,30 @@ impl<ES: 'static + MediaEdgeSecure> Transport<ExtIn, ExtOut> for TransportWebrtc
                     }
                 }
                 ExtIn::Disconnect(req_id, variant) => {
-                    self.internal.close(now);
+                    self.internal.on_shutdown(now);
                     self.queue.push_back(TransportOutput::Ext(ExtOut::Disconnect(req_id, variant, Ok(()))));
                 }
             },
-            TransportInput::SystemClose => {
-                log::info!("[TransportWebrtc] system close request");
-                self.internal.close(now);
-            }
         }
+    }
+
+    fn on_shutdown(&mut self, now: Instant) {
+        log::info!("[TransportWebrtc] shutdown request");
+        self.internal.on_shutdown(now);
+        self.rtc.disconnect();
     }
 }
 
 impl<ES: 'static + MediaEdgeSecure> TaskSwitcherChild<TransportOutput<ExtOut>> for TransportWebrtc<ES> {
     type Time = Instant;
+
+    fn empty_event(&self) -> TransportOutput<ExtOut> {
+        TransportOutput::OnResourceEmpty
+    }
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.internal.is_empty()
+    }
 
     fn pop_output(&mut self, now: Instant) -> Option<TransportOutput<ExtOut>> {
         return_if_some!(self.queue.pop_front());

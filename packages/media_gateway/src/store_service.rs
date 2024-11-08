@@ -41,6 +41,7 @@ pub struct GatewayStoreService<UserData, SC, SE, TC, TW> {
     queue: VecDeque<ServiceOutput<UserData, FeaturesControl, SE, TW>>,
     store: GatewayStore,
     seq: u16,
+    shutdown: bool,
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
@@ -54,6 +55,7 @@ where
             store: GatewayStore::new(zone, Location { lat, lon }, max_cpu, max_memory, max_disk),
             queue: VecDeque::from([ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())]),
             seq: 0,
+            shutdown: false,
             _tmp: std::marker::PhantomData,
         }
     }
@@ -96,6 +98,10 @@ where
 
     fn service_name(&self) -> &str {
         STORE_SERVICE_NAME
+    }
+
+    fn is_service_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
     }
 
     fn on_shared_input<'a>(&mut self, _ctx: &ServiceCtx, now: u64, input: ServiceSharedInput) {
@@ -157,6 +163,10 @@ where
         }
     }
 
+    fn on_shutdown(&mut self, _ctx: &ServiceCtx, _now: u64) {
+        self.shutdown = true;
+    }
+
     fn pop_output2(&mut self, _now: u64) -> Option<ServiceOutput<UserData, FeaturesControl, SE, TW>> {
         self.queue.pop_front()
     }
@@ -164,6 +174,7 @@ where
 
 pub struct GatewayStoreServiceWorker<UserData, SC, SE, TC> {
     queue: VecDeque<ServiceWorkerOutput<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC>>,
+    shutdown: bool,
 }
 
 impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW> for GatewayStoreServiceWorker<UserData, SC, SE, TC> {
@@ -173,6 +184,10 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
 
     fn service_name(&self) -> &str {
         STORE_SERVICE_NAME
+    }
+
+    fn is_service_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
     }
 
     fn on_tick(&mut self, _ctx: &ServiceWorkerCtx, _now: u64, _tick_count: u64) {}
@@ -186,6 +201,10 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
                 self.queue.push_back(ServiceWorkerOutput::ForwardFeatureEventToController(event))
             }
         }
+    }
+
+    fn on_shutdown(&mut self, _ctx: &ServiceWorkerCtx, _now: u64) {
+        self.shutdown = true;
     }
 
     fn pop_output2(&mut self, _now: u64) -> Option<ServiceWorkerOutput<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC>> {
@@ -242,6 +261,9 @@ where
     }
 
     fn create_worker(&self) -> Box<dyn ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {
-        Box::new(GatewayStoreServiceWorker { queue: Default::default() })
+        Box::new(GatewayStoreServiceWorker {
+            queue: Default::default(),
+            shutdown: false,
+        })
     }
 }

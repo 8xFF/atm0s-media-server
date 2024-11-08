@@ -18,7 +18,7 @@ pub use media_server_protocol::transport::{LocalTrackId, RemoteTrackId};
 #[derive(From, Debug, Clone, Copy, PartialEq, Eq, Display)]
 pub struct TransportId(pub u64);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportError {
     Timeout,
 }
@@ -94,7 +94,6 @@ pub enum TransportInput<Ext> {
     Endpoint(EndpointEvent),
     RpcRes(EndpointReqId, EndpointRes),
     Ext(Ext),
-    SystemClose,
 }
 
 /// This is event from transport, in general is is result of transport protocol
@@ -104,9 +103,11 @@ pub enum TransportOutput<Ext> {
     Event(TransportEvent),
     RpcReq(EndpointReqId, EndpointReq),
     Ext(Ext),
+    OnResourceEmpty,
 }
 
 pub trait Transport<ExtIn, ExtOut>: TaskSwitcherChild<TransportOutput<ExtOut>> {
     fn on_tick(&mut self, now: Instant);
     fn on_input(&mut self, now: Instant, input: TransportInput<ExtIn>);
+    fn on_shutdown(&mut self, now: Instant);
 }

@@ -132,16 +132,25 @@ impl<Endpoint: Clone> Task<Input, Output<Endpoint>> for ManualMixer<Endpoint> {
                     log::info!("[ClusterManualMixer] remove source {:?} on queue => unsub {channel_id}", source);
                     self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)));
                 }
-                self.queue.push_back(Output::OnResourceEmpty);
             }
         }
     }
 
-    fn on_shutdown(&mut self, _now: Instant) {}
+    fn on_shutdown(&mut self, _now: Instant) {
+        // this is depend on endpoint, so we cannot shutdown until endpoint is empty
+    }
 }
 
 impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for ManualMixer<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.sources.is_empty() && self.outputs.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
 
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
@@ -245,7 +254,7 @@ mod test {
 
         manual.on_event(t0, Input::LeaveRoom);
         assert_eq!(manual.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto))));
-        assert_eq!(manual.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(manual.pop_output(()), None);
+        assert_eq!(manual.is_empty(), true);
     }
 }

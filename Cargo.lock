@@ -503,8 +503,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b95dae8a1c71d28f90b1c891eddf9d80a84249ae16f557a36e1e690c2d83ab6"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -523,8 +521,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ec96b78570f6f704f7b7074f2c496604c2729044d5374441fee7cf202ee7633"
 dependencies = [
  "multiaddr",
  "rand 0.8.5",
@@ -534,8 +530,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-network"
 version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f890567c3ee41e7748ddee4ab6c8edd7c1fbdc93fde5d322187eeb00673dfe0b"
 dependencies = [
  "aes-gcm 0.10.3",
  "atm0s-sdn-identity",
@@ -562,8 +556,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-router"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b88e27523f92b50bd5c827281b52ef73cd8497c5df6c7bc95a167e503f28d60"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -575,8 +567,6 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "437f8450fd7095986c5bce4abd7ad03e95f1651a214b8727976363c86d6b9cc9"
 dependencies = [
  "log",
  "serde",
@@ -3350,6 +3340,7 @@ dependencies = [
 name = "media-server-utils"
 version = "0.1.0"
 dependencies = [
+ "derive_more 1.0.0",
  "log",
  "once_cell",
  "pin-project-lite",
@@ -5206,8 +5197,6 @@ dependencies = [
 [[package]]
 name = "sans-io-runtime"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ecb86ad7989fbacc137308565897a1e401a101043c1ccfbe5bd8a9fea79675"
 dependencies = [
  "convert-enum",
  "derive_more 0.99.18",

@@ -39,10 +39,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelPublisher<Endpoint> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.queue.is_empty() && self.channels.is_empty() && self.publishers.is_empty()
-    }
-
     pub fn on_channel_pub_start(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
         log::info!("[ClusterRoomDataChannel {}/Publishers] publish start message channel", self.room);
 
@@ -115,6 +111,15 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelPublisher<Endpoint> {
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for MessageChannelPublisher<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.channels.is_empty() && self.publishers.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }

@@ -63,10 +63,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.subscribers.is_empty() && self.queue.is_empty()
-    }
-
     pub fn on_track_relay_changed(&mut self, channel: ChannelId, _relay: NodeId) {
         let channel_container = return_if_none!(self.channels.get(&channel));
         log::info!(
@@ -164,15 +160,20 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
             log::info!("[ClusterRoom {}/Subscribers] last unsubscriber => Unsub channel {channel_id}", self.room);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)));
         }
-
-        if self.subscribers.is_empty() {
-            self.queue.push_back(Output::OnResourceEmpty);
-        }
     }
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomChannelSubscribe<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.subscribers.is_empty() && self.channels.is_empty() && self.queue.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
@@ -248,8 +249,8 @@ mod tests {
 
         subscriber.on_track_unsubscribe(endpoint, track);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
+        assert_eq!(subscriber.is_empty(), true);
     }
 
     //TODO Sending key-frame request
@@ -279,8 +280,8 @@ mod tests {
 
         subscriber.on_track_unsubscribe(endpoint, track);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
+        assert_eq!(subscriber.is_empty(), true);
     }
 
     //TODO Sending bitrate request single sub
@@ -359,7 +360,7 @@ mod tests {
         subscriber.on_track_unsubscribe(endpoint1, track1);
         subscriber.on_track_unsubscribe(endpoint2, track2);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
+        assert_eq!(subscriber.is_empty(), true);
     }
 }

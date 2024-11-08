@@ -60,6 +60,15 @@ impl BitrateAllocator {
 
 impl TaskSwitcherChild<Output> for BitrateAllocator {
     type Time = Instant;
+    fn is_empty(&self) -> bool {
+        // we never send empty event
+        false
+    }
+
+    fn empty_event(&self) -> Output {
+        unreachable!()
+    }
+
     fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         if let Some(out) = self.egress.pop_output() {
             let out = match out {

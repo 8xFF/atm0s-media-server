@@ -19,7 +19,7 @@ use media_server_protocol::{
 use media_server_secure::MediaEdgeSecure;
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
-    group_owner_type, return_if_none, return_if_some, TaskGroup, TaskSwitcherChild,
+    group_owner_type, return_if_none, return_if_some, TaskGroup, TaskGroupOutput, TaskSwitcherChild,
 };
 use str0m::change::DtlsCert;
 
@@ -45,7 +45,7 @@ pub enum GroupOutput {
     PeerEvent(WebrtcSession, AppId, u64, Instant, peer_event::Event),
     RecordEvent(WebrtcSession, u64, Instant, SessionRecordEvent),
     Ext(WebrtcSession, ExtOut),
-    Shutdown(WebrtcSession),
+    OnResourceEmpty,
     Continue,
 }
 
@@ -59,6 +59,7 @@ pub struct MediaWorkerWebrtc<ES: 'static + MediaEdgeSecure> {
     addrs: Vec<(SocketAddr, usize)>,
     queue: VecDeque<GroupOutput>,
     secure: Arc<ES>,
+    shutdown: bool,
 }
 
 impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
@@ -72,6 +73,7 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
             addrs: vec![],
             queue: VecDeque::from(addrs.iter().map(|addr| GroupOutput::Net(BackendOutgoing::UdpListen { addr: *addr, reuse: false })).collect::<Vec<_>>()),
             secure,
+            shutdown: false,
         }
     }
 
@@ -110,11 +112,11 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(WebrtcSession(index), room, control),
             EndpointOutput::PeerEvent(app, session_id, ts, event) => GroupOutput::PeerEvent(WebrtcSession(index), app, session_id, ts, event),
             EndpointOutput::RecordEvent(session_id, ts, event) => GroupOutput::RecordEvent(WebrtcSession(index), session_id, ts, event),
-            EndpointOutput::Destroy => {
+            EndpointOutput::OnResourceEmpty => {
                 log::info!("[TransportWebrtc] destroy endpoint {index}");
                 self.endpoints.remove_task(index);
                 self.shared_port.remove_task(index);
-                GroupOutput::Shutdown(WebrtcSession(index))
+                GroupOutput::Continue
             }
             EndpointOutput::Ext(ext) => GroupOutput::Ext(WebrtcSession(index), ext),
             EndpointOutput::Continue => GroupOutput::Continue,
@@ -179,15 +181,31 @@ impl<ES: MediaEdgeSecure> MediaWorkerWebrtc<ES> {
     }
 
     pub fn shutdown(&mut self, now: Instant) {
-        self.endpoints.on_shutdown(now);
+        if !self.shutdown {
+            log::info!("[MediaWorkerWebrtc] shutdown request");
+            self.shutdown = true;
+            self.endpoints.on_shutdown(now);
+        }
     }
 }
 
 impl<ES: MediaEdgeSecure> TaskSwitcherChild<GroupOutput> for MediaWorkerWebrtc<ES> {
     type Time = Instant;
+
+    fn empty_event(&self) -> GroupOutput {
+        GroupOutput::OnResourceEmpty
+    }
+
+    fn is_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty() && self.endpoints.tasks() == 0 && self.shutdown
+    }
+
     fn pop_output(&mut self, now: Instant) -> Option<GroupOutput> {
         return_if_some!(self.queue.pop_front());
-        let (index, out) = self.endpoints.pop_output(now)?;
+        let (index, out) = match self.endpoints.pop_output(now)? {
+            TaskGroupOutput::TaskOutput(index, out) => (index, out),
+            TaskGroupOutput::OnResourceEmpty => return Some(GroupOutput::Continue),
+        };
         Some(self.process_output(index, out))
     }
 }

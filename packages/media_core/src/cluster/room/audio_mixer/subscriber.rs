@@ -48,10 +48,6 @@ impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscr
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.endpoints.is_empty() && self.queue.is_empty()
-    }
-
     pub fn on_tick(&mut self, now: Instant) {
         if let Some(removed_slots) = self.mixer.on_tick(now) {
             for slot in removed_slots {
@@ -154,13 +150,21 @@ impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscr
         if self.endpoints.is_empty() {
             log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::UnsubAuto)));
-            self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 }
 
 impl<Endpoint, const OUTPUTS: usize> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endpoint, OUTPUTS> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.endpoints.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
@@ -284,7 +288,7 @@ mod test {
         //now is last endpoint => should fire Unsub
         subscriber.on_endpoint_leave(t0 + ms(100 + 2000), endpoint2);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
+        assert_eq!(subscriber.is_empty(), true);
     }
 }

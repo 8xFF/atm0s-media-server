@@ -50,6 +50,7 @@ pub struct MediaRuntimeWorker<ES: 'static + MediaEdgeSecure> {
     index: u16,
     worker: MediaServerWorker<ES>,
     queue: VecDeque<Output>,
+    shutdown: bool,
 }
 
 impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, Event, ICfg<ES>, SCfg> for MediaRuntimeWorker<ES> {
@@ -72,7 +73,12 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
             cfg.media,
         );
         log::info!("created worker");
-        MediaRuntimeWorker { index, worker, queue }
+        MediaRuntimeWorker {
+            index,
+            worker,
+            queue,
+            shutdown: false,
+        }
     }
 
     fn worker_index(&self) -> u16 {
@@ -81,6 +87,10 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
 
     fn tasks(&self) -> usize {
         self.worker.tasks()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty() && self.worker.is_empty()
     }
 
     fn spawn(&mut self, _now: Instant, _cfg: SCfg) {
@@ -104,7 +114,11 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
     }
 
     fn on_shutdown(&mut self, now: Instant) {
-        self.worker.shutdown(now);
+        if self.shutdown {
+            return;
+        }
+        self.shutdown = true;
+        self.worker.on_shutdown(now);
     }
 }
 

@@ -50,10 +50,6 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.tracks.is_empty() && self.queue.is_empty()
-    }
-
     pub fn on_tick(&mut self, now: Instant) {
         if let Some(removed_slots) = self.mixer.on_tick(now) {
             for slot in removed_slots {
@@ -119,13 +115,21 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         if self.tracks.is_empty() {
             log::info!("[ClusterAudioMixerPublisher] last track leave ind Auto mode => unpublish channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::PubStop)));
-            self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 }
 
 impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.tracks.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
@@ -214,8 +218,8 @@ mod test {
 
         publisher.on_track_unpublish(t0 + ms(100), 2, 0.into());
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::PubStop))));
-        assert_eq!(publisher.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(publisher.pop_output(()), None);
+        assert_eq!(publisher.is_empty(), true);
     }
 
     #[test]

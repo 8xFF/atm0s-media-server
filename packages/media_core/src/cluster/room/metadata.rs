@@ -63,10 +63,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMetadata<Endpoint> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.peers.is_empty() && self.queue.is_empty()
-    }
-
     pub fn get_peer_from_endpoint(&self, endpoint: Endpoint) -> Option<PeerId> {
         Some(self.peers.get(&endpoint)?.peer.clone())
     }
@@ -167,11 +163,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMetadata<Endpoint> {
                 self.peers_tracks_subs.remove(&target_peer_map);
                 self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(target_peer_map, MapControl::Unsub)));
             }
-        }
-
-        if self.peers.is_empty() {
-            log::info!("[ClusterRoom {}] last peer leaed => destroy metadata", self.room);
-            self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 
@@ -346,6 +337,15 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMetadata<Endpoint> {
 
 impl<Endpoint: Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for RoomMetadata<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.peers.is_empty() && self.peers_map_subscribers.is_empty() && self.tracks_map_subscribers.is_empty() && self.peers_tracks_subs.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
@@ -395,8 +395,8 @@ mod tests {
         assert_eq!(room_meta.get_peer_from_endpoint(2), None);
 
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     /// Test join as peer only => should subscribe peers, fire only peer
@@ -452,8 +452,8 @@ mod tests {
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Del(peer_key)))));
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     #[test]
@@ -488,8 +488,8 @@ mod tests {
 
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     //TODO Test join as track only => should subscribe only tracks, fire only track events
@@ -548,8 +548,8 @@ mod tests {
         // peer leave should send unsub
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     //join track only should restore old tracks
@@ -589,8 +589,8 @@ mod tests {
 
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     //Test manual no subscribe peer => dont fire any event
@@ -633,8 +633,8 @@ mod tests {
 
         // peer leave should send unsub
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     //TODO Test manual and subscribe peer => should fire event
@@ -689,8 +689,8 @@ mod tests {
 
         // peer leave should not send unsub
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     //TODO Test track publish => should set key to both single peer map and tracks map
@@ -736,8 +736,8 @@ mod tests {
 
         //should not pop anything after leave
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     //TODO Test track publish in disable mode => should not set key to both single peer map and tracks map
@@ -770,8 +770,8 @@ mod tests {
 
         //should not pop anything after leave
         room_meta.on_leave(endpoint);
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     /// Test leave room auto del remain remote tracks
@@ -813,8 +813,8 @@ mod tests {
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Del(track_key)))));
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Del(track_key)))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 
     // Leave room auto unsub private peer maps
@@ -843,7 +843,7 @@ mod tests {
         // peer leave should send unsub of peer2_map
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Unsub))));
-        assert_eq!(room_meta.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(room_meta.pop_output(()), None);
+        assert_eq!(room_meta.is_empty(), true);
     }
 }

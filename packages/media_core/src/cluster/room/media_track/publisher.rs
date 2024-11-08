@@ -58,10 +58,6 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.tracks.is_empty() && self.queue.is_empty()
-    }
-
     pub fn on_track_feedback(&mut self, channel: ChannelId, fb: Feedback) {
         let fb = return_if_err!(FeedbackKind::try_from(fb));
         let sources = return_if_none!(self.tracks_source.get(&channel));
@@ -118,16 +114,21 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
             self.tracks_source.remove(&channel_id).expect("Should remove source channel on unpublish");
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)));
         }
-
         log::info!("[ClusterRoom {}/Publishers] peer ({peer} stopped track {name})", self.room);
-        if self.tracks.is_empty() {
-            self.queue.push_back(Output::OnResourceEmpty);
-        }
     }
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomChannelPublisher<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.tracks.is_empty() && self.tracks_source.is_empty() && self.queue.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
@@ -195,8 +196,8 @@ mod tests {
 
         publisher.on_track_unpublish(endpoint, track);
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
-        assert_eq!(publisher.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(publisher.pop_output(()), None);
+        assert_eq!(publisher.is_empty(), true);
     }
 
     //TODO Handle feedback: should handle KeyFrame feedback
@@ -233,8 +234,8 @@ mod tests {
 
         publisher.on_track_unpublish(endpoint, track);
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
-        assert_eq!(publisher.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(publisher.pop_output(()), None);
+        assert_eq!(publisher.is_empty(), true);
     }
 
     #[test]
