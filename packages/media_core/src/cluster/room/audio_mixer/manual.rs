@@ -4,7 +4,7 @@
 //! to determine which source is sent to client.
 //!
 
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, fmt::Debug, time::Instant};
 
 use atm0s_sdn::{
     features::pubsub::{self, ChannelId},
@@ -30,7 +30,8 @@ pub enum Input {
     LeaveRoom,
 }
 
-pub struct ManualMixer<Endpoint> {
+#[derive(Debug)]
+pub struct ManualMixer<Endpoint: Debug> {
     _c: Count<Self>,
     endpoint: Endpoint,
     room: ClusterRoomHash,
@@ -40,7 +41,7 @@ pub struct ManualMixer<Endpoint> {
     mixer: audio_mixer::AudioMixer<ChannelId>,
 }
 
-impl<Endpoint: Clone> ManualMixer<Endpoint> {
+impl<Endpoint: Debug + Clone> ManualMixer<Endpoint> {
     pub fn new(room: ClusterRoomHash, endpoint: Endpoint, outputs: Vec<LocalTrackId>) -> Self {
         Self {
             _c: Default::default(),
@@ -95,7 +96,7 @@ impl<Endpoint: Clone> ManualMixer<Endpoint> {
     }
 }
 
-impl<Endpoint: Clone> Task<Input, Output<Endpoint>> for ManualMixer<Endpoint> {
+impl<Endpoint: Debug + Clone> Task<Input, Output<Endpoint>> for ManualMixer<Endpoint> {
     fn on_tick(&mut self, now: Instant) {
         if let Some(removed) = self.mixer.on_tick(now) {
             for slot in removed {
@@ -141,11 +142,11 @@ impl<Endpoint: Clone> Task<Input, Output<Endpoint>> for ManualMixer<Endpoint> {
     }
 }
 
-impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for ManualMixer<Endpoint> {
+impl<Endpoint: Debug> TaskSwitcherChild<Output<Endpoint>> for ManualMixer<Endpoint> {
     type Time = ();
 
     fn is_empty(&self) -> bool {
-        self.queue.is_empty() && self.sources.is_empty() && self.outputs.is_empty()
+        self.queue.is_empty() && self.sources.is_empty()
     }
 
     fn empty_event(&self) -> Output<Endpoint> {
@@ -157,11 +158,11 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for ManualMixer<Endpoint> {
     }
 }
 
-impl<Endpoint> Drop for ManualMixer<Endpoint> {
+impl<Endpoint: Debug> Drop for ManualMixer<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterManualMixer] Drop {}", self.room);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.sources.len(), 0, "Sources not empty on drop");
+        assert_eq!(self.queue.len(), 0, "AudioMixerManual Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.sources.len(), 0, "AudioMixerManual Sources not empty on drop {:?}", self.sources);
     }
 }
 
@@ -184,7 +185,7 @@ mod test {
         Duration::from_millis(ms)
     }
 
-    #[test]
+    #[test_log::test]
     fn attach_detach() {
         let t0 = Instant::now();
         let room = 0.into();
@@ -235,7 +236,7 @@ mod test {
         assert_eq!(manual.pop_output(()), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn leave_room() {
         let t0 = Instant::now();
         let room = 0.into();

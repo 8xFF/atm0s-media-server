@@ -53,9 +53,10 @@ pub enum Output<Endpoint> {
     OnResourceEmpty,
 }
 
-type AudioMixerManuals<T> = TaskSwitcherBranch<TaskGroup<manual::Input, Output<T>, ManualMixer<T>, 4>, (usize, Output<T>)>;
+type AudioMixerManuals<T> = TaskSwitcherBranch<TaskGroup<manual::Input, Output<T>, ManualMixer<T>, 4>, TaskGroupOutput<Output<T>>>;
 
-pub struct AudioMixer<Endpoint: Clone> {
+#[derive(Debug)]
+pub struct AudioMixer<Endpoint: Debug + Clone> {
     room: ClusterRoomHash,
     mix_channel_id: ChannelId,
     //store number of outputs
@@ -244,7 +245,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
                     }
                 }
                 TaskType::Manuals => {
-                    let (index, out) = match self.manuals.input(&mut self.switcher).pop_output(()) {
+                    let (index, out) = match self.manuals.pop_output((), &mut self.switcher) {
                         Some(TaskGroupOutput::TaskOutput(index, out)) => (index, out),
                         Some(TaskGroupOutput::OnResourceEmpty) => {
                             // we dont need to forward OnResourceEmpty to parent
@@ -287,15 +288,15 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
     }
 }
 
-impl<Endpoint: Clone> Drop for AudioMixer<Endpoint> {
+impl<Endpoint: Debug + Clone> Drop for AudioMixer<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoomAudioMixer] Drop {}", self.room);
-        assert_eq!(self.manual_channels.len(), 0, "Manual channels not empty on drop");
-        assert_eq!(self.manual_mode.len(), 0, "Manual modes not empty on drop");
-        assert!(self.manuals.is_empty(), "AudioMixerManuals not empty on drop");
-        assert!(self.publisher.is_empty(), "AudioMixerPublisher not empty on drop");
-        assert!(self.subscriber1.is_empty(), "AudioMixerSubscriber1 not empty on drop");
-        assert!(self.subscriber2.is_empty(), "AudioMixerSubscriber2 not empty on drop");
-        assert!(self.subscriber3.is_empty(), "AudioMixerSubscriber3 not empty on drop");
+        assert_eq!(self.manual_channels.len(), 0, "Manual channels not empty on drop {:?}", self.manual_channels);
+        assert_eq!(self.manual_mode.len(), 0, "Manual modes not empty on drop {:?}", self.manual_mode);
+        assert!(self.manuals.is_empty(), "AudioMixerManuals not empty on drop {:?}", self.manuals);
+        assert!(self.publisher.is_empty(), "AudioMixerPublisher not empty on drop {:?}", self.publisher);
+        assert!(self.subscriber1.is_empty(), "AudioMixerSubscriber1 not empty on drop {:?}", self.subscriber1);
+        assert!(self.subscriber2.is_empty(), "AudioMixerSubscriber2 not empty on drop {:?}", self.subscriber2);
+        assert!(self.subscriber3.is_empty(), "AudioMixerSubscriber3 not empty on drop {:?}", self.subscriber3);
     }
 }

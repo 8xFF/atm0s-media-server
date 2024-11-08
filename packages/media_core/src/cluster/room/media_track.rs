@@ -32,6 +32,7 @@ pub enum Output<Endpoint> {
     OnResourceEmpty,
 }
 
+#[derive(Debug)]
 pub struct MediaTrack<Endpoint: Debug + Hash + Eq + Copy> {
     room: ClusterRoomHash,
     publisher: TaskSwitcherBranch<RoomChannelPublisher<Endpoint>, Output<Endpoint>>,
@@ -133,7 +134,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
 impl<Endpoint: Debug + Hash + Eq + Copy> Drop for MediaTrack<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoomMediaTrack] Drop {}", self.room);
-        assert!(self.publisher.is_empty(), "Publisher not empty on drop");
-        assert!(self.subscriber.is_empty(), "Subscriber not empty on drop");
+        assert!(self.publisher.is_empty(), "MediaTrackPublisher not empty on drop {:?}", self.publisher);
+        assert!(self.subscriber.is_empty(), "MediaTrackSubscriber not empty on drop {:?}", self.subscriber);
     }
 }

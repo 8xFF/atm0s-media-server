@@ -277,7 +277,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn audio_should_not_request_key_frame() {
         let mut selector = PacketSelector::new(MediaKind::Audio, 2, 2);
 
@@ -286,7 +286,7 @@ mod tests {
         assert_eq!(selector.pop_output(0), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn video_should_not_request_key_frame_with_first_is_key() {
         let mut selector = PacketSelector::new(MediaKind::Video, 2, 2);
 
@@ -297,7 +297,7 @@ mod tests {
         assert_eq!(selector.pop_output(0), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn video_should_request_key_frame_with_first_is_not_key() {
         let mut selector = PacketSelector::new(MediaKind::Video, 2, 2);
 
@@ -325,6 +325,6 @@ mod tests {
         assert_eq!(selector.pop_output(0), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn pkt_rewrite_after_switch_channel() {}
 }

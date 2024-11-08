@@ -10,6 +10,7 @@ const SWITCH_AUDIO_THRESHOLD: i16 = 30;
 /// if no audio pkt received in AUDIO_SLOT_TIMEOUT, set audio level to SILENT_LEVEL
 const AUDIO_SLOT_TIMEOUT: Duration = Duration::from_millis(1000);
 
+#[derive(Debug)]
 struct SourceState {
     last_changed_at: Instant,
     slot: Option<usize>,
@@ -24,6 +25,7 @@ struct OutputSlotState<Src> {
 
 /// Implement lightweight audio mixer with mix-minus feature
 /// We will select n highest audio-level tracks
+#[derive(Debug)]
 pub struct AudioMixer<Src> {
     len: usize,
     sources: HashMap<Src, SourceState>,

@@ -39,7 +39,8 @@ impl TryFrom<Feedback> for FeedbackKind {
     }
 }
 
-pub struct RoomChannelPublisher<Endpoint> {
+#[derive(Debug)]
+pub struct RoomChannelPublisher<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
     tracks: HashMap<(Endpoint, RemoteTrackId), (PeerId, TrackName, ChannelId)>,
@@ -134,12 +135,12 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
     }
 }
 
-impl<Endpoint> Drop for RoomChannelPublisher<Endpoint> {
+impl<Endpoint: Debug> Drop for RoomChannelPublisher<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoom {}/Publishers] Drop", self.room);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.tracks.len(), 0, "Tracks not empty on drop");
-        assert_eq!(self.tracks_source.len(), 0, "Tracks source not empty on drop");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.tracks.len(), 0, "Tracks not empty on drop {:?}", self.tracks);
+        assert_eq!(self.tracks_source.len(), 0, "Tracks source not empty on drop {:?}", self.tracks_source);
     }
 }
 
@@ -175,7 +176,7 @@ mod tests {
     //Track start => should register with SDN
     //Track stop => should unregister with SDN
     //Track media => should send data over SDN
-    #[test]
+    #[test_log::test]
     fn channel_publish_data() {
         let room = 1.into();
         let mut publisher = RoomChannelPublisher::<u8>::new(room);
@@ -202,7 +203,7 @@ mod tests {
 
     //TODO Handle feedback: should handle KeyFrame feedback
     //TODO Handle feedback: should handle Bitrate feedback
-    #[test]
+    #[test_log::test]
     fn channel_feedback() {
         let room = 1.into();
         let mut publisher = RoomChannelPublisher::<u8>::new(room);
@@ -238,7 +239,7 @@ mod tests {
         assert_eq!(publisher.is_empty(), true);
     }
 
-    #[test]
+    #[test_log::test]
     fn two_sessions_same_room_peer_should_not_crash() {
         let room = 1.into();
         let mut publisher = RoomChannelPublisher::<u8>::new(room);
@@ -248,6 +249,7 @@ mod tests {
         let track = RemoteTrackId::from(3);
         let peer: PeerId = "peer1".to_string().into();
         let name: TrackName = "audio_main".to_string().into();
+        let channel_id = gen_track_channel_id(room, &peer, &name);
 
         publisher.on_track_publish(endpoint1, track, peer.clone(), name.clone());
         publisher.on_track_publish(endpoint2, track, peer, name);
@@ -258,8 +260,8 @@ mod tests {
         publisher.on_track_unpublish(endpoint1, track);
         publisher.on_track_unpublish(endpoint2, track);
 
-        assert!(publisher.pop_output(()).is_some()); // PubStop
-        assert!(publisher.pop_output(()).is_some()); // OnResourceEmpty
-        assert!(publisher.pop_output(()).is_none());
+        assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop)))); // PubStop
+        assert_eq!(publisher.pop_output(()), None);
+        assert_eq!(publisher.is_empty(), true);
     }
 }

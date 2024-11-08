@@ -324,7 +324,7 @@ mod tests {
     }
 
     /// Test if first arrived pkt match filter
-    #[test]
+    #[test_log::test]
     fn start_low_layer() {
         let channel = 0;
         test(
@@ -335,7 +335,7 @@ mod tests {
     }
 
     /// Test if first arrived pkt not match filter
-    #[test]
+    #[test_log::test]
     fn start_high_layer() {
         let channel = 0;
         test(
@@ -363,7 +363,7 @@ mod tests {
     }
 
     /// Test with up temporal, need to wait pkt with layer_sync flag
-    #[test]
+    #[test_log::test]
     fn up_temporal_wait_layer_sync() {
         let channel = 0;
         test(
@@ -387,7 +387,7 @@ mod tests {
     }
 
     /// Test with down temporal
-    #[test]
+    #[test_log::test]
     fn down_temporal() {
         let channel = 0;
         test(
@@ -410,7 +410,7 @@ mod tests {
     }
 
     /// Test with up temporal, need to wait pkt with layer_sync flag
-    #[test]
+    #[test_log::test]
     fn up_spatial_wait_key_frame() {
         let channel = 0;
         test(
@@ -449,7 +449,7 @@ mod tests {
     }
 
     /// Test with up temporal, need to wait pkt with layer_sync flag
-    #[test]
+    #[test_log::test]
     fn down_spatial_wait_key_frame() {
         let channel = 0;
         test(

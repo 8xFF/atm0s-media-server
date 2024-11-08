@@ -227,7 +227,7 @@ mod tests {
 
     use super::{ClusterEndpointControl, ClusterRoomHash, MediaCluster, Output};
 
-    #[test]
+    #[test_log::test]
     fn multi_tenancy_room() {
         let app_root = AppContext { app: AppId::root_app() };
         let app1 = AppContext { app: AppId::from("app1") };
@@ -247,7 +247,7 @@ mod tests {
     //TODO should create room when new room event arrived
     //TODO should route to correct room
     //TODO should remove room after all peers leaved
-    #[test]
+    #[test_log::test]
     fn room_manager_should_work() {
         let mut cluster = MediaCluster::<u8>::default();
 

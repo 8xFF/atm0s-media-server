@@ -37,14 +37,15 @@ const KEYFRAME_FEEDBACK_TIMEOUT: u16 = 2000; //2 seconds
 const BITRATE_FEEDBACK_KIND: u8 = 0;
 const KEYFRAME_FEEDBACK_KIND: u8 = 1;
 
-#[derive(Derivative)]
+#[derive(Derivative, Debug)]
 #[derivative(Default(bound = ""))]
-struct ChannelContainer<Endpoint> {
+struct ChannelContainer<Endpoint: Debug> {
     endpoints: Vec<(Endpoint, LocalTrackId)>,
     bitrate_fbs: HashMap<Endpoint, (Instant, Feedback)>,
 }
 
-pub struct RoomChannelSubscribe<Endpoint> {
+#[derive(Debug)]
+pub struct RoomChannelSubscribe<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
     channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
@@ -52,7 +53,7 @@ pub struct RoomChannelSubscribe<Endpoint> {
     queue: VecDeque<Output<Endpoint>>,
 }
 
-impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
             _c: Default::default(),
@@ -179,12 +180,12 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
     }
 }
 
-impl<Endpoint> Drop for RoomChannelSubscribe<Endpoint> {
+impl<Endpoint: Debug> Drop for RoomChannelSubscribe<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoom {}/Subscriber] Drop", self.room);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.channels.len(), 0, "Channels not empty on drop");
-        assert_eq!(self.subscribers.len(), 0, "Subscribers not empty on drop");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.channels.len(), 0, "Channels not empty on drop {:?}", self.channels);
+        assert_eq!(self.subscribers.len(), 0, "Subscribers not empty on drop {:?}", self.subscribers);
     }
 }
 
@@ -222,7 +223,7 @@ mod tests {
 
     //TODO First Subscribe channel should sending Sub
     //TODO Last Unsubscribe channel should sending Unsub
-    #[test]
+    #[test_log::test]
     fn normal_sub_ubsub() {
         let room = 1.into();
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);
@@ -254,7 +255,7 @@ mod tests {
     }
 
     //TODO Sending key-frame request
-    #[test]
+    #[test_log::test]
     fn send_key_frame() {
         let room = 1.into();
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);
@@ -285,7 +286,7 @@ mod tests {
     }
 
     //TODO Sending bitrate request single sub
-    #[test]
+    #[test_log::test]
     fn send_bitrate_limit_speed() {
         let room = 1.into();
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);

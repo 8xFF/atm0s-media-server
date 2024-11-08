@@ -74,7 +74,7 @@ mod test {
 
     const TEST_BITRATE: u64 = 2_000_000;
 
-    #[test]
+    #[test_log::test]
     fn single_source() {
         let mut allocator = IngressBitrateAllocator::new(TEST_BITRATE);
         allocator.set_video_track(0.into(), 1.into());
@@ -83,7 +83,7 @@ mod test {
         assert_eq!(allocator.pop_output(), Some((0.into(), Action::SetBitrate(TEST_BITRATE))));
     }
 
-    #[test]
+    #[test_log::test]
     fn multi_source() {
         let mut allocator = IngressBitrateAllocator::new(TEST_BITRATE);
         allocator.set_video_track(0.into(), 1.into());

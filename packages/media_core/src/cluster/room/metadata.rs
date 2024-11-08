@@ -19,6 +19,7 @@ use crate::{
     transport::RemoteTrackId,
 };
 
+#[derive(Debug)]
 struct PeerContainer {
     peer: PeerId,
     publish: RoomInfoPublish,
@@ -33,7 +34,8 @@ pub enum Output<Endpoint> {
     OnResourceEmpty,
 }
 
-pub struct RoomMetadata<Endpoint: Hash + Eq> {
+#[derive(Debug)]
+pub struct RoomMetadata<Endpoint: Debug + Hash + Eq> {
     room: ClusterRoomHash,
     peers_map: Map,
     tracks_map: Map,
@@ -47,7 +49,7 @@ pub struct RoomMetadata<Endpoint: Hash + Eq> {
     queue: VecDeque<Output<Endpoint>>,
 }
 
-impl<Endpoint: Hash + Eq + Copy + Debug> RoomMetadata<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
             room,
@@ -335,7 +337,7 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMetadata<Endpoint> {
     }
 }
 
-impl<Endpoint: Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for RoomMetadata<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for RoomMetadata<Endpoint> {
     type Time = ();
 
     fn is_empty(&self) -> bool {
@@ -351,14 +353,14 @@ impl<Endpoint: Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for RoomMetadata<E
     }
 }
 
-impl<Endpoint: Hash + Eq> Drop for RoomMetadata<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq> Drop for RoomMetadata<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoomMetadata] Drop {}", self.room);
-        assert_eq!(self.queue.len(), 0, "Queue not empty");
-        assert_eq!(self.peers.len(), 0, "Peers not empty");
-        assert_eq!(self.peers_map_subscribers.len(), 0, "Peers subscriber not empty");
-        assert_eq!(self.tracks_map_subscribers.len(), 0, "Tracks subscriber not empty");
-        assert_eq!(self.peers_tracks_subs.len(), 0, "Peers tracks subs not empty");
+        assert_eq!(self.queue.len(), 0, "Metadata Queue not empty {:?}", self.queue);
+        assert_eq!(self.peers.len(), 0, "Metadata Peers not empty {:?}", self.peers);
+        assert_eq!(self.peers_map_subscribers.len(), 0, "Metadata Peers subscriber not empty {:?}", self.peers_map_subscribers);
+        assert_eq!(self.tracks_map_subscribers.len(), 0, "Metadata Tracks subscriber not empty {:?}", self.tracks_map_subscribers);
+        assert_eq!(self.peers_tracks_subs.len(), 0, "Metadata Peers tracks subs not empty {:?}", self.peers_tracks_subs);
     }
 }
 
@@ -376,7 +378,7 @@ mod tests {
     use super::{Output, RoomMetadata};
 
     /// Test correct get peer info
-    #[test]
+    #[test_log::test]
     fn correct_get_peer() {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
@@ -401,7 +403,7 @@ mod tests {
 
     /// Test join as peer only => should subscribe peers, fire only peer
     /// After leave should unsubscribe only peers, and del
-    #[test]
+    #[test_log::test]
     fn join_peer_only() {
         let room: ClusterRoomHash = 1.into();
         let peers_map = id_generator::peers_map(room);
@@ -456,7 +458,7 @@ mod tests {
         assert_eq!(room_meta.is_empty(), true);
     }
 
-    #[test]
+    #[test_log::test]
     fn join_sub_peer_only_should_restore_old_peers() {
         let room: ClusterRoomHash = 1.into();
         let peers_map = id_generator::peers_map(room);
@@ -493,7 +495,7 @@ mod tests {
     }
 
     //TODO Test join as track only => should subscribe only tracks, fire only track events
-    #[test]
+    #[test_log::test]
     fn join_track_only() {
         let room: ClusterRoomHash = 1.into();
         let peers_map = id_generator::peers_map(room);
@@ -553,7 +555,7 @@ mod tests {
     }
 
     //join track only should restore old tracks
-    #[test]
+    #[test_log::test]
     fn join_sub_track_only_should_restore_old_tracks() {
         let room: ClusterRoomHash = 1.into();
         let tracks_map = id_generator::tracks_map(room);
@@ -594,7 +596,7 @@ mod tests {
     }
 
     //Test manual no subscribe peer => dont fire any event
-    #[test]
+    #[test_log::test]
     fn join_manual_no_subscribe_peer() {
         let room: ClusterRoomHash = 1.into();
         let peers_map = id_generator::peers_map(room);
@@ -638,7 +640,7 @@ mod tests {
     }
 
     //TODO Test manual and subscribe peer => should fire event
-    #[test]
+    #[test_log::test]
     fn join_manual_with_subscribe() {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
@@ -694,7 +696,7 @@ mod tests {
     }
 
     //TODO Test track publish => should set key to both single peer map and tracks map
-    #[test]
+    #[test_log::test]
     fn track_publish_enable() {
         let room: ClusterRoomHash = 1.into();
         let tracks_map = id_generator::tracks_map(room);
@@ -741,7 +743,7 @@ mod tests {
     }
 
     //TODO Test track publish in disable mode => should not set key to both single peer map and tracks map
-    #[test]
+    #[test_log::test]
     fn track_publish_disable() {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);
@@ -775,7 +777,7 @@ mod tests {
     }
 
     /// Test leave room auto del remain remote tracks
-    #[test]
+    #[test_log::test]
     fn leave_room_auto_del_remote_tracks() {
         let room: ClusterRoomHash = 1.into();
         let tracks_map = id_generator::tracks_map(room);
@@ -818,7 +820,7 @@ mod tests {
     }
 
     // Leave room auto unsub private peer maps
-    #[test]
+    #[test_log::test]
     fn leave_room_auto_unsub_private_peer_maps() {
         let room: ClusterRoomHash = 1.into();
         let mut room_meta: RoomMetadata<u8> = RoomMetadata::<u8>::new(room);

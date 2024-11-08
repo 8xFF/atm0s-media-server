@@ -56,8 +56,8 @@ pub struct EndpointInternal {
     joined: Option<(ClusterRoomHash, RoomId, PeerId, Option<AudioMixerMode>)>,
     local_tracks_id: Small2dMap<LocalTrackId, usize>,
     remote_tracks_id: Small2dMap<RemoteTrackId, usize>,
-    local_tracks: TaskSwitcherBranch<TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>, (usize, local_track::Output)>,
-    remote_tracks: TaskSwitcherBranch<TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>, (usize, remote_track::Output)>,
+    local_tracks: TaskSwitcherBranch<TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>, TaskGroupOutput<local_track::Output>>,
+    remote_tracks: TaskSwitcherBranch<TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>, TaskGroupOutput<remote_track::Output>>,
     bitrate_allocator: TaskSwitcherBranch<BitrateAllocator, bitrate_allocator::Output>,
     queue: VecDeque<InternalOutput>,
     shutdown: bool,
@@ -511,7 +511,7 @@ impl EndpointInternal {
 /// This block for internal local and remote track
 impl EndpointInternal {
     fn pop_remote_tracks(&mut self, now: Instant) {
-        let (index, out) = match return_if_none!(self.remote_tracks.input(&mut self.switcher).pop_output(now)) {
+        let (index, out) = match return_if_none!(self.remote_tracks.pop_output(now, &mut self.switcher)) {
             TaskGroupOutput::TaskOutput(index, out) => (index, out),
             TaskGroupOutput::OnResourceEmpty => return,
         };
@@ -553,7 +553,7 @@ impl EndpointInternal {
     }
 
     fn pop_local_tracks(&mut self, now: Instant) {
-        let (index, out) = match return_if_none!(self.local_tracks.input(&mut self.switcher).pop_output(now)) {
+        let (index, out) = match return_if_none!(self.local_tracks.pop_output(now, &mut self.switcher)) {
             TaskGroupOutput::TaskOutput(index, out) => (index, out),
             TaskGroupOutput::OnResourceEmpty => return,
         };
@@ -644,7 +644,7 @@ mod tests {
 
     use super::EndpointInternal;
 
-    #[test]
+    #[test_log::test]
     fn test_join_leave_room_success() {
         let app = AppContext::root_app();
         let mut internal = EndpointInternal::new(EndpointCfg {
@@ -764,7 +764,7 @@ mod tests {
         assert_eq!(internal.pop_output(now), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_join_overwrite_auto_leave() {
         let app = AppContext::root_app();
         let mut internal = EndpointInternal::new(EndpointCfg {

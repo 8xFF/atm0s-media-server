@@ -16,11 +16,13 @@ use crate::{
 
 use super::Output;
 
-struct ChannelContainer<Endpoint> {
+#[derive(Debug)]
+struct ChannelContainer<Endpoint: Debug> {
     publishers: HashSet<Endpoint>,
 }
 
-pub struct MessageChannelPublisher<Endpoint> {
+#[derive(Debug)]
+pub struct MessageChannelPublisher<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
     channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
@@ -28,7 +30,7 @@ pub struct MessageChannelPublisher<Endpoint> {
     queue: VecDeque<Output<Endpoint>>,
 }
 
-impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelPublisher<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelPublisher<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
             _c: Default::default(),
@@ -125,11 +127,11 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
     }
 }
 
-impl<Endpoint> Drop for MessageChannelPublisher<Endpoint> {
+impl<Endpoint: Debug> Drop for MessageChannelPublisher<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoomDataChannel {}/Publishers] Drop", self.room);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.publishers.len(), 0, "Publishers not empty on drop");
-        assert_eq!(self.channels.len(), 0, "Channels not empty on drop");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.publishers.len(), 0, "Publishers not empty on drop {:?}", self.publishers);
+        assert_eq!(self.channels.len(), 0, "Channels not empty on drop {:?}", self.channels);
     }
 }

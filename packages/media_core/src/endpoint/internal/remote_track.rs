@@ -285,7 +285,7 @@ mod tests {
 
     use super::{EndpointRemoteTrack, Input, Output};
 
-    #[test]
+    #[test_log::test]
     fn start_in_room() {
         let room = 0.into();
         let track_name = TrackName::from("audio_main");
@@ -334,9 +334,9 @@ mod tests {
                 }),
             ))
         );
-        //we need Output::Stopped at last
-        assert_eq!(track.pop_output(now), Some(Output::Stopped(meta.kind)));
         assert_eq!(track.pop_output(now), None);
+        //we dont need Output::Stopped here, it will be fired with TaskSwitcherChild::pop_output with is_empty true
+        assert_eq!(track.is_empty(), true);
     }
 
     //TODO start not in room

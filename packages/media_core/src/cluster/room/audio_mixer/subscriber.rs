@@ -17,17 +17,19 @@ use crate::cluster::{ClusterAudioMixerEvent, ClusterEndpointEvent, ClusterLocalT
 
 use super::Output;
 
+#[derive(Debug)]
 struct EndpointSlot {
     peer: PeerHashCode,
     tracks: Vec<LocalTrackId>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct OutputSlot {
     source: Option<(PeerId, TrackName)>,
 }
 
-pub struct AudioMixerSubscriber<Endpoint, const OUTPUTS: usize> {
+#[derive(Debug)]
+pub struct AudioMixerSubscriber<Endpoint: Debug, const OUTPUTS: usize> {
     _c: Count<Self>,
     channel_id: ChannelId,
     queue: DynamicDeque<Output<Endpoint>, 16>,
@@ -154,7 +156,7 @@ impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscr
     }
 }
 
-impl<Endpoint, const OUTPUTS: usize> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endpoint, OUTPUTS> {
+impl<Endpoint: Debug, const OUTPUTS: usize> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endpoint, OUTPUTS> {
     type Time = ();
 
     fn is_empty(&self) -> bool {
@@ -170,11 +172,11 @@ impl<Endpoint, const OUTPUTS: usize> TaskSwitcherChild<Output<Endpoint>> for Aud
     }
 }
 
-impl<Endpoint, const OUTPUTS: usize> Drop for AudioMixerSubscriber<Endpoint, OUTPUTS> {
+impl<Endpoint: Debug, const OUTPUTS: usize> Drop for AudioMixerSubscriber<Endpoint, OUTPUTS> {
     fn drop(&mut self) {
         log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] Drop {}", self.channel_id);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.endpoints.len(), 0, "Endpoints not empty on drop");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.endpoints.len(), 0, "Endpoints not empty on drop {:?}", self.endpoints);
     }
 }
 
@@ -197,7 +199,7 @@ mod test {
         Duration::from_millis(m)
     }
 
-    #[test]
+    #[test_log::test]
     fn sub_unsub() {
         let t0 = Instant::now();
         let channel = 0.into();

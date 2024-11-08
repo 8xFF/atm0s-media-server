@@ -19,17 +19,20 @@ use super::Output;
 
 const FIRE_SOURCE_INTERVAL: Duration = Duration::from_millis(500);
 
+#[derive(Debug)]
 struct TrackSlot {
     peer: PeerId,
     name: TrackName,
     peer_hash: PeerHashCode,
 }
 
+#[derive(Debug)]
 struct OutputSlot {
     last_fired_source: Instant,
 }
 
-pub struct AudioMixerPublisher<Endpoint> {
+#[derive(Debug)]
+pub struct AudioMixerPublisher<Endpoint: Debug> {
     _c: Count<Self>,
     channel_id: pubsub::ChannelId,
     tracks: HashMap<(Endpoint, RemoteTrackId), TrackSlot>,
@@ -119,7 +122,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
     }
 }
 
-impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpoint> {
+impl<Endpoint: Debug> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpoint> {
     type Time = ();
 
     fn is_empty(&self) -> bool {
@@ -135,11 +138,11 @@ impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpo
     }
 }
 
-impl<Endpoint> Drop for AudioMixerPublisher<Endpoint> {
+impl<Endpoint: Debug> Drop for AudioMixerPublisher<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterAudioMixerPublisher] Drop {}", self.channel_id);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.tracks.len(), 0, "Tracks not empty on drop");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.tracks.len(), 0, "Tracks not empty on drop {:?}", self.tracks);
     }
 }
 
@@ -160,7 +163,7 @@ mod test {
         Duration::from_millis(m)
     }
 
-    #[test]
+    #[test_log::test]
     fn track_publish_unpublish() {
         let channel = 0.into();
         let peer1: PeerId = "peer1".into();
@@ -222,7 +225,7 @@ mod test {
         assert_eq!(publisher.is_empty(), true);
     }
 
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "Track not found")]
     fn invalid_track_data_should_panic() {
         let t0 = Instant::now();

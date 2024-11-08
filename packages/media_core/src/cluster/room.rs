@@ -271,10 +271,10 @@ impl<Endpoint: Debug + Clone + Copy + Hash + Eq> ClusterRoom<Endpoint> {
 impl<Endpoint: Debug + Copy + Clone + Hash + Eq> Drop for ClusterRoom<Endpoint> {
     fn drop(&mut self) {
         log::info!("Drop ClusterRoom {}", self.room);
-        assert!(self.audio_mixer.is_empty(), "Audio mixer not empty");
-        assert!(self.media_track.is_empty(), "Media track not empty");
-        assert!(self.metadata.is_empty(), "Metadata not empty");
-        assert!(self.message_channel.is_empty(), "Data channel not empty");
+        assert!(self.audio_mixer.is_empty(), "Audio mixer not empty, {:?}", self.audio_mixer);
+        assert!(self.media_track.is_empty(), "Media track not empty, {:?}", self.media_track);
+        assert!(self.metadata.is_empty(), "Metadata not empty, {:?}", self.metadata);
+        assert!(self.message_channel.is_empty(), "Data channel not empty, {:?}", self.message_channel);
     }
 }
 
@@ -301,7 +301,7 @@ mod tests {
     //TODO channel data should fire event to endpoint
     //TODO unsubscribe track should UNSUB channel
 
-    #[test]
+    #[test_log::test]
     fn cleanup_resource_sub_and_mixer() {
         let room_id = 0.into();
         let endpoint = 1;
