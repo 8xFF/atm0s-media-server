@@ -536,7 +536,7 @@ impl ConnectorSqlStorage {
                 JoinType::InnerJoin,
                 entity::peer_session::Relation::Peer
                     .def()
-                    .on_condition(move |_left, right| Expr::col((right, entity::peer::Column::Room)).is(room).into_condition()),
+                    .on_condition(move |_left, right| Expr::col((right, entity::peer::Column::Room)).eq(room).into_condition()),
             )
             .count(&self.db)
             .await
@@ -550,14 +550,14 @@ impl Storage for ConnectorSqlStorage {
     }
     async fn on_tick(&mut self, now_ms: u64) {
         if let Err(e) = self.close_exited_rooms(now_ms).await {
-            log::error!("[ConnectorSqlStorage] db error {e:?}");
+            log::error!("[ConnectorSqlStorage] on_tick db error {e:?}");
         }
     }
     async fn on_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, event: connector_request::Request) -> Option<connector_response::Response> {
         match event {
             connector_request::Request::Peer(event) => {
                 if let Err(e) = self.on_peer_event(now_ms, from, event_ts, &event.app, event.session_id, event.event.clone()?).await {
-                    log::error!("[ConnectorSqlStorage] db error {e:?}");
+                    log::error!("[ConnectorSqlStorage] on_peer_event db error {e:?}");
                     return None;
                 }
                 self.hook_events.push_back((

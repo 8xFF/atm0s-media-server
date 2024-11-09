@@ -53,18 +53,32 @@ impl SessionReader {
         Ok(())
     }
 
+    pub async fn peek_ts(&mut self) -> Option<u64> {
+        loop {
+            self.next_chunk_if_empty().await?;
+            if let Some(res) = self.current_chunk.as_mut()?.peek_ts().await {
+                return Some(res);
+            } else {
+                self.current_chunk = None;
+            }
+        }
+    }
+
+    pub async fn pop(&mut self) -> Option<SessionRecordRow> {
+        loop {
+            self.next_chunk_if_empty().await?;
+            if let Some(res) = self.current_chunk.as_mut()?.pop().await.ok()? {
+                return Some(res);
+            } else {
+                self.current_chunk = None;
+            }
+        }
+    }
+
+    /// async style for recv all packets in sequence
     pub async fn recv(&mut self) -> Option<SessionRecordRow> {
         loop {
-            if self.current_chunk.is_none() {
-                let first = self.files.pop()?;
-                log::info!("switch to chunk {first}");
-                let first_chunk = self.s3.get_object(Some(&self.credentials), &first);
-                let source = BodyWrap::get_uri(first_chunk.sign(Duration::from_secs(3600)).as_str()).await.ok()?;
-                let mut chunk_reader = RecordChunkReader::new(source).await.ok()?;
-                chunk_reader.connect().await.ok()?;
-                self.current_chunk = Some(chunk_reader);
-            }
-
+            self.next_chunk_if_empty().await?;
             let chunk = self.current_chunk.as_mut()?;
             let res = chunk.pop().await.ok()?;
             if res.is_none() {
@@ -73,5 +87,18 @@ impl SessionReader {
             }
             return res;
         }
+    }
+
+    async fn next_chunk_if_empty(&mut self) -> Option<()> {
+        if self.current_chunk.is_none() {
+            let first = self.files.pop()?;
+            log::info!("switch to chunk {first}");
+            let first_chunk = self.s3.get_object(Some(&self.credentials), &first);
+            let source = BodyWrap::get_uri(first_chunk.sign(Duration::from_secs(3600)).as_str()).await.ok()?;
+            let mut chunk_reader = RecordChunkReader::new(source).await.ok()?;
+            chunk_reader.connect().await.ok()?;
+            self.current_chunk = Some(chunk_reader);
+        }
+        Some(())
     }
 }

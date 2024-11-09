@@ -6,7 +6,7 @@ pub struct HookEvent {
     pub node: u32,
     #[prost(uint64, tag = "2")]
     pub ts: u64,
-    #[prost(oneof = "hook_event::Event", tags = "3, 4, 5")]
+    #[prost(oneof = "hook_event::Event", tags = "3, 4, 5, 6")]
     pub event: ::core::option::Option<hook_event::Event>,
 }
 /// Nested message and enum types in `HookEvent`.
@@ -20,6 +20,8 @@ pub mod hook_event {
         Peer(super::PeerEvent),
         #[prost(message, tag = "5")]
         Record(super::RecordEvent),
+        #[prost(message, tag = "6")]
+        Compose(super::ComposeEvent),
     }
 }
 #[derive(serde::Serialize)]
@@ -478,6 +480,100 @@ pub mod record_event {
         Started(RecordStarted),
         #[prost(message, tag = "3")]
         PeerJoined(RecordPeerJoined),
+    }
+}
+#[derive(serde::Serialize)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ComposeEvent {
+    #[prost(string, tag = "1")]
+    pub app: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub job_id: ::prost::alloc::string::String,
+    #[prost(oneof = "compose_event::Event", tags = "10, 11, 12")]
+    pub event: ::core::option::Option<compose_event::Event>,
+}
+/// Nested message and enum types in `ComposeEvent`.
+pub mod compose_event {
+    #[derive(serde::Serialize)]
+    #[derive(Clone, Copy, PartialEq, ::prost::Message)]
+    pub struct RecordJobStarted {}
+    #[derive(serde::Serialize)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct RecordJobFailed {
+        #[prost(string, tag = "2")]
+        pub error: ::prost::alloc::string::String,
+    }
+    #[derive(serde::Serialize)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct RecordJobCompleted {
+        #[prost(message, optional, tag = "1")]
+        pub transmux: ::core::option::Option<record_job_completed::TransmuxSummary>,
+        #[prost(message, optional, tag = "2")]
+        pub compose: ::core::option::Option<record_job_completed::ComposeSummary>,
+    }
+    /// Nested message and enum types in `RecordJobCompleted`.
+    pub mod record_job_completed {
+        #[derive(serde::Serialize)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct TrackTimeline {
+            #[prost(string, tag = "1")]
+            pub path: ::prost::alloc::string::String,
+            #[prost(uint64, tag = "2")]
+            pub start: u64,
+            /// Optional field, can be omitted
+            #[prost(uint64, tag = "3")]
+            pub end: u64,
+        }
+        #[derive(serde::Serialize)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct TrackSummary {
+            #[prost(enumeration = "super::super::super::shared::Kind", tag = "1")]
+            pub kind: i32,
+            #[prost(message, repeated, tag = "2")]
+            pub timeline: ::prost::alloc::vec::Vec<TrackTimeline>,
+        }
+        #[derive(serde::Serialize)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct SessionSummary {
+            #[prost(map = "string, message", tag = "1")]
+            pub track: ::std::collections::HashMap<
+                ::prost::alloc::string::String,
+                TrackSummary,
+            >,
+        }
+        #[derive(serde::Serialize)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct PeerSummary {
+            #[prost(map = "uint64, message", tag = "1")]
+            pub sessions: ::std::collections::HashMap<u64, SessionSummary>,
+        }
+        #[derive(serde::Serialize)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct TransmuxSummary {
+            #[prost(string, tag = "1")]
+            pub metadata_json: ::prost::alloc::string::String,
+            #[prost(map = "string, message", tag = "2")]
+            pub peers: ::std::collections::HashMap<
+                ::prost::alloc::string::String,
+                PeerSummary,
+            >,
+        }
+        #[derive(serde::Serialize)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct ComposeSummary {
+            #[prost(string, tag = "1")]
+            pub media_uri: ::prost::alloc::string::String,
+        }
+    }
+    #[derive(serde::Serialize)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Event {
+        #[prost(message, tag = "10")]
+        Started(RecordJobStarted),
+        #[prost(message, tag = "11")]
+        Failed(RecordJobFailed),
+        #[prost(message, tag = "12")]
+        Completed(RecordJobCompleted),
     }
 }
 #[derive(serde::Serialize)]

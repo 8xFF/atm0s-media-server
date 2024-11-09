@@ -3,7 +3,8 @@ use std::io::{Seek, Write};
 use media_server_protocol::media::MediaPacket;
 use webm::mux::{AudioCodecId, AudioTrack, Segment, Track, VideoCodecId, VideoTrack, Writer};
 
-use super::{vpx_demuxer::VpxDemuxer, TrackWriter};
+use super::vpx_demuxer::VpxDemuxer;
+use super::CodecWriter;
 
 pub struct VpxWriter<W: Write + Seek> {
     webm: Option<Segment<Writer<W>>>,
@@ -26,7 +27,7 @@ impl<W: Write + Seek> VpxWriter<W> {
     }
 }
 
-impl<W: Write + Seek> TrackWriter for VpxWriter<W> {
+impl<W: Write + Seek> CodecWriter for VpxWriter<W> {
     fn push_media(&mut self, pkt_ms: u64, pkt: MediaPacket) {
         let delta_ts = pkt_ms - self.start_ts;
         self.last_ts = pkt_ms;

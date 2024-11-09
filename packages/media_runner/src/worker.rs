@@ -676,7 +676,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     match self
                         .media_rtpengine
                         .input(&mut self.switcher)
-                        .spawn(conn_req.app, conn_req.room, conn_req.peer, false, conn_req.session_id, None)
+                        .spawn(conn_req.app, conn_req.room, conn_req.peer, conn_req.record, conn_req.session_id, None)
                     {
                         Ok((conn_id, sdp)) => {
                             log::info!("[MediaServerWorker] rpc request {req_id}, rtpengine::RpcReq::CreateOffer => created conn {conn_id}");
@@ -699,7 +699,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     match self
                         .media_rtpengine
                         .input(&mut self.switcher)
-                        .spawn(conn_req.app, conn_req.room, conn_req.peer, false, conn_req.session_id, Some(&conn_req.sdp))
+                        .spawn(conn_req.app, conn_req.room, conn_req.peer, conn_req.record, conn_req.session_id, Some(&conn_req.sdp))
                     {
                         Ok((conn_id, sdp)) => {
                             log::info!("[MediaServerWorker] rpc request {req_id}, rtpengine::RpcReq::CreateAnswer => created conn {conn_id}");

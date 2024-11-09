@@ -127,6 +127,20 @@ docker run -d --name media2 --net=host ghcr.io/8xff/atm0s-media-gateway:master \
         --allow-private-ip
 ```
 
+## Deploy a record convert worker (optional)
+
+```bash
+docker run -d --name record-convert-worker --privileged \
+    -e INPUT_S3_URI=http://user:password@host/atm0s-record/raw \
+    -e MULTI_TENANCY_SYNC=MULTI_TENANCY_SYNC_ENDPOINT \
+    -e SECRET=secr3t \
+    -e HTTP_ADDR=0.0.0.0:20000 \
+    --entrypoint /convert_record_worker \
+    ghcr.io/8xff/atm0s-media-gateway:master
+```
+
+API docs: `ENDPOINT:20000/api/docs/`
+
 ## Testing your cluster
 
 Some samples required access to microphone and camera permission, therefore it need to run with https if you want to test with some remote servers. We have 2 options for that:
