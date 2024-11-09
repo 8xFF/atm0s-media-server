@@ -7,6 +7,12 @@ pub struct VpxDemuxer {
     current_frame: Option<(bool, BytesMut)>,
 }
 
+impl Default for VpxDemuxer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VpxDemuxer {
     pub fn new() -> Self {
         Self {

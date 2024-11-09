@@ -54,11 +54,7 @@ async fn main() -> Result<(), String> {
         in_s3: args.in_s3,
         transmux: if let Some(out_path) = args.transmux_out_s3 {
             Some(RecordConvertOutputLocation::S3(out_path))
-        } else if let Some(out_path) = args.transmux_out_path {
-            Some(RecordConvertOutputLocation::Local(out_path))
-        } else {
-            None
-        },
+        } else { args.transmux_out_path.map(RecordConvertOutputLocation::Local) },
         compose: if args.compose_audio || args.compose_video {
             Some(RecordComposerConfig {
                 audio: args.compose_audio,

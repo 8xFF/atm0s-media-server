@@ -136,7 +136,7 @@ async fn main() -> Result<(), std::io::Error> {
         .nest("/api/docs", apis_ui)
         .at("/api/spec", poem::endpoint::make_sync(move |_| apis_spec.clone()))
         .with(Cors::new())
-        .with(Tracing::default());
+        .with(Tracing);
 
     log::info!("Starting convert worker on {}", args.http_addr);
     poem::Server::new(TcpListener::bind(args.http_addr)).run(app).await

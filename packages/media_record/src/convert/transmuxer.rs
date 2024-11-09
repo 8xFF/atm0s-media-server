@@ -115,7 +115,7 @@ impl RecordTransmuxer {
         let summary_json = serde_json::to_string(&record_summary).expect("Should convert to json");
 
         if let Some(out_s3) = self.out_s3.as_ref() {
-            let (s3, credentials, s3_sub_folder) = convert_s3_uri(&out_s3).map_err(|e| e.to_string())?;
+            let (s3, credentials, s3_sub_folder) = convert_s3_uri(out_s3).map_err(|e| e.to_string())?;
             let s3_output_path = PathBuf::from_str(&s3_sub_folder).map_err(|e| e.to_string())?;
             let summary_key = s3_output_path.join("summary.json").to_str().expect("Should convert to str").to_string();
             let summary_put_obj = s3.put_object(Some(&credentials), &summary_key);
@@ -142,7 +142,7 @@ impl RecordTransmuxer {
             Ok(record_summary)
         } else {
             let summary_out = temp_folder.join("summary.json").to_str().expect("Should convert path to str").to_string();
-            std::fs::write(&summary_out, &summary_json).map_err(|e| e.to_string())?;
+            std::fs::write(summary_out, &summary_json).map_err(|e| e.to_string())?;
             record_summary.metadata_json = summary_json;
             Ok(record_summary)
         }
