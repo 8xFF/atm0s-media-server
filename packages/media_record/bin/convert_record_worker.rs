@@ -133,7 +133,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     let app = Route::new()
         .nest("/api/", apis)
-        .nest("/api/ui", apis_ui)
+        .nest("/api/docs", apis_ui)
         .at("/api/spec", poem::endpoint::make_sync(move |_| apis_spec.clone()))
         .with(Cors::new())
         .with(Tracing::default());
