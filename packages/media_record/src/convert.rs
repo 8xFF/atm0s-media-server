@@ -7,14 +7,14 @@ pub use composer::*;
 pub use transmuxer::*;
 
 #[derive(Debug, Clone)]
-pub enum RecordConvertOutputLocaltion {
+pub enum RecordConvertOutputLocation {
     S3(String),
     Local(String),
 }
 
 pub struct RecordConvertConfig {
     pub in_s3: String,
-    pub transmux: Option<RecordConvertOutputLocaltion>,
+    pub transmux: Option<RecordConvertOutputLocation>,
     pub compose: Option<RecordComposerConfig>,
 }
 

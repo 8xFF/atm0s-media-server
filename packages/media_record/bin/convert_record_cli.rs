@@ -1,5 +1,5 @@
 use clap::Parser;
-use media_server_record::convert::{RecordComposerConfig, RecordConvert, RecordConvertConfig, RecordConvertOutputLocaltion};
+use media_server_record::convert::{RecordComposerConfig, RecordConvert, RecordConvertConfig, RecordConvertOutputLocation};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Record file converter for atm0s-media-server.
@@ -53,9 +53,9 @@ async fn main() -> Result<(), String> {
     let convert = RecordConvert::new(RecordConvertConfig {
         in_s3: args.in_s3,
         transmux: if let Some(out_path) = args.transmux_out_s3 {
-            Some(RecordConvertOutputLocaltion::S3(out_path))
+            Some(RecordConvertOutputLocation::S3(out_path))
         } else if let Some(out_path) = args.transmux_out_path {
-            Some(RecordConvertOutputLocaltion::Local(out_path))
+            Some(RecordConvertOutputLocation::Local(out_path))
         } else {
             None
         },
@@ -65,9 +65,9 @@ async fn main() -> Result<(), String> {
                 video: args.compose_video,
                 output_relative: "".to_string(),
                 output: if let Some(out_path) = args.compose_out_s3 {
-                    RecordConvertOutputLocaltion::S3(out_path)
+                    RecordConvertOutputLocation::S3(out_path)
                 } else if let Some(out_path) = args.compose_out_path {
-                    RecordConvertOutputLocaltion::Local(out_path)
+                    RecordConvertOutputLocation::Local(out_path)
                 } else {
                     panic!("No output path or s3 uri");
                 },

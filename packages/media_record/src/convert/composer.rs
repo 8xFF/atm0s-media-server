@@ -11,7 +11,7 @@ use video_composer::VideoComposer;
 
 use crate::{storage::convert_s3_uri, RoomReader, SessionReader};
 
-use super::{CodecWriter, RecordConvertOutputLocaltion, VpxWriter};
+use super::{CodecWriter, RecordConvertOutputLocation, VpxWriter};
 
 mod audio_mixer;
 mod video_composer;
@@ -21,7 +21,7 @@ pub struct RecordComposerConfig {
     pub audio: bool,
     pub video: bool,
     pub output_relative: String,
-    pub output: RecordConvertOutputLocaltion,
+    pub output: RecordConvertOutputLocation,
 }
 
 struct SessionWrapper {
@@ -84,7 +84,7 @@ impl RecordComposer {
     pub fn new(in_s3: String, cfg: RecordComposerConfig) -> Self {
         assert!(cfg.audio || cfg.video);
         match cfg.output {
-            RecordConvertOutputLocaltion::S3(s3) => Self {
+            RecordConvertOutputLocation::S3(s3) => Self {
                 audio: cfg.audio,
                 video: cfg.video,
                 in_s3,
@@ -96,7 +96,7 @@ impl RecordComposer {
                 track_writer: None,
                 out_relative: cfg.output_relative,
             },
-            RecordConvertOutputLocaltion::Local(local_path) => Self {
+            RecordConvertOutputLocation::Local(local_path) => Self {
                 audio: cfg.audio,
                 video: cfg.video,
                 in_s3,

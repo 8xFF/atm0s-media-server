@@ -8,7 +8,7 @@ use media_server_protocol::protobuf::cluster_connector::{
     hook_event, ComposeEvent, HookEvent,
 };
 use media_server_record::{
-    convert::{RecordComposerConfig, RecordConvert, RecordConvertConfig, RecordConvertOutputLocaltion},
+    convert::{RecordComposerConfig, RecordConvert, RecordConvertConfig, RecordConvertOutputLocation},
     convert_s3_uri,
 };
 use media_server_secure::AppStorage;
@@ -218,7 +218,7 @@ impl HttpApis {
                     let uri = t
                         .custom_s3
                         .unwrap_or_else(|| format!("{transmux_s3_uri}/{}/transmux/{current_date_path}/{job_id_c}?path_style=true", app.app));
-                    RecordConvertOutputLocaltion::S3(uri)
+                    RecordConvertOutputLocation::S3(uri)
                 }),
                 compose: body.compose.map(|c| {
                     let (uri, relative) = c
@@ -240,7 +240,7 @@ impl HttpApis {
                         audio: c.audio,
                         video: c.video,
                         output_relative: relative,
-                        output: RecordConvertOutputLocaltion::S3(uri),
+                        output: RecordConvertOutputLocation::S3(uri),
                     }
                 }),
             });

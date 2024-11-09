@@ -17,7 +17,7 @@ mod track_writer;
 pub use summary::*;
 use track_writer::*;
 
-use super::RecordConvertOutputLocaltion;
+use super::RecordConvertOutputLocation;
 
 pub struct RecordTransmuxer {
     in_s3: String,
@@ -26,14 +26,14 @@ pub struct RecordTransmuxer {
 }
 
 impl RecordTransmuxer {
-    pub fn new(in_s3: String, out: RecordConvertOutputLocaltion) -> Self {
+    pub fn new(in_s3: String, out: RecordConvertOutputLocation) -> Self {
         match out {
-            RecordConvertOutputLocaltion::S3(s3) => Self {
+            RecordConvertOutputLocation::S3(s3) => Self {
                 in_s3,
                 out_s3: Some(s3),
                 local_folder: format!("/tmp/media-record-transmuxer-{}", rand::random::<u64>()),
             },
-            RecordConvertOutputLocaltion::Local(local) => Self {
+            RecordConvertOutputLocation::Local(local) => Self {
                 in_s3,
                 out_s3: None,
                 local_folder: local,
