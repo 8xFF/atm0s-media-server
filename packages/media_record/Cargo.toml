@@ -5,7 +5,11 @@ edition = "2021"
 
 [dependencies]
 media-server-protocol = { path = "../protocol" }
+media-server-multi-tenancy = { path = "../multi_tenancy", optional = true }
 media-server-utils = { path = "../media_utils" }
+media-server-connector = { path = "../media_connector", optional = true }
+media-server-secure = { path = "../media_secure", optional = true }
+media-server-codecs = { path = "../media_codecs", optional = true }
 log = { workspace = true }
 tokio = { version = "1", features = ["sync", "fs"] }
 rand = { workspace = true }
@@ -19,17 +23,27 @@ tracing-subscriber = { workspace = true, optional = true }
 webm = { version = "1.1.2", optional = true }
 rtp = { version = "0.11.0", optional = true }
 clap = { version = "4.5", features = ["env", "derive"], optional = true }
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.120"
+poem = { version = "3.0", features = ["static-files"], optional = true }
+poem-openapi = { version = "5.0", features = ["swagger-ui"], optional = true }
+chrono = { version = "0.4", optional = true }
+openssl = { version = "0.10", features = ["vendored"], optional = true }
 
 [features]
-default = ["convert_record"]
-convert_record = ["tokio/full", "tracing-subscriber", "webm", "rtp", "clap", "serde"]
+default = ["convert_record", "convert_worker"]
+convert_record = ["tokio/full", "tracing-subscriber", "webm", "rtp", "clap", "chrono", "openssl"]
+convert_worker = ["tokio/full", "tracing-subscriber", "clap", "convert_record", "poem", "poem-openapi", "media-server-multi-tenancy", "media-server-connector", "media-server-secure", "media-server-codecs"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 
 [[bin]]
-name = "convert_record"
-path = "./bin/convert_record.rs"
+name = "convert_record_cli"
+path = "./bin/convert_record_cli.rs"
 required-features = ["convert_record"]
+
+[[bin]]
+name = "convert_record_worker"
+path = "./bin/convert_record_worker.rs"
+required-features = ["convert_record", "convert_worker"]

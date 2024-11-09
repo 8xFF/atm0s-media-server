@@ -1,5 +1,8 @@
 use disk::{DiskFile, DiskStorage};
+use media_server_utils::CustomUri;
 use memory::{MemoryFile, MemoryStorage};
+use rusty_s3::{Bucket, Credentials, UrlStyle};
+use serde::Deserialize;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub mod disk;
@@ -165,4 +168,25 @@ impl AsyncWrite for HybridFile {
             HybridFile::Disk(f) => std::pin::Pin::new(f).poll_shutdown(cx),
         }
     }
+}
+
+#[derive(Deserialize, Clone)]
+struct S3Options {
+    pub path_style: Option<bool>,
+    pub region: Option<String>,
+}
+
+pub fn convert_s3_uri(uri: &str) -> Result<(Bucket, Credentials, String), String> {
+    let s3_endpoint = CustomUri::<S3Options>::try_from(uri).map_err(|e| e.to_string())?;
+    let url_style = if s3_endpoint.query.path_style == Some(true) {
+        UrlStyle::Path
+    } else {
+        UrlStyle::VirtualHost
+    };
+
+    let s3_bucket = s3_endpoint.path[0].clone();
+    let s3_sub_folder = s3_endpoint.path[1..].join("/");
+    let s3 = Bucket::new(s3_endpoint.endpoint.parse().unwrap(), url_style, s3_bucket, s3_endpoint.query.region.unwrap_or("".to_string())).unwrap();
+    let credentials = Credentials::new(s3_endpoint.username.expect("Should have s3 accesskey"), s3_endpoint.password.expect("Should have s3 secretkey"));
+    Ok((s3, credentials, s3_sub_folder))
 }
