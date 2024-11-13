@@ -1,10 +1,10 @@
-use media_server_protocol::media::{H264Profile, H264Sim, MediaMeta};
+use media_server_protocol::media::{H264Profile, H264Sim, MediaMeta, MediaOrientation};
 
 const H264_NALU_TTYPE_STAP_A: u32 = 24;
 const H264_NALU_TTYPE_SPS: u32 = 7;
 const H264_NALU_TYPE_BITMASK: u32 = 0x1F;
 
-pub fn parse_rtp(payload: &[u8], profile: H264Profile, rid: Option<u8>) -> Option<MediaMeta> {
+pub fn parse_rtp(payload: &[u8], profile: H264Profile, rid: Option<u8>, rotation: Option<MediaOrientation>) -> Option<MediaMeta> {
     if payload.len() < 4 {
         None
     } else {
@@ -16,6 +16,7 @@ pub fn parse_rtp(payload: &[u8], profile: H264Profile, rid: Option<u8>) -> Optio
             key,
             profile,
             sim: rid.map(|rid| H264Sim { spatial: rid }),
+            rotation,
         })
     }
 }

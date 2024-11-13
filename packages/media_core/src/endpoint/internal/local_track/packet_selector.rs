@@ -272,7 +272,7 @@ mod tests {
             marker: true,
             nackable: false,
             layers: None,
-            meta: MediaMeta::Vp8 { key, sim: None },
+            meta: MediaMeta::Vp8 { key, sim: None, rotation: None },
             data: vec![1, 2, 3],
         }
     }

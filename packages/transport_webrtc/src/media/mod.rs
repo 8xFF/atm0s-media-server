@@ -1,8 +1,8 @@
-use media_server_protocol::media::{H264Profile, MediaCodec, MediaLayerBitrate, MediaLayersBitrate, MediaMeta, MediaPacket, Vp9Profile};
+use media_server_protocol::media::{H264Profile, MediaCodec, MediaLayerBitrate, MediaLayersBitrate, MediaMeta, MediaOrientation, MediaPacket, Vp9Profile};
 use str0m::{
     format::{CodecConfig, CodecSpec},
     media::{Mid, Pt, Rid},
-    rtp::{vla::VideoLayersAllocation, RtpPacket, Ssrc},
+    rtp::{vla::VideoLayersAllocation, ExtensionValues, RtpPacket, Ssrc, VideoOrientation},
 };
 
 mod bit_read;
@@ -60,17 +60,20 @@ impl RemoteMediaConvert {
             ),
             MediaCodec::H264(profile) => {
                 let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().and_then(extract_simulcast);
-                let meta = h264::parse_rtp(&rtp.payload, profile, spatial)?;
+                let rotation = rtp.header.ext_vals.video_orientation.map(from_webrtc_orientation);
+                let meta = h264::parse_rtp(&rtp.payload, profile, spatial, rotation)?;
                 (true, layers, meta)
             }
             MediaCodec::Vp8 => {
                 let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().and_then(extract_simulcast);
-                let meta = vp8::parse_rtp(&rtp.payload, spatial)?;
+                let rotation = rtp.header.ext_vals.video_orientation.map(from_webrtc_orientation);
+                let meta = vp8::parse_rtp(&rtp.payload, spatial, rotation)?;
                 (true, layers, meta)
             }
             MediaCodec::Vp9(profile) => {
                 let layers = rtp.header.ext_vals.user_values.get::<VideoLayersAllocation>().and_then(extract_svc);
-                let meta = vp9::parse_rtp(&rtp.payload, profile)?;
+                let rotation = rtp.header.ext_vals.video_orientation.map(from_webrtc_orientation);
+                let meta = vp9::parse_rtp(&rtp.payload, profile, rotation)?;
                 (true, layers, meta)
             }
         };
@@ -208,5 +211,113 @@ fn rid_to_spatial(rid: &Rid) -> u8 {
         Some(b'1') => 1,
         Some(b'2') => 2,
         _ => 0,
+    }
+}
+
+fn from_webrtc_orientation(orientation: VideoOrientation) -> MediaOrientation {
+    match orientation {
+        VideoOrientation::Deg0 => MediaOrientation::Deg0,
+        VideoOrientation::Deg90 => MediaOrientation::Deg90,
+        VideoOrientation::Deg180 => MediaOrientation::Deg180,
+        VideoOrientation::Deg270 => MediaOrientation::Deg270,
+    }
+}
+
+fn to_webrtc_orientation(orientation: MediaOrientation) -> VideoOrientation {
+    match orientation {
+        MediaOrientation::Deg0 => VideoOrientation::Deg0,
+        MediaOrientation::Deg90 => VideoOrientation::Deg90,
+        MediaOrientation::Deg180 => VideoOrientation::Deg180,
+        MediaOrientation::Deg270 => VideoOrientation::Deg270,
+    }
+}
+
+pub fn to_webrtc_extensions(pkt: &MediaPacket) -> ExtensionValues {
+    let mut ext = ExtensionValues::default();
+    if let Some(rotation) = pkt.meta.rotation() {
+        ext.video_orientation = Some(to_webrtc_orientation(rotation));
+    }
+    if let Some(audio_level) = pkt.meta.audio_level() {
+        ext.audio_level = Some(audio_level);
+    }
+    ext
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_str0m_codec_convert() {
+        let spec = CodecSpec {
+            codec: str0m::format::Codec::Opus,
+            clock_rate: str0m::media::Frequency::FORTY_EIGHT_KHZ,
+            channels: None,
+            format: str0m::format::FormatParams::default(),
+        };
+        assert_eq!(str0m_codec_convert(spec), Some(MediaCodec::Opus));
+
+        let spec = CodecSpec {
+            codec: str0m::format::Codec::H264,
+            clock_rate: str0m::media::Frequency::NINETY_KHZ,
+            channels: None,
+            format: str0m::format::FormatParams::parse_line("profile-level-id=42e01f;packetization-mode=1"),
+        };
+        assert_eq!(str0m_codec_convert(spec), Some(MediaCodec::H264(H264Profile::P42e01fNonInterleaved)));
+    }
+
+    #[test]
+    fn test_rid_to_spatial() {
+        let rid0 = Rid::from_array([b'0', b'0', b'0', b'0', b'0', b'0', b'0', b'0']);
+        assert_eq!(rid_to_spatial(&rid0), 0);
+
+        let rid1 = Rid::from_array([b'1', b'0', b'0', b'0', b'0', b'0', b'0', b'0']);
+        assert_eq!(rid_to_spatial(&rid1), 1);
+
+        let rid2 = Rid::from_array([b'2', b'0', b'0', b'0', b'0', b'0', b'0', b'0']);
+        assert_eq!(rid_to_spatial(&rid2), 2);
+
+        // other values should be 0
+        let rid3 = Rid::from_array([b'3', b'0', b'0', b'0', b'0', b'0', b'0', b'0']);
+        assert_eq!(rid_to_spatial(&rid3), 0);
+    }
+
+    #[test]
+    fn test_from_webrtc_orientation() {
+        assert_eq!(from_webrtc_orientation(VideoOrientation::Deg0), MediaOrientation::Deg0);
+        assert_eq!(from_webrtc_orientation(VideoOrientation::Deg90), MediaOrientation::Deg90);
+        assert_eq!(from_webrtc_orientation(VideoOrientation::Deg180), MediaOrientation::Deg180);
+        assert_eq!(from_webrtc_orientation(VideoOrientation::Deg270), MediaOrientation::Deg270);
+    }
+
+    #[test]
+    fn test_to_webrtc_orientation() {
+        assert_eq!(to_webrtc_orientation(MediaOrientation::Deg0), VideoOrientation::Deg0);
+        assert_eq!(to_webrtc_orientation(MediaOrientation::Deg90), VideoOrientation::Deg90);
+        assert_eq!(to_webrtc_orientation(MediaOrientation::Deg180), VideoOrientation::Deg180);
+        assert_eq!(to_webrtc_orientation(MediaOrientation::Deg270), VideoOrientation::Deg270);
+    }
+
+    #[test]
+    fn test_to_webrtc_extensions() {
+        let pkt = MediaPacket::build_audio(1, 1, Some(10), vec![1, 2, 3]);
+        let ext = to_webrtc_extensions(&pkt);
+        assert_eq!(ext.audio_level, Some(10));
+
+        let pkt = MediaPacket {
+            ts: 1,
+            seq: 1,
+            marker: true,
+            nackable: false,
+            layers: None,
+            meta: MediaMeta::Vp8 {
+                key: true,
+                sim: None,
+                rotation: Some(MediaOrientation::Deg90),
+            },
+            data: vec![1, 2, 3],
+        };
+        let ext = to_webrtc_extensions(&pkt);
+        assert_eq!(ext.video_orientation, Some(VideoOrientation::Deg90));
     }
 }

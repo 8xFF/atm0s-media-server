@@ -50,7 +50,13 @@ impl Selector {
         if self.target == self.current {
             return;
         }
-        if let MediaMeta::H264 { key, profile: _, sim: Some(_sim) } = &mut pkt.meta {
+        if let MediaMeta::H264 {
+            key,
+            profile: _,
+            sim: Some(_sim),
+            rotation: _,
+        } = &mut pkt.meta
+        {
             match (self.current, self.target) {
                 (Some(current), Some(target)) => {
                     match target.cmp(&current) {
@@ -106,7 +112,12 @@ impl Selector {
     fn is_allow(&mut self, _ctx: &mut VideoSelectorCtx, pkt: &mut MediaPacket) -> Option<()> {
         let current = self.current?;
         match &mut pkt.meta {
-            MediaMeta::H264 { key: _, profile: _, sim: Some(sim) } => {
+            MediaMeta::H264 {
+                key: _,
+                profile: _,
+                sim: Some(sim),
+                rotation: _,
+            } => {
                 if current == sim.spatial {
                     Some(())
                 } else {
@@ -177,6 +188,7 @@ mod tests {
                 key,
                 profile: H264Profile::P42001fNonInterleaved,
                 sim: Some(H264Sim { spatial }),
+                rotation: None,
             },
             data: vec![1, 2, 3],
         }

@@ -1,14 +1,14 @@
-use media_server_protocol::media::{MediaMeta, Vp9Profile, Vp9Svc};
+use media_server_protocol::media::{MediaMeta, MediaOrientation, Vp9Profile, Vp9Svc};
 
 use super::bit_read::BitRead;
 
 const MAX_SPATIAL_LAYERS: u8 = 5;
 const MAX_VP9REF_PICS: usize = 3;
 
-pub fn parse_rtp(payload: &[u8], profile: Vp9Profile) -> Option<MediaMeta> {
+pub fn parse_rtp(payload: &[u8], profile: Vp9Profile, rotation: Option<MediaOrientation>) -> Option<MediaMeta> {
     let mut header = Vp9Header::default();
     let (key, svc) = header.parse_from(payload).ok()?;
-    Some(MediaMeta::Vp9 { key, profile, svc })
+    Some(MediaMeta::Vp9 { key, profile, svc, rotation })
 }
 
 #[allow(unused_assignments)]

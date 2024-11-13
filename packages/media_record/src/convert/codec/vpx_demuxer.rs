@@ -26,12 +26,15 @@ impl VpxDemuxer {
         let (mut depacketizer, is_key_frame) = match rtp.meta {
             media_server_protocol::media::MediaMeta::Opus { .. } => panic!("wrong codec"),
             media_server_protocol::media::MediaMeta::H264 { .. } => panic!("wrong codec"),
-            media_server_protocol::media::MediaMeta::Vp8 { key, sim } => {
+            media_server_protocol::media::MediaMeta::Vp8 { key, sim, rotation } => {
                 if let Some(sim) = sim {
                     if sim.spatial != 0 {
                         //TODO: how to get maximum quality
                         return None;
                     }
+                }
+                if let Some(_rotation) = rotation {
+                    //TODO: process rotation
                 }
                 (Box::new(rtp::codecs::vp8::Vp8Packet::default()) as Box<dyn Depacketizer>, key)
             }
