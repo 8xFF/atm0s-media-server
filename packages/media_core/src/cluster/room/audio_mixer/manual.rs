@@ -256,6 +256,6 @@ mod test {
         manual.on_event(t0, Input::LeaveRoom);
         assert_eq!(manual.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto))));
         assert_eq!(manual.pop_output(()), None);
-        assert_eq!(manual.is_empty(), true);
+        assert!(manual.is_empty());
     }
 }

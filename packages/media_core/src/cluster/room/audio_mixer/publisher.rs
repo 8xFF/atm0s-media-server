@@ -222,7 +222,7 @@ mod test {
         publisher.on_track_unpublish(t0 + ms(100), 2, 0.into());
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::PubStop))));
         assert_eq!(publisher.pop_output(()), None);
-        assert_eq!(publisher.is_empty(), true);
+        assert!(publisher.is_empty());
     }
 
     #[test_log::test]

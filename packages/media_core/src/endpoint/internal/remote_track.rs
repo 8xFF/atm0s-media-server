@@ -336,7 +336,7 @@ mod tests {
         );
         assert_eq!(track.pop_output(now), None);
         //we dont need Output::Stopped here, it will be fired with TaskSwitcherChild::pop_output with is_empty true
-        assert_eq!(track.is_empty(), true);
+        assert!(track.is_empty());
     }
 
     //TODO start not in room

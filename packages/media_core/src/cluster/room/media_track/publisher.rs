@@ -198,7 +198,7 @@ mod tests {
         publisher.on_track_unpublish(endpoint, track);
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
         assert_eq!(publisher.pop_output(()), None);
-        assert_eq!(publisher.is_empty(), true);
+        assert!(publisher.is_empty());
     }
 
     //TODO Handle feedback: should handle KeyFrame feedback
@@ -236,7 +236,7 @@ mod tests {
         publisher.on_track_unpublish(endpoint, track);
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop))));
         assert_eq!(publisher.pop_output(()), None);
-        assert_eq!(publisher.is_empty(), true);
+        assert!(publisher.is_empty());
     }
 
     #[test_log::test]
@@ -262,6 +262,6 @@ mod tests {
 
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::PubStop)))); // PubStop
         assert_eq!(publisher.pop_output(()), None);
-        assert_eq!(publisher.is_empty(), true);
+        assert!(publisher.is_empty());
     }
 }

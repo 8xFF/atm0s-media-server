@@ -251,7 +251,7 @@ mod tests {
         subscriber.on_track_unsubscribe(endpoint, track);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
         assert_eq!(subscriber.pop_output(()), None);
-        assert_eq!(subscriber.is_empty(), true);
+        assert!(subscriber.is_empty());
     }
 
     //TODO Sending key-frame request
@@ -282,7 +282,7 @@ mod tests {
         subscriber.on_track_unsubscribe(endpoint, track);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
         assert_eq!(subscriber.pop_output(()), None);
-        assert_eq!(subscriber.is_empty(), true);
+        assert!(subscriber.is_empty());
     }
 
     //TODO Sending bitrate request single sub
@@ -362,6 +362,6 @@ mod tests {
         subscriber.on_track_unsubscribe(endpoint2, track2);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
         assert_eq!(subscriber.pop_output(()), None);
-        assert_eq!(subscriber.is_empty(), true);
+        assert!(subscriber.is_empty());
     }
 }

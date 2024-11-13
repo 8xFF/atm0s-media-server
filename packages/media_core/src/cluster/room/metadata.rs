@@ -398,7 +398,7 @@ mod tests {
 
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     /// Test join as peer only => should subscribe peers, fire only peer
@@ -455,7 +455,7 @@ mod tests {
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Del(peer_key)))));
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Unsub))));
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     #[test_log::test]
@@ -491,7 +491,7 @@ mod tests {
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peers_map, MapControl::Unsub))));
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     //TODO Test join as track only => should subscribe only tracks, fire only track events
@@ -551,7 +551,7 @@ mod tests {
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Unsub))));
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     //join track only should restore old tracks
@@ -592,7 +592,7 @@ mod tests {
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Unsub))));
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     //Test manual no subscribe peer => dont fire any event
@@ -636,7 +636,7 @@ mod tests {
         // peer leave should send unsub
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     //TODO Test manual and subscribe peer => should fire event
@@ -692,7 +692,7 @@ mod tests {
         // peer leave should not send unsub
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     //TODO Test track publish => should set key to both single peer map and tracks map
@@ -739,7 +739,7 @@ mod tests {
         //should not pop anything after leave
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     //TODO Test track publish in disable mode => should not set key to both single peer map and tracks map
@@ -773,7 +773,7 @@ mod tests {
         //should not pop anything after leave
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     /// Test leave room auto del remain remote tracks
@@ -816,7 +816,7 @@ mod tests {
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(tracks_map, MapControl::Del(track_key)))));
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peer_map, MapControl::Del(track_key)))));
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 
     // Leave room auto unsub private peer maps
@@ -846,6 +846,6 @@ mod tests {
         room_meta.on_leave(endpoint);
         assert_eq!(room_meta.pop_output(()), Some(Output::Kv(Control::MapCmd(peer2_map, MapControl::Unsub))));
         assert_eq!(room_meta.pop_output(()), None);
-        assert_eq!(room_meta.is_empty(), true);
+        assert!(room_meta.is_empty());
     }
 }

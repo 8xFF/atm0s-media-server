@@ -377,6 +377,6 @@ mod tests {
             ))
         );
         assert_eq!(room.pop_output(()), None);
-        assert_eq!(room.is_empty(), true);
+        assert!(room.is_empty());
     }
 }
