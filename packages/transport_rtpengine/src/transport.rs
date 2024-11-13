@@ -163,18 +163,20 @@ impl TransportRtpEngine {
 
 impl Transport<ExtIn, ExtOut> for TransportRtpEngine {
     fn on_tick(&mut self, _now: Instant) {
-        let last_activity = match (self.last_recv_rtp, self.last_send_rtp) {
-            (None, None) => self.created,
-            (Some(_time), None) => self.created, //we need two way, if only one-way => disconnect
-            (None, Some(_time)) => self.created, //we need two way, if only one-way => disconnect
-            (Some(time1), Some(time2)) => time1.max(time2),
-        };
+        if !self.shutdown {
+            let last_activity = match (self.last_recv_rtp, self.last_send_rtp) {
+                (None, None) => self.created,
+                (Some(_time), None) => self.created, //we need two way, if only one-way => disconnect
+                (None, Some(_time)) => self.created, //we need two way, if only one-way => disconnect
+                (Some(time1), Some(time2)) => time1.max(time2),
+            };
 
-        if last_activity.elapsed() >= Duration::from_millis(TIMEOUT_DURATION_MS) {
-            log::warn!("[TransportRtpEngine] timeout after {TIMEOUT_DURATION_MS} ms don't has activity");
-            self.queue
-                .push_back(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(TransportError::Timeout)))));
-            self.shutdown = true;
+            if last_activity.elapsed() >= Duration::from_millis(TIMEOUT_DURATION_MS) {
+                log::warn!("[TransportRtpEngine] timeout after {TIMEOUT_DURATION_MS} ms don't has activity");
+                self.queue
+                    .push_back(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(Some(TransportError::Timeout)))));
+                self.shutdown = true;
+            }
         }
     }
 

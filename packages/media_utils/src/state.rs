@@ -42,7 +42,7 @@ impl<T> StateQueue<T> for StateDestroyingQueue<T> {
 
     fn pop(&mut self) -> Option<T> {
         if self.destroy_event.is_none() {
-            assert_eq!(self.data.is_empty(), true);
+            assert!(self.data.is_empty());
             return None;
         }
         if self.data.is_empty() {
