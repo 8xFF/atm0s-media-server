@@ -63,7 +63,7 @@ impl<C, S> McContext<C, S> {
         self.next = Some(next);
     }
 
-    pub fn next(&mut self) -> Option<S> {
+    pub fn next_state(&mut self) -> Option<S> {
         self.next.take()
     }
 }
@@ -138,7 +138,7 @@ mod tests {
 
         pub fn on_event(&mut self, event: Input) {
             self.states.on_event(&mut self.ctx, event);
-            if let Some(next) = self.ctx.next() {
+            if let Some(next) = self.ctx.next_state() {
                 self.states = next;
             }
         }
