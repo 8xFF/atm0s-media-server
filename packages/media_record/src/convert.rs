@@ -21,7 +21,7 @@ pub struct RecordConvertConfig {
 #[derive(Debug, Clone)]
 pub struct RecordConvertOutput {
     pub transmux: Option<TransmuxSummary>,
-    pub compose: Option<String>,
+    pub compose: Option<RecordComposerResult>,
 }
 
 pub struct RecordConvert {

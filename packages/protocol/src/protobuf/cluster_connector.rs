@@ -563,6 +563,8 @@ pub mod compose_event {
         pub struct ComposeSummary {
             #[prost(string, tag = "1")]
             pub media_uri: ::prost::alloc::string::String,
+            #[prost(uint64, tag = "2")]
+            pub duration_ms: u64,
         }
     }
     #[derive(serde::Serialize)]

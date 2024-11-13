@@ -249,7 +249,10 @@ impl HttpApis {
                     log::info!("Convert job {job_id_c} completed");
                     compose_event::Event::Completed(RecordJobCompleted {
                         transmux: summary.transmux.map(|s| s.into()),
-                        compose: summary.compose.map(|s| ComposeSummary { media_uri: s }),
+                        compose: summary.compose.map(|s| ComposeSummary {
+                            media_uri: s.media_uri,
+                            duration_ms: s.duration_ms,
+                        }),
                     })
                 }
                 Err(e) => {
