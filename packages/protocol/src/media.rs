@@ -197,6 +197,14 @@ pub enum MediaScaling {
     Simulcast,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MediaOrientation {
+    Deg0,
+    Deg90,
+    Deg180,
+    Deg270,
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum MediaCodec {
     Opus,
@@ -207,10 +215,26 @@ pub enum MediaCodec {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MediaMeta {
-    Opus { audio_level: Option<i8> },
-    H264 { key: bool, profile: H264Profile, sim: Option<H264Sim> },
-    Vp8 { key: bool, sim: Option<Vp8Sim> },
-    Vp9 { key: bool, profile: Vp9Profile, svc: Option<Vp9Svc> },
+    Opus {
+        audio_level: Option<i8>,
+    },
+    H264 {
+        key: bool,
+        profile: H264Profile,
+        sim: Option<H264Sim>,
+        rotation: Option<MediaOrientation>,
+    },
+    Vp8 {
+        key: bool,
+        sim: Option<Vp8Sim>,
+        rotation: Option<MediaOrientation>,
+    },
+    Vp9 {
+        key: bool,
+        profile: Vp9Profile,
+        svc: Option<Vp9Svc>,
+        rotation: Option<MediaOrientation>,
+    },
 }
 
 impl MediaMeta {
@@ -235,6 +259,20 @@ impl MediaMeta {
             Self::H264 { profile, .. } => MediaCodec::H264(*profile),
             Self::Vp8 { .. } => MediaCodec::Vp8,
             Self::Vp9 { profile, .. } => MediaCodec::Vp9(*profile),
+        }
+    }
+
+    pub fn rotation(&self) -> Option<MediaOrientation> {
+        match self {
+            Self::H264 { rotation, .. } | Self::Vp8 { rotation, .. } | Self::Vp9 { rotation, .. } => *rotation,
+            Self::Opus { .. } => None,
+        }
+    }
+
+    pub fn audio_level(&self) -> Option<i8> {
+        match self {
+            Self::Opus { audio_level, .. } => *audio_level,
+            _ => None,
         }
     }
 }

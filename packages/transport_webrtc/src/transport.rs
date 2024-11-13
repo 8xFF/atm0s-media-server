@@ -32,11 +32,13 @@ use str0m::{
     ice::IceCreds,
     media::{KeyframeRequestKind, Mid},
     net::{Protocol, Receive},
-    rtp::ExtensionValues,
     Candidate, Rtc,
 };
 
-use crate::{media::LocalMediaConvert, WebrtcError};
+use crate::{
+    media::{to_webrtc_extensions, LocalMediaConvert},
+    WebrtcError,
+};
 
 mod bwe_state;
 mod webrtc;
@@ -239,7 +241,8 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
                 let mut api = self.rtc.direct_api();
                 let tx = return_if_none!(api.stream_tx_by_mid(mid, None));
 
-                if let Err(e) = tx.write_rtp(pt, seq2.into(), pkt.ts, now, pkt.marker, ExtensionValues::default(), pkt.nackable, pkt.data) {
+                let ext = to_webrtc_extensions(&pkt);
+                if let Err(e) = tx.write_rtp(pt, seq2.into(), pkt.ts, now, pkt.marker, ext, pkt.nackable, pkt.data) {
                     log::error!("[TransportWebrtc] write rtp error {e}");
                 }
             }

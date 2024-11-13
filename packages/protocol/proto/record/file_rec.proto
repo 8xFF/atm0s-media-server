@@ -31,11 +31,26 @@ message RecordChunk {
     }
 
     message TrackMedia {
+        enum Orientation {
+            UNKNOWN = 0;
+            DEG0 = 1;
+            DEG90 = 2;
+            DEG180 = 3;
+            DEG270 = 4;
+        }
+
+        message AudioLevel {
+            bool present = 1;
+            int32 level = 2;
+        }
+
         uint32 media_ts = 1;
         uint32 media_seq = 2;
         bool marker = 3;
         uint32 codec = 4;
         bytes payload = 5;
+        Orientation orientation = 6;
+        AudioLevel audio_level = 7;
     }
 
     uint32 track_id = 1;

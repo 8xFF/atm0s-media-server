@@ -70,7 +70,7 @@ impl Selector {
         if self.target == self.current {
             return;
         }
-        if let MediaMeta::Vp8 { key, sim: Some(sim) } = &mut pkt.meta {
+        if let MediaMeta::Vp8 { key, sim: Some(sim), rotation: _ } = &mut pkt.meta {
             match (&mut self.current, &self.target) {
                 (Some(current), Some(target)) => {
                     match target.spatial.cmp(&current.spatial) {
@@ -164,7 +164,7 @@ impl Selector {
     fn is_allow(&mut self, ctx: &mut VideoSelectorCtx, pkt: &mut MediaPacket) -> Option<()> {
         let current = self.current.as_ref()?;
         match &mut pkt.meta {
-            MediaMeta::Vp8 { key: _, sim: Some(sim) } => {
+            MediaMeta::Vp8 { key: _, sim: Some(sim), rotation: _ } => {
                 if sim.spatial == current.spatial && sim.temporal <= current.temporal {
                     log::trace!(
                         "[Vp8SimSelector] allow {} {}, seq {}, ts {}, tl0idx {:?} pic_id {:?}",
@@ -271,6 +271,7 @@ mod tests {
                     temporal,
                     layer_sync,
                 }),
+                rotation: None,
             },
             data: vec![1, 2, 3],
         }
@@ -301,6 +302,7 @@ mod tests {
                             MediaMeta::Vp8 {
                                 key: _,
                                 sim: Some(Vp8Sim { picture_id, tl0_pic_idx, .. }),
+                                rotation: _,
                             } => (picture_id.unwrap(), tl0_pic_idx.unwrap()),
                             _ => panic!("Should not happen"),
                         };

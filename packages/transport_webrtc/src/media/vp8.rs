@@ -1,7 +1,7 @@
 use super::bit_read::BitRead;
-use media_server_protocol::media::{MediaMeta, Vp8Sim};
+use media_server_protocol::media::{MediaMeta, MediaOrientation, Vp8Sim};
 
-pub fn parse_rtp(packet: &[u8], rid: Option<u8>) -> Option<MediaMeta> {
+pub fn parse_rtp(packet: &[u8], rid: Option<u8>, rotation: Option<MediaOrientation>) -> Option<MediaMeta> {
     let payload_len = packet.len();
     if payload_len < 4 {
         return None;
@@ -93,9 +93,10 @@ pub fn parse_rtp(packet: &[u8], rid: Option<u8>) -> Option<MediaMeta> {
                 },
                 layer_sync: vp8.y != 0,
             }),
+            rotation,
         })
     } else {
-        Some(MediaMeta::Vp8 { key: is_key, sim: None })
+        Some(MediaMeta::Vp8 { key: is_key, sim: None, rotation })
     }
 }
 

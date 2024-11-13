@@ -83,7 +83,13 @@ impl Selector {
         if self.target == self.current {
             return;
         }
-        if let MediaMeta::Vp9 { key, profile: _, svc: Some(svc) } = &mut pkt.meta {
+        if let MediaMeta::Vp9 {
+            key,
+            profile: _,
+            svc: Some(svc),
+            rotation: _,
+        } = &mut pkt.meta
+        {
             match (&mut self.current, &self.target) {
                 (Some(current), Some(target)) => {
                     match target.spatial.cmp(&current.spatial) {
@@ -181,7 +187,12 @@ impl Selector {
     fn is_allow(&mut self, ctx: &mut VideoSelectorCtx, pkt: &mut MediaPacket) -> Option<()> {
         let current = self.current.as_ref()?;
         match &mut pkt.meta {
-            MediaMeta::Vp9 { key: _, profile: _, svc: Some(svc) } => {
+            MediaMeta::Vp9 {
+                key: _,
+                profile: _,
+                svc: Some(svc),
+                rotation: _,
+            } => {
                 if svc.spatial <= current.spatial && svc.temporal <= current.temporal {
                     log::trace!(
                         "[Vp9SvcSelector] allow {} {}, seq {}, ts {}, marker {}, pic_id {:?}",
@@ -289,6 +300,7 @@ mod tests {
                     spatial_layers: None,
                     predicted_frame: false,
                 }),
+                rotation: None,
             },
             data: vec![1, 2, 3],
         }
