@@ -140,7 +140,9 @@ impl<TID: Hash + Eq + Copy> MixerBuffer<TID> {
 
 impl<T> Drop for MixerBuffer<T> {
     fn drop(&mut self) {
-        log::warn!("drop audio mixer buffer with remaining {} frames", self.frames.len());
+        if !self.frames.is_empty() {
+            log::warn!("drop audio mixer buffer with remaining {} frames", self.frames.len());
+        }
     }
 }
 

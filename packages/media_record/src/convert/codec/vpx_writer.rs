@@ -25,6 +25,10 @@ impl<W: Write + Seek> VpxWriter<W> {
             last_ts: start_ts,
         }
     }
+
+    pub fn duration(&self) -> u64 {
+        self.last_ts - self.start_ts
+    }
 }
 
 impl<W: Write + Seek> CodecWriter for VpxWriter<W> {

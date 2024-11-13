@@ -67,6 +67,12 @@ impl Ord for SessionWrapper {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RecordComposerResult {
+    pub media_uri: String,
+    pub duration_ms: u64,
+}
+
 pub struct RecordComposer {
     audio: bool,
     video: bool,
@@ -111,7 +117,7 @@ impl RecordComposer {
         }
     }
 
-    pub async fn compose(mut self) -> Result<String, String> {
+    pub async fn compose(mut self) -> Result<RecordComposerResult, String> {
         let (s3, credentials, s3_sub_folder) = convert_s3_uri(&self.in_s3).map_err(|e| e.to_string())?;
 
         let room_reader = RoomReader::new(s3, credentials, &s3_sub_folder);
@@ -208,16 +214,18 @@ impl RecordComposer {
             }
         }
 
-        self.track_writer.take();
+        let track_writer = self.track_writer.take().ok_or("record empty".to_string())?;
+        let duration_ms = track_writer.duration();
 
         if let Some(out_s3) = self.out_s3.take() {
             surf::put(&out_s3)
                 .body(Body::from_file(&self.out_local_path).await.map_err(|e| e.to_string())?)
                 .await
                 .map_err(|e| e.to_string())?;
-            Ok(self.out_relative)
-        } else {
-            Ok(self.out_relative)
         }
+        Ok(RecordComposerResult {
+            media_uri: self.out_relative,
+            duration_ms,
+        })
     }
 }

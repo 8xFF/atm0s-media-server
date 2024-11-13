@@ -164,6 +164,7 @@ message ComposeEvent {
 
         message ComposeSummary {
             string media_uri = 1;
+            uint64 duration_ms = 2;
         }
 
         TransmuxSummary transmux = 1;
