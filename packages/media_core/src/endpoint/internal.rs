@@ -9,7 +9,7 @@ use media_server_protocol::{
     transport::RpcError,
 };
 use media_server_utils::Small2dMap;
-use sans_io_runtime::{return_if_none, return_if_some, TaskGroup, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
+use sans_io_runtime::{return_if_none, return_if_some, TaskGroup, TaskGroupOutput, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::{
     cluster::{
@@ -44,7 +44,7 @@ pub enum InternalOutput {
     RecordEvent(Instant, SessionRecordEvent),
     RpcRes(EndpointReqId, EndpointRes),
     Cluster(ClusterRoomHash, ClusterEndpointControl),
-    Destroy,
+    OnResourceEmpty,
 }
 
 type EndpointInternalWaitJoin = Option<(EndpointReqId, RoomId, PeerId, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, Option<AudioMixerConfig>)>;
@@ -56,10 +56,11 @@ pub struct EndpointInternal {
     joined: Option<(ClusterRoomHash, RoomId, PeerId, Option<AudioMixerMode>)>,
     local_tracks_id: Small2dMap<LocalTrackId, usize>,
     remote_tracks_id: Small2dMap<RemoteTrackId, usize>,
-    local_tracks: TaskSwitcherBranch<TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>, (usize, local_track::Output)>,
-    remote_tracks: TaskSwitcherBranch<TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>, (usize, remote_track::Output)>,
+    local_tracks: TaskSwitcherBranch<TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>, TaskGroupOutput<local_track::Output>>,
+    remote_tracks: TaskSwitcherBranch<TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>, TaskGroupOutput<remote_track::Output>>,
     bitrate_allocator: TaskSwitcherBranch<BitrateAllocator, bitrate_allocator::Output>,
     queue: VecDeque<InternalOutput>,
+    shutdown: bool,
     switcher: TaskSwitcher,
 }
 
@@ -75,6 +76,7 @@ impl EndpointInternal {
             remote_tracks: TaskSwitcherBranch::default(TaskType::RemoteTracks),
             bitrate_allocator: TaskSwitcherBranch::new(BitrateAllocator::new(cfg.max_ingress_bitrate, cfg.max_ingress_bitrate), TaskType::BitrateAllocator),
             queue: Default::default(),
+            shutdown: false,
             switcher: TaskSwitcher::new(3),
             cfg,
         }
@@ -85,10 +87,46 @@ impl EndpointInternal {
         self.local_tracks.input(&mut self.switcher).on_tick(now);
         self.remote_tracks.input(&mut self.switcher).on_tick(now);
     }
+
+    pub fn on_shutdown(&mut self, now: Instant) {
+        if self.shutdown {
+            return;
+        }
+        self.shutdown = true;
+        self.local_tracks.input(&mut self.switcher).on_shutdown(now);
+        self.remote_tracks.input(&mut self.switcher).on_shutdown(now);
+
+        // after shutdown, we need to pop all the remaining tasks
+        while let Some(task) = self.switcher.current() {
+            match task.try_into().expect("Should valid task type") {
+                TaskType::BitrateAllocator => self.pop_bitrate_allocator(now),
+                TaskType::LocalTracks => self.pop_local_tracks(now),
+                TaskType::RemoteTracks => self.pop_remote_tracks(now),
+            }
+        }
+
+        // if joined, send leave event
+        let (hash, room, peer, _) = return_if_none!(self.joined.take());
+        self.queue.push_back(InternalOutput::Cluster(hash, ClusterEndpointControl::Leave));
+        if self.cfg.record {
+            self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::LeaveRoom));
+        }
+        self.queue
+            .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.into(), peer: peer.into() })));
+    }
 }
 
 impl TaskSwitcherChild<InternalOutput> for EndpointInternal {
     type Time = Instant;
+
+    fn is_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty() && self.local_tracks.is_empty() && self.remote_tracks.is_empty()
+    }
+
+    fn empty_event(&self) -> InternalOutput {
+        InternalOutput::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, now: Instant) -> Option<InternalOutput> {
         return_if_some!(self.queue.pop_front());
 
@@ -301,7 +339,7 @@ impl EndpointInternal {
                         error: 0,
                     }),
                 ));
-                self.queue.push_back(InternalOutput::Destroy);
+                self.on_shutdown(now);
             }
             TransportState::Connected(ip) => {
                 log::info!("[EndpointInternal] connected");
@@ -334,8 +372,6 @@ impl EndpointInternal {
             }
             TransportState::Disconnected(err) => {
                 log::info!("[EndpointInternal] disconnected {:?}", err);
-                self.leave_room(now);
-                self.clear_tracks();
                 self.queue.push_back(InternalOutput::PeerEvent(
                     now,
                     peer_event::Event::Disconnected(peer_event::Disconnected { duration_ms: 0, reason: 0 }), //TODO provide correct reason
@@ -343,19 +379,19 @@ impl EndpointInternal {
                 if self.cfg.record {
                     self.queue.push_back(InternalOutput::RecordEvent(now, SessionRecordEvent::Disconnected));
                 }
-                self.queue.push_back(InternalOutput::Destroy);
+                self.on_shutdown(now);
             }
         }
     }
 
     fn on_transport_remote_track(&mut self, now: Instant, track: RemoteTrackId, event: RemoteTrackEvent) {
-        if let Some((name, priority, meta)) = event.need_create() {
+        if let Some((name, _priority, meta)) = event.need_create() {
             log::info!("[EndpointInternal] create remote track {:?}", track);
             let room = self.joined.as_ref().map(|j| j.0);
             let index = self
                 .remote_tracks
                 .input(&mut self.switcher)
-                .add_task(EndpointRemoteTrack::new(room, track, name, priority, meta, self.cfg.record));
+                .add_task(EndpointRemoteTrack::new(room, track, name, meta, self.cfg.record));
             self.remote_tracks_id.insert(track, index);
         }
         let index = return_if_none!(self.remote_tracks_id.get1(&track));
@@ -439,19 +475,6 @@ impl EndpointInternal {
         self.queue
             .push_back(InternalOutput::PeerEvent(now, peer_event::Event::Leave(peer_event::Leave { room: room.into(), peer: peer.into() })));
     }
-
-    /// only call when endpoint shutdown or disconnect
-    fn clear_tracks(&mut self) {
-        for (id, index) in self.local_tracks_id.pairs() {
-            self.local_tracks.input(&mut self.switcher).remove_task(index);
-            self.local_tracks_id.remove1(&id);
-        }
-
-        for (id, index) in self.remote_tracks_id.pairs() {
-            self.remote_tracks.input(&mut self.switcher).remove_task(index);
-            self.remote_tracks_id.remove1(&id);
-        }
-    }
 }
 
 /// This block is for cluster related events
@@ -488,7 +511,10 @@ impl EndpointInternal {
 /// This block for internal local and remote track
 impl EndpointInternal {
     fn pop_remote_tracks(&mut self, now: Instant) {
-        let (index, out) = return_if_none!(self.remote_tracks.pop_output(now, &mut self.switcher));
+        let (index, out) = match return_if_none!(self.remote_tracks.pop_output(now, &mut self.switcher)) {
+            TaskGroupOutput::TaskOutput(index, out) => (index, out),
+            TaskGroupOutput::OnResourceEmpty => return,
+        };
         let id = *self.remote_tracks_id.get2(&index).expect("Should have remote_track_id");
 
         match out {
@@ -516,7 +542,6 @@ impl EndpointInternal {
                     self.bitrate_allocator.input(&mut self.switcher).del_ingress_video_track(id);
                 }
                 self.remote_tracks.input(&mut self.switcher).remove_task(index);
-                self.remote_tracks_id.remove1(&id);
             }
             remote_track::Output::PeerEvent(ts, event) => {
                 self.queue.push_back(InternalOutput::PeerEvent(ts, event));
@@ -528,7 +553,10 @@ impl EndpointInternal {
     }
 
     fn pop_local_tracks(&mut self, now: Instant) {
-        let (index, out) = return_if_none!(self.local_tracks.pop_output(now, &mut self.switcher));
+        let (index, out) = match return_if_none!(self.local_tracks.pop_output(now, &mut self.switcher)) {
+            TaskGroupOutput::TaskOutput(index, out) => (index, out),
+            TaskGroupOutput::OnResourceEmpty => return,
+        };
         let id = *self.local_tracks_id.get2(&index).expect("Should have local_track_id");
         match out {
             local_track::Output::Event(event) => {
@@ -540,8 +568,8 @@ impl EndpointInternal {
             local_track::Output::RpcRes(req_id, res) => {
                 self.queue.push_back(InternalOutput::RpcRes(req_id, EndpointRes::LocalTrack(id, res)));
             }
-            local_track::Output::Started(kind, priority) => {
-                log::info!("[EndpointInternal] local track started {kind} priority {priority}");
+            local_track::Output::Bind(kind, priority) => {
+                log::info!("[EndpointInternal] local track bind {kind} priority {priority}");
                 if kind.is_video() {
                     self.bitrate_allocator.input(&mut self.switcher).set_egress_video_track(id, priority);
                 }
@@ -551,14 +579,18 @@ impl EndpointInternal {
                     self.bitrate_allocator.input(&mut self.switcher).set_egress_video_track(id, priority);
                 }
             }
-            local_track::Output::Stopped(kind) => {
-                log::info!("[EndpointInternal] local track stopped {kind}");
+            local_track::Output::Unbind(kind) => {
+                log::info!("[EndpointInternal] local track unbind {kind}");
                 if kind.is_video() {
                     self.bitrate_allocator.input(&mut self.switcher).del_egress_video_track(id);
                 }
             }
             local_track::Output::PeerEvent(ts, event) => {
                 self.queue.push_back(InternalOutput::PeerEvent(ts, event));
+            }
+            local_track::Output::OnResourceEmpty => {
+                self.local_tracks.input(&mut self.switcher).remove_task(index);
+                self.local_tracks_id.remove1(&id);
             }
         }
     }
@@ -612,7 +644,7 @@ mod tests {
 
     use super::EndpointInternal;
 
-    #[test]
+    #[test_log::test]
     fn test_join_leave_room_success() {
         let app = AppContext::root_app();
         let mut internal = EndpointInternal::new(EndpointCfg {
@@ -732,7 +764,7 @@ mod tests {
         assert_eq!(internal.pop_output(now), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_join_overwrite_auto_leave() {
         let app = AppContext::root_app();
         let mut internal = EndpointInternal::new(EndpointCfg {

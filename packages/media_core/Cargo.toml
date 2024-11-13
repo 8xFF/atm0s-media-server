@@ -21,3 +21,4 @@ indexmap = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
+test-log = { workspace = true }

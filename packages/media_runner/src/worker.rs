@@ -132,6 +132,7 @@ pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
     timer: TimePivot,
     last_feedback_gateway_agent: u64,
     secure: Arc<ES>,
+    shutdown: bool,
 }
 
 impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
@@ -219,11 +220,16 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             secure,
             sdn_backend_addrs: Default::default(),
             sdn_backend_slots: Default::default(),
+            shutdown: false,
         }
     }
 
     pub fn tasks(&self) -> usize {
         self.sdn_worker.tasks() + self.sdn_worker.tasks()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty() && self.sdn_worker.is_empty() && self.media_cluster.is_empty() && self.media_webrtc.is_empty() && self.media_rtpengine.is_empty()
     }
 
     pub fn on_tick(&mut self, now: Instant) {
@@ -369,9 +375,9 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         None
     }
 
-    pub fn shutdown(&mut self, now: Instant) {
+    pub fn on_shutdown(&mut self, now: Instant) {
         let now_ms = self.timer.timestamp_ms(now);
-        self.sdn_worker.input(&mut self.switcher).on_event(now_ms, SdnWorkerInput::ShutdownRequest);
+        self.sdn_worker.input(&mut self.switcher).on_shutdown(now_ms);
         self.media_cluster.input(&mut self.switcher).shutdown(now);
         self.media_webrtc.input(&mut self.switcher).shutdown(now);
         self.media_rtpengine.input(&mut self.switcher).shutdown(now);
@@ -406,7 +412,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 }
             },
             SdnWorkerOutput::Bus(event) => Output::Bus(event),
-            SdnWorkerOutput::ShutdownResponse => Output::Continue,
+            SdnWorkerOutput::OnResourceEmpty => Output::Continue,
             SdnWorkerOutput::Continue => Output::Continue,
         }
     }
@@ -435,6 +441,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 }
                 Output::Continue
             }
+            cluster::Output::OnResourceEmpty => Output::Continue,
             cluster::Output::Continue => Output::Continue,
         }
     }
@@ -492,7 +499,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     transport_webrtc::Variant::Webrtc => Output::ExtRpc(req_id, RpcRes::Webrtc(webrtc::RpcRes::Delete(res))),
                 },
             },
-            transport_webrtc::GroupOutput::Shutdown(_session) => Output::Continue,
+            transport_webrtc::GroupOutput::OnResourceEmpty => Output::Continue,
             transport_webrtc::GroupOutput::Continue => Output::Continue,
         }
     }
@@ -529,7 +536,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 Output::Continue
             }
             transport_rtpengine::GroupOutput::RecordEvent(_, session_id, ts, event) => Output::Record(session_id, ts, event),
-            transport_rtpengine::GroupOutput::Shutdown(_) => Output::Continue,
+            transport_rtpengine::GroupOutput::OnResourceEmpty => Output::Continue,
             transport_rtpengine::GroupOutput::Continue => Output::Continue,
         }
     }

@@ -19,17 +19,20 @@ use super::Output;
 
 const FIRE_SOURCE_INTERVAL: Duration = Duration::from_millis(500);
 
+#[derive(Debug)]
 struct TrackSlot {
     peer: PeerId,
     name: TrackName,
     peer_hash: PeerHashCode,
 }
 
+#[derive(Debug)]
 struct OutputSlot {
     last_fired_source: Instant,
 }
 
-pub struct AudioMixerPublisher<Endpoint> {
+#[derive(Debug)]
+pub struct AudioMixerPublisher<Endpoint: Debug> {
     _c: Count<Self>,
     channel_id: pubsub::ChannelId,
     tracks: HashMap<(Endpoint, RemoteTrackId), TrackSlot>,
@@ -48,10 +51,6 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
             slots: [None, None, None],
             queue: DynamicDeque::default(),
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.tracks.is_empty() && self.queue.is_empty()
     }
 
     pub fn on_tick(&mut self, now: Instant) {
@@ -119,23 +118,31 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         if self.tracks.is_empty() {
             log::info!("[ClusterAudioMixerPublisher] last track leave ind Auto mode => unpublish channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::PubStop)));
-            self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 }
 
-impl<Endpoint> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpoint> {
+impl<Endpoint: Debug> TaskSwitcherChild<Output<Endpoint>> for AudioMixerPublisher<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.tracks.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
 }
 
-impl<Endpoint> Drop for AudioMixerPublisher<Endpoint> {
+impl<Endpoint: Debug> Drop for AudioMixerPublisher<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterAudioMixerPublisher] Drop {}", self.channel_id);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.tracks.len(), 0, "Tracks not empty on drop");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.tracks.len(), 0, "Tracks not empty on drop {:?}", self.tracks);
     }
 }
 
@@ -156,7 +163,7 @@ mod test {
         Duration::from_millis(m)
     }
 
-    #[test]
+    #[test_log::test]
     fn track_publish_unpublish() {
         let channel = 0.into();
         let peer1: PeerId = "peer1".into();
@@ -214,11 +221,11 @@ mod test {
 
         publisher.on_track_unpublish(t0 + ms(100), 2, 0.into());
         assert_eq!(publisher.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::PubStop))));
-        assert_eq!(publisher.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(publisher.pop_output(()), None);
+        assert!(publisher.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "Track not found")]
     fn invalid_track_data_should_panic() {
         let t0 = Instant::now();

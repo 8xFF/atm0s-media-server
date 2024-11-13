@@ -222,7 +222,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[test_log::test]
     fn up_spatial() {
         test(
             200,
@@ -247,7 +247,7 @@ mod tests {
         )
     }
 
-    #[test]
+    #[test_log::test]
     fn down_spatial() {
         test(
             800,

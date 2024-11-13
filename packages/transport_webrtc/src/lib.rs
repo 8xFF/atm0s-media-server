@@ -19,4 +19,5 @@ pub enum WebrtcError {
     RpcTokenInvalid = 0x2007,
     RpcTokenRoomPeerNotMatch = 0x2008,
     RpcTokenAppNotMatch = 0x2009,
+    RpcAlreadyDisconnected = 0x2010,
 }

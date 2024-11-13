@@ -7,4 +7,5 @@ pub enum EndpointErrors {
     RemoteTrackInvalidPriority = 0x2001,
     RemoteTrackStopped = 0x2002,
     AudioMixerWrongMode = 0x3001,
+    Destroying = 0x4001,
 }

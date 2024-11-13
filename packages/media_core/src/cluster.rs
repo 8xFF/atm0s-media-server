@@ -6,7 +6,7 @@
 //!
 
 use derive_more::{AsRef, Display, From};
-use sans_io_runtime::{return_if_none, TaskGroup, TaskSwitcherChild};
+use sans_io_runtime::{return_if_none, TaskGroup, TaskGroupOutput, TaskSwitcherChild};
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -126,12 +126,14 @@ pub enum Input<Endpoint> {
 pub enum Output<Endpoint> {
     Sdn(RoomUserData, FeaturesControl),
     Endpoint(Vec<Endpoint>, ClusterEndpointEvent),
+    OnResourceEmpty,
     Continue,
 }
 
 pub struct MediaCluster<Endpoint: Debug + Copy + Clone + Hash + Eq> {
     rooms_map: HashMap<ClusterRoomHash, usize>,
     rooms: TaskGroup<room::Input<Endpoint>, room::Output<Endpoint>, ClusterRoom<Endpoint>, 16>,
+    shutdown: bool,
 }
 
 impl<Endpoint: Debug + Copy + Hash + Eq + Clone> Default for MediaCluster<Endpoint> {
@@ -139,6 +141,7 @@ impl<Endpoint: Debug + Copy + Hash + Eq + Clone> Default for MediaCluster<Endpoi
         Self {
             rooms_map: HashMap::new(),
             rooms: TaskGroup::default(),
+            shutdown: false,
         }
     }
 }
@@ -165,18 +168,34 @@ impl<Endpoint: Debug + Hash + Copy + Clone + Debug + Eq> MediaCluster<Endpoint> 
     }
 
     pub fn shutdown(&mut self, now: Instant) {
+        if self.shutdown {
+            return;
+        }
         self.rooms.on_shutdown(now);
+        self.shutdown = true;
     }
 }
 
 impl<Endpoint: Debug + Hash + Copy + Clone + Debug + Eq> TaskSwitcherChild<Output<Endpoint>> for MediaCluster<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.shutdown && self.rooms.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
-        let (index, out) = self.rooms.pop_output(())?;
+        let (index, out) = match self.rooms.pop_output(())? {
+            TaskGroupOutput::TaskOutput(index, out) => (index, out),
+            TaskGroupOutput::OnResourceEmpty => return Some(Output::Continue),
+        };
         match out {
             room::Output::Sdn(userdata, control) => Some(Output::Sdn(userdata, control)),
             room::Output::Endpoint(endpoints, event) => Some(Output::Endpoint(endpoints, event)),
-            room::Output::Destroy(room) => {
+            room::Output::OnResourceEmpty(room) => {
                 log::info!("[MediaCluster] remove room index {index}, hash {room}");
                 self.rooms_map.remove(&room).expect("Should have room with index");
                 self.rooms.remove_task(index);
@@ -208,7 +227,7 @@ mod tests {
 
     use super::{ClusterEndpointControl, ClusterRoomHash, MediaCluster, Output};
 
-    #[test]
+    #[test_log::test]
     fn multi_tenancy_room() {
         let app_root = AppContext { app: AppId::root_app() };
         let app1 = AppContext { app: AppId::from("app1") };
@@ -228,7 +247,7 @@ mod tests {
     //TODO should create room when new room event arrived
     //TODO should route to correct room
     //TODO should remove room after all peers leaved
-    #[test]
+    #[test_log::test]
     fn room_manager_should_work() {
         let mut cluster = MediaCluster::<u8>::default();
 

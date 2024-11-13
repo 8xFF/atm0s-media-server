@@ -15,12 +15,14 @@ use crate::{
     endpoint::MessageChannelLabel,
 };
 
-struct ChannelContainer<Endpoint> {
+#[derive(Debug)]
+struct ChannelContainer<Endpoint: Debug> {
     subscribers: HashSet<Endpoint>,
     label: MessageChannelLabel,
 }
 
-pub struct MessageChannelSubscriber<Endpoint> {
+#[derive(Debug)]
+pub struct MessageChannelSubscriber<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
     channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
@@ -28,7 +30,7 @@ pub struct MessageChannelSubscriber<Endpoint> {
     queue: VecDeque<Output<Endpoint>>,
 }
 
-impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelSubscriber<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelSubscriber<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
             _c: Default::default(),
@@ -37,10 +39,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelSubscriber<Endpoint> {
             channels: HashMap::new(),
             subscriptions: HashMap::new(),
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.queue.is_empty() && self.subscriptions.is_empty() && self.channels.is_empty()
     }
 
     pub fn on_channel_subscribe(&mut self, endpoint: Endpoint, label: &MessageChannelLabel) {
@@ -117,16 +115,25 @@ impl<Endpoint: Hash + Eq + Copy + Debug> MessageChannelSubscriber<Endpoint> {
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for MessageChannelSubscriber<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.subscriptions.is_empty() && self.channels.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
 }
 
-impl<Endpoint> Drop for MessageChannelSubscriber<Endpoint> {
+impl<Endpoint: Debug> Drop for MessageChannelSubscriber<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoomDataChannel {}/Subscriber] Drop", self.room);
         assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.subscriptions.len(), 0, "Subscribers not empty on drop");
-        assert_eq!(self.channels.len(), 0, "Channels not not empty on drop");
+        assert_eq!(self.subscriptions.len(), 0, "Subscribers not empty on drop {:?}", self.subscriptions);
+        assert_eq!(self.channels.len(), 0, "Channels not not empty on drop {:?}", self.channels);
     }
 }

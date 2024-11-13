@@ -37,14 +37,15 @@ const KEYFRAME_FEEDBACK_TIMEOUT: u16 = 2000; //2 seconds
 const BITRATE_FEEDBACK_KIND: u8 = 0;
 const KEYFRAME_FEEDBACK_KIND: u8 = 1;
 
-#[derive(Derivative)]
+#[derive(Derivative, Debug)]
 #[derivative(Default(bound = ""))]
-struct ChannelContainer<Endpoint> {
+struct ChannelContainer<Endpoint: Debug> {
     endpoints: Vec<(Endpoint, LocalTrackId)>,
     bitrate_fbs: HashMap<Endpoint, (Instant, Feedback)>,
 }
 
-pub struct RoomChannelSubscribe<Endpoint> {
+#[derive(Debug)]
+pub struct RoomChannelSubscribe<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
     channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
@@ -52,7 +53,7 @@ pub struct RoomChannelSubscribe<Endpoint> {
     queue: VecDeque<Output<Endpoint>>,
 }
 
-impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
     pub fn new(room: ClusterRoomHash) -> Self {
         Self {
             _c: Default::default(),
@@ -61,10 +62,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
             subscribers: HashMap::new(),
             queue: VecDeque::new(),
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.subscribers.is_empty() && self.queue.is_empty()
     }
 
     pub fn on_track_relay_changed(&mut self, channel: ChannelId, _relay: NodeId) {
@@ -164,26 +161,31 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> {
             log::info!("[ClusterRoom {}/Subscribers] last unsubscriber => Unsub channel {channel_id}", self.room);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)));
         }
-
-        if self.subscribers.is_empty() {
-            self.queue.push_back(Output::OnResourceEmpty);
-        }
     }
 }
 
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomChannelSubscribe<Endpoint> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.subscribers.is_empty() && self.channels.is_empty() && self.queue.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
 }
 
-impl<Endpoint> Drop for RoomChannelSubscribe<Endpoint> {
+impl<Endpoint: Debug> Drop for RoomChannelSubscribe<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoom {}/Subscriber] Drop", self.room);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.channels.len(), 0, "Channels not empty on drop");
-        assert_eq!(self.subscribers.len(), 0, "Subscribers not empty on drop");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.channels.len(), 0, "Channels not empty on drop {:?}", self.channels);
+        assert_eq!(self.subscribers.len(), 0, "Subscribers not empty on drop {:?}", self.subscribers);
     }
 }
 
@@ -221,7 +223,7 @@ mod tests {
 
     //TODO First Subscribe channel should sending Sub
     //TODO Last Unsubscribe channel should sending Unsub
-    #[test]
+    #[test_log::test]
     fn normal_sub_ubsub() {
         let room = 1.into();
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);
@@ -248,12 +250,12 @@ mod tests {
 
         subscriber.on_track_unsubscribe(endpoint, track);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
+        assert!(subscriber.is_empty());
     }
 
     //TODO Sending key-frame request
-    #[test]
+    #[test_log::test]
     fn send_key_frame() {
         let room = 1.into();
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);
@@ -279,12 +281,12 @@ mod tests {
 
         subscriber.on_track_unsubscribe(endpoint, track);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
+        assert!(subscriber.is_empty());
     }
 
     //TODO Sending bitrate request single sub
-    #[test]
+    #[test_log::test]
     fn send_bitrate_limit_speed() {
         let room = 1.into();
         let mut subscriber = RoomChannelSubscribe::<u8>::new(room);
@@ -359,7 +361,7 @@ mod tests {
         subscriber.on_track_unsubscribe(endpoint1, track1);
         subscriber.on_track_unsubscribe(endpoint2, track2);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(Control(channel_id, ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
+        assert!(subscriber.is_empty());
     }
 }

@@ -85,6 +85,10 @@ impl TransportWebrtcWhep {
 impl TransportWebrtcInternal for TransportWebrtcWhep {
     fn on_codec_config(&mut self, _cfg: &str0m::format::CodecConfig) {}
 
+    fn is_empty(&self) -> bool {
+        matches!(self.state, State::Disconnected) && self.queue.is_empty()
+    }
+
     fn on_tick(&mut self, now: Instant) {
         if let Some(init_bitrate) = self.bwe_state.on_tick(now) {
             self.queue.push_back(InternalOutput::Str0mResetBwe(init_bitrate));
@@ -217,11 +221,15 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
         }
     }
 
-    fn close(&mut self, _now: Instant) {
-        log::info!("[TransportWebrtcWhep] switched to disconnected with close action");
-        self.state = State::Disconnected;
-        self.queue
-            .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+    fn on_shutdown(&mut self, _now: Instant) {
+        if !matches!(self.state, State::Disconnected) {
+            log::info!("[TransportWebrtcWhep] switched to disconnected with close action");
+            self.state = State::Disconnected;
+            self.queue
+                .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+        } else {
+            log::warn!("[TransportWebrtcWhep] already disconnected, ignore close action");
+        }
     }
 
     fn pop_output(&mut self, _now: Instant) -> Option<InternalOutput> {

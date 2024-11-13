@@ -35,6 +35,7 @@ pub struct ConnectorAgentService<UserData, SC, SE, TC, TW> {
     subscriber: Option<ServiceControlActor<UserData>>,
     msg_queue: MessageQueue<ConnectorRequest, 1024>,
     queue: VecDeque<ServiceOutput<UserData, FeaturesControl, SE, TW>>,
+    shutdown: bool,
     _tmp: std::marker::PhantomData<(UserData, SC, SE, TC, TW)>,
 }
 
@@ -52,6 +53,7 @@ impl<UserData, SC, SE, TC, TW> ConnectorAgentService<UserData, SC, SE, TC, TW> {
             subscriber: None,
             queue: VecDeque::from([ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())]),
             msg_queue: MessageQueue::default(),
+            shutdown: false,
             _tmp: std::marker::PhantomData,
         }
     }
@@ -62,6 +64,10 @@ where
     SC: From<Control> + TryInto<Control> + Debug,
     SE: From<Event> + TryInto<Event>,
 {
+    fn is_service_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
+    }
+
     fn service_id(&self) -> u8 {
         AGENT_SERVICE_ID
     }
@@ -134,6 +140,10 @@ where
         }
     }
 
+    fn on_shutdown(&mut self, _ctx: &ServiceCtx, _now: u64) {
+        self.shutdown = true;
+    }
+
     fn pop_output2(&mut self, now: u64) -> Option<ServiceOutput<UserData, FeaturesControl, SE, TW>> {
         if let Some(out) = self.queue.pop_front() {
             return Some(out);
@@ -151,9 +161,14 @@ where
 
 pub struct ConnectorAgentServiceWorker<UserData, SC, SE, TC> {
     queue: VecDeque<ServiceWorkerOutput<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC>>,
+    shutdown: bool,
 }
 
 impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW> for ConnectorAgentServiceWorker<UserData, SC, SE, TC> {
+    fn is_service_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
+    }
+
     fn service_id(&self) -> u8 {
         AGENT_SERVICE_ID
     }
@@ -170,6 +185,10 @@ impl<UserData, SC, SE, TC, TW> ServiceWorker<UserData, FeaturesControl, Features
             ServiceWorkerInput::FromController(_) => {}
             ServiceWorkerInput::FeatureEvent(event) => self.queue.push_back(ServiceWorkerOutput::ForwardFeatureEventToController(event)),
         }
+    }
+
+    fn on_shutdown(&mut self, _ctx: &ServiceWorkerCtx, _now: u64) {
+        self.shutdown = true;
     }
 
     fn pop_output2(&mut self, _now: u64) -> Option<ServiceWorkerOutput<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC>> {
@@ -218,7 +237,10 @@ where
     }
 
     fn create_worker(&self) -> Box<dyn ServiceWorker<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {
-        Box::new(ConnectorAgentServiceWorker { queue: Default::default() })
+        Box::new(ConnectorAgentServiceWorker {
+            queue: Default::default(),
+            shutdown: false,
+        })
     }
 }
 

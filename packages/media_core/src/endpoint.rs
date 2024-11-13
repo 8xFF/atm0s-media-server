@@ -206,8 +206,8 @@ pub enum EndpointOutput<Ext> {
     PeerEvent(AppId, u64, Instant, peer_event::Event),
     RecordEvent(u64, Instant, SessionRecordEvent),
     Ext(Ext),
+    OnResourceEmpty,
     Continue,
-    Destroy,
 }
 
 #[derive(num_enum::TryFromPrimitive, num_enum::IntoPrimitive)]
@@ -232,6 +232,7 @@ pub struct Endpoint<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> {
     transport: TaskSwitcherBranch<T, TransportOutput<ExtOut>>,
     internal: TaskSwitcherBranch<EndpointInternal, InternalOutput>,
     switcher: TaskSwitcher,
+    shutdown: bool,
     _tmp: PhantomData<(ExtIn, ExtOut)>,
 }
 
@@ -244,6 +245,7 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
             transport: TaskSwitcherBranch::new(transport, TaskType::Transport),
             internal: TaskSwitcherBranch::new(EndpointInternal::new(cfg), TaskType::Internal),
             switcher: TaskSwitcher::new(2),
+            shutdown: false,
             _tmp: PhantomData,
         }
     }
@@ -273,7 +275,12 @@ where
     }
 
     fn on_shutdown(&mut self, now: Instant) {
-        self.transport.input(&mut self.switcher).on_input(now, TransportInput::SystemClose);
+        if self.shutdown {
+            return;
+        }
+        self.shutdown = true;
+        self.internal.input(&mut self.switcher).on_shutdown(now);
+        self.transport.input(&mut self.switcher).on_shutdown(now);
     }
 }
 
@@ -282,6 +289,15 @@ where
     T::Time: From<Instant>,
 {
     type Time = Instant;
+
+    fn is_empty(&self) -> bool {
+        self.internal.is_empty() && self.transport.is_empty()
+    }
+
+    fn empty_event(&self) -> EndpointOutput<ExtOut> {
+        EndpointOutput::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, now: Instant) -> Option<EndpointOutput<ExtOut>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
@@ -313,6 +329,10 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
                 self.internal.input(&mut self.switcher).on_transport_rpc(now, req_id, req);
                 None
             }
+            TransportOutput::OnResourceEmpty => {
+                // we don't need to forward this event to parent, itself will fire OnResourceEmpty
+                Some(EndpointOutput::Continue)
+            }
         }
     }
 
@@ -327,7 +347,10 @@ impl<T: Transport<ExtIn, ExtOut>, ExtIn, ExtOut> Endpoint<T, ExtIn, ExtOut> {
                 None
             }
             InternalOutput::Cluster(room, control) => Some(EndpointOutput::Cluster(room, control)),
-            InternalOutput::Destroy => Some(EndpointOutput::Destroy),
+            InternalOutput::OnResourceEmpty => {
+                // we don't need to forward this event to parent, itself will fire OnResourceEmpty
+                Some(EndpointOutput::Continue)
+            }
             InternalOutput::PeerEvent(ts, event) => Some(EndpointOutput::PeerEvent(self.app.clone(), self.session_id, ts, event)),
             InternalOutput::RecordEvent(ts, event) => Some(EndpointOutput::RecordEvent(self.session_id, ts, event)),
         }

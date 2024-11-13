@@ -198,6 +198,10 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
         self.media_convert.set_config(cfg);
     }
 
+    fn is_empty(&self) -> bool {
+        matches!(self.state, State::Disconnected) && self.queue.is_empty()
+    }
+
     fn on_tick(&mut self, now: Instant) {
         if let Some(init_bitrate) = self.bwe_state.on_tick(now) {
             self.queue.push_back(InternalOutput::Str0mResetBwe(init_bitrate));
@@ -517,9 +521,12 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             }
             Str0mEvent::ChannelClose(_channel) => {
                 log::info!("[TransportWebrtcSdk] channel closed, leave room {:?}", self.join);
-                self.state = State::Disconnected;
-                self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+                if !matches!(self.state, State::Disconnected) {
+                    log::info!("[TransportWebrtcSdk] switched to disconnected");
+                    self.state = State::Disconnected;
+                    self.queue
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+                }
             }
             Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
             Str0mEvent::MediaAdded(media) => self.on_str0m_media_added(now, media),
@@ -583,11 +590,15 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
         }
     }
 
-    fn close(&mut self, _now: Instant) {
-        log::info!("[TransportWebrtcSdk] switched to disconnected with close action");
-        self.state = State::Disconnected;
-        self.queue
-            .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+    fn on_shutdown(&mut self, _now: Instant) {
+        if !matches!(self.state, State::Disconnected) {
+            log::info!("[TransportWebrtcSdk] switched to disconnected with close action");
+            self.state = State::Disconnected;
+            self.queue
+                .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+        } else {
+            log::warn!("[TransportWebrtcSdk] already disconnected, ignore close action");
+        }
     }
 
     fn pop_output(&mut self, _now: Instant) -> Option<InternalOutput> {
@@ -758,15 +769,21 @@ impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
                 self.queue.push_back(InternalOutput::RpcReq(req_id, InternalRpcReq::SetRemoteSdp(req.sdp)));
             }
             protobuf::session::request::session::Request::Disconnect(_req) => {
-                log::info!("[TransportWebrtcSdk] switched to disconnected with close action from client");
-                self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
-                self.send_rpc_res(
-                    req_id,
-                    protobuf::session::response::Response::Session(protobuf::session::response::Session {
-                        response: Some(protobuf::session::response::session::Response::Disconnect(protobuf::session::response::session::Disconnect {})),
-                    }),
-                );
+                if !matches!(self.state, State::Disconnected) {
+                    log::info!("[TransportWebrtcSdk] switched to disconnected with close action from client");
+                    self.state = State::Disconnected;
+                    self.queue
+                        .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+                    self.send_rpc_res(
+                        req_id,
+                        protobuf::session::response::Response::Session(protobuf::session::response::Session {
+                            response: Some(protobuf::session::response::session::Response::Disconnect(protobuf::session::response::session::Disconnect {})),
+                        }),
+                    );
+                } else {
+                    log::warn!("[TransportWebrtcSdk] already disconnected, ignore close action from client");
+                    self.send_rpc_res_err(req_id, RpcError::new2(WebrtcError::RpcAlreadyDisconnected));
+                }
             }
         }
     }

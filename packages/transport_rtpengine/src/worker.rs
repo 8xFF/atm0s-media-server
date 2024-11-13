@@ -13,7 +13,7 @@ use media_server_protocol::{
 };
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
-    group_owner_type, return_if_some, TaskGroup, TaskSwitcherChild,
+    group_owner_type, return_if_some, TaskGroup, TaskGroupOutput, TaskSwitcherChild,
 };
 
 use crate::transport::{ExtIn, ExtOut, TransportRtpEngine};
@@ -34,7 +34,7 @@ pub enum GroupOutput {
     PeerEvent(RtpEngineSession, AppId, u64, Instant, peer_event::Event),
     RecordEvent(RtpEngineSession, u64, Instant, SessionRecordEvent),
     Ext(RtpEngineSession, ExtOut),
-    Shutdown(RtpEngineSession),
+    OnResourceEmpty,
     Continue,
 }
 
@@ -43,6 +43,7 @@ pub struct MediaWorkerRtpEngine {
     ip: IpAddr,
     endpoints: TaskGroup<EndpointInput<ExtIn>, EndpointOutput<ExtOut>, Endpoint<TransportRtpEngine, ExtIn, ExtOut>, 16>,
     queue: VecDeque<GroupOutput>,
+    shutdown: bool,
 }
 
 impl MediaWorkerRtpEngine {
@@ -51,6 +52,7 @@ impl MediaWorkerRtpEngine {
             ip,
             endpoints: TaskGroup::default(),
             queue: VecDeque::new(),
+            shutdown: false,
         }
     }
 
@@ -77,10 +79,10 @@ impl MediaWorkerRtpEngine {
             EndpointOutput::Cluster(room, control) => GroupOutput::Cluster(RtpEngineSession(index), room, control),
             EndpointOutput::PeerEvent(app, session_id, ts, event) => GroupOutput::PeerEvent(RtpEngineSession(index), app, session_id, ts, event),
             EndpointOutput::RecordEvent(session_id, ts, event) => GroupOutput::RecordEvent(RtpEngineSession(index), session_id, ts, event),
-            EndpointOutput::Destroy => {
+            EndpointOutput::OnResourceEmpty => {
                 log::info!("[TransportRtpEngine] destroy endpoint {index}");
                 self.endpoints.remove_task(index);
-                GroupOutput::Shutdown(RtpEngineSession(index))
+                GroupOutput::Continue
             }
             EndpointOutput::Ext(ext) => GroupOutput::Ext(RtpEngineSession(index), ext),
             EndpointOutput::Continue => GroupOutput::Continue,
@@ -120,15 +122,30 @@ impl MediaWorkerRtpEngine {
     }
 
     pub fn shutdown(&mut self, now: Instant) {
-        self.endpoints.on_shutdown(now);
+        if !self.shutdown {
+            self.shutdown = true;
+            self.endpoints.on_shutdown(now);
+        }
     }
 }
 
 impl TaskSwitcherChild<GroupOutput> for MediaWorkerRtpEngine {
     type Time = Instant;
+
+    fn empty_event(&self) -> GroupOutput {
+        GroupOutput::OnResourceEmpty
+    }
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.endpoints.tasks() == 0 && self.shutdown
+    }
+
     fn pop_output(&mut self, now: Instant) -> Option<GroupOutput> {
         return_if_some!(self.queue.pop_front());
-        let (index, out) = self.endpoints.pop_output(now)?;
+        let (index, out) = match self.endpoints.pop_output(now)? {
+            TaskGroupOutput::TaskOutput(index, out) => (index, out),
+            TaskGroupOutput::OnResourceEmpty => return Some(GroupOutput::Continue),
+        };
         Some(self.process_output(index, out))
     }
 }

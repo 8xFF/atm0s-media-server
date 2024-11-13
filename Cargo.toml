@@ -19,8 +19,9 @@ members = [
 ]
 
 [workspace.dependencies]
-sans-io-runtime = { version = "0.2", default-features = false }
-atm0s-sdn = { version = "0.2.2", default-features = false }
+sans-io-runtime = { version = "0.3", default-features = false }
+atm0s-sdn = { version = "0.2", default-features = false }
+atm0s-sdn-network = { version = "0.6", default-features = false }
 tokio = "1.37"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
 convert-enum = "0.1"
@@ -37,3 +38,4 @@ prost = "0.13"
 indexmap = "2.2"
 spin = "0.9"
 httpmock = "0.7"
+test-log = "0.2"

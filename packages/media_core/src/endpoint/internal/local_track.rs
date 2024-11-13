@@ -11,7 +11,6 @@ use media_server_protocol::{
     protobuf::{cluster_connector::peer_event, shared::receiver::Status as ProtoStatus},
     transport::{LocalTrackId, RpcError},
 };
-use media_server_utils::Count;
 use sans_io_runtime::{return_if_none, Task, TaskSwitcherChild};
 
 use crate::{
@@ -45,9 +44,10 @@ pub enum Output {
     Cluster(ClusterRoomHash, ClusterLocalTrackControl),
     PeerEvent(Instant, peer_event::Event),
     RpcRes(EndpointReqId, EndpointLocalTrackRes),
-    Started(MediaKind, TrackPriority),
+    Bind(MediaKind, TrackPriority),
     Updated(MediaKind, TrackPriority),
-    Stopped(MediaKind),
+    Unbind(MediaKind),
+    OnResourceEmpty,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -58,7 +58,6 @@ enum Status {
 }
 
 pub struct EndpointLocalTrack {
-    _c: Count<Self>,
     track: LocalTrackId,
     kind: MediaKind,
     room: Option<ClusterRoomHash>,
@@ -67,13 +66,13 @@ pub struct EndpointLocalTrack {
     selector: PacketSelector,
     timer: TimePivot,
     voice_activity: VoiceActivityDetector,
+    shutdown: bool,
 }
 
 impl EndpointLocalTrack {
     pub fn new(track: LocalTrackId, kind: MediaKind, room: Option<ClusterRoomHash>) -> Self {
         log::info!("[EndpointLocalTrack] track {kind}, room {:?}", room);
         Self {
-            _c: Default::default(),
             track,
             kind,
             room,
@@ -82,6 +81,7 @@ impl EndpointLocalTrack {
             selector: PacketSelector::new(kind, 2, 2),
             timer: TimePivot::build(),
             voice_activity: VoiceActivityDetector::default(),
+            shutdown: false,
         }
     }
 
@@ -184,11 +184,11 @@ impl EndpointLocalTrack {
                             self.kind
                         );
                         self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
-                        self.queue.push_back(Output::Stopped(self.kind));
+                        self.queue.push_back(Output::Unbind(self.kind));
                     }
                     self.bind = Some((peer.clone(), track.clone(), Status::Waiting));
                     self.selector.set_limit_layer(now_ms, config.max_spatial, config.max_temporal);
-                    self.queue.push_back(Output::Started(self.kind, config.priority));
+                    self.queue.push_back(Output::Bind(self.kind, config.priority));
                     self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Subscribe(peer.clone(), track.clone())));
                     self.queue.push_back(Output::PeerEvent(
                         now,
@@ -211,7 +211,7 @@ impl EndpointLocalTrack {
                     if let Some((peer, track, _)) = self.bind.take() {
                         log::info!("[EndpointLocalTrack] unview room {room} peer {peer} track {track}");
                         self.queue.push_back(Output::RpcRes(req_id, EndpointLocalTrackRes::Detach(Ok(()))));
-                        self.queue.push_back(Output::Stopped(self.kind));
+                        self.queue.push_back(Output::Unbind(self.kind));
                         self.queue.push_back(Output::Cluster(*room, ClusterLocalTrackControl::Unsubscribe));
                         self.queue.push_back(Output::PeerEvent(
                             now,
@@ -298,11 +298,28 @@ impl Task<Input, Output> for EndpointLocalTrack {
         }
     }
 
-    fn on_shutdown(&mut self, _now: Instant) {}
+    fn on_shutdown(&mut self, now: Instant) {
+        if self.shutdown {
+            return;
+        }
+        self.shutdown = true;
+        if self.room.is_some() {
+            self.on_leave_room(now);
+        }
+    }
 }
 
 impl TaskSwitcherChild<Output> for EndpointLocalTrack {
     type Time = Instant;
+
+    fn is_empty(&self) -> bool {
+        self.shutdown && self.queue.is_empty()
+    }
+
+    fn empty_event(&self) -> Output {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Instant) -> Option<Output> {
         self.queue.pop_front()
     }

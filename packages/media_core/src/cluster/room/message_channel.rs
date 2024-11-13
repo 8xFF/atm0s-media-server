@@ -27,7 +27,8 @@ pub enum Output<Endpoint> {
     OnResourceEmpty,
 }
 
-pub struct RoomMessageChannel<Endpoint> {
+#[derive(Debug)]
+pub struct RoomMessageChannel<Endpoint: Debug + Hash + Eq + Copy> {
     room: ClusterRoomHash,
     publisher: TaskSwitcherBranch<MessageChannelPublisher<Endpoint>, Output<Endpoint>>,
     subscriber: TaskSwitcherBranch<MessageChannelSubscriber<Endpoint>, Output<Endpoint>>,
@@ -43,10 +44,6 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMessageChannel<Endpoint> {
             subscriber: TaskSwitcherBranch::new(MessageChannelSubscriber::new(room), TaskType::Subscriber),
             switcher: TaskSwitcher::new(2),
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.publisher.is_empty() && self.subscriber.is_empty()
     }
 
     pub fn on_pubsub_event(&mut self, event: pubsub::Event) {
@@ -85,15 +82,21 @@ impl<Endpoint: Hash + Eq + Copy + Debug> RoomMessageChannel<Endpoint> {
 impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for RoomMessageChannel<Endpoint> {
     type Time = ();
 
+    fn is_empty(&self) -> bool {
+        self.publisher.is_empty() && self.subscriber.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         loop {
             match self.switcher.current()?.try_into().ok()? {
                 TaskType::Publisher => {
                     if let Some(out) = self.publisher.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
@@ -102,9 +105,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
                 TaskType::Subscriber => {
                     if let Some(out) = self.subscriber.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
@@ -115,9 +116,11 @@ impl<Endpoint: Debug + Hash + Eq + Copy> TaskSwitcherChild<Output<Endpoint>> for
     }
 }
 
-impl<Endpoint> Drop for RoomMessageChannel<Endpoint> {
+impl<Endpoint: Debug + Hash + Eq + Copy> Drop for RoomMessageChannel<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoomDataChannel] Drop {}", self.room);
+        assert!(self.publisher.is_empty(), "MessageChannelPublisher not empty on drop {:?}", self.publisher);
+        assert!(self.subscriber.is_empty(), "MessageChannelSubscriber not empty on drop {:?}", self.subscriber);
     }
 }
 
@@ -138,7 +141,7 @@ mod tests {
         endpoint::MessageChannelLabel,
     };
 
-    #[test]
+    #[test_log::test]
     fn start_stop_publish() {
         let now = ();
         let room_id = 1.into();
@@ -165,7 +168,7 @@ mod tests {
         assert_eq!(room.pop_output(now), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn sub_unsub() {
         let now = ();
         let room_id = 1.into();
@@ -208,7 +211,7 @@ mod tests {
         assert!(room.subscriber.is_empty());
     }
 
-    #[test]
+    #[test_log::test]
     fn receive_data() {
         let now = ();
         let room_id = 1.into();
@@ -259,7 +262,7 @@ mod tests {
         assert_eq!(room.pop_output(now), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn publish_data() {
         let now = ();
         let room_id = 1.into();
@@ -298,7 +301,7 @@ mod tests {
         assert_eq!(room.pop_output(now), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn leave_room() {
         let now = ();
         let room_id = 1.into();

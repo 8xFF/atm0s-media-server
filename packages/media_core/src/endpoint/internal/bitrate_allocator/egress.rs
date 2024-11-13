@@ -108,7 +108,7 @@ mod test {
 
     const MAX_BW: u64 = 2_500_000;
 
-    #[test]
+    #[test_log::test]
     fn no_source() {
         let mut allocator = EgressBitrateAllocator::new(MAX_BW);
         allocator.set_egress_estimate(200_000);
@@ -118,7 +118,7 @@ mod test {
         assert_eq!(allocator.pop_output(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn single_source() {
         let mut allocator = EgressBitrateAllocator::new(MAX_BW);
         allocator.set_video_track(0.into(), 1.into());
@@ -136,7 +136,7 @@ mod test {
         assert_eq!(allocator.pop_output(), None);
     }
 
-    #[test]
+    #[test_log::test]
     fn multi_source() {
         let mut allocator = EgressBitrateAllocator::new(MAX_BW);
         allocator.set_video_track(0.into(), 1.into());

@@ -78,6 +78,10 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
         self.media_convert.set_config(cfg);
     }
 
+    fn is_empty(&self) -> bool {
+        matches!(self.state, State::Disconnected) && self.queue.is_empty()
+    }
+
     fn on_tick(&mut self, now: Instant) {
         match &self.state {
             State::New => {
@@ -199,11 +203,15 @@ impl TransportWebrtcInternal for TransportWebrtcWhip {
         }
     }
 
-    fn close(&mut self, _now: Instant) {
-        log::info!("[TransportWebrtcWhip] switched to disconnected with close action");
-        self.state = State::Disconnected;
-        self.queue
-            .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+    fn on_shutdown(&mut self, _now: Instant) {
+        if !matches!(self.state, State::Disconnected) {
+            log::info!("[TransportWebrtcWhip] switched to disconnected with close action");
+            self.state = State::Disconnected;
+            self.queue
+                .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))));
+        } else {
+            log::warn!("[TransportWebrtcWhip] already disconnected, ignore close action");
+        }
     }
 
     fn pop_output(&mut self, _now: Instant) -> Option<InternalOutput> {

@@ -17,17 +17,19 @@ use crate::cluster::{ClusterAudioMixerEvent, ClusterEndpointEvent, ClusterLocalT
 
 use super::Output;
 
+#[derive(Debug)]
 struct EndpointSlot {
     peer: PeerHashCode,
     tracks: Vec<LocalTrackId>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct OutputSlot {
     source: Option<(PeerId, TrackName)>,
 }
 
-pub struct AudioMixerSubscriber<Endpoint, const OUTPUTS: usize> {
+#[derive(Debug)]
+pub struct AudioMixerSubscriber<Endpoint: Debug, const OUTPUTS: usize> {
     _c: Count<Self>,
     channel_id: ChannelId,
     queue: DynamicDeque<Output<Endpoint>, 16>,
@@ -46,10 +48,6 @@ impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscr
             outputs: array::from_fn(|_| None),
             mixer: audio_mixer::AudioMixer::new(OUTPUTS),
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.endpoints.is_empty() && self.queue.is_empty()
     }
 
     pub fn on_tick(&mut self, now: Instant) {
@@ -154,23 +152,31 @@ impl<Endpoint: Debug + Hash + Eq + Clone, const OUTPUTS: usize> AudioMixerSubscr
         if self.endpoints.is_empty() {
             log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] last endpoint leave in Auto mode => unsubscribe channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::UnsubAuto)));
-            self.queue.push_back(Output::OnResourceEmpty);
         }
     }
 }
 
-impl<Endpoint, const OUTPUTS: usize> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endpoint, OUTPUTS> {
+impl<Endpoint: Debug, const OUTPUTS: usize> TaskSwitcherChild<Output<Endpoint>> for AudioMixerSubscriber<Endpoint, OUTPUTS> {
     type Time = ();
+
+    fn is_empty(&self) -> bool {
+        self.queue.is_empty() && self.endpoints.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     fn pop_output(&mut self, _now: Self::Time) -> Option<Output<Endpoint>> {
         self.queue.pop_front()
     }
 }
 
-impl<Endpoint, const OUTPUTS: usize> Drop for AudioMixerSubscriber<Endpoint, OUTPUTS> {
+impl<Endpoint: Debug, const OUTPUTS: usize> Drop for AudioMixerSubscriber<Endpoint, OUTPUTS> {
     fn drop(&mut self) {
         log::info!("[ClusterAudioMixerSubscriber {OUTPUTS}] Drop {}", self.channel_id);
-        assert_eq!(self.queue.len(), 0, "Queue not empty on drop");
-        assert_eq!(self.endpoints.len(), 0, "Endpoints not empty on drop");
+        assert_eq!(self.queue.len(), 0, "Queue not empty on drop {:?}", self.queue);
+        assert_eq!(self.endpoints.len(), 0, "Endpoints not empty on drop {:?}", self.endpoints);
     }
 }
 
@@ -193,7 +199,7 @@ mod test {
         Duration::from_millis(m)
     }
 
-    #[test]
+    #[test_log::test]
     fn sub_unsub() {
         let t0 = Instant::now();
         let channel = 0.into();
@@ -284,7 +290,7 @@ mod test {
         //now is last endpoint => should fire Unsub
         subscriber.on_endpoint_leave(t0 + ms(100 + 2000), endpoint2);
         assert_eq!(subscriber.pop_output(()), Some(Output::Pubsub(pubsub::Control(channel, pubsub::ChannelControl::UnsubAuto))));
-        assert_eq!(subscriber.pop_output(()), Some(Output::OnResourceEmpty));
         assert_eq!(subscriber.pop_output(()), None);
+        assert!(subscriber.is_empty());
     }
 }

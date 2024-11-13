@@ -20,7 +20,7 @@ use media_server_protocol::{
     endpoint::{AudioMixerConfig, PeerId, TrackName},
     media::MediaPacket,
 };
-use sans_io_runtime::{TaskGroup, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
+use sans_io_runtime::{TaskGroup, TaskGroupOutput, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::{
     cluster::{ClusterAudioMixerControl, ClusterEndpointEvent, ClusterRoomHash},
@@ -53,9 +53,10 @@ pub enum Output<Endpoint> {
     OnResourceEmpty,
 }
 
-type AudioMixerManuals<T> = TaskSwitcherBranch<TaskGroup<manual::Input, Output<T>, ManualMixer<T>, 4>, (usize, Output<T>)>;
+type AudioMixerManuals<T> = TaskSwitcherBranch<TaskGroup<manual::Input, Output<T>, ManualMixer<T>, 4>, TaskGroupOutput<Output<T>>>;
 
-pub struct AudioMixer<Endpoint: Clone> {
+#[derive(Debug)]
+pub struct AudioMixer<Endpoint: Debug + Clone> {
     room: ClusterRoomHash,
     mix_channel_id: ChannelId,
     //store number of outputs
@@ -87,13 +88,6 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
             switcher: TaskSwitcher::new(5),
             last_tick: Instant::now(),
         }
-    }
-
-    ///
-    /// We need to wait all publisher, subscriber, and manuals ready to remove
-    ///
-    pub fn is_empty(&self) -> bool {
-        self.publisher.is_empty() && self.subscriber1.is_empty() && self.subscriber2.is_empty() && self.subscriber3.is_empty() && self.manuals.tasks() == 0
     }
 
     pub fn on_tick(&mut self, now: Instant) {
@@ -194,6 +188,20 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
 impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> for AudioMixer<Endpoint> {
     type Time = ();
 
+    fn is_empty(&self) -> bool {
+        self.manual_channels.is_empty()
+            && self.manual_mode.is_empty()
+            && self.publisher.is_empty()
+            && self.subscriber1.is_empty()
+            && self.subscriber2.is_empty()
+            && self.subscriber3.is_empty()
+            && self.manuals.is_empty()
+    }
+
+    fn empty_event(&self) -> Output<Endpoint> {
+        Output::OnResourceEmpty
+    }
+
     ///
     /// We need to wait all publisher, subscriber, and manuals ready to remove
     ///
@@ -203,9 +211,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
                 TaskType::Publisher => {
                     if let Some(out) = self.publisher.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
@@ -214,9 +220,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
                 TaskType::Subscriber1 => {
                     if let Some(out) = self.subscriber1.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
@@ -225,9 +229,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
                 TaskType::Subscriber2 => {
                     if let Some(out) = self.subscriber2.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
@@ -236,42 +238,49 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
                 TaskType::Subscriber3 => {
                     if let Some(out) = self.subscriber3.pop_output((), &mut self.switcher) {
                         if let Output::OnResourceEmpty = out {
-                            if self.is_empty() {
-                                return Some(Output::OnResourceEmpty);
-                            }
+                            // we dont need to forward OnResourceEmpty to parent
                         } else {
                             return Some(out);
                         }
                     }
                 }
                 TaskType::Manuals => {
-                    if let Some((index, out)) = self.manuals.pop_output((), &mut self.switcher) {
-                        match out {
-                            Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto)) => {
-                                if let Some(slot) = self.manual_channels.get_mut(&channel_id) {
-                                    slot.push(index);
-                                } else {
-                                    self.manual_channels.insert(channel_id, vec![index]);
-                                    return Some(out);
-                                }
-                            }
-                            Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)) => {
-                                let slot = self.manual_channels.get_mut(&channel_id).expect("Manual channel map not found");
-                                let (slot_index, _) = slot.iter().enumerate().find(|(_, task_i)| **task_i == index).expect("Subscribed task not found");
-                                slot.swap_remove(slot_index);
-                                if slot.is_empty() {
-                                    self.manual_channels.remove(&channel_id);
-                                    return Some(out);
-                                }
-                            }
-                            Output::OnResourceEmpty => {
-                                self.manuals.input(&mut self.switcher).remove_task(index);
-                                if self.is_empty() {
-                                    return Some(Output::OnResourceEmpty);
-                                }
-                            }
-                            _ => return Some(out),
+                    let (index, out) = match self.manuals.pop_output((), &mut self.switcher) {
+                        Some(TaskGroupOutput::TaskOutput(index, out)) => (index, out),
+                        Some(TaskGroupOutput::OnResourceEmpty) => {
+                            // we dont need to forward OnResourceEmpty to parent
+                            continue;
                         }
+                        None => {
+                            continue;
+                        }
+                    };
+
+                    match out {
+                        Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto)) => {
+                            if let Some(slot) = self.manual_channels.get_mut(&channel_id) {
+                                slot.push(index);
+                            } else {
+                                self.manual_channels.insert(channel_id, vec![index]);
+                                return Some(out);
+                            }
+                        }
+                        Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)) => {
+                            let slot = self.manual_channels.get_mut(&channel_id).expect("Manual channel map not found");
+                            let (slot_index, _) = slot.iter().enumerate().find(|(_, task_i)| **task_i == index).expect("Subscribed task not found");
+                            slot.swap_remove(slot_index);
+                            if slot.is_empty() {
+                                self.manual_channels.remove(&channel_id);
+                                return Some(out);
+                            }
+                        }
+                        Output::OnResourceEmpty => {
+                            self.manuals.input(&mut self.switcher).remove_task(index);
+                            if self.is_empty() {
+                                return Some(Output::OnResourceEmpty);
+                            }
+                        }
+                        _ => return Some(out),
                     }
                 }
             }
@@ -279,11 +288,15 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
     }
 }
 
-impl<Endpoint: Clone> Drop for AudioMixer<Endpoint> {
+impl<Endpoint: Debug + Clone> Drop for AudioMixer<Endpoint> {
     fn drop(&mut self) {
         log::info!("[ClusterRoomAudioMixer] Drop {}", self.room);
-        assert_eq!(self.manual_channels.len(), 0, "Manual channels not empty on drop");
-        assert_eq!(self.manual_mode.len(), 0, "Manual modes not empty on drop");
-        assert_eq!(self.manuals.tasks(), 0, "Manuals not empty on drop");
+        assert_eq!(self.manual_channels.len(), 0, "Manual channels not empty on drop {:?}", self.manual_channels);
+        assert_eq!(self.manual_mode.len(), 0, "Manual modes not empty on drop {:?}", self.manual_mode);
+        assert!(self.manuals.is_empty(), "AudioMixerManuals not empty on drop {:?}", self.manuals);
+        assert!(self.publisher.is_empty(), "AudioMixerPublisher not empty on drop {:?}", self.publisher);
+        assert!(self.subscriber1.is_empty(), "AudioMixerSubscriber1 not empty on drop {:?}", self.subscriber1);
+        assert!(self.subscriber2.is_empty(), "AudioMixerSubscriber2 not empty on drop {:?}", self.subscriber2);
+        assert!(self.subscriber3.is_empty(), "AudioMixerSubscriber3 not empty on drop {:?}", self.subscriber3);
     }
 }

@@ -468,7 +468,7 @@ dependencies = [
  "atm0s-sdn",
  "clap",
  "convert-enum",
- "derive_more 1.0.0",
+ "derive_more",
  "hex",
  "local-ip-address",
  "log",
@@ -502,9 +502,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b95dae8a1c71d28f90b1c891eddf9d80a84249ae16f557a36e1e690c2d83ab6"
+checksum = "9ae4bafdf42069f4419ca9b361a3a31d59d8bbdbf87b14a0eee7fdcd744d30db"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -533,9 +533,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-network"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f890567c3ee41e7748ddee4ab6c8edd7c1fbdc93fde5d322187eeb00673dfe0b"
+checksum = "68bb1728d2a0f5f517c6be60a6e32bd73767b8bf70bb9df5f006d188def58210"
 dependencies = [
  "aes-gcm 0.10.3",
  "atm0s-sdn-identity",
@@ -546,7 +546,7 @@ dependencies = [
  "convert-enum",
  "derivative",
  "log",
- "mockall 0.12.1",
+ "mockall",
  "num",
  "num_enum",
  "parking_lot",
@@ -561,14 +561,14 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-router"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b88e27523f92b50bd5c827281b52ef73cd8497c5df6c7bc95a167e503f28d60"
+checksum = "6679fb3c1797ae958c247a0549c3e33224c7c0352e5b28bb984f8a7e90bd7bf7"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
  "log",
- "mockall 0.12.1",
+ "mockall",
  "serde",
 ]
 
@@ -1144,12 +1144,6 @@ dependencies = [
 
 [[package]]
 name = "convert_case"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
-
-[[package]]
-name = "convert_case"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
@@ -1521,19 +1515,6 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "0.99.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f33878137e4dafd7fa914ad4e259e18a4e8e532b9617a2d0150262bf53abfce"
-dependencies = [
- "convert_case 0.4.0",
- "proc-macro2",
- "quote",
- "rustc_version 0.4.1",
- "syn 2.0.79",
-]
-
-[[package]]
-name = "derive_more"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
@@ -1547,7 +1528,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
- "convert_case 0.6.0",
+ "convert_case",
  "proc-macro2",
  "quote",
  "syn 2.0.79",
@@ -1696,6 +1677,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b45de904aa0b010bce2ab45264d0631681847fa7b6f2eaa7dab7619943bc4f59"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "env_filter"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "log",
 ]
 
 [[package]]
@@ -3233,15 +3235,16 @@ dependencies = [
  "atm0s-sdn",
  "audio-mixer",
  "derivative",
- "derive_more 1.0.0",
+ "derive_more",
  "indexmap",
  "log",
  "media-server-protocol",
  "media-server-utils",
- "mockall 0.13.0",
+ "mockall",
  "num_enum",
  "sans-io-runtime",
  "smallmap",
+ "test-log",
  "tracing-subscriber",
 ]
 
@@ -3250,7 +3253,7 @@ name = "media-server-gateway"
 version = "0.1.0"
 dependencies = [
  "atm0s-sdn",
- "derive_more 1.0.0",
+ "derive_more",
  "httpmock",
  "log",
  "media-server-protocol",
@@ -3283,7 +3286,7 @@ dependencies = [
  "bincode",
  "convert-enum",
  "derivative",
- "derive_more 1.0.0",
+ "derive_more",
  "log",
  "prost",
  "prost-build",
@@ -3358,6 +3361,7 @@ dependencies = [
 name = "media-server-utils"
 version = "0.1.0"
 dependencies = [
+ "derive_more",
  "log",
  "once_cell",
  "pin-project-lite",
@@ -3435,21 +3439,6 @@ checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
 
 [[package]]
 name = "mockall"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43766c2b5203b10de348ffe19f7e54564b64f3d6018ff7648d1e2d6d3a0f0a48"
-dependencies = [
- "cfg-if",
- "downcast",
- "fragile",
- "lazy_static",
- "mockall_derive 0.12.1",
- "predicates",
- "predicates-tree",
-]
-
-[[package]]
-name = "mockall"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4c28b3fb6d753d28c20e826cd46ee611fda1cf3cde03a443a974043247c065a"
@@ -3457,21 +3446,9 @@ dependencies = [
  "cfg-if",
  "downcast",
  "fragile",
- "mockall_derive 0.13.0",
+ "mockall_derive",
  "predicates",
  "predicates-tree",
-]
-
-[[package]]
-name = "mockall_derive"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af7cbce79ec385a1d4f54baa90a76401eb15d9cab93685f62e7e9f942aa00ae2"
-dependencies = [
- "cfg-if",
- "proc-macro2",
- "quote",
- "syn 2.0.79",
 ]
 
 [[package]]
@@ -4240,7 +4217,7 @@ checksum = "5c354a706a81a17657da8441869c6ce3d486ef5e72705919d6035fb038a6f7b5"
 dependencies = [
  "base64 0.22.1",
  "bytes 1.7.2",
- "derive_more 1.0.0",
+ "derive_more",
  "futures-util",
  "indexmap",
  "mime",
@@ -5213,12 +5190,12 @@ dependencies = [
 
 [[package]]
 name = "sans-io-runtime"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9ecb86ad7989fbacc137308565897a1e401a101043c1ccfbe5bd8a9fea79675"
+checksum = "00a1be6434e4714a0e0d75634aca19691a5ea6bee5163391b3b82260565bbb68"
 dependencies = [
  "convert-enum",
- "derive_more 0.99.18",
+ "derive_more",
  "heapless",
  "log",
  "num_enum",
@@ -6443,6 +6420,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 
 [[package]]
+name = "test-log"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dffced63c2b5c7be278154d76b479f9f9920ed34e7574201407f0b14e2bbb93"
+dependencies = [
+ "env_logger",
+ "test-log-macros",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "test-log-macros"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5999e24eaa32083191ba4e425deb75cdf25efefabe5aaccb7446dd0d4122a3f5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.79",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6738,7 +6737,7 @@ dependencies = [
 name = "transport-rtpengine"
 version = "0.1.0"
 dependencies = [
- "derive_more 1.0.0",
+ "derive_more",
  "log",
  "media-server-codecs",
  "media-server-core",
@@ -6756,7 +6755,7 @@ dependencies = [
 name = "transport-webrtc"
 version = "0.1.0"
 dependencies = [
- "derive_more 1.0.0",
+ "derive_more",
  "log",
  "media-server-core",
  "media-server-protocol",
