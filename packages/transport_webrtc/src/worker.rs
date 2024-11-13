@@ -197,7 +197,7 @@ impl<ES: MediaEdgeSecure> TaskSwitcherChild<GroupOutput> for MediaWorkerWebrtc<E
     }
 
     fn is_empty(&self) -> bool {
-        self.shutdown && self.queue.is_empty() && self.endpoints.tasks() == 0 && self.shutdown
+        self.shutdown && self.queue.is_empty() && self.endpoints.is_empty()
     }
 
     fn pop_output(&mut self, now: Instant) -> Option<GroupOutput> {
