@@ -291,6 +291,7 @@ where
     type Time = Instant;
 
     fn is_empty(&self) -> bool {
+        // we don't need to check shutdown here, because it can be shutdown by transport itself
         self.internal.is_empty() && self.transport.is_empty()
     }
 

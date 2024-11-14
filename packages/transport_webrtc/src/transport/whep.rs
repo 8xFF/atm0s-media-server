@@ -36,6 +36,12 @@ enum State {
     Disconnected,
 }
 
+impl State {
+    fn is_shutdown(&self) -> bool {
+        matches!(self, State::ConnectError(_) | State::Disconnected)
+    }
+}
+
 #[derive(Debug)]
 enum TransportWebrtcError {
     Timeout,
@@ -86,7 +92,7 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
     fn on_codec_config(&mut self, _cfg: &str0m::format::CodecConfig) {}
 
     fn is_empty(&self) -> bool {
-        matches!(self.state, State::Disconnected) && self.queue.is_empty()
+        self.state.is_shutdown() && self.queue.is_empty()
     }
 
     fn on_tick(&mut self, now: Instant) {
@@ -176,6 +182,8 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
             Str0mEvent::Connected => {
                 log::info!("[TransportWebrtcWhep] connected");
                 self.state = State::Connected;
+                self.queue
+                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(self.remote)))));
                 self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::RpcReq(
                     0.into(),
                     EndpointReq::JoinRoom(
@@ -190,8 +198,6 @@ impl TransportWebrtcInternal for TransportWebrtcWhep {
                         None,
                     ),
                 )));
-                self.queue
-                    .push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(self.remote)))));
             }
             Str0mEvent::IceConnectionStateChange(state) => self.on_str0m_state(now, state),
             Str0mEvent::MediaAdded(media) => self.on_str0m_media_added(now, media),
@@ -375,5 +381,108 @@ impl TransportWebrtcWhep {
                 self.subscribed.peer = None;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::Ipv4Addr;
+
+    use super::*;
+
+    #[test]
+    fn shutdown_before_connected() {
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let now = Instant::now();
+        let mut transport = TransportWebrtcWhep::new("room".into(), "peer".into(), None, ip);
+        assert_eq!(transport.pop_output(now), None);
+
+        transport.on_tick(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(ip)))))
+        );
+        assert_eq!(transport.pop_output(now), None);
+
+        transport.on_shutdown(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+        );
+        assert_eq!(transport.pop_output(now), None);
+        assert!(transport.is_empty());
+    }
+
+    #[test]
+    fn shutdown_after_connected() {
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let now = Instant::now();
+        let room: RoomId = "room".into();
+        let peer: PeerId = "peer".into();
+
+        let mut transport = TransportWebrtcWhep::new(room.clone(), peer.clone(), None, ip);
+        assert_eq!(transport.pop_output(now), None);
+
+        transport.on_tick(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(ip)))))
+        );
+
+        transport.on_str0m_event(now, str0m::Event::Connected);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(ip)))))
+        );
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::RpcReq(
+                0.into(),
+                EndpointReq::JoinRoom(
+                    room.clone(),
+                    peer.clone(),
+                    PeerMeta { metadata: None, extra_data: None },
+                    RoomInfoPublish { peer: false, tracks: false },
+                    RoomInfoSubscribe { peers: false, tracks: true },
+                    None,
+                ),
+            )))
+        );
+
+        transport.on_shutdown(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+        );
+        assert_eq!(transport.pop_output(now), None);
+        assert!(transport.is_empty());
+    }
+
+    #[test]
+    fn shutdown_after_connect_error() {
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let now = Instant::now();
+        let room: RoomId = "room".into();
+        let peer: PeerId = "peer".into();
+
+        let mut transport = TransportWebrtcWhep::new(room.clone(), peer.clone(), None, ip);
+        assert_eq!(transport.pop_output(now), None);
+
+        transport.on_tick(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(ip)))))
+        );
+
+        transport.on_tick(now + Duration::from_secs(TIMEOUT_SEC));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::ConnectError(
+                TransportError::Timeout
+            )))))
+        );
+
+        assert_eq!(transport.pop_output(now), None);
+        assert!(transport.is_empty());
     }
 }
