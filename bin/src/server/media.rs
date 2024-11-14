@@ -80,6 +80,14 @@ pub struct Args {
     /// Number of workers for uploading recordings.
     #[arg(env, long, default_value_t = 5)]
     record_upload_worker: usize,
+
+    /// Enables the Gateway Agent service.
+    #[arg(env, long)]
+    disable_gateway_agent: bool,
+
+    /// Enables the Connector Agent service.
+    #[arg(env, long)]
+    disable_connector_agent: bool,
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
@@ -147,6 +155,8 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
                 max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core), (ServiceKind::RtpEngine, workers as u32 * args.ccu_per_core)]),
+                enable_gateway_agent: !args.disable_gateway_agent,
+                enable_connector_agent: !args.disable_connector_agent,
             },
         };
         controller.add_worker::<_, _, MediaRuntimeWorker<_>, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);

@@ -6,6 +6,8 @@ use std::{
 };
 
 use atm0s_sdn::{
+    base::ServiceBuilder,
+    features::{FeaturesControl, FeaturesEvent},
     generate_node_addr,
     secure::{HandshakeBuilderXDA, StaticKeyAuthorization},
     services::{manual_discovery, visualization},
@@ -49,6 +51,8 @@ pub struct MediaConfig<ES> {
     pub rtpengine_rtp_ip: IpAddr,
     pub secure: Arc<ES>,
     pub max_live: HashMap<ServiceKind, u32>,
+    pub enable_gateway_agent: bool,
+    pub enable_connector_agent: bool,
 }
 
 pub type SdnConfig = SdnWorkerCfg<UserData, SC, SE, TC, TW>;
@@ -170,9 +174,15 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
             vec![],
             vec![generate_gateway_zone_tag(sdn_zone)],
         ));
-        let gateway = Arc::new(GatewayAgentServiceBuilder::new(media.max_live));
-        let connector = Arc::new(ConnectorAgentServiceBuilder::new());
         let history = Arc::new(DataWorkerHistory::default());
+
+        let mut services: Vec<Arc<dyn ServiceBuilder<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>>> = vec![visualization, discovery];
+        if media.enable_gateway_agent {
+            services.push(Arc::new(GatewayAgentServiceBuilder::new(media.max_live)));
+        }
+        if media.enable_connector_agent {
+            services.push(Arc::new(ConnectorAgentServiceBuilder::new()));
+        }
 
         let sdn_config = SdnConfig {
             node_id,
@@ -183,18 +193,14 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                     authorization: Arc::new(StaticKeyAuthorization::new(secret)),
                     handshake_builder: Arc::new(HandshakeBuilderXDA),
                     random: Box::new(OsRng),
-                    services: vec![visualization.clone(), discovery.clone(), gateway.clone(), connector.clone()],
+                    services: services.clone(),
                     history: history.clone(),
                 })
             } else {
                 None
             },
             tick_ms: 1000,
-            data: DataPlaneCfg {
-                worker_id: 0,
-                services: vec![visualization, discovery, gateway, connector],
-                history,
-            },
+            data: DataPlaneCfg { worker_id: 0, services, history },
         };
 
         let mut queue = DynamicDeque::default();
