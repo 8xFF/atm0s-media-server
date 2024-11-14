@@ -77,6 +77,12 @@ enum State {
     Disconnected,
 }
 
+impl State {
+    fn is_shutdown(&self) -> bool {
+        matches!(self, State::ConnectError(_) | State::Disconnected)
+    }
+}
+
 #[derive(Debug)]
 enum TransportWebrtcError {
     Timeout,
@@ -199,7 +205,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
     }
 
     fn is_empty(&self) -> bool {
-        matches!(self.state, State::Disconnected) && self.queue.is_empty()
+        self.state.is_shutdown() && self.queue.is_empty()
     }
 
     fn on_tick(&mut self, now: Instant) {
@@ -452,7 +458,6 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                         response: Some(MessageChannelResponse::Sub(Subscribe {})),
                     }),
                 ),
-
                 EndpointMessageChannelRes::Unsubscribe(Ok(_)) => self.send_rpc_res(
                     req_id.0,
                     media_server_protocol::protobuf::session::response::Response::MessageChannel(MessageChannel {
@@ -591,7 +596,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
     }
 
     fn on_shutdown(&mut self, _now: Instant) {
-        if !matches!(self.state, State::Disconnected) {
+        if !self.state.is_shutdown() {
             log::info!("[TransportWebrtcSdk] switched to disconnected with close action");
             self.state = State::Disconnected;
             self.queue
@@ -907,12 +912,12 @@ mod tests {
     use std::{
         net::{IpAddr, Ipv4Addr},
         sync::Arc,
-        time::Instant,
+        time::{Duration, Instant},
     };
 
     use media_server_core::{
         endpoint::EndpointReq,
-        transport::{TransportEvent, TransportOutput, TransportState},
+        transport::{TransportError, TransportEvent, TransportOutput, TransportState},
     };
     use media_server_protocol::{
         endpoint::{PeerMeta, RoomInfoPublish, RoomInfoSubscribe},
@@ -933,7 +938,7 @@ mod tests {
     use str0m::channel::ChannelId;
 
     use crate::{
-        transport::{InternalOutput, TransportWebrtcInternal},
+        transport::{webrtc::TIMEOUT_SEC, InternalOutput, TransportWebrtcInternal},
         WebrtcError,
     };
 
@@ -1138,6 +1143,88 @@ mod tests {
 
         assert_eq!(transport.pop_output(now), Some(InternalOutput::Str0mSendData(channel_id, event_buf)));
         assert_eq!(transport.pop_output(now), None);
+    }
+
+    #[test]
+    fn connect_error_shutdown() {
+        let app = AppContext::root_app();
+        let req = gateway::ConnectRequest::default();
+
+        let now = Instant::now();
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
+        let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
+        assert_eq!(transport.pop_output(now), None);
+
+        transport.on_tick(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(ip)))))
+        );
+
+        transport.on_tick(now + Duration::from_secs(TIMEOUT_SEC));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::ConnectError(
+                TransportError::Timeout
+            )))))
+        );
+        assert_eq!(transport.pop_output(now), None);
+        assert!(transport.is_empty());
+    }
+
+    #[test]
+    fn shutdown_before_connected() {
+        let app = AppContext::root_app();
+        let req = gateway::ConnectRequest::default();
+
+        let now = Instant::now();
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
+        let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
+        assert_eq!(transport.pop_output(now), None);
+
+        transport.on_tick(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connecting(ip)))))
+        );
+
+        transport.on_shutdown(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+        );
+        assert_eq!(transport.pop_output(now), None);
+        assert!(transport.is_empty());
+    }
+
+    #[test]
+    fn shutdown_after_connected() {
+        let app = AppContext::root_app();
+        let req = gateway::ConnectRequest::default();
+
+        let channel_id = create_channel_id();
+
+        let now = Instant::now();
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
+        let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt.clone(), ip);
+        assert_eq!(transport.pop_output(now), None);
+
+        transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(ip)))))
+        );
+
+        transport.on_shutdown(now);
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Disconnected(None)))))
+        );
+        assert_eq!(transport.pop_output(now), None);
+        assert!(transport.is_empty());
     }
 
     //TODO test remote track non-source
