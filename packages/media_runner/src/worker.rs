@@ -87,6 +87,8 @@ pub enum SE {
 pub type TC = ();
 pub type TW = ();
 
+pub type WServiceBuilder = dyn ServiceBuilder<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>;
+
 pub enum Input {
     NodeStats(NodeMetrics),
     ExtRpc(u64, RpcReq<usize>),
@@ -176,7 +178,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         ));
         let history = Arc::new(DataWorkerHistory::default());
 
-        let mut services: Vec<Arc<dyn ServiceBuilder<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>>> = vec![visualization, discovery];
+        let mut services: Vec<Arc<WServiceBuilder>> = vec![visualization, discovery];
         if media.enable_gateway_agent {
             services.push(Arc::new(GatewayAgentServiceBuilder::new(media.max_live)));
         }
