@@ -52,44 +52,42 @@ type TW = ();
 pub struct Args {
     /// Location latitude.
     #[arg(env, long, default_value_t = 0.0)]
-    lat: f32,
+    pub lat: f32,
 
     /// Location longitude.
     #[arg(env, long, default_value_t = 0.0)]
-    lon: f32,
+    pub lon: f32,
 
     /// Path to the GeoIP database.
     #[arg(env, long, default_value = "./maxminddb-data/GeoLite2-City.mmdb")]
-    geo_db: String,
+    pub geo_db: String,
 
     /// Maximum CPU usage (in percent) allowed for routing to a media node or gateway node.
     #[arg(env, long, default_value_t = 60)]
-    max_cpu: u8,
+    pub max_cpu: u8,
 
     /// Maximum memory usage (in percent) allowed for routing to a media node or gateway node.
     #[arg(env, long, default_value_t = 80)]
-    max_memory: u8,
+    pub max_memory: u8,
 
     /// Maximum disk usage (in percent) allowed for routing to a media node or gateway node.
     #[arg(env, long, default_value_t = 90)]
-    max_disk: u8,
+    pub max_disk: u8,
 
     /// The port for binding the RTPengine command UDP socket.
     #[arg(env, long)]
-    rtpengine_cmd_addr: Option<SocketAddr>,
+    pub rtpengine_cmd_addr: Option<SocketAddr>,
 
     /// multi-tenancy sync endpoint
     #[arg(env, long)]
-    multi_tenancy_sync: Option<String>,
+    pub multi_tenancy_sync: Option<String>,
 
     /// multi-tenancy sync endpoint
     #[arg(env, long, default_value_t = 30_000)]
-    multi_tenancy_sync_interval_ms: u64,
+    pub multi_tenancy_sync_interval_ms: u64,
 }
 
 pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
-    rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
-
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
     let default_cluster_cert = CertificateDer::from(default_cluster_cert_buf.to_vec());
@@ -101,6 +99,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let edge_secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
 
     let app_storage = if let Some(url) = args.multi_tenancy_sync {
+        log::info!("[MediaGateway] multi-tenancy sync is enabled, using url: {}", url);
         let app_storage = Arc::new(MultiTenancyStorage::new());
         let mut app_sync = MultiTenancySync::new(app_storage.clone(), url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
         tokio::spawn(async move {
@@ -108,6 +107,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         });
         app_storage
     } else {
+        log::info!("[MediaGateway] multi-tenancy sync is disabled, using single tenant with secret: {}", node.secret);
         Arc::new(MultiTenancyStorage::new_with_single(&node.secret, None))
     };
     let gateway_secure = MediaGatewaySecureJwt::new(node.secret.as_bytes(), app_storage.clone());
@@ -130,10 +130,10 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         let rtpengine_udp = NgUdpTransport::new(ngproto_addr).await;
         let secure2 = edge_secure.clone();
         tokio::spawn(async move {
-            log::info!("[MediaServer] start ng_controller task");
+            log::info!("[MediaGateway] start ng_controller task");
             let mut server = NgControllerServer::new(rtpengine_udp, secure2, req_tx);
             while server.recv().await.is_some() {}
-            log::info!("[MediaServer] stop ng_controller task");
+            log::info!("[MediaGateway] stop ng_controller task");
         });
     }
 
@@ -248,7 +248,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
             tokio::spawn(async move {
                 let res = local_rpc_processor.process_req(conn_part, param).await;
-                res_tx.send(res).print_err2("answer http request error");
+                res_tx.send(res).print_err2("[MediaGateway] answer http request error");
             });
         }
         while let Ok(control) = connector_agent_rx.try_recv() {
@@ -271,7 +271,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {
                     if let Err(e) = vnet_tx.try_send(event) {
-                        log::error!("[MediaEdge] forward Sdn SocketEvent error {:?}", e);
+                        log::error!("[MediaGateway] forward Sdn SocketEvent error {:?}", e);
                     }
                 }
                 _ => {}

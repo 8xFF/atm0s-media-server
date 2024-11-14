@@ -44,55 +44,53 @@ use runtime_worker::{ExtIn, ExtOut};
 pub struct Args {
     /// Enables the Token API, which allows token generation.
     #[arg(env, long)]
-    enable_token_api: bool,
+    pub enable_token_api: bool,
 
     /// Enables WebRTC ICE Lite mode.
     #[arg(env, long)]
-    ice_lite: bool,
+    pub ice_lite: bool,
 
     /// The seed port for binding the WebRTC UDP socket. The port will increment by one for each worker.
     /// Default: 0, which assigns the port randomly.
     /// If set to 20000, each worker will be assigned a unique port: worker0: 20000, worker1: 20001, worker2: 20002, ...
     #[arg(env, long, default_value_t = 0)]
-    webrtc_port_seed: u16,
+    pub webrtc_port_seed: u16,
 
     /// The port for binding the RTPengine command UDP socket.
     #[arg(env, long)]
-    rtpengine_cmd_addr: Option<SocketAddr>,
+    pub rtpengine_cmd_addr: Option<SocketAddr>,
 
     /// The IP address for RTPengine RTP listening.
     /// Default: 127.0.0.1
     #[arg(env, long, default_value = "127.0.0.1")]
-    rtpengine_rtp_ip: IpAddr,
+    pub rtpengine_rtp_ip: IpAddr,
 
     /// Maximum concurrent connections per CPU core.
     #[arg(env, long, default_value_t = 200)]
-    ccu_per_core: u32,
+    pub ccu_per_core: u32,
 
     /// Directory for storing cached recordings.
     #[arg(env, long, default_value = "./record_cache/")]
-    record_cache: String,
+    pub record_cache: String,
 
     /// Maximum size of the recording cache in bytes.
     #[arg(env, long, default_value_t = 100_000_000)]
-    record_mem_max_size: usize,
+    pub record_mem_max_size: usize,
 
     /// Number of workers for uploading recordings.
     #[arg(env, long, default_value_t = 5)]
-    record_upload_worker: usize,
+    pub record_upload_worker: usize,
 
     /// Enables the Gateway Agent service.
     #[arg(env, long)]
-    disable_gateway_agent: bool,
+    pub disable_gateway_agent: bool,
 
     /// Enables the Connector Agent service.
     #[arg(env, long)]
-    disable_connector_agent: bool,
+    pub disable_connector_agent: bool,
 }
 
 pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
-    rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
-
     let default_cluster_cert_buf = include_bytes!("../../certs/cluster.cert");
     let default_cluster_key_buf = include_bytes!("../../certs/cluster.key");
     let default_cluster_cert = CertificateDer::from(default_cluster_cert_buf.to_vec());
