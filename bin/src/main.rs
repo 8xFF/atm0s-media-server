@@ -57,7 +57,6 @@ struct Args {
     seeds: Vec<NodeAddr>,
 
     /// Seeds from API, this is used for auto-discovery of seeds.
-    /// It is very useful for cloud deployment.
     /// Currently all of nodes expose /api/node/address endpoint, so we can get seeds from there.
     #[arg(env, long)]
     seeds_from_node_api: Option<String>,

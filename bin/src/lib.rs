@@ -24,7 +24,7 @@ pub struct NodeConfig {
 }
 
 pub async fn fetch_node_addr_from_api(url: &str) -> Result<NodeAddr, String> {
-    let resp = reqwest::get(url).await.map_err(|e| e.to_string())?;
+    let resp = reqwest::get(format!("{}/api/node/address", url)).await.map_err(|e| e.to_string())?;
     let node_addr = resp
         .json::<http::Response<String>>()
         .await
