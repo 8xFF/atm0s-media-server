@@ -28,6 +28,7 @@ cargo build --release --package atm0s-media-server
 
 Depend on your need, we have some topology to install atm0s-media-server:
 
+- [Standalone](./standalone.md)
 - [Single zone](./single-zone.md)
 - [Multi zones](./multi-zones.md)
 

@@ -22,14 +22,36 @@ impl MigrationTrait for Migration {
             .alter_table(Table::alter().table(PeerSession::Table).add_column(ColumnDef::new(PeerSession::Record).string()).to_owned())
             .await?;
         let db = manager.get_connection();
-        db.execute_unprepared(
-            "UPDATE peer_session
-            SET room = t1.room
-            FROM peer_session t2
-            INNER JOIN peer t1 on t1.id = t2.peer
-            ",
-        )
-        .await?;
+        match db.get_database_backend() {
+            sea_orm::DatabaseBackend::MySql => {
+                db.execute_unprepared(
+                    "UPDATE peer_session t2
+                    INNER JOIN peer t1 ON t1.id = t2.peer
+                    SET t2.room = t1.room",
+                )
+                .await?;
+            }
+            sea_orm::DatabaseBackend::Postgres => {
+                db.execute_unprepared(
+                    "UPDATE peer_session
+                    SET room = t1.room
+                    FROM peer_session t2
+                    INNER JOIN peer t1 on t1.id = t2.peer",
+                )
+                .await?;
+            }
+            sea_orm::DatabaseBackend::Sqlite => {
+                db.execute_unprepared(
+                    "UPDATE peer_session
+                    SET room = (
+                        SELECT t1.room
+                        FROM peer t1
+                        WHERE t1.id = peer_session.peer
+                    )",
+                )
+                .await?;
+            }
+        }
 
         manager
             .create_index(Index::create().name("room_last_peer_leaved_at").table(Room::Table).col(Room::LastPeerLeavedAt).to_owned())

@@ -3,13 +3,15 @@ use clap::Subcommand;
 #[cfg(feature = "cert_utils")]
 mod cert;
 #[cfg(feature = "connector")]
-mod connector;
+pub mod connector;
 #[cfg(feature = "console")]
-mod console;
+pub mod console;
 #[cfg(feature = "gateway")]
-mod gateway;
+pub mod gateway;
 #[cfg(feature = "media")]
-mod media;
+pub mod media;
+#[cfg(feature = "standalone")]
+pub mod standalone;
 
 #[cfg(feature = "cert_utils")]
 pub use cert::run_cert_utils;
@@ -21,6 +23,8 @@ pub use console::{run_console_server, storage as console_storage};
 pub use gateway::run_media_gateway;
 #[cfg(feature = "media")]
 pub use media::run_media_server;
+#[cfg(feature = "standalone")]
+pub use standalone::run_standalone;
 
 #[derive(Debug, Subcommand)]
 pub enum ServerType {
@@ -34,4 +38,6 @@ pub enum ServerType {
     Media(media::Args),
     #[cfg(feature = "cert_utils")]
     Cert(cert::Args),
+    #[cfg(feature = "standalone")]
+    Standalone(standalone::Args),
 }
