@@ -10,6 +10,7 @@ use media_server_multi_tenancy::{MultiTenancyStorage, MultiTenancySync};
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
     connector::CONNECTOR_RPC_PORT,
+    gateway::generate_gateway_zone_tag,
     protobuf::cluster_connector::{connector_response, MediaConnectorServiceServer},
     rpc::quinn::QuinnServer,
 };
@@ -124,7 +125,7 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
     });
 
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
-    builder.set_manual_discovery(vec!["connector".to_string()], vec!["gateway".to_string()]);
+    builder.set_manual_discovery(vec!["connector".to_string()], vec![generate_gateway_zone_tag(node.zone)]);
     builder.add_service(Arc::new(ConnectorHandlerServiceBuilder::new()));
 
     for seed in node.seeds {
