@@ -51,7 +51,7 @@ pub async fn fetch_node_ip_alt_from_cloud(cloud: CloudProvider) -> Result<IpAddr
         CloudProvider::Aws => {
             let resp = reqwest::get("http://169.254.169.254/latest/meta-data/public-ipv4").await.map_err(|e| e.to_string())?;
             let ip = resp.text().await.map_err(|e| e.to_string())?;
-            IpAddr::from_str(&ip).map_err(|e| e.to_string())
+            IpAddr::from_str(ip.trim()).map_err(|e| e.to_string())
         }
         CloudProvider::Gcp => {
             let client = reqwest::Client::new();
@@ -62,12 +62,12 @@ pub async fn fetch_node_ip_alt_from_cloud(cloud: CloudProvider) -> Result<IpAddr
                 .await
                 .map_err(|e| e.to_string())?;
             let ip = resp.text().await.map_err(|e| e.to_string())?;
-            IpAddr::from_str(&ip).map_err(|e| e.to_string())
+            IpAddr::from_str(ip.trim()).map_err(|e| e.to_string())
         }
         CloudProvider::Azure | CloudProvider::Other => {
             let resp = reqwest::get("http://ipv4.icanhazip.com").await.map_err(|e| e.to_string())?;
             let ip = resp.text().await.map_err(|e| e.to_string())?;
-            IpAddr::from_str(&ip).map_err(|e| e.to_string())
+            IpAddr::from_str(ip.trim()).map_err(|e| e.to_string())
         }
     }
 }
