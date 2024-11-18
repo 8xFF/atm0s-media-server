@@ -1,6 +1,6 @@
 use std::net::{IpAddr, SocketAddr};
 
-use atm0s_media_server::{fetch_node_addr_from_api, server, NodeConfig};
+use atm0s_media_server::{fetch_node_addrs_from_api, server, NodeConfig};
 use atm0s_media_server::{fetch_node_ip_alt_from_cloud, CloudProvider};
 use atm0s_sdn::NodeAddr;
 use clap::Parser;
@@ -68,8 +68,9 @@ struct Args {
 
     /// Seeds from API, this is used for auto-discovery of seeds.
     /// Currently all of nodes expose /api/node/address endpoint, so we can get seeds from there.
+    /// Or we can get from console api /api/cluster/seeds?zone_id=xxx&node_type=xxx
     #[arg(env, long)]
-    seeds_from_node_api: Option<String>,
+    seeds_from_url: Option<String>,
 
     /// Number of worker threads to spawn.
     #[arg(env, long, default_value_t = 1)]
@@ -170,11 +171,11 @@ async fn main() {
 
     log::info!("Bind addrs {:?}, bind addrs alt {:?}", node.bind_addrs, node.bind_addrs_alt);
 
-    if let Some(seeds_from_node_api) = args.seeds_from_node_api {
-        log::info!("Generate seeds from node_api {}", seeds_from_node_api);
-        let addr = fetch_node_addr_from_api(&seeds_from_node_api).await.expect("should get seed");
-        log::info!("Generated seed {:?}", addr);
-        node.seeds = vec![addr];
+    if let Some(url) = args.seeds_from_url {
+        log::info!("Generate seeds from node_api {}", url);
+        let addrs = fetch_node_addrs_from_api(&url).await.expect("should get seeds");
+        log::info!("Generated seeds {:?}", addrs);
+        node.seeds = addrs;
     }
 
     let local = tokio::task::LocalSet::new();

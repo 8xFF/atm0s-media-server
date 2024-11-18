@@ -106,7 +106,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         });
         let req_tx = req_tx.clone();
         let secure_edge = secure.clone();
-        let node_ctx = NodeApiCtx { address: node_addr.to_string() };
+        let node_ctx = NodeApiCtx { address: node_addr.clone() };
         tokio::spawn(async move {
             if let Err(e) = run_media_http_server(http_port, node_ctx, req_tx, secure_edge, secure_gateway).await {
                 log::error!("HTTP Error: {}", e);

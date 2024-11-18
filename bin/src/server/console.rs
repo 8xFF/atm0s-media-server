@@ -70,7 +70,7 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
     if let Some(http_port) = http_port {
         let secure = MediaConsoleSecureJwt::from(node.secret.as_bytes());
         let storage = storage.clone();
-        let node_ctx = NodeApiCtx { address: node_addr.to_string() };
+        let node_ctx = NodeApiCtx { address: node_addr.clone() };
         tokio::spawn(async move {
             if let Err(e) = run_console_http_server(http_port, node_ctx, secure, storage, connector_rpc_client).await {
                 log::error!("HTTP Error: {}", e);

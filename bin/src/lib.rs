@@ -27,15 +27,17 @@ pub struct NodeConfig {
     pub bind_addrs_alt: Vec<SocketAddr>,
 }
 
-pub async fn fetch_node_addr_from_api(url: &str) -> Result<NodeAddr, String> {
-    let resp = reqwest::get(format!("{}/api/node/address", url)).await.map_err(|e| e.to_string())?;
-    let node_addr = resp
-        .json::<http::Response<String>>()
-        .await
-        .map_err(|e| e.to_string())?
-        .data
-        .ok_or(format!("No data in response from {}", url))?;
-    NodeAddr::from_str(&node_addr).map_err(|e| e.to_string())
+/// Fetch node addrs from the given url.
+/// The url should return a list of node addrs in JSON format or a single node addr.
+pub async fn fetch_node_addrs_from_api(url: &str) -> Result<Vec<NodeAddr>, String> {
+    let resp = reqwest::get(url).await.map_err(|e| e.to_string())?;
+    let content = resp.text().await.map_err(|e| e.to_string())?;
+    if content.starts_with("[") {
+        let node_addrs: Vec<String> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        Ok(node_addrs.into_iter().map(|addr| NodeAddr::from_str(&addr)).flatten().collect())
+    } else {
+        Ok(vec![NodeAddr::from_str(&content).map_err(|e| e.to_string())?])
+    }
 }
 
 #[derive(Debug, Clone, ValueEnum)]

@@ -1,9 +1,8 @@
-use poem_openapi::{payload::Json, OpenApi};
-
-use super::Response;
+use atm0s_sdn::NodeAddr;
+use poem_openapi::{payload::PlainText, OpenApi};
 
 pub struct NodeApiCtx {
-    pub address: String,
+    pub address: NodeAddr,
 }
 
 pub struct Apis {
@@ -19,11 +18,7 @@ impl Apis {
 #[OpenApi]
 impl Apis {
     #[oai(path = "/address", method = "get")]
-    async fn get_address(&self) -> Json<Response<String>> {
-        Json(Response {
-            status: true,
-            data: Some(self.ctx.address.clone()),
-            ..Default::default()
-        })
+    async fn get_address(&self) -> PlainText<String> {
+        PlainText(self.ctx.address.to_string())
     }
 }

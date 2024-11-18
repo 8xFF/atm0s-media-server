@@ -28,6 +28,7 @@ media-server-multi-tenancy = { path = "../packages/multi_tenancy", optional = tr
 rtpengine-ngcontrol = { path = "../packages/rtpengine_ngcontrol", optional = true }
 local-ip-address = "0.6"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
 quinn = { version = "0.11", optional = true }
 rustls = { version = "0.23", optional = true }
 convert-enum = { workspace = true }

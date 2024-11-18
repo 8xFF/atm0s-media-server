@@ -162,7 +162,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     if let Some(http_port) = http_port {
         let req_tx = req_tx.clone();
         let secure2 = edge_secure.clone();
-        let node_ctx = NodeApiCtx { address: node_addr.to_string() };
+        let node_ctx = NodeApiCtx { address: node_addr.clone() };
         tokio::spawn(async move {
             if let Err(e) = run_gateway_http_server(http_port, node_ctx, req_tx, secure2, gateway_secure).await {
                 log::error!("HTTP Error: {}", e);

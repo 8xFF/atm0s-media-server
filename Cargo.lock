@@ -496,6 +496,7 @@ dependencies = [
  "sans-io-runtime",
  "sentry",
  "serde",
+ "serde_json",
  "sysinfo",
  "tokio",
  "tracing-subscriber",
