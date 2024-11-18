@@ -52,22 +52,32 @@ impl ConnectorSqlStorage {
             .acquire_timeout(Duration::from_secs(8))
             .idle_timeout(Duration::from_secs(8))
             .max_lifetime(Duration::from_secs(8))
-            .sqlx_logging(false)
-            .sqlx_logging_level(log::LevelFilter::Info); // Setting default PostgreSQL schema
+            .sqlx_logging(true)
+            .sqlx_logging_level(log::LevelFilter::Info);
 
         let db = Database::connect(opt).await.expect("Should connect to sql server");
         migration::Migrator::up(&db, None).await.expect("Should run migration success");
 
         let s3_endpoint = CustomUri::<S3Options>::try_from(cfg.s3_uri.as_str()).expect("should parse s3");
-        let mut s3 = Presigner::new(
-            Credentials::new(s3_endpoint.username.expect("Should have s3 accesskey"), s3_endpoint.password.expect("Should have s3 secretkey"), None),
+        let mut s3 = Presigner::new_with_root(
+            Credentials::new(
+                s3_endpoint.username.as_deref().expect("Should have s3 accesskey"),
+                s3_endpoint.password.as_deref().expect("Should have s3 secretkey"),
+                None,
+            ),
             s3_endpoint.path.first().as_ref().expect("Should have bucket name"),
             s3_endpoint.query.region.as_ref().unwrap_or(&"".to_string()),
+            s3_endpoint.host.as_str(),
         );
-        s3.endpoint(s3_endpoint.endpoint.as_str());
         if s3_endpoint.query.path_style == Some(true) {
+            log::info!("[ConnectorSqlStorage] use path style");
             s3.use_path_style();
         }
+
+        let signed_url = s3.put("aaa.mp4", 10000).unwrap();
+        log::info!("[ConnectorSqlStorage] signed_url: {:?}", signed_url);
+        let res = reqwest::Client::new().put(signed_url).body(vec![1; 10000]).send().await.unwrap();
+        assert_eq!(res.status().as_u16(), 200);
 
         let s3_sub_folder = s3_endpoint.path[1..].join("/");
 
