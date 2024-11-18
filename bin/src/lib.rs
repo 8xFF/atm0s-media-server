@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, str::FromStr};
 
 use atm0s_sdn::{NodeAddr, NodeId};
 use media_server_protocol::cluster::ZoneId;
@@ -21,4 +21,15 @@ pub struct NodeConfig {
     pub bind_addrs: Vec<SocketAddr>,
     pub zone: ZoneId,
     pub bind_addrs_alt: Vec<SocketAddr>,
+}
+
+pub async fn fetch_node_addr_from_api(url: &str) -> Result<NodeAddr, String> {
+    let resp = reqwest::get(url).await.map_err(|e| e.to_string())?;
+    let node_addr = resp
+        .json::<http::Response<String>>()
+        .await
+        .map_err(|e| e.to_string())?
+        .data
+        .ok_or(format!("No data in response from {}", url))?;
+    NodeAddr::from_str(&node_addr).map_err(|e| e.to_string())
 }

@@ -17,7 +17,7 @@ use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use std::net::SocketAddr;
 
 use crate::{
-    http::run_gateway_http_server,
+    http::{run_gateway_http_server, NodeApiCtx},
     ng_controller::NgControllerServer,
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, make_quinn_server, VirtualNetwork},
@@ -114,17 +114,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let gateway_secure = Arc::new(gateway_secure);
 
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
-    if let Some(http_port) = http_port {
-        let req_tx = req_tx.clone();
-        let secure2 = edge_secure.clone();
-        tokio::spawn(async move {
-            if let Err(e) = run_gateway_http_server(http_port, req_tx, secure2, gateway_secure).await {
-                log::error!("HTTP Error: {}", e);
-            }
-        });
-    }
-
-    //Running ng controller for Voip
+    // Running ng controller for Voip
     if let Some(ngproto_addr) = args.rtpengine_cmd_addr {
         let req_tx = req_tx.clone();
         let rtpengine_udp = NgUdpTransport::new(ngproto_addr).await;
@@ -137,8 +127,8 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         });
     }
 
+    // Setup Sdn
     let node_id = node.node_id;
-
     let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, &node.bind_addrs, node.bind_addrs_alt);
     let node_addr = builder.node_addr();
     let node_info = ClusterNodeInfo::Gateway(
@@ -167,6 +157,18 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers, node_info);
     let (selector, mut requester) = build_dest_selector();
+
+    // Setup HTTP server
+    if let Some(http_port) = http_port {
+        let req_tx = req_tx.clone();
+        let secure2 = edge_secure.clone();
+        let node_ctx = NodeApiCtx { address: node_addr.to_string() };
+        tokio::spawn(async move {
+            if let Err(e) = run_gateway_http_server(http_port, node_ctx, req_tx, secure2, gateway_secure).await {
+                log::error!("HTTP Error: {}", e);
+            }
+        });
+    }
 
     // Ip location for routing client to closest gateway
     let ip2location = Arc::new(Ip2Location::new(&args.geo_db));

@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use atm0s_sdn::{features::FeaturesEvent, SdnExtIn, SdnExtOut, TimePivot, TimeTicker};
+use atm0s_sdn::{features::FeaturesEvent, generate_node_addr, SdnExtIn, SdnExtOut, TimePivot, TimeTicker};
 use clap::Parser;
 use media_server_gateway::ServiceKind;
 use media_server_multi_tenancy::MultiTenancyStorage;
@@ -27,7 +27,7 @@ use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sans_io_runtime::{backend::PollingBackend, Controller};
 
 use crate::{
-    http::run_media_http_server,
+    http::{run_media_http_server, NodeApiCtx},
     ng_controller::NgControllerServer,
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_server, VirtualNetwork},
@@ -92,6 +92,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
 
     let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
+    let node_addr = generate_node_addr(node.node_id, &node.bind_addrs, node.bind_addrs_alt.clone());
     if let Some(http_port) = http_port {
         let secure_gateway = args.enable_token_api.then(|| {
             let app_storage = Arc::new(MultiTenancyStorage::new_with_single(&node.secret, None));
@@ -99,8 +100,9 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         });
         let req_tx = req_tx.clone();
         let secure_edge = secure.clone();
+        let node_ctx = NodeApiCtx { address: node_addr.to_string() };
         tokio::spawn(async move {
-            if let Err(e) = run_media_http_server(http_port, req_tx, secure_edge, secure_gateway).await {
+            if let Err(e) = run_media_http_server(http_port, node_ctx, req_tx, secure_edge, secure_gateway).await {
                 log::error!("HTTP Error: {}", e);
             }
         });

@@ -489,6 +489,7 @@ dependencies = [
  "quinn",
  "rand 0.8.5",
  "rcgen",
+ "reqwest",
  "rtpengine-ngcontrol",
  "rust-embed",
  "rustls",

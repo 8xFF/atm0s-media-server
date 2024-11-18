@@ -11,7 +11,7 @@ use media_server_secure::jwt::MediaConsoleSecureJwt;
 use storage::StorageShared;
 
 use crate::{
-    http::run_console_http_server,
+    http::{run_console_http_server, NodeApiCtx},
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, VirtualNetwork},
     NodeConfig,
@@ -72,8 +72,9 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
     if let Some(http_port) = http_port {
         let secure = MediaConsoleSecureJwt::from(node.secret.as_bytes());
         let storage = storage.clone();
+        let node_ctx = NodeApiCtx { address: node_addr.to_string() };
         tokio::spawn(async move {
-            if let Err(e) = run_console_http_server(http_port, secure, storage, connector_rpc_client).await {
+            if let Err(e) = run_console_http_server(http_port, node_ctx, secure, storage, connector_rpc_client).await {
                 log::error!("HTTP Error: {}", e);
             }
         });
