@@ -32,6 +32,11 @@ struct Args {
     #[arg(env, long, default_value_t = 0)]
     sdn_zone_node_id: u8,
 
+    /// Auto generate node_id from last 8 bits of local_ip which match prefix
+    /// Example: 192.168.1, or 10.10.10.
+    #[arg(env, long)]
+    sdn_zone_node_id_from_ip_prefix: Option<String>,
+
     /// Manually specify the IP address of the node. This disables IP autodetection.
     #[arg(env, long)]
     node_ip: Option<IpAddr>,
@@ -107,6 +112,19 @@ async fn main() {
 
     let workers = args.workers;
 
+    let mut auto_generated_node_id = None;
+    if let Some(ip_prefix) = args.sdn_zone_node_id_from_ip_prefix {
+        for (name, ip) in local_ip_address::list_afinet_netifas().expect("Should have list interfaces") {
+            if let IpAddr::V4(ipv4) = ip {
+                if ipv4.to_string().starts_with(&ip_prefix) {
+                    auto_generated_node_id = Some(ipv4.octets()[3]);
+                    log::info!("Found ip prefix {ip_prefix} on {name} with ip {ip} => auto generate sdn_zone_node_id with {}", ipv4.octets()[3]);
+                    break;
+                }
+            }
+        }
+    }
+
     let bind_addrs = if let Some(ip) = args.node_ip {
         vec![SocketAddr::new(ip, sdn_port)]
     } else {
@@ -124,7 +142,7 @@ async fn main() {
             .collect::<Vec<_>>()
     };
     let mut node = NodeConfig {
-        node_id: ZoneId(args.sdn_zone_id).to_node_id(args.sdn_zone_node_id),
+        node_id: ZoneId(args.sdn_zone_id).to_node_id(auto_generated_node_id.unwrap_or(args.sdn_zone_node_id)),
         secret: args.secret,
         seeds: args.seeds,
         bind_addrs,

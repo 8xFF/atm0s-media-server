@@ -37,3 +37,4 @@ Or you can use some tools to deploy atm0s-media-server:
 - [Docker Compose](./docker-compose.md)
 
 About network discovery, please refer to [Network Discovery](./network-discovery.md) for more details with your own use-case.
+About some mechanism to generate node_id without manually specify, please refer to [Auto generate node_id](./auto-generate-node-id.md) for more details.
