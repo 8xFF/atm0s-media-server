@@ -49,7 +49,7 @@ pub enum CloudProvider {
 pub async fn fetch_node_ip_alt_from_cloud(cloud: CloudProvider) -> Result<IpAddr, String> {
     match cloud {
         CloudProvider::Aws => {
-            let resp = reqwest::get("http://169.254.169.254/latest/meta-data/local-ipv4").await.map_err(|e| e.to_string())?;
+            let resp = reqwest::get("http://169.254.169.254/latest/meta-data/public-ipv4").await.map_err(|e| e.to_string())?;
             let ip = resp.text().await.map_err(|e| e.to_string())?;
             IpAddr::from_str(&ip).map_err(|e| e.to_string())
         }

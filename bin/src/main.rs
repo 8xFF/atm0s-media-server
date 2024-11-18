@@ -132,7 +132,10 @@ async fn main() {
 
     let mut node_ip_alt_cloud = vec![];
     if let Some(cloud) = args.node_ip_alt_cloud {
-        node_ip_alt_cloud.push(fetch_node_ip_alt_from_cloud(cloud).await.expect("should get node ip alt"));
+        log::info!("Fetch public ip from cloud provider {:?}", cloud);
+        let public_ip = fetch_node_ip_alt_from_cloud(cloud).await.expect("should get node ip alt");
+        log::info!("Fetched public ip {:?}", public_ip);
+        node_ip_alt_cloud.push(public_ip);
     }
 
     let bind_addrs = if let Some(ip) = args.node_ip {
