@@ -1,6 +1,7 @@
 use std::net::{IpAddr, SocketAddr};
 
 use atm0s_media_server::{fetch_node_addr_from_api, server, NodeConfig};
+use atm0s_media_server::{fetch_node_ip_alt_from_cloud, CloudProvider};
 use atm0s_sdn::NodeAddr;
 use clap::Parser;
 use media_server_protocol::cluster::ZoneId;
@@ -44,6 +45,10 @@ struct Args {
     /// Alternative IP addresses for the node, useful for environments like AWS or GCP that are behind NAT.
     #[arg(env, long)]
     node_ip_alt: Vec<IpAddr>,
+
+    /// Auto detect node_ip_alt with some common cloud provider metadata.
+    #[arg(env, long)]
+    node_ip_alt_cloud: Option<CloudProvider>,
 
     /// Enable private IP addresses for the node.
     #[arg(env, long)]
@@ -125,6 +130,11 @@ async fn main() {
         }
     }
 
+    let mut node_ip_alt_cloud = vec![];
+    if let Some(cloud) = args.node_ip_alt_cloud {
+        node_ip_alt_cloud.push(fetch_node_ip_alt_from_cloud(cloud).await.expect("should get node ip alt"));
+    }
+
     let bind_addrs = if let Some(ip) = args.node_ip {
         vec![SocketAddr::new(ip, sdn_port)]
     } else {
@@ -147,7 +157,11 @@ async fn main() {
         seeds: args.seeds,
         bind_addrs,
         zone: ZoneId(args.sdn_zone_id),
-        bind_addrs_alt: args.node_ip_alt.into_iter().map(|ip| SocketAddr::new(ip, sdn_port)).collect::<Vec<_>>(),
+        bind_addrs_alt: node_ip_alt_cloud
+            .into_iter()
+            .chain(args.node_ip_alt.into_iter())
+            .map(|ip| SocketAddr::new(ip, sdn_port))
+            .collect::<Vec<_>>(),
     };
 
     log::info!("Bind addrs {:?}, bind addrs alt {:?}", node.bind_addrs, node.bind_addrs_alt);
