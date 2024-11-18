@@ -63,7 +63,7 @@ pub struct Args {
     /// The IP address for RTPengine RTP listening.
     /// Default: 127.0.0.1
     #[arg(env, long, default_value = "127.0.0.1")]
-    pub rtpengine_rtp_ip: IpAddr,
+    pub rtpengine_listen_ip: IpAddr,
 
     /// Maximum concurrent connections per CPU core.
     #[arg(env, long, default_value_t = 200)]
@@ -141,6 +141,15 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         };
         let webrtc_addrs = node.bind_addrs.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
         let webrtc_addrs_alt = node.bind_addrs_alt.iter().map(|addr| SocketAddr::new(addr.ip(), webrtc_port)).collect::<Vec<_>>();
+        let rtpengine_public_ip = webrtc_addrs
+            .iter()
+            .chain(webrtc_addrs_alt.iter())
+            .find(|addr| match addr.ip() {
+                IpAddr::V4(ipv4) => !ipv4.is_unspecified() && !ipv4.is_multicast() && !ipv4.is_loopback() && !ipv4.is_broadcast() && !ipv4.is_private(),
+                IpAddr::V6(ipv6) => !ipv6.is_unspecified() && !ipv6.is_multicast() && !ipv6.is_loopback(),
+            })
+            .map(|addr| addr.ip())
+            .unwrap_or(args.rtpengine_listen_ip);
 
         println!("Running media server worker {i} with addrs: {:?}, ice-lite: {}", webrtc_addrs, args.ice_lite);
 
@@ -151,7 +160,8 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             media: MediaConfig {
                 webrtc_addrs,
                 webrtc_addrs_alt,
-                rtpengine_rtp_ip: args.rtpengine_rtp_ip,
+                rtpengine_listen_ip: args.rtpengine_listen_ip,
+                rtpengine_public_ip: rtpengine_public_ip,
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
                 max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core), (ServiceKind::RtpEngine, workers as u32 * args.ccu_per_core)]),

@@ -86,7 +86,7 @@ pub struct Args {
     /// The IP address for RTPengine RTP listening.
     /// Default: 127.0.0.1
     #[arg(env, long, default_value = "127.0.0.1")]
-    pub rtpengine_rtp_ip: IpAddr,
+    pub rtpengine_listen_ip: IpAddr,
 
     /// Media instance count
     #[arg(env, long, default_value_t = 2)]
@@ -208,7 +208,7 @@ pub async fn run_standalone(workers: usize, node: NodeConfig, args: Args) {
         let record_cache = args.record_cache.clone();
         let record_mem_max_size = args.record_mem_max_size;
         let record_upload_worker = args.record_upload_worker;
-        let rtpengine_rtp_ip = args.rtpengine_rtp_ip;
+        let rtpengine_listen_ip = args.rtpengine_listen_ip;
         tokio::task::spawn_local(async move {
             super::run_media_server(
                 workers,
@@ -226,7 +226,7 @@ pub async fn run_standalone(workers: usize, node: NodeConfig, args: Args) {
                     ice_lite: false,
                     webrtc_port_seed: 0,
                     rtpengine_cmd_addr: None,
-                    rtpengine_rtp_ip,
+                    rtpengine_listen_ip,
                     ccu_per_core: 200,
                     record_cache,
                     record_mem_max_size,
