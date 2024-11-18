@@ -70,6 +70,7 @@ struct Args {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
     if std::env::var_os("RUST_LOG").is_none() {
         std::env::set_var("RUST_LOG", "info");
     }
@@ -147,6 +148,8 @@ async fn main() {
                         log::error!("create cert error {:?}", e);
                     }
                 }
+                #[cfg(feature = "standalone")]
+                server::ServerType::Standalone(args) => server::run_standalone(workers, node, args).await,
             }
         })
         .await;

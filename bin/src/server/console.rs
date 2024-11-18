@@ -36,8 +36,6 @@ type TW = ();
 pub struct Args {}
 
 pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: NodeConfig, _args: Args) {
-    rustls::crypto::ring::default_provider().install_default().expect("should install ring as default");
-
     let storage = StorageShared::default();
 
     let node_id = node.node_id;
