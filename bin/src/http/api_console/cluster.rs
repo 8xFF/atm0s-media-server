@@ -34,7 +34,7 @@ impl Apis {
             NodeType::Gateway => {
                 let consoles = ctx.storage.consoles().into_iter().map(|node| node.addr.clone());
                 let zone = ctx.storage.zone(ZoneId(zone_id.0));
-                let same_zone_gateways = zone.iter().map(|n| n.gateways.iter()).flatten().map(|n| n.addr.clone());
+                let same_zone_gateways = zone.iter().flat_map(|n| n.gateways.iter()).map(|n| n.addr.clone());
                 Json(consoles.chain(same_zone_gateways).collect())
             }
             NodeType::Connector => Json(ctx.storage.zone(ZoneId(zone_id.0)).unwrap().gateways.iter().map(|node| node.addr.to_string()).collect()),

@@ -161,7 +161,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                 webrtc_addrs,
                 webrtc_addrs_alt,
                 rtpengine_listen_ip: args.rtpengine_listen_ip,
-                rtpengine_public_ip: rtpengine_public_ip,
+                rtpengine_public_ip,
                 ice_lite: args.ice_lite,
                 secure: secure.clone(),
                 max_live: HashMap::from([(ServiceKind::Webrtc, workers as u32 * args.ccu_per_core), (ServiceKind::RtpEngine, workers as u32 * args.ccu_per_core)]),

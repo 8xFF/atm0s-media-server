@@ -31,8 +31,8 @@ impl<Q: DeserializeOwned> TryFrom<&str> for CustomUri<Q> {
                         (false, Some(port)) => format!("http://{}:{}", host, port),
                     };
 
-                    let username = uri.username().map(|u| urlencoding::decode(&u.to_string()).map(|u| u.to_string()).ok()).flatten();
-                    let password = uri.password().map(|u| urlencoding::decode(&u.to_string()).map(|u| u.to_string()).ok()).flatten();
+                    let username = uri.username().and_then(|u| urlencoding::decode(u.as_ref()).map(|u| u.to_string()).ok());
+                    let password = uri.password().and_then(|u| urlencoding::decode(u.as_ref()).map(|u| u.to_string()).ok());
 
                     Ok(Self {
                         username: username.map(|u| u.to_string()),

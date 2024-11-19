@@ -32,9 +32,9 @@ pub struct NodeConfig {
 pub async fn fetch_node_addrs_from_api(url: &str) -> Result<Vec<NodeAddr>, String> {
     let resp = reqwest::get(url).await.map_err(|e| e.to_string())?;
     let content = resp.text().await.map_err(|e| e.to_string())?;
-    if content.starts_with("[") {
+    if content.starts_with('[') {
         let node_addrs: Vec<String> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        Ok(node_addrs.into_iter().map(|addr| NodeAddr::from_str(&addr)).flatten().collect())
+        Ok(node_addrs.into_iter().flat_map(|addr| NodeAddr::from_str(&addr)).collect())
     } else {
         Ok(vec![NodeAddr::from_str(&content).map_err(|e| e.to_string())?])
     }
