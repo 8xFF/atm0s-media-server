@@ -1,6 +1,7 @@
 use serde::de::DeserializeOwned;
 use serde_querystring::DuplicateQS;
 
+#[derive(Debug, Clone)]
 pub struct CustomUri<Q> {
     pub username: Option<String>,
     pub password: Option<String>,

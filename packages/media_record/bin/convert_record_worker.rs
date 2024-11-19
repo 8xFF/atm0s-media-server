@@ -27,7 +27,7 @@ use poem_openapi::{
 use rusty_s3::S3Action;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-macro_rules! try_opt {
+macro_rules! try_validate_app {
     ($self:ident, $token:ident, $err:expr) => {
         match $self.apps.validate_app(&$token.token) {
             Some(app) => app,
@@ -37,6 +37,21 @@ macro_rules! try_opt {
                     error: Some($err.to_owned()),
                     data: None,
                 })
+            }
+        }
+    };
+}
+
+macro_rules! try_opt {
+    ($opt:expr, $err:expr) => {
+        match $opt {
+            Some(o) => o,
+            None => {
+                return Json(Response {
+                    status: false,
+                    error: Some($err.to_owned()),
+                    data: None,
+                });
             }
         }
     };
@@ -187,13 +202,28 @@ struct HttpApis {
 impl HttpApis {
     #[oai(path = "/convert/job", method = "post")]
     async fn create_job(&self, TokenAuthorization(token): TokenAuthorization, Json(body): Json<ConvertJobRequest>) -> Json<Response<ConvertJobResponse>> {
-        let app = try_opt!(self, token, "Invalid token");
+        let app = try_validate_app!(self, token, "Invalid token");
         let job_id = rand::random::<u64>().to_string();
-        let input_s3 = format!("{}/{}/?path_style=true", self.input_s3_uri, body.record_path);
-        let transmux_s3_uri = self.transmux_s3_uri.clone();
+        let input_s3 = try_opt!(concat_s3_uri_path(&self.input_s3_uri, &body.record_path), "Invalid input_s3_uri");
         let compose_s3_uri = self.compose_s3_uri.clone();
         let job_id_c = job_id.clone();
         let hook = self.hook.clone();
+
+        // get yyyy/mm/dd with chrono
+        let current_date_path = chrono::Utc::now().format("%Y/%m/%d").to_string();
+        let transmux = if let Some(t) = body.transmux {
+            if let Some(custom_s3) = t.custom_s3 {
+                Some(RecordConvertOutputLocation::S3(custom_s3))
+            } else {
+                let s3 = try_opt!(
+                    concat_s3_uri_path(&self.transmux_s3_uri, &format!("{}/transmux/{current_date_path}/{job_id_c}", app.app)),
+                    "Invalid transmux_s3_uri"
+                );
+                Some(RecordConvertOutputLocation::S3(s3))
+            }
+        } else {
+            None
+        };
 
         tokio::spawn(async move {
             log::info!("Convert job {job_id_c} started");
@@ -210,16 +240,9 @@ impl HttpApis {
                 },
             );
 
-            // get yyyy/mm/dd with chrono
-            let current_date_path = chrono::Utc::now().format("%Y/%m/%d").to_string();
             let converter = RecordConvert::new(RecordConvertConfig {
                 in_s3: input_s3,
-                transmux: body.transmux.map(|t| {
-                    let uri = t
-                        .custom_s3
-                        .unwrap_or_else(|| format!("{transmux_s3_uri}/{}/transmux/{current_date_path}/{job_id_c}?path_style=true", app.app));
-                    RecordConvertOutputLocation::S3(uri)
-                }),
+                transmux,
                 compose: body.compose.map(|c| {
                     let (uri, relative) = c
                         .custom_s3
@@ -228,7 +251,6 @@ impl HttpApis {
                             (u, relative)
                         })
                         .unwrap_or_else(|| {
-                            let compose_s3_uri = format!("{compose_s3_uri}?path_style=true");
                             let (s3, credentials, s3_sub_folder) = convert_s3_uri(&compose_s3_uri).expect("should convert compose_s3_uri");
                             let relative = format!("{}/compose/{current_date_path}/{job_id_c}.webm", app.app);
                             let path = PathBuf::from(s3_sub_folder).join(&relative);
@@ -279,5 +301,28 @@ impl HttpApis {
             error: None,
             data: Some(ConvertJobResponse { job_id }),
         })
+    }
+}
+
+fn concat_s3_uri_path(s3_uri: &str, path: &str) -> Option<String> {
+    fn ensure_last_slash(s: String) -> String {
+        if s.ends_with('/') {
+            s
+        } else {
+            s + "/"
+        }
+    }
+
+    let parts = s3_uri.split('?').collect::<Vec<_>>();
+    if parts.len() == 2 {
+        let first = PathBuf::from(parts[0]).join(path).to_str()?.to_string();
+        let first = ensure_last_slash(first);
+        log::info!("first: {}", first);
+        Some(first + "?" + parts[1])
+    } else {
+        let first = PathBuf::from(s3_uri).join(path).to_str()?.to_string();
+        let first = ensure_last_slash(first);
+        log::info!("first: {}", first);
+        Some(first)
     }
 }

@@ -73,12 +73,6 @@ impl ConnectorSqlStorage {
             log::info!("[ConnectorSqlStorage] use path style");
             s3.use_path_style();
         }
-
-        let signed_url = s3.put("aaa.mp4", 10000).unwrap();
-        log::info!("[ConnectorSqlStorage] signed_url: {:?}", signed_url);
-        let res = reqwest::Client::new().put(signed_url).body(vec![1; 10000]).send().await.unwrap();
-        assert_eq!(res.status().as_u16(), 200);
-
         let s3_sub_folder = s3_endpoint.path[1..].join("/");
 
         Self {
