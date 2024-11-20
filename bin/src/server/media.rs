@@ -5,7 +5,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use atm0s_sdn::{features::FeaturesEvent, generate_node_addr, SdnExtIn, SdnExtOut, TimePivot, TimeTicker};
+use atm0s_sdn::{
+    features::{router_sync, FeaturesEvent},
+    generate_node_addr, SdnExtIn, SdnExtOut, TimePivot, TimeTicker,
+};
 use clap::Parser;
 use media_server_gateway::ServiceKind;
 use media_server_multi_tenancy::MultiTenancyStorage;
@@ -25,6 +28,7 @@ use rand::random;
 use rtpengine_ngcontrol::NgUdpTransport;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sans_io_runtime::{backend::PollingBackend, Controller};
+use tokio::sync::mpsc::channel;
 
 use crate::{
     http::{run_media_http_server, NodeApiCtx},
@@ -99,6 +103,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let secure = Arc::new(MediaEdgeSecureJwt::from(node.secret.as_bytes()));
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     let node_addr = generate_node_addr(node.node_id, &node.bind_addrs, node.bind_addrs_alt.clone());
+    let (dump_tx, mut dump_rx) = channel(10);
     if let Some(http_port) = http_port {
         let secure_gateway = args.enable_token_api.then(|| {
             let app_storage = Arc::new(MultiTenancyStorage::new_with_single(&node.secret, None));
@@ -106,7 +111,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         });
         let req_tx = req_tx.clone();
         let secure_edge = secure.clone();
-        let node_ctx = NodeApiCtx { address: node_addr.clone() };
+        let node_ctx = NodeApiCtx { address: node_addr.clone(), dump_tx };
         tokio::spawn(async move {
             if let Err(e) = run_media_http_server(http_port, node_ctx, req_tx, secure_edge, secure_gateway).await {
                 log::error!("HTTP Error: {}", e);
@@ -207,6 +212,9 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
     let timer = TimePivot::build();
     let mut ticker = TimeTicker::build(1000);
 
+    // List all waiting router dump requests
+    let mut wait_dump_router = vec![];
+
     loop {
         if controller.process().is_none() {
             break;
@@ -267,6 +275,14 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             }
         }
 
+        while let Ok(v) = dump_rx.try_recv() {
+            controller.send_to(
+                0,
+                ExtIn::Sdn(SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, router_sync::Control::DumpRouter.into()), true),
+            );
+            wait_dump_router.push(v);
+        }
+
         while let Some(out) = controller.pop_event() {
             match out {
                 ExtOut::Rpc(req_id, worker, res) => {
@@ -283,6 +299,14 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                         log::error!("[MediaEdge] forward Sdn SocketEvent error {:?}", e);
                     }
                 }
+                ExtOut::Sdn(SdnExtOut::FeaturesEvent(_, FeaturesEvent::RouterSync(event))) => match event {
+                    router_sync::Event::DumpRouter(dump) => {
+                        let json = serde_json::to_value(dump).expect("should convert json");
+                        while let Some(v) = wait_dump_router.pop() {
+                            let _ = v.send(json.clone());
+                        }
+                    }
+                },
                 ExtOut::Sdn(SdnExtOut::ServicesEvent(_service, userdata, SE::Connector(event))) => {
                     match event {
                         media_server_connector::agent_service::Event::Response(res) => {

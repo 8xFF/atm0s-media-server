@@ -176,6 +176,7 @@ pub async fn run_standalone(workers: usize, node: NodeConfig, args: Args) {
         tokio::task::spawn_local(async move {
             super::run_media_connector(
                 workers,
+                None,
                 NodeConfig {
                     node_id: 30,
                     secret,

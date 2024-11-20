@@ -1,6 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
-use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
+use atm0s_sdn::{
+    features::{router_sync, FeaturesEvent},
+    secure::StaticKeyAuthorization,
+    services::visualization,
+    SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner,
+};
 use clap::Parser;
 use media_server_connector::{
     handler_service::{self, ConnectorHandlerServiceBuilder},
@@ -19,6 +24,7 @@ use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use tokio::sync::mpsc::channel;
 
 use crate::{
+    http::{run_connector_http_server, NodeApiCtx},
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_server, VirtualNetwork},
     NodeConfig,
@@ -82,7 +88,7 @@ pub struct Args {
     pub multi_tenancy_sync_interval_ms: u64,
 }
 
-pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
+pub async fn run_media_connector(workers: usize, http_port: Option<u16>, node: NodeConfig, args: Args) {
     let app_storage = if let Some(url) = args.multi_tenancy_sync {
         let app_storage = Arc::new(MultiTenancyStorage::new());
         let mut app_sync = MultiTenancySync::new(app_storage.clone(), url, Duration::from_millis(args.multi_tenancy_sync_interval_ms));
@@ -201,6 +207,18 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
         }
     });
 
+    // Start http server
+    let (dump_tx, mut dump_rx) = channel(10);
+    if let Some(http_port) = http_port {
+        let node_ctx = NodeApiCtx { address: node_addr.clone(), dump_tx };
+        tokio::spawn(async move {
+            if let Err(e) = run_connector_http_server(http_port, node_ctx).await {
+                log::error!("HTTP Error: {}", e);
+            }
+        });
+    }
+    let mut wait_dump_router = vec![];
+
     loop {
         if controller.process().is_none() {
             break;
@@ -224,6 +242,11 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
             controller.service_control(HANDLER_SERVICE_ID.into(), (), control.into());
         }
 
+        while let Ok(v) = dump_rx.try_recv() {
+            controller.feature_control((), router_sync::Control::DumpRouter.into());
+            wait_dump_router.push(v);
+        }
+
         while let Some(out) = controller.pop_event() {
             match out {
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
@@ -238,6 +261,14 @@ pub async fn run_media_connector(workers: usize, node: NodeConfig, args: Args) {
                         log::error!("[MediaConnector] forward Sdn SocketEvent error {:?}", e);
                     }
                 }
+                SdnExtOut::FeaturesEvent(_, FeaturesEvent::RouterSync(event)) => match event {
+                    router_sync::Event::DumpRouter(dump) => {
+                        let json = serde_json::to_value(dump).expect("should convert json");
+                        while let Some(v) = wait_dump_router.pop() {
+                            let _ = v.send(json.clone());
+                        }
+                    }
+                },
                 _ => {}
             }
         }

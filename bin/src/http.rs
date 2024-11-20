@@ -230,6 +230,35 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     Ok(())
 }
 
+#[cfg(feature = "connector")]
+pub async fn run_connector_http_server(port: u16, node: NodeApiCtx) -> Result<(), Box<dyn std::error::Error>> {
+    use poem::middleware::Tracing;
+
+    let node_api = api_node::Apis::new(node);
+    let node_service = OpenApiService::new(node_api, "Node APIs", env!("CARGO_PKG_VERSION")).server("/api/node/");
+    let node_ui = node_service.swagger_ui();
+    let node_spec = node_service.spec();
+
+    let metrics_service: OpenApiService<_, ()> = OpenApiService::new(api_metrics::Apis, "Metrics APIs", env!("CARGO_PKG_VERSION")).server("/api/metrics/");
+    let metrics_ui = metrics_service.swagger_ui();
+    let metrics_spec = metrics_service.spec();
+
+    let route = Route::new()
+        //node
+        .nest("/api/node/", node_service)
+        .nest("/api/node/ui", node_ui)
+        .at("/api/node/spec", poem::endpoint::make_sync(move |_| node_spec.clone()))
+        //metrics
+        .nest("/api/metrics/", metrics_service)
+        .nest("/api/metrics/ui", metrics_ui)
+        .at("/api/metrics/spec", poem::endpoint::make_sync(move |_| metrics_spec.clone()))
+        .with(Cors::new())
+        .with(Tracing);
+
+    Server::new(TcpListener::bind(SocketAddr::new([0, 0, 0, 0].into(), port))).run(route).await?;
+    Ok(())
+}
+
 #[cfg(feature = "media")]
 pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, GS: 'static + MediaGatewaySecure + Send + Sync>(
     port: u16,
