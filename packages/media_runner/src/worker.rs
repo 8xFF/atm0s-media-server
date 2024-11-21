@@ -740,7 +740,7 @@ mod test {
 
     #[test]
     fn smallmap_collision() {
-        for i in 0..1000_000 {
+        for i in 0..1_000_000 {
             let mut map = indexmap::IndexMap::new();
             let webrtc = MediaClusterEndpoint::Webrtc(WebrtcSession::from(rand::random::<usize>()));
             map.insert(webrtc, ());
@@ -753,11 +753,11 @@ mod test {
             map.swap_remove(&webrtc);
 
             assert_eq!(map.len(), 1);
-            assert_eq!(map.is_empty(), false, "first failsed, cycle {i} {webrtc:?} {rtpengine:?}");
+            assert!(!map.is_empty(), "first failsed, cycle {i} {webrtc:?} {rtpengine:?}");
 
             map.swap_remove(&rtpengine);
             assert_eq!(map.len(), 0);
-            assert_eq!(map.is_empty(), true, "second failsed, cycle {i} {webrtc:?} {rtpengine:?}");
+            assert!(map.is_empty(), "second failsed, cycle {i} {webrtc:?} {rtpengine:?}");
         }
     }
 }

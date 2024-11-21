@@ -250,7 +250,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             None
         };
 
-        let subscribers = self.peers_map_subscribers.iter().map(|a| a.clone()).collect::<Vec<_>>();
+        let subscribers = self.peers_map_subscribers.iter().copied().collect::<Vec<_>>();
         if let Some(info) = info {
             log::info!("[ClusterRoom {}] cluster: peer {} joined => fire event to {:?}", self.room, info.peer, subscribers);
             self.cluster_peers.insert(peer_key, info.clone());
@@ -273,7 +273,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             None
         };
 
-        let subscribers = self.tracks_map_subscribers.iter().map(|a| a.clone()).collect::<Vec<_>>();
+        let subscribers = self.tracks_map_subscribers.iter().copied().collect::<Vec<_>>();
         if let Some(info) = info {
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) started track {}) => fire event to {:?}",
@@ -310,7 +310,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             None
         };
 
-        let subscribers = return_if_none!(self.peers_tracks_subs.get(&peer_map)).iter().map(|a| a.clone()).collect::<Vec<_>>();
+        let subscribers = return_if_none!(self.peers_tracks_subs.get(&peer_map)).iter().copied().collect::<Vec<_>>();
         if let Some(info) = info {
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) started track {}) => fire event to {:?}",
