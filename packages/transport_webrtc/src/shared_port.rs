@@ -1,21 +1,22 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash, net::SocketAddr};
+use indexmap::IndexMap;
+use std::{fmt::Debug, hash::Hash, net::SocketAddr};
 use str0m::ice::StunMessage;
 
 #[derive(Debug)]
 pub struct SharedUdpPort<Task> {
-    task_remotes: HashMap<SocketAddr, Task>,
-    task_remotes_map: HashMap<Task, Vec<SocketAddr>>,
-    task_ufrags: HashMap<String, Task>,
-    task_ufrags_reverse: HashMap<Task, String>,
+    task_remotes: IndexMap<SocketAddr, Task>,
+    task_remotes_map: IndexMap<Task, Vec<SocketAddr>>,
+    task_ufrags: IndexMap<String, Task>,
+    task_ufrags_reverse: IndexMap<Task, String>,
 }
 
 impl<Task> Default for SharedUdpPort<Task> {
     fn default() -> Self {
         Self {
-            task_remotes: HashMap::new(),
-            task_remotes_map: HashMap::new(),
-            task_ufrags: HashMap::new(),
-            task_ufrags_reverse: HashMap::new(),
+            task_remotes: IndexMap::new(),
+            task_remotes_map: IndexMap::new(),
+            task_ufrags: IndexMap::new(),
+            task_ufrags_reverse: IndexMap::new(),
         }
     }
 }
@@ -28,13 +29,13 @@ impl<Task: Debug + Clone + Copy + Hash + PartialEq + Eq> SharedUdpPort<Task> {
     }
 
     pub fn remove_task(&mut self, task: Task) -> Option<()> {
-        let ufrag = self.task_ufrags_reverse.remove(&task)?;
+        let ufrag = self.task_ufrags_reverse.swap_remove(&task)?;
         log::info!("Remove task {:?} => ufrag {}", task, ufrag);
-        self.task_ufrags.remove(&ufrag)?;
-        let remotes = self.task_remotes_map.remove(&task)?;
+        self.task_ufrags.swap_remove(&ufrag)?;
+        let remotes = self.task_remotes_map.swap_remove(&task)?;
         for remote in remotes {
             log::info!("     Remove remote {:?} => task {:?}", remote, task);
-            self.task_remotes.remove(&remote);
+            self.task_remotes.swap_remove(&remote);
         }
         Some(())
     }

@@ -4,12 +4,13 @@
 //! to determine which source is sent to client.
 //!
 
-use std::{collections::HashMap, fmt::Debug, time::Instant};
+use std::{fmt::Debug, time::Instant};
 
 use atm0s_sdn::{
     features::pubsub::{self, ChannelId},
     NodeId,
 };
+use indexmap::{map::Entry, IndexMap};
 use media_server_protocol::{
     endpoint::TrackSource,
     media::{MediaMeta, MediaPacket},
@@ -36,7 +37,7 @@ pub struct ManualMixer<Endpoint: Debug> {
     endpoint: Endpoint,
     room: ClusterRoomHash,
     outputs: Vec<LocalTrackId>,
-    sources: HashMap<ChannelId, TrackSource>,
+    sources: IndexMap<ChannelId, TrackSource>,
     queue: DynamicDeque<Output<Endpoint>, 4>,
     mixer: audio_mixer::AudioMixer<ChannelId>,
 }
@@ -49,14 +50,14 @@ impl<Endpoint: Debug + Clone> ManualMixer<Endpoint> {
             room,
             mixer: audio_mixer::AudioMixer::new(outputs.len()),
             outputs,
-            sources: HashMap::new(),
+            sources: Default::default(),
             queue: Default::default(),
         }
     }
 
     fn attach(&mut self, _now: Instant, source: TrackSource) {
         let channel_id = id_generator::gen_track_channel_id(self.room, &source.peer, &source.track);
-        if let std::collections::hash_map::Entry::Vacant(e) = self.sources.entry(channel_id) {
+        if let Entry::Vacant(e) = self.sources.entry(channel_id) {
             log::info!("[ClusterManualMixer] add source {:?} => sub {channel_id}", source);
             e.insert(source);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::SubAuto)));
@@ -89,7 +90,7 @@ impl<Endpoint: Debug + Clone> ManualMixer<Endpoint> {
 
     fn detach(&mut self, _now: Instant, source: TrackSource) {
         let channel_id = id_generator::gen_track_channel_id(self.room, &source.peer, &source.track);
-        if self.sources.remove(&channel_id).is_some() {
+        if self.sources.swap_remove(&channel_id).is_some() {
             log::info!("[ClusterManualMixer] remove source {:?} => unsub {channel_id}", source);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, pubsub::ChannelControl::UnsubAuto)));
         }
