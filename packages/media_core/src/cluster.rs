@@ -6,9 +6,9 @@
 //!
 
 use derive_more::{AsRef, Display, From};
+use indexmap::IndexMap;
 use sans_io_runtime::{return_if_none, TaskGroup, TaskGroupOutput, TaskSwitcherChild};
 use std::{
-    collections::HashMap,
     fmt::Debug,
     hash::{Hash, Hasher},
     time::Instant,
@@ -131,7 +131,7 @@ pub enum Output<Endpoint> {
 }
 
 pub struct MediaCluster<Endpoint: Debug + Copy + Clone + Hash + Eq> {
-    rooms_map: HashMap<ClusterRoomHash, usize>,
+    rooms_map: IndexMap<ClusterRoomHash, usize>,
     rooms: TaskGroup<room::Input<Endpoint>, room::Output<Endpoint>, ClusterRoom<Endpoint>, 16>,
     shutdown: bool,
 }
@@ -139,7 +139,7 @@ pub struct MediaCluster<Endpoint: Debug + Copy + Clone + Hash + Eq> {
 impl<Endpoint: Debug + Copy + Hash + Eq + Clone> Default for MediaCluster<Endpoint> {
     fn default() -> Self {
         Self {
-            rooms_map: HashMap::new(),
+            rooms_map: IndexMap::new(),
             rooms: TaskGroup::default(),
             shutdown: false,
         }
@@ -197,7 +197,7 @@ impl<Endpoint: Debug + Hash + Copy + Clone + Debug + Eq> TaskSwitcherChild<Outpu
             room::Output::Endpoint(endpoints, event) => Some(Output::Endpoint(endpoints, event)),
             room::Output::OnResourceEmpty(room) => {
                 log::info!("[MediaCluster] remove room index {index}, hash {room}");
-                self.rooms_map.remove(&room).expect("Should have room with index");
+                self.rooms_map.swap_remove(&room).expect("Should have room with index");
                 self.rooms.remove_task(index);
                 Some(Output::Continue)
             }

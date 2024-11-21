@@ -1,11 +1,13 @@
 use std::hash::Hash;
 
-pub struct Small2dMap<T1, T2> {
-    data: smallmap::Map<T1, T2>,
-    reverse: smallmap::Map<T2, T1>,
+use indexmap::IndexMap;
+
+pub struct IndexMap2d<T1, T2> {
+    data: IndexMap<T1, T2>,
+    reverse: IndexMap<T2, T1>,
 }
 
-impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> Default for Small2dMap<T1, T2> {
+impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> Default for IndexMap2d<T1, T2> {
     fn default() -> Self {
         Self {
             data: Default::default(),
@@ -14,7 +16,7 @@ impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> Default for Small2dMap<T1, T2
     }
 }
 
-impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> Small2dMap<T1, T2> {
+impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> IndexMap2d<T1, T2> {
     pub fn insert(&mut self, key: T1, value: T2) {
         self.data.insert(key.clone(), value.clone());
         self.reverse.insert(value, key);
@@ -25,7 +27,7 @@ impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> Small2dMap<T1, T2> {
     }
 
     pub fn pairs(&self) -> Vec<(T1, T2)> {
-        self.data.iter().cloned().collect::<Vec<_>>()
+        self.data.iter().map(|(k, v)| (k.clone(), v.clone())).collect::<Vec<_>>()
     }
 
     pub fn keys2(&self) -> Vec<T2> {
@@ -41,14 +43,14 @@ impl<T1: Hash + Eq + Clone, T2: Hash + Eq + Clone> Small2dMap<T1, T2> {
     }
 
     pub fn remove1(&mut self, key: &T1) -> Option<T2> {
-        let value = self.data.remove(key)?;
-        self.reverse.remove(&value);
+        let value = self.data.swap_remove(key)?;
+        self.reverse.swap_remove(&value);
         Some(value)
     }
 
     pub fn remove2(&mut self, key: &T2) -> Option<T1> {
-        let value = self.reverse.remove(key)?;
-        self.data.remove(&value);
+        let value = self.reverse.swap_remove(key)?;
+        self.data.swap_remove(&value);
         Some(value)
     }
 

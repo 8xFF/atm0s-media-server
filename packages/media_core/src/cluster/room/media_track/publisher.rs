@@ -2,13 +2,10 @@
 //! Channel Publisher will takecare of pubsub channel for sending data and handle when received channel feedback
 //!
 
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Debug,
-    hash::Hash,
-};
+use std::{collections::VecDeque, fmt::Debug, hash::Hash};
 
 use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId, Feedback};
+use indexmap::{IndexMap, IndexSet};
 use media_server_protocol::{
     endpoint::{PeerId, TrackName},
     media::MediaPacket,
@@ -43,8 +40,8 @@ impl TryFrom<Feedback> for FeedbackKind {
 pub struct RoomChannelPublisher<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
-    tracks: HashMap<(Endpoint, RemoteTrackId), (PeerId, TrackName, ChannelId)>,
-    tracks_source: HashMap<ChannelId, HashSet<(Endpoint, RemoteTrackId)>>, // We allow multi sources here for avoiding crash
+    tracks: IndexMap<(Endpoint, RemoteTrackId), (PeerId, TrackName, ChannelId)>,
+    tracks_source: IndexMap<ChannelId, IndexSet<(Endpoint, RemoteTrackId)>>, // We allow multi sources here for avoiding crash
     queue: VecDeque<Output<Endpoint>>,
 }
 
@@ -53,8 +50,8 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
         Self {
             _c: Default::default(),
             room,
-            tracks: HashMap::new(),
-            tracks_source: HashMap::new(),
+            tracks: Default::default(),
+            tracks_source: Default::default(),
             queue: VecDeque::new(),
         }
     }
@@ -107,12 +104,12 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomChannelPublisher<Endpoint> {
     }
 
     pub fn on_track_unpublish(&mut self, endpoint: Endpoint, track: RemoteTrackId) {
-        let (peer, name, channel_id) = return_if_none!(self.tracks.remove(&(endpoint, track)));
+        let (peer, name, channel_id) = return_if_none!(self.tracks.swap_remove(&(endpoint, track)));
         let sources = self.tracks_source.get_mut(&channel_id).expect("Should have track_source");
-        let removed = sources.remove(&(endpoint, track));
+        let removed = sources.swap_remove(&(endpoint, track));
         assert!(removed, "Should remove source child on unpublish");
         if sources.is_empty() {
-            self.tracks_source.remove(&channel_id).expect("Should remove source channel on unpublish");
+            self.tracks_source.swap_remove(&channel_id).expect("Should remove source channel on unpublish");
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)));
         }
         log::info!("[ClusterRoom {}/Publishers] peer ({peer} stopped track {name})", self.room);

@@ -2,18 +2,14 @@
 //! Channel Subscriber handle logic for viewer. This module takecare sending Sub or Unsub, and also feedback
 //!
 
-use std::{
-    collections::{HashMap, VecDeque},
-    fmt::Debug,
-    hash::Hash,
-    time::Instant,
-};
+use std::{collections::VecDeque, fmt::Debug, hash::Hash, time::Instant};
 
 use atm0s_sdn::{
     features::pubsub::{self, ChannelControl, ChannelId, Feedback},
     NodeId,
 };
 use derivative::Derivative;
+use indexmap::IndexMap;
 use media_server_protocol::{
     endpoint::{PeerId, TrackName},
     media::MediaPacket,
@@ -41,15 +37,15 @@ const KEYFRAME_FEEDBACK_KIND: u8 = 1;
 #[derivative(Default(bound = ""))]
 struct ChannelContainer<Endpoint: Debug> {
     endpoints: Vec<(Endpoint, LocalTrackId)>,
-    bitrate_fbs: HashMap<Endpoint, (Instant, Feedback)>,
+    bitrate_fbs: IndexMap<Endpoint, (Instant, Feedback)>,
 }
 
 #[derive(Debug)]
 pub struct RoomChannelSubscribe<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
-    channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
-    subscribers: HashMap<(Endpoint, LocalTrackId), (ChannelId, PeerId, TrackName)>,
+    channels: IndexMap<ChannelId, ChannelContainer<Endpoint>>,
+    subscribers: IndexMap<(Endpoint, LocalTrackId), (ChannelId, PeerId, TrackName)>,
     queue: VecDeque<Output<Endpoint>>,
 }
 
@@ -58,8 +54,8 @@ impl<Endpoint: Debug + Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> 
         Self {
             _c: Default::default(),
             room,
-            channels: HashMap::new(),
-            subscribers: HashMap::new(),
+            channels: IndexMap::new(),
+            subscribers: IndexMap::new(),
             queue: VecDeque::new(),
         }
     }
@@ -146,7 +142,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> 
     }
 
     pub fn on_track_unsubscribe(&mut self, endpoint: Endpoint, track: LocalTrackId) {
-        let (channel_id, target_peer, target_track) = return_if_none!(self.subscribers.remove(&(endpoint, track)));
+        let (channel_id, target_peer, target_track) = return_if_none!(self.subscribers.swap_remove(&(endpoint, track)));
         log::info!(
             "[ClusterRoom {}/Subscribers] endpoint {:?} track {track} unsubscribe from source {target_peer} {target_track}, channel {channel_id}",
             self.room,
@@ -157,7 +153,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy + Debug> RoomChannelSubscribe<Endpoint> 
         channel_container.endpoints.swap_remove(index);
 
         if channel_container.endpoints.is_empty() {
-            self.channels.remove(&channel_id);
+            self.channels.swap_remove(&channel_id);
             log::info!("[ClusterRoom {}/Subscribers] last unsubscriber => Unsub channel {channel_id}", self.room);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)));
         }

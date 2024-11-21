@@ -1,11 +1,11 @@
 use std::{
-    collections::HashMap,
     fmt::Debug,
     hash::Hash,
     time::{Duration, Instant},
 };
 
 use atm0s_sdn::features::pubsub::{self, ChannelId};
+use indexmap::IndexMap;
 use media_server_protocol::{
     endpoint::{AudioMixerPkt, PeerHashCode, PeerId, TrackName},
     media::{MediaMeta, MediaPacket},
@@ -35,7 +35,7 @@ struct OutputSlot {
 pub struct AudioMixerPublisher<Endpoint: Debug> {
     _c: Count<Self>,
     channel_id: pubsub::ChannelId,
-    tracks: HashMap<(Endpoint, RemoteTrackId), TrackSlot>,
+    tracks: IndexMap<(Endpoint, RemoteTrackId), TrackSlot>,
     mixer: audio_mixer::AudioMixer<(Endpoint, RemoteTrackId)>,
     slots: [Option<OutputSlot>; 3],
     queue: DynamicDeque<Output<Endpoint>, 4>,
@@ -114,7 +114,7 @@ impl<Endpoint: Debug + Clone + Eq + Hash> AudioMixerPublisher<Endpoint> {
         log::debug!("[ClusterAudioMixerPublisher] on track unpublish {track}");
         let key = (endpoint, track);
         assert!(self.tracks.contains_key(&key));
-        self.tracks.remove(&key);
+        self.tracks.swap_remove(&key);
         if self.tracks.is_empty() {
             log::info!("[ClusterAudioMixerPublisher] last track leave ind Auto mode => unpublish channel {}", self.channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(self.channel_id, pubsub::ChannelControl::PubStop)));

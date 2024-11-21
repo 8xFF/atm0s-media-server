@@ -10,9 +10,9 @@
 use std::{collections::VecDeque, fmt::Debug, hash::Hash};
 
 use atm0s_sdn::features::dht_kv::{self, Map, MapControl, MapEvent};
+use indexmap::{IndexMap, IndexSet};
 use media_server_protocol::endpoint::{PeerId, PeerInfo, PeerMeta, RoomInfoPublish, RoomInfoSubscribe, TrackInfo, TrackMeta, TrackName};
 use sans_io_runtime::{return_if_none, TaskSwitcherChild};
-use smallmap::{Map as SmallMap, Set as SmallSet};
 
 use crate::{
     cluster::{id_generator, ClusterEndpointEvent, ClusterRoomHash},
@@ -23,8 +23,8 @@ use crate::{
 struct PeerContainer {
     peer: PeerId,
     publish: RoomInfoPublish,
-    sub_peers: SmallSet<PeerId>,
-    pub_tracks: SmallMap<RemoteTrackId, TrackName>,
+    sub_peers: IndexSet<PeerId>,
+    pub_tracks: IndexMap<RemoteTrackId, TrackName>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -39,13 +39,13 @@ pub struct RoomMetadata<Endpoint: Debug + Hash + Eq> {
     room: ClusterRoomHash,
     peers_map: Map,
     tracks_map: Map,
-    peers: SmallMap<Endpoint, PeerContainer>,
-    peers_map_subscribers: SmallSet<Endpoint>,
-    tracks_map_subscribers: SmallSet<Endpoint>,
+    peers: IndexMap<Endpoint, PeerContainer>,
+    peers_map_subscribers: IndexSet<Endpoint>,
+    tracks_map_subscribers: IndexSet<Endpoint>,
     //This is for storing list of endpoints subscribe manual a target track
-    peers_tracks_subs: SmallMap<dht_kv::Map, SmallSet<Endpoint>>,
-    cluster_peers: SmallMap<dht_kv::Key, PeerInfo>,
-    cluster_tracks: SmallMap<dht_kv::Key, TrackInfo>,
+    peers_tracks_subs: IndexMap<dht_kv::Map, IndexSet<Endpoint>>,
+    cluster_peers: IndexMap<dht_kv::Key, PeerInfo>,
+    cluster_tracks: IndexMap<dht_kv::Key, TrackInfo>,
     queue: VecDeque<Output<Endpoint>>,
 }
 
@@ -55,13 +55,13 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             room,
             peers_map: id_generator::peers_map(room),
             tracks_map: id_generator::tracks_map(room),
-            peers: SmallMap::new(),
-            peers_map_subscribers: SmallMap::new(),
-            tracks_map_subscribers: SmallMap::new(),
-            peers_tracks_subs: SmallMap::new(),
-            cluster_peers: SmallMap::new(),
-            cluster_tracks: SmallMap::new(),
-            queue: VecDeque::new(),
+            peers: Default::default(),
+            peers_map_subscribers: Default::default(),
+            tracks_map_subscribers: Default::default(),
+            peers_tracks_subs: Default::default(),
+            cluster_peers: Default::default(),
+            cluster_tracks: Default::default(),
+            queue: Default::default(),
         }
     }
 
@@ -78,8 +78,8 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             PeerContainer {
                 peer: peer.clone(),
                 publish: publish.clone(),
-                sub_peers: SmallSet::new(),
-                pub_tracks: SmallMap::new(),
+                sub_peers: Default::default(),
+                pub_tracks: Default::default(),
             },
         );
         let peer_key = id_generator::peers_key(&peer);
@@ -91,7 +91,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
         }
         // Let Sub to peers_map if need need subscribe.peers
         if subscribe.peers {
-            self.peers_map_subscribers.insert(endpoint, ());
+            self.peers_map_subscribers.insert(endpoint);
             log::info!("[ClusterRoom {}] next peer sub peers => restore {} remote peers", self.room, self.cluster_peers.len());
 
             // Restore already added peers
@@ -109,7 +109,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
         }
         // Let Sub to tracks_map if need need subscribe.tracks
         if subscribe.tracks {
-            self.tracks_map_subscribers.insert(endpoint, ());
+            self.tracks_map_subscribers.insert(endpoint);
             log::info!("[ClusterRoom {}] next peer sub tracks => restore {} remote tracks", self.room, self.cluster_tracks.len());
 
             // Restore already added tracks
@@ -130,7 +130,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
     }
 
     pub fn on_leave(&mut self, endpoint: Endpoint) {
-        let peer = return_if_none!(self.peers.remove(&endpoint));
+        let peer = return_if_none!(self.peers.swap_remove(&endpoint));
         log::info!("[ClusterRoom {}] leave peer {}", self.room, peer.peer);
         let peer_key = id_generator::peers_key(&peer.peer);
         // If remain remote tracks, must to delete from list.
@@ -146,23 +146,23 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(peer_map, MapControl::Del(track_key))));
         }
 
-        if self.peers_map_subscribers.remove(&endpoint).is_some() && self.peers_map_subscribers.is_empty() {
+        if self.peers_map_subscribers.swap_remove(&endpoint) && self.peers_map_subscribers.is_empty() {
             log::info!("[ClusterRoom {}] last peer unsub peers map => unsubscribe", self.room);
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.peers_map, MapControl::Unsub)));
         }
 
-        if self.tracks_map_subscribers.remove(&endpoint).is_some() && self.tracks_map_subscribers.is_empty() {
+        if self.tracks_map_subscribers.swap_remove(&endpoint) && self.tracks_map_subscribers.is_empty() {
             log::info!("[ClusterRoom {}] last peer unsub tracks map => unsubscribe", self.room);
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(self.tracks_map, MapControl::Unsub)));
         }
 
         // check if this peer manual subscribe to some private peer map => need send Unsub
-        for (target, _) in peer.sub_peers.into_iter() {
+        for target in peer.sub_peers.into_iter() {
             let target_peer_map = id_generator::peer_map(self.room, &target);
-            let subs = self.peers_tracks_subs.get_mut(&target_peer_map).expect("Should have private peer_map");
-            subs.remove(&endpoint);
+            let subs: &mut IndexSet<Endpoint> = self.peers_tracks_subs.get_mut(&target_peer_map).expect("Should have private peer_map");
+            subs.swap_remove(&endpoint);
             if subs.is_empty() {
-                self.peers_tracks_subs.remove(&target_peer_map);
+                self.peers_tracks_subs.swap_remove(&target_peer_map);
                 self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(target_peer_map, MapControl::Unsub)));
             }
         }
@@ -173,8 +173,8 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
         let target_peer_map = id_generator::peer_map(self.room, &target);
         let subs = self.peers_tracks_subs.entry(target_peer_map).or_default();
         let need_sub = subs.is_empty();
-        subs.insert(endpoint, ());
-        peer.sub_peers.insert(target, ());
+        subs.insert(endpoint);
+        peer.sub_peers.insert(target);
 
         if need_sub {
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(target_peer_map, MapControl::Sub)));
@@ -185,10 +185,10 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
         let peer = self.peers.get_mut(&endpoint).expect("Should have peer");
         let target_peer_map = id_generator::peer_map(self.room, &target);
         let subs = self.peers_tracks_subs.entry(target_peer_map).or_default();
-        subs.remove(&endpoint);
-        peer.sub_peers.remove(&target);
+        subs.swap_remove(&endpoint);
+        peer.sub_peers.swap_remove(&target);
         if subs.is_empty() {
-            self.peers_tracks_subs.remove(&target_peer_map);
+            self.peers_tracks_subs.swap_remove(&target_peer_map);
             self.queue.push_back(Output::Kv(dht_kv::Control::MapCmd(target_peer_map, MapControl::Unsub)));
         }
     }
@@ -212,7 +212,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
 
     pub fn on_track_unpublish(&mut self, endpoint: Endpoint, track_id: RemoteTrackId) {
         let peer = return_if_none!(self.peers.get_mut(&endpoint));
-        let track = return_if_none!(peer.pub_tracks.remove(&track_id));
+        let track = return_if_none!(peer.pub_tracks.swap_remove(&track_id));
         let track_key = id_generator::tracks_key(&peer.peer, &track);
 
         let peer_map = id_generator::peer_map(self.room, &peer.peer);
@@ -250,7 +250,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             None
         };
 
-        let subscribers = self.peers_map_subscribers.iter().map(|a| a.0).collect::<Vec<_>>();
+        let subscribers = self.peers_map_subscribers.iter().map(|a| a.clone()).collect::<Vec<_>>();
         if let Some(info) = info {
             log::info!("[ClusterRoom {}] cluster: peer {} joined => fire event to {:?}", self.room, info.peer, subscribers);
             self.cluster_peers.insert(peer_key, info.clone());
@@ -258,7 +258,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
                 self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::PeerJoined(info.peer, info.meta)));
             }
         } else {
-            let info = return_if_none!(self.cluster_peers.remove(&peer_key));
+            let info = return_if_none!(self.cluster_peers.swap_remove(&peer_key));
             log::info!("[ClusterRoom {}] cluster: peer ({}) leaved => fire event to {:?}", self.room, info.peer, subscribers);
             if !subscribers.is_empty() {
                 self.queue.push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::PeerLeaved(info.peer, info.meta)));
@@ -273,7 +273,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             None
         };
 
-        let subscribers = self.tracks_map_subscribers.iter().map(|a| a.0).collect::<Vec<_>>();
+        let subscribers = self.tracks_map_subscribers.iter().map(|a| a.clone()).collect::<Vec<_>>();
         if let Some(info) = info {
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) started track {}) => fire event to {:?}",
@@ -288,7 +288,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
                     .push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStarted(info.peer, info.track, info.meta)));
             }
         } else {
-            let info = return_if_none!(self.cluster_tracks.remove(&track));
+            let info = return_if_none!(self.cluster_tracks.swap_remove(&track));
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) stopped track {}) => fire event to {:?}",
                 self.room,
@@ -310,7 +310,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             None
         };
 
-        let subscribers = return_if_none!(self.peers_tracks_subs.get(&peer_map)).iter().map(|a| a.0).collect::<Vec<_>>();
+        let subscribers = return_if_none!(self.peers_tracks_subs.get(&peer_map)).iter().map(|a| a.clone()).collect::<Vec<_>>();
         if let Some(info) = info {
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) started track {}) => fire event to {:?}",
@@ -323,7 +323,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> RoomMetadata<Endpoint> {
             self.queue
                 .push_back(Output::Endpoint(subscribers, ClusterEndpointEvent::TrackStarted(info.peer, info.track, info.meta)));
         } else {
-            let info = return_if_none!(self.cluster_tracks.remove(&track));
+            let info = return_if_none!(self.cluster_tracks.swap_remove(&track));
             log::info!(
                 "[ClusterRoom {}] cluster: peer ({}) stopped track {}) => fire event to {:?}",
                 self.room,

@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 log = { workspace = true }
 num_enum = { workspace = true }
-smallmap = { workspace = true }
+indexmap = { workspace = true }
 derivative = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 mockall = { workspace = true }
@@ -17,7 +17,6 @@ atm0s-sdn = { workspace = true }
 media-server-protocol = { path = "../protocol" }
 media-server-utils = { path = "../media_utils" }
 audio-mixer = { path = "../audio_mixer" }
-indexmap = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }

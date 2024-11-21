@@ -1,10 +1,7 @@
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
-    fmt::Debug,
-    hash::Hash,
-};
+use std::{collections::VecDeque, fmt::Debug, hash::Hash};
 
 use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId};
+use indexmap::{map::Entry, IndexMap, IndexSet};
 use media_server_protocol::message_channel::MessageChannelPacket;
 use media_server_utils::Count;
 use sans_io_runtime::{return_if_none, TaskSwitcherChild};
@@ -17,7 +14,7 @@ use crate::{
 
 #[derive(Debug)]
 struct ChannelContainer<Endpoint: Debug> {
-    subscribers: HashSet<Endpoint>,
+    subscribers: IndexSet<Endpoint>,
     label: MessageChannelLabel,
 }
 
@@ -25,8 +22,8 @@ struct ChannelContainer<Endpoint: Debug> {
 pub struct MessageChannelSubscriber<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
-    channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
-    subscriptions: HashMap<Endpoint, HashSet<ChannelId>>,
+    channels: IndexMap<ChannelId, ChannelContainer<Endpoint>>,
+    subscriptions: IndexMap<Endpoint, IndexSet<ChannelId>>,
     queue: VecDeque<Output<Endpoint>>,
 }
 
@@ -36,8 +33,8 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelSubscriber<Endpoint> {
             _c: Default::default(),
             room,
             queue: VecDeque::new(),
-            channels: HashMap::new(),
-            subscriptions: HashMap::new(),
+            channels: IndexMap::new(),
+            subscriptions: IndexMap::new(),
         }
     }
 
@@ -52,7 +49,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelSubscriber<Endpoint> {
             }
             Entry::Vacant(v) => {
                 let mut channel = ChannelContainer {
-                    subscribers: HashSet::new(),
+                    subscribers: IndexSet::new(),
                     label: label.clone(),
                 };
                 channel.subscribers.insert(endpoint);
@@ -70,16 +67,16 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelSubscriber<Endpoint> {
 
         let channel = return_if_none!(self.channels.get_mut(&channel_id));
 
-        channel.subscribers.remove(&endpoint);
+        channel.subscribers.swap_remove(&endpoint);
         if let Some(channels) = self.subscriptions.get_mut(&endpoint) {
-            channels.remove(&channel_id);
+            channels.swap_remove(&channel_id);
             if channels.is_empty() {
-                self.subscriptions.remove(&endpoint);
+                self.subscriptions.swap_remove(&endpoint);
             }
         }
 
         if channel.subscribers.is_empty() {
-            self.channels.remove(&channel_id);
+            self.channels.swap_remove(&channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::UnsubAuto)));
         }
     }
@@ -99,12 +96,12 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelSubscriber<Endpoint> {
 
     pub fn on_leave(&mut self, endpoint: Endpoint) {
         log::info!("[ClusterRoomDataChannel {}/Subscribers] user leaves, clean up", self.room);
-        if let Some(channels) = self.subscriptions.remove(&endpoint) {
+        if let Some(channels) = self.subscriptions.swap_remove(&endpoint) {
             for c in channels {
                 if let Some(channel) = self.channels.get_mut(&c) {
-                    channel.subscribers.remove(&endpoint);
+                    channel.subscribers.swap_remove(&endpoint);
                     if channel.subscribers.is_empty() {
-                        self.channels.remove(&c);
+                        self.channels.swap_remove(&c);
                         self.queue.push_back(Output::Pubsub(pubsub::Control(c, ChannelControl::UnsubAuto)));
                     }
                 }

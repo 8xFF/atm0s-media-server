@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-smallmap = { workspace = true }
 sorted-vec = "0.8"
+indexmap = { workspace = true }
 log = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 uriparse = "0.6"
@@ -15,4 +15,11 @@ serde-querystring = "0.2"
 pin-project-lite = "0.2"
 spin = { workspace = true }
 once_cell = "1.20"
-derive_more = "1.0"
+derive_more = { version = "1.0", features = ["full"] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "map_bench"
+harness = false

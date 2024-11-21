@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use media_server_protocol::media::{H264Profile, MediaCodec, MediaLayerBitrate, MediaLayersBitrate, MediaMeta, MediaOrientation, MediaPacket, Vp9Profile};
 use str0m::{
     format::{CodecConfig, CodecSpec},
@@ -12,9 +13,9 @@ mod vp9;
 
 #[derive(Default)]
 pub struct RemoteMediaConvert {
-    map: smallmap::Map<Pt, MediaCodec>,
-    ssrcs_rid: smallmap::Map<Ssrc, u8>,
-    ssrcs_mid: smallmap::Map<Ssrc, Mid>,
+    map: IndexMap<Pt, MediaCodec>,
+    ssrcs_rid: IndexMap<Ssrc, u8>,
+    ssrcs_mid: IndexMap<Ssrc, Mid>,
 }
 
 impl RemoteMediaConvert {
@@ -96,7 +97,7 @@ impl RemoteMediaConvert {
 
 #[derive(Default)]
 pub struct LocalMediaConvert {
-    map: smallmap::Map<MediaCodec, Pt>,
+    map: IndexMap<MediaCodec, Pt>,
 }
 
 impl LocalMediaConvert {
