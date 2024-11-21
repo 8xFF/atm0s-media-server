@@ -1,9 +1,10 @@
 use std::{
-    collections::HashMap,
     fmt::Debug,
     hash::Hash,
     time::{Duration, Instant},
 };
+
+use indexmap::IndexMap;
 
 const SILENT_LEVEL: i8 = -127;
 const SWITCH_AUDIO_THRESHOLD: i16 = 30;
@@ -28,7 +29,7 @@ struct OutputSlotState<Src> {
 #[derive(Debug)]
 pub struct AudioMixer<Src> {
     len: usize,
-    sources: HashMap<Src, SourceState>,
+    sources: IndexMap<Src, SourceState>,
     outputs: Vec<Option<OutputSlotState<Src>>>,
 }
 
@@ -38,7 +39,7 @@ impl<Src: Debug + Clone + Eq + Hash> AudioMixer<Src> {
 
         Self {
             len: 0,
-            sources: HashMap::new(),
+            sources: Default::default(),
             outputs: vec![None; output],
         }
     }

@@ -14,6 +14,7 @@ use atm0s_sdn::{
     ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, NetInput, NetOutput, NodeAddr, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot,
 };
 use atm0s_sdn_network::data_plane::NetPair;
+use indexmap::IndexMap;
 use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
 use media_server_core::cluster::{self, MediaCluster};
 use media_server_gateway::{agent_service::GatewayAgentServiceBuilder, NodeMetrics, ServiceKind, AGENT_SERVICE_ID};
@@ -127,8 +128,8 @@ pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
     worker: u16,
     sdn_addr: NodeAddr,
     sdn_worker: TaskSwitcherBranch<SdnWorker<UserData, SC, SE, TC, TW>, SdnWorkerOutput<UserData, SC, SE, TC, TW>>,
-    sdn_backend_addrs: HashMap<SocketAddr, usize>,
-    sdn_backend_slots: HashMap<usize, SocketAddr>,
+    sdn_backend_addrs: IndexMap<SocketAddr, usize>,
+    sdn_backend_slots: IndexMap<usize, SocketAddr>,
     media_cluster: TaskSwitcherBranch<MediaCluster<MediaClusterEndpoint>, cluster::Output<MediaClusterEndpoint>>,
     media_webrtc: TaskSwitcherBranch<MediaWorkerWebrtc<ES>, transport_webrtc::GroupOutput>,
     media_rtpengine: TaskSwitcherBranch<MediaWorkerRtpEngine, transport_rtpengine::GroupOutput>,
@@ -726,6 +727,37 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                         .on_event(now, transport_rtpengine::GroupInput::Ext(conn.into(), transport_rtpengine::ExtIn::Disconnect(req_id)));
                 }
             },
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use transport_rtpengine::RtpEngineSession;
+    use transport_webrtc::WebrtcSession;
+
+    use super::MediaClusterEndpoint;
+
+    #[test]
+    fn smallmap_collision() {
+        for i in 0..1_000_000 {
+            let mut map = indexmap::IndexMap::new();
+            let webrtc = MediaClusterEndpoint::Webrtc(WebrtcSession::from(rand::random::<usize>()));
+            map.insert(webrtc, ());
+            assert_eq!(map.len(), 1);
+
+            let rtpengine = MediaClusterEndpoint::RtpEngine(RtpEngineSession::from(rand::random::<usize>()));
+            map.insert(rtpengine, ());
+            assert_eq!(map.len(), 2);
+
+            map.swap_remove(&webrtc);
+
+            assert_eq!(map.len(), 1);
+            assert!(!map.is_empty(), "first failsed, cycle {i} {webrtc:?} {rtpengine:?}");
+
+            map.swap_remove(&rtpengine);
+            assert_eq!(map.len(), 0);
+            assert!(map.is_empty(), "second failsed, cycle {i} {webrtc:?} {rtpengine:?}");
         }
     }
 }

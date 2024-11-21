@@ -8,13 +8,13 @@
 //TODO refactor multiple subscriber mode to array instead of manual implement with subscriber1, subscriber2, subscriber3
 
 use std::{
-    collections::HashMap,
     fmt::Debug,
     hash::Hash,
     time::{Duration, Instant},
 };
 
 use atm0s_sdn::features::pubsub::{self, ChannelId};
+use indexmap::IndexMap;
 use manual::ManualMixer;
 use media_server_protocol::{
     endpoint::{AudioMixerConfig, PeerId, TrackName},
@@ -60,9 +60,9 @@ pub struct AudioMixer<Endpoint: Debug + Clone> {
     room: ClusterRoomHash,
     mix_channel_id: ChannelId,
     //store number of outputs
-    auto_mode: HashMap<Endpoint, usize>,
-    manual_mode: HashMap<Endpoint, usize>,
-    manual_channels: HashMap<ChannelId, Vec<usize>>,
+    auto_mode: IndexMap<Endpoint, usize>,
+    manual_mode: IndexMap<Endpoint, usize>,
+    manual_channels: IndexMap<ChannelId, Vec<usize>>,
     publisher: TaskSwitcherBranch<AudioMixerPublisher<Endpoint>, Output<Endpoint>>,
     subscriber1: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint, 1>, Output<Endpoint>>,
     subscriber2: TaskSwitcherBranch<AudioMixerSubscriber<Endpoint, 2>, Output<Endpoint>>,
@@ -77,9 +77,9 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
         Self {
             room,
             mix_channel_id,
-            auto_mode: HashMap::new(),
-            manual_mode: HashMap::new(),
-            manual_channels: HashMap::new(),
+            auto_mode: IndexMap::new(),
+            manual_mode: IndexMap::new(),
+            manual_channels: IndexMap::new(),
             publisher: TaskSwitcherBranch::new(AudioMixerPublisher::new(mix_channel_id), TaskType::Publisher),
             subscriber1: TaskSwitcherBranch::new(AudioMixerSubscriber::new(mix_channel_id), TaskType::Subscriber1),
             subscriber2: TaskSwitcherBranch::new(AudioMixerSubscriber::new(mix_channel_id), TaskType::Subscriber2),
@@ -138,7 +138,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
     }
 
     pub fn on_leave(&mut self, now: Instant, endpoint: Endpoint) {
-        if let Some(outputs) = self.auto_mode.remove(&endpoint) {
+        if let Some(outputs) = self.auto_mode.swap_remove(&endpoint) {
             match outputs {
                 1 => self.subscriber1.input(&mut self.switcher).on_endpoint_leave(now, endpoint),
                 2 => self.subscriber2.input(&mut self.switcher).on_endpoint_leave(now, endpoint),
@@ -147,9 +147,9 @@ impl<Endpoint: Debug + Clone + Hash + Eq> AudioMixer<Endpoint> {
                     log::warn!("[ClusterRoomAudioMixer] unsupported mixer with {} outputs", outputs);
                 }
             }
-        } else if let Some(index) = self.manual_mode.remove(&endpoint) {
+        } else if let Some(index) = self.manual_mode.swap_remove(&endpoint) {
             log::info!("[ClusterRoomAudioMixer] endpoint {:?} leave from manual mode", endpoint);
-            self.manual_mode.remove(&endpoint);
+            self.manual_mode.swap_remove(&endpoint);
             self.manuals.input(&mut self.switcher).on_event(now, index, manual::Input::LeaveRoom);
         }
     }
@@ -270,7 +270,7 @@ impl<Endpoint: Debug + Clone + Hash + Eq> TaskSwitcherChild<Output<Endpoint>> fo
                             let (slot_index, _) = slot.iter().enumerate().find(|(_, task_i)| **task_i == index).expect("Subscribed task not found");
                             slot.swap_remove(slot_index);
                             if slot.is_empty() {
-                                self.manual_channels.remove(&channel_id);
+                                self.manual_channels.swap_remove(&channel_id);
                                 return Some(out);
                             }
                         }

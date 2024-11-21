@@ -1,10 +1,7 @@
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
-    fmt::Debug,
-    hash::Hash,
-};
+use std::{collections::VecDeque, fmt::Debug, hash::Hash};
 
 use atm0s_sdn::features::pubsub::{self, ChannelControl, ChannelId};
+use indexmap::{map::Entry, IndexMap, IndexSet};
 use media_server_protocol::message_channel::MessageChannelPacket;
 use media_server_utils::Count;
 use sans_io_runtime::{return_if_none, TaskSwitcherChild};
@@ -18,15 +15,15 @@ use super::Output;
 
 #[derive(Debug)]
 struct ChannelContainer<Endpoint: Debug> {
-    publishers: HashSet<Endpoint>,
+    publishers: IndexSet<Endpoint>,
 }
 
 #[derive(Debug)]
 pub struct MessageChannelPublisher<Endpoint: Debug> {
     _c: Count<Self>,
     room: ClusterRoomHash,
-    channels: HashMap<ChannelId, ChannelContainer<Endpoint>>,
-    publishers: HashMap<Endpoint, HashSet<ChannelId>>,
+    channels: IndexMap<ChannelId, ChannelContainer<Endpoint>>,
+    publishers: IndexMap<Endpoint, IndexSet<ChannelId>>,
     queue: VecDeque<Output<Endpoint>>,
 }
 
@@ -36,8 +33,8 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelPublisher<Endpoint> {
             _c: Default::default(),
             room,
             queue: VecDeque::new(),
-            channels: HashMap::new(),
-            publishers: HashMap::new(),
+            channels: IndexMap::new(),
+            publishers: IndexMap::new(),
         }
     }
 
@@ -51,7 +48,7 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelPublisher<Endpoint> {
                 o.get_mut().publishers.insert(endpoint);
             }
             Entry::Vacant(v) => {
-                let mut channel = ChannelContainer { publishers: HashSet::new() };
+                let mut channel = ChannelContainer { publishers: IndexSet::new() };
                 channel.publishers.insert(endpoint);
                 v.insert(channel);
                 self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStart)));
@@ -67,29 +64,29 @@ impl<Endpoint: Debug + Hash + Eq + Copy> MessageChannelPublisher<Endpoint> {
         let channel_id: ChannelId = id_generator::gen_msg_channel_id(self.room, label);
         let channel = return_if_none!(self.channels.get_mut(&channel_id));
 
-        channel.publishers.remove(&endpoint);
+        channel.publishers.swap_remove(&endpoint);
 
         if let Some(publisher) = self.publishers.get_mut(&endpoint) {
-            publisher.remove(&channel_id);
+            publisher.swap_remove(&channel_id);
             if publisher.is_empty() {
-                self.publishers.remove(&endpoint);
+                self.publishers.swap_remove(&endpoint);
             }
         }
 
         if channel.publishers.is_empty() {
-            self.channels.remove(&channel_id);
+            self.channels.swap_remove(&channel_id);
             self.queue.push_back(Output::Pubsub(pubsub::Control(channel_id, ChannelControl::PubStop)));
         }
     }
 
     pub fn on_leave(&mut self, endpoint: Endpoint) {
         log::info!("[ClusterRoomDataChannel {}/Publishers] user leaves, clean up", self.room);
-        if let Some(channels) = self.publishers.remove(&endpoint) {
+        if let Some(channels) = self.publishers.swap_remove(&endpoint) {
             for c in channels {
                 if let Some(channel) = self.channels.get_mut(&c) {
-                    channel.publishers.remove(&endpoint);
+                    channel.publishers.swap_remove(&endpoint);
                     if channel.publishers.is_empty() {
-                        self.channels.remove(&c);
+                        self.channels.swap_remove(&c);
                         self.queue.push_back(Output::Pubsub(pubsub::Control(c, ChannelControl::PubStop)));
                     }
                 }

@@ -6,6 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use indexmap::IndexMap;
 use media_server_core::{
     endpoint::{EndpointEvent, EndpointReqId, EndpointRes},
     transport::{Transport, TransportInput, TransportOutput},
@@ -18,7 +19,7 @@ use media_server_protocol::{
     transport::{RpcError, RpcResult},
 };
 use media_server_secure::MediaEdgeSecure;
-use media_server_utils::{Count, RtpSeqExtend, Small2dMap};
+use media_server_utils::{Count, IndexMap2d, RtpSeqExtend};
 use sans_io_runtime::{
     backend::{BackendIncoming, BackendOutgoing},
     collections::DynamicDeque,
@@ -114,9 +115,9 @@ pub struct TransportWebrtc<ES> {
     rtc: Rtc,
     rtc_ice_lite: bool,
     internal: Box<dyn TransportWebrtcInternal>,
-    ports: Small2dMap<SocketAddr, usize>,
+    ports: IndexMap2d<SocketAddr, usize>,
     local_convert: LocalMediaConvert,
-    seq_extends: smallmap::Map<Mid, RtpSeqExtend>,
+    seq_extends: IndexMap<Mid, RtpSeqExtend>,
     queue: DynamicDeque<TransportOutput<ExtOut>, 4>,
     _tmp: PhantomData<ES>,
 }
@@ -175,7 +176,7 @@ impl<ES: 'static + MediaEdgeSecure> TransportWebrtc<ES> {
         };
 
         rtc.direct_api().enable_twcc_feedback();
-        let mut ports = Small2dMap::default();
+        let mut ports = IndexMap2d::default();
         for (local_addr, slot) in local_addrs {
             ports.insert(*local_addr, *slot);
             rtc.add_local_candidate(Candidate::host(*local_addr, Protocol::Udp).expect("Should add local candidate"));

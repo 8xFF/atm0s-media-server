@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use indexmap::IndexMap;
 use media_server_protocol::endpoint::TrackPriority;
 
 use crate::transport::RemoteTrackId;
@@ -12,7 +13,7 @@ pub enum Action {
 pub struct IngressBitrateAllocator {
     changed: bool,
     ingress_bitrate: u64,
-    tracks: smallmap::Map<RemoteTrackId, TrackPriority>,
+    tracks: IndexMap<RemoteTrackId, TrackPriority>,
     queue: VecDeque<(RemoteTrackId, Action)>,
 }
 
@@ -21,7 +22,7 @@ impl IngressBitrateAllocator {
         Self {
             ingress_bitrate,
             changed: false,
-            tracks: smallmap::Map::new(),
+            tracks: IndexMap::new(),
             queue: VecDeque::new(),
         }
     }
@@ -38,7 +39,7 @@ impl IngressBitrateAllocator {
 
     pub fn del_video_track(&mut self, track: RemoteTrackId) {
         log::info!("[IngressBitrateAllocator] del video track {track}");
-        self.tracks.remove(&track);
+        self.tracks.swap_remove(&track);
         self.changed = true;
     }
 

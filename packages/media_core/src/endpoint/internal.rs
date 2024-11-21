@@ -8,7 +8,7 @@ use media_server_protocol::{
     record::SessionRecordEvent,
     transport::RpcError,
 };
-use media_server_utils::Small2dMap;
+use media_server_utils::IndexMap2d;
 use sans_io_runtime::{return_if_none, return_if_some, TaskGroup, TaskGroupOutput, TaskSwitcher, TaskSwitcherBranch, TaskSwitcherChild};
 
 use crate::{
@@ -54,8 +54,8 @@ pub struct EndpointInternal {
     state: Option<(Instant, TransportState)>,
     wait_join: EndpointInternalWaitJoin,
     joined: Option<(ClusterRoomHash, RoomId, PeerId, Option<AudioMixerMode>)>,
-    local_tracks_id: Small2dMap<LocalTrackId, usize>,
-    remote_tracks_id: Small2dMap<RemoteTrackId, usize>,
+    local_tracks_id: IndexMap2d<LocalTrackId, usize>,
+    remote_tracks_id: IndexMap2d<RemoteTrackId, usize>,
     local_tracks: TaskSwitcherBranch<TaskGroup<local_track::Input, local_track::Output, EndpointLocalTrack, 4>, TaskGroupOutput<local_track::Output>>,
     remote_tracks: TaskSwitcherBranch<TaskGroup<remote_track::Input, remote_track::Output, EndpointRemoteTrack, 16>, TaskGroupOutput<remote_track::Output>>,
     bitrate_allocator: TaskSwitcherBranch<BitrateAllocator, bitrate_allocator::Output>,

@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use indexmap::IndexMap;
 use media_server_protocol::endpoint::TrackPriority;
 
 use crate::transport::LocalTrackId;
@@ -23,7 +24,7 @@ pub struct EgressBitrateAllocator {
     max_egress_bitrate: u64,
     changed: bool,
     egress_bitrate: u64,
-    tracks: smallmap::Map<LocalTrackId, TrackPriority>,
+    tracks: IndexMap<LocalTrackId, TrackPriority>,
     queue: VecDeque<Output>,
 }
 
@@ -33,8 +34,8 @@ impl EgressBitrateAllocator {
             max_egress_bitrate,
             changed: false,
             egress_bitrate: DEFAULT_BITRATE_BPS,
-            tracks: smallmap::Map::new(),
-            queue: VecDeque::new(),
+            tracks: Default::default(),
+            queue: Default::default(),
         }
     }
 
@@ -55,7 +56,7 @@ impl EgressBitrateAllocator {
 
     pub fn del_video_track(&mut self, track: LocalTrackId) {
         log::info!("[EgressBitrateAllocator] del video track {track}");
-        self.tracks.remove(&track);
+        self.tracks.swap_remove(&track);
         self.changed = true;
     }
 
