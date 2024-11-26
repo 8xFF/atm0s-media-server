@@ -16,6 +16,9 @@ impl Default for PcmaDecoder {
 
 impl AudioDecoder for PcmaDecoder {
     fn decode(&mut self, in_buf: &[u8], out_buf: &mut [i16]) -> Option<usize> {
+        if in_buf.len() != 160 {
+            return None;
+        }
         decode_pcma(in_buf, &mut self.tmp_buf[0..in_buf.len()]);
         // upsample to 48k
         self.resample.resample(&self.tmp_buf[..in_buf.len()], out_buf)
@@ -38,6 +41,9 @@ impl Default for PcmaEncoder {
 
 impl AudioEncodder for PcmaEncoder {
     fn encode(&mut self, in_buf: &[i16], out_buf: &mut [u8]) -> Option<usize> {
+        if in_buf.len() != 960 {
+            return None;
+        }
         // downsample to 8k
         let out_samples = self.resample.resample(in_buf, &mut self.tmp_buf)?;
         encode_pcma(&self.tmp_buf[..out_samples], &mut out_buf[..out_samples]);
