@@ -316,4 +316,88 @@ mod tests {
             })
         );
     }
+
+    #[test]
+    fn clear_timeout() {
+        let mut store = GatewayStore::new(ZoneId(0), Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
+        store.on_ping(
+            0,
+            1,
+            PingEvent {
+                cpu: 10,
+                memory: 20,
+                disk: 30,
+                origin: Origin::Media(MediaOrigin {}),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+                rtpengine: None,
+            },
+        );
+
+        store.on_ping(
+            0,
+            257,
+            PingEvent {
+                cpu: 10,
+                memory: 20,
+                disk: 30,
+                origin: Origin::Gateway(GatewayOrigin {
+                    location: Some(Location { lat: 2.0, lon: 2.0 }),
+                    zone: 1,
+                }),
+                webrtc: Some(ServiceStats { live: 100, max: 1000, active: true }),
+                rtpengine: None,
+            },
+        );
+
+        // Verify nodes are registered
+        assert_eq!(store.best_for(ServiceKind::Webrtc, None), Some(1));
+
+        // Trigger timeout
+        store.on_tick(5000); // PING_TIMEOUT is 5000
+
+        // Verify nodes are cleared
+        assert_eq!(store.best_for(ServiceKind::Webrtc, None), None);
+    }
+
+    #[test]
+    fn clear_timeout_rtpengine() {
+        let mut store = GatewayStore::new(ZoneId(0), Location { lat: 1.0, lon: 1.0 }, 60, 80, 90);
+        store.on_ping(
+            0,
+            1,
+            PingEvent {
+                cpu: 10,
+                memory: 20,
+                disk: 30,
+                origin: Origin::Media(MediaOrigin {}),
+                webrtc: None,
+                rtpengine: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            },
+        );
+
+        store.on_ping(
+            0,
+            257,
+            PingEvent {
+                cpu: 10,
+                memory: 20,
+                disk: 30,
+                origin: Origin::Gateway(GatewayOrigin {
+                    location: Some(Location { lat: 2.0, lon: 2.0 }),
+                    zone: 1,
+                }),
+                webrtc: None,
+                rtpengine: Some(ServiceStats { live: 100, max: 1000, active: true }),
+            },
+        );
+
+        // Verify nodes are registered
+        assert_eq!(store.best_for(ServiceKind::RtpEngine, None), Some(1));
+
+        // Trigger timeout
+        store.on_tick(5000); // PING_TIMEOUT is 5000
+
+        // Verify nodes are cleared
+        assert_eq!(store.best_for(ServiceKind::RtpEngine, None), None);
+    }
 }
