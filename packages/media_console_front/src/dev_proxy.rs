@@ -162,7 +162,7 @@ impl ProxyConfig {
         self
     }
 
-    /// Finishes off the building proccess by returning a new ProxyConfig object
+    /// Finishes off the building process by returning a new ProxyConfig object
     /// (not reference) that contains all the settings that were previously
     /// specified.
     pub fn finish<'a>(&'a mut self) -> ProxyConfig {
