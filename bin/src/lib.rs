@@ -9,7 +9,6 @@ use media_server_protocol::cluster::ZoneId;
 
 mod errors;
 mod http;
-mod ng_controller;
 #[cfg(feature = "node_metrics")]
 mod node_metrics;
 #[cfg(feature = "quinn_vnet")]

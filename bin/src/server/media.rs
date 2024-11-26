@@ -25,14 +25,12 @@ use media_server_runner::{MediaConfig, UserData, SE};
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
 use media_server_utils::now_ms;
 use rand::random;
-use rtpengine_ngcontrol::NgUdpTransport;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use sans_io_runtime::{backend::PollingBackend, Controller};
 use tokio::sync::mpsc::channel;
 
 use crate::{
     http::{run_media_http_server, NodeApiCtx},
-    ng_controller::NgControllerServer,
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_server, VirtualNetwork},
     server::media::runtime_worker::MediaRuntimeWorker,
@@ -59,10 +57,6 @@ pub struct Args {
     /// If set to 20000, each worker will be assigned a unique port: worker0: 20000, worker1: 20001, worker2: 20002, ...
     #[arg(env, long, default_value_t = 0)]
     pub webrtc_port_seed: u16,
-
-    /// The port for binding the RTPengine command UDP socket.
-    #[arg(env, long)]
-    pub rtpengine_cmd_addr: Option<SocketAddr>,
 
     /// The IP address for RTPengine RTP listening.
     /// Default: 127.0.0.1
@@ -116,19 +110,6 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             if let Err(e) = run_media_http_server(http_port, node_ctx, req_tx, secure_edge, secure_gateway).await {
                 log::error!("HTTP Error: {}", e);
             }
-        });
-    }
-
-    //Running ng controller for Voip
-    if let Some(ngproto_addr) = args.rtpengine_cmd_addr {
-        let req_tx = req_tx.clone();
-        let rtpengine_udp = NgUdpTransport::new(ngproto_addr).await;
-        let secure = secure.clone();
-        tokio::spawn(async move {
-            log::info!("[MediaServer] start ng_controller task");
-            let mut server = NgControllerServer::new(rtpengine_udp, secure, req_tx);
-            while server.recv().await.is_some() {}
-            log::info!("[MediaServer] stop ng_controller task");
         });
     }
 

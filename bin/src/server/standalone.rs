@@ -226,7 +226,6 @@ pub async fn run_standalone(workers: usize, node: NodeConfig, args: Args) {
                     enable_token_api: false,
                     ice_lite: false,
                     webrtc_port_seed: 0,
-                    rtpengine_cmd_addr: None,
                     rtpengine_listen_ip,
                     ccu_per_core: 200,
                     record_cache,

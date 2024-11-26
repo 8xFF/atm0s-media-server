@@ -17,14 +17,12 @@ use media_server_protocol::{
     rpc::quinn::{QuinnClient, QuinnServer},
 };
 use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
-use rtpengine_ngcontrol::NgUdpTransport;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use std::net::SocketAddr;
 use tokio::sync::mpsc::channel;
 
 use crate::{
     http::{run_gateway_http_server, NodeApiCtx},
-    ng_controller::NgControllerServer,
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, make_quinn_server, VirtualNetwork},
     NodeConfig,
@@ -119,20 +117,6 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let gateway_secure = MediaGatewaySecureJwt::new(node.secret.as_bytes(), app_storage.clone());
     let gateway_secure = Arc::new(gateway_secure);
 
-    let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
-    // Running ng controller for Voip
-    if let Some(ngproto_addr) = args.rtpengine_cmd_addr {
-        let req_tx = req_tx.clone();
-        let rtpengine_udp = NgUdpTransport::new(ngproto_addr).await;
-        let secure2 = edge_secure.clone();
-        tokio::spawn(async move {
-            log::info!("[MediaGateway] start ng_controller task");
-            let mut server = NgControllerServer::new(rtpengine_udp, secure2, req_tx);
-            while server.recv().await.is_some() {}
-            log::info!("[MediaGateway] stop ng_controller task");
-        });
-    }
-
     // Setup Sdn
     let node_id = node.node_id;
     let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, &node.bind_addrs, node.bind_addrs_alt);
@@ -165,6 +149,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let (selector, mut requester) = build_dest_selector();
 
     // Setup HTTP server
+    let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
     let (dump_tx, mut dump_rx) = channel(10);
     if let Some(http_port) = http_port {
         let req_tx = req_tx.clone();
