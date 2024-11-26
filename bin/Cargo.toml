@@ -25,7 +25,6 @@ media-server-connector = { path = "../packages/media_connector", optional = true
 media-server-record = { path = "../packages/media_record", default-features=false, optional = true }
 media-server-utils = { path = "../packages/media_utils", optional = true }
 media-server-multi-tenancy = { path = "../packages/multi_tenancy", optional = true }
-rtpengine-ngcontrol = { path = "../packages/rtpengine_ngcontrol", optional = true }
 local-ip-address = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
@@ -36,7 +35,7 @@ num_enum = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 rcgen = { version = "0.13", optional = true }
 maxminddb = { version = "0.24", optional = true }
-sysinfo = { version = "0.31", optional = true }
+sysinfo = { version = "0.32", optional = true }
 hex = { version = "0.4", optional = true }
 mime_guess = { version = "2.0", optional = true }
 reqwest = { version = "0.12", features = ["json"]}
@@ -46,7 +45,7 @@ sentry = "0.34"
 default = ["console", "gateway", "media", "connector", "standalone", "cert_utils"]
 standalone = ["console", "gateway", "media", "connector"]
 gateway = ["media-server-gateway", "media-server-connector", "quinn_vnet", "node_metrics", "maxminddb", "rust-embed", "media-server-multi-tenancy"]
-media = ["media-server-runner", "media-server-record", "quinn_vnet", "node_metrics", "rtpengine-ngcontrol"]
+media = ["media-server-runner", "media-server-record", "quinn_vnet", "node_metrics"]
 console = []
 connector = ["quinn_vnet", "media-server-connector", "media-server-utils", "media-server-multi-tenancy"]
 cert_utils = ["rcgen", "rustls"]

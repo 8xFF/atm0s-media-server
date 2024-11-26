@@ -496,7 +496,6 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "reqwest",
- "rtpengine-ngcontrol",
  "rust-embed",
  "rustls",
  "sans-io-runtime",
@@ -5202,16 +5201,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4ed274a5b3d36c4434cff6a4de1b42f43e64ae326b1cfa72d13d9037a314355"
 
 [[package]]
-name = "rtpengine-ngcontrol"
-version = "0.1.0"
-dependencies = [
- "log",
- "serde",
- "serde_bencode",
- "tokio",
-]
-
-[[package]]
 name = "rust-embed"
 version = "8.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5854,25 +5843,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce88f8e75d0920545b35b78775e0927137337401f65b01326ce299734885fd21"
 dependencies = [
  "lexical",
- "serde",
-]
-
-[[package]]
-name = "serde_bencode"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a70dfc7b7438b99896e7f8992363ab8e2c4ba26aa5ec675d32d1c3c2c33d413e"
-dependencies = [
- "serde",
- "serde_bytes",
-]
-
-[[package]]
-name = "serde_bytes"
-version = "0.11.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "387cc504cb06bb40a96c8e04e951fe01854cf6bc921053c954e4a606d9675c6a"
-dependencies = [
  "serde",
 ]
 
@@ -6579,9 +6549,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.31.4"
+version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "355dbe4f8799b304b05e1b0f05fc59b2a18d36645cf169607da45bde2f69a1be"
+checksum = "4c33cd241af0f2e9e3b5c32163b873b29956890b5342e6745b917ce9d490f4af"
 dependencies = [
  "core-foundation-sys",
  "libc",
