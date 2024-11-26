@@ -475,10 +475,10 @@ dependencies = [
  "clap",
  "convert-enum",
  "derive_more",
- "hex",
  "local-ip-address",
  "log",
  "maxminddb",
+ "media-console-front",
  "media-server-connector",
  "media-server-gateway",
  "media-server-multi-tenancy",
@@ -487,7 +487,6 @@ dependencies = [
  "media-server-runner",
  "media-server-secure",
  "media-server-utils",
- "mime_guess",
  "num_enum",
  "poem",
  "poem-openapi",
@@ -509,8 +508,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.2.3"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7f6cc8c9526192af3d5e85bbe0dd219d85c384ea065aff6d455cb59d9d73239"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -529,7 +529,8 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.3.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ec96b78570f6f704f7b7074f2c496604c2729044d5374441fee7cf202ee7633"
 dependencies = [
  "multiaddr",
  "rand 0.8.5",
@@ -538,8 +539,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-network"
-version = "0.6.0"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0030a22c69c262e976e780016432877e60643a5586d7899cbfafe2133e62a7b3"
 dependencies = [
  "aes-gcm 0.10.3",
  "atm0s-sdn-identity",
@@ -565,8 +567,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-router"
-version = "0.2.2"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75fa02a553becdd4911e75be5a8c60af9d84da3c5e4331cb01f2f0ffc334bcff"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -578,7 +581,8 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.2.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "437f8450fd7095986c5bce4abd7ad03e95f1651a214b8727976363c86d6b9cc9"
 dependencies = [
  "log",
  "serde",
@@ -3441,6 +3445,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "media-console-front"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "media-server-utils",
+ "poem",
+ "reqwest",
+ "rust-embed",
+]
+
+[[package]]
 name = "media-server-codecs"
 version = "0.1.0"
 dependencies = [
@@ -3609,10 +3624,14 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "derive_more",
+ "hex",
  "indexmap",
  "log",
+ "mime_guess",
  "once_cell",
  "pin-project-lite",
+ "poem",
+ "rust-embed",
  "serde",
  "serde-querystring",
  "sorted-vec",

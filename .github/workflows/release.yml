@@ -214,7 +214,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }} --features embed_static
+          args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }}
 
       - name: Build record tool
         if: matrix.build_record_tool
