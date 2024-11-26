@@ -495,12 +495,14 @@ dependencies = [
  "quinn",
  "rand 0.8.5",
  "rcgen",
+ "reqwest",
  "rtpengine-ngcontrol",
  "rust-embed",
  "rustls",
  "sans-io-runtime",
  "sentry",
  "serde",
+ "serde_json",
  "sysinfo",
  "tokio",
  "tracing-subscriber",
@@ -509,8 +511,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ae4bafdf42069f4419ca9b361a3a31d59d8bbdbf87b14a0eee7fdcd744d30db"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -529,8 +530,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-identity"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ec96b78570f6f704f7b7074f2c496604c2729044d5374441fee7cf202ee7633"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
 dependencies = [
  "multiaddr",
  "rand 0.8.5",
@@ -540,8 +540,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-network"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68bb1728d2a0f5f517c6be60a6e32bd73767b8bf70bb9df5f006d188def58210"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
 dependencies = [
  "aes-gcm 0.10.3",
  "atm0s-sdn-identity",
@@ -568,8 +567,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-router"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6679fb3c1797ae958c247a0549c3e33224c7c0352e5b28bb984f8a7e90bd7bf7"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -581,8 +579,7 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "437f8450fd7095986c5bce4abd7ad03e95f1651a214b8727976363c86d6b9cc9"
+source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-router-dump#aa0a9f9ca0c74b559975ea3f3848ad66e8dbc32b"
 dependencies = [
  "log",
  "serde",
@@ -3478,6 +3475,7 @@ dependencies = [
  "sorted-vec",
  "spin",
  "uriparse",
+ "urlencoding",
 ]
 
 [[package]]
@@ -5309,9 +5307,9 @@ checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
 
 [[package]]
 name = "s3-presign"
-version = "0.0.2"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "748e207ba5bb8317987e9a6db2e33c8e43de4eec7ad6c2e5faec49f6fdd46e92"
+checksum = "87dd93104cb3e5cff33676215f1ea9296bd524d2b783cbaf24422955d6b50dd1"
 dependencies = [
  "chrono",
  "hmac 0.12.1",
@@ -7127,6 +7125,12 @@ dependencies = [
  "percent-encoding",
  "serde",
 ]
+
+[[package]]
+name = "urlencoding"
+version = "2.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
 name = "utf8parse"

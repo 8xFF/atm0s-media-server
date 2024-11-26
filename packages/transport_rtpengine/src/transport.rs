@@ -66,10 +66,10 @@ pub struct TransportRtpEngine {
 }
 
 impl TransportRtpEngine {
-    pub fn new_offer(room: RoomId, peer: PeerId, ip: IpAddr) -> Result<(Self, String), String> {
-        let socket = std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).map_err(|e| e.to_string())?;
+    pub fn new_offer(room: RoomId, peer: PeerId, public_ip: IpAddr, listen_ip: IpAddr) -> Result<(Self, String), String> {
+        let socket = std::net::UdpSocket::bind(SocketAddr::new(listen_ip, 0)).map_err(|e| e.to_string())?;
         let port = socket.local_addr().map_err(|e| e.to_string())?.port();
-        let answer = sdp_builder(ip, port);
+        let answer = sdp_builder(public_ip, port);
 
         Ok((
             Self {
@@ -85,7 +85,7 @@ impl TransportRtpEngine {
                 last_send_rtp: None,
                 queue: DynamicDeque::from([
                     TransportOutput::Net(BackendOutgoing::UdpListen {
-                        addr: SocketAddr::new(ip, port),
+                        addr: SocketAddr::new(listen_ip, port),
                         reuse: false,
                     }),
                     TransportOutput::Event(TransportEvent::State(TransportState::New)),
@@ -99,7 +99,7 @@ impl TransportRtpEngine {
         ))
     }
 
-    pub fn new_answer(room: RoomId, peer: PeerId, ip: IpAddr, offer: &str) -> Result<(Self, String), String> {
+    pub fn new_answer(room: RoomId, peer: PeerId, public_ip: IpAddr, listen_ip: IpAddr, offer: &str) -> Result<(Self, String), String> {
         let mut offer = SessionDescription::try_from(offer.to_string()).map_err(|e| e.to_string())?;
         let dest_ip: IpAddr = if let Some(conn) = offer.connection {
             conn.connection_address.base
@@ -111,9 +111,9 @@ impl TransportRtpEngine {
 
         log::info!("[TransportRtpEngine] on create answer => set remote to {remote}");
 
-        let socket = std::net::UdpSocket::bind(SocketAddr::new(ip, 0)).map_err(|e| e.to_string())?;
+        let socket = std::net::UdpSocket::bind(SocketAddr::new(listen_ip, 0)).map_err(|e| e.to_string())?;
         let port = socket.local_addr().map_err(|e| e.to_string())?.port();
-        let answer = sdp_builder(ip, port);
+        let answer = sdp_builder(public_ip, port);
 
         Ok((
             Self {
@@ -129,7 +129,7 @@ impl TransportRtpEngine {
                 last_send_rtp: None,
                 queue: DynamicDeque::from([
                     TransportOutput::Net(BackendOutgoing::UdpListen {
-                        addr: SocketAddr::new(ip, port),
+                        addr: SocketAddr::new(listen_ip, port),
                         reuse: false,
                     }),
                     TransportOutput::Event(TransportEvent::State(TransportState::Connecting(dest_ip))),

@@ -40,16 +40,18 @@ pub enum GroupOutput {
 
 #[allow(clippy::type_complexity)]
 pub struct MediaWorkerRtpEngine {
-    ip: IpAddr,
+    listen_ip: IpAddr,
+    public_ip: IpAddr,
     endpoints: TaskGroup<EndpointInput<ExtIn>, EndpointOutput<ExtOut>, Endpoint<TransportRtpEngine, ExtIn, ExtOut>, 16>,
     queue: VecDeque<GroupOutput>,
     shutdown: bool,
 }
 
 impl MediaWorkerRtpEngine {
-    pub fn new(ip: IpAddr) -> Self {
+    pub fn new(listen_ip: IpAddr, public_ip: IpAddr) -> Self {
         Self {
-            ip,
+            listen_ip,
+            public_ip,
             endpoints: TaskGroup::default(),
             queue: VecDeque::new(),
             shutdown: false,
@@ -58,9 +60,9 @@ impl MediaWorkerRtpEngine {
 
     pub fn spawn(&mut self, app: AppContext, room: RoomId, peer: PeerId, record: bool, session_id: u64, offer: Option<&str>) -> RpcResult<(usize, String)> {
         let (tran, answer) = if let Some(offer) = offer {
-            TransportRtpEngine::new_answer(room, peer, self.ip, offer).map_err(|e| RpcError::new(1000_u32, &e))?
+            TransportRtpEngine::new_answer(room, peer, self.public_ip, self.listen_ip, offer).map_err(|e| RpcError::new(1000_u32, &e))?
         } else {
-            TransportRtpEngine::new_offer(room, peer, self.ip).map_err(|e| RpcError::new(1000_u32, &e))?
+            TransportRtpEngine::new_offer(room, peer, self.public_ip, self.listen_ip).map_err(|e| RpcError::new(1000_u32, &e))?
         };
         let cfg = EndpointCfg {
             app,

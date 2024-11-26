@@ -1,6 +1,11 @@
 use std::{sync::Arc, time::Duration};
 
-use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
+use atm0s_sdn::{
+    features::{router_sync, FeaturesEvent},
+    secure::StaticKeyAuthorization,
+    services::visualization,
+    SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner,
+};
 use clap::Parser;
 use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
 use media_server_gateway::{store_service::GatewayStoreServiceBuilder, STORE_SERVICE_ID};
@@ -15,9 +20,10 @@ use media_server_secure::jwt::{MediaEdgeSecureJwt, MediaGatewaySecureJwt};
 use rtpengine_ngcontrol::NgUdpTransport;
 use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use std::net::SocketAddr;
+use tokio::sync::mpsc::channel;
 
 use crate::{
-    http::run_gateway_http_server,
+    http::{run_gateway_http_server, NodeApiCtx},
     ng_controller::NgControllerServer,
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, make_quinn_server, VirtualNetwork},
@@ -114,17 +120,7 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     let gateway_secure = Arc::new(gateway_secure);
 
     let (req_tx, mut req_rx) = tokio::sync::mpsc::channel(1024);
-    if let Some(http_port) = http_port {
-        let req_tx = req_tx.clone();
-        let secure2 = edge_secure.clone();
-        tokio::spawn(async move {
-            if let Err(e) = run_gateway_http_server(http_port, req_tx, secure2, gateway_secure).await {
-                log::error!("HTTP Error: {}", e);
-            }
-        });
-    }
-
-    //Running ng controller for Voip
+    // Running ng controller for Voip
     if let Some(ngproto_addr) = args.rtpengine_cmd_addr {
         let req_tx = req_tx.clone();
         let rtpengine_udp = NgUdpTransport::new(ngproto_addr).await;
@@ -137,8 +133,8 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
         });
     }
 
+    // Setup Sdn
     let node_id = node.node_id;
-
     let mut builder = SdnBuilder::<(), SC, SE, TC, TW, ClusterNodeInfo>::new(node_id, &node.bind_addrs, node.bind_addrs_alt);
     let node_addr = builder.node_addr();
     let node_info = ClusterNodeInfo::Gateway(
@@ -167,6 +163,19 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers, node_info);
     let (selector, mut requester) = build_dest_selector();
+
+    // Setup HTTP server
+    let (dump_tx, mut dump_rx) = channel(10);
+    if let Some(http_port) = http_port {
+        let req_tx = req_tx.clone();
+        let secure2 = edge_secure.clone();
+        let node_ctx = NodeApiCtx { address: node_addr.clone(), dump_tx };
+        tokio::spawn(async move {
+            if let Err(e) = run_gateway_http_server(http_port, node_ctx, req_tx, secure2, gateway_secure).await {
+                log::error!("HTTP Error: {}", e);
+            }
+        });
+    }
 
     // Ip location for routing client to closest gateway
     let ip2location = Arc::new(Ip2Location::new(&args.geo_db));
@@ -209,6 +218,9 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
 
     // Subscribe ConnectorHandler service
     controller.service_control(media_server_connector::AGENT_SERVICE_ID.into(), (), media_server_connector::agent_service::Control::Sub.into());
+
+    // List all waiting router dump requests
+    let mut wait_dump_router = vec![];
 
     loop {
         if controller.process().is_none() {
@@ -255,6 +267,11 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
             controller.service_control(media_server_connector::AGENT_SERVICE_ID.into(), (), control.into());
         }
 
+        while let Ok(v) = dump_rx.try_recv() {
+            controller.feature_control((), router_sync::Control::DumpRouter.into());
+            wait_dump_router.push(v);
+        }
+
         while let Some(out) = controller.pop_event() {
             match out {
                 SdnExtOut::ServicesEvent(_, _, SE::Gateway(event)) => match event {
@@ -274,6 +291,14 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                         log::error!("[MediaGateway] forward Sdn SocketEvent error {:?}", e);
                     }
                 }
+                SdnExtOut::FeaturesEvent(_, FeaturesEvent::RouterSync(event)) => match event {
+                    router_sync::Event::DumpRouter(dump) => {
+                        let json = serde_json::to_value(dump).expect("should convert json");
+                        while let Some(v) = wait_dump_router.pop() {
+                            let _ = v.send(json.clone());
+                        }
+                    }
+                },
                 _ => {}
             }
         }

@@ -1,10 +1,12 @@
 use serde::de::DeserializeOwned;
 use serde_querystring::DuplicateQS;
 
+#[derive(Debug, Clone)]
 pub struct CustomUri<Q> {
     pub username: Option<String>,
     pub password: Option<String>,
     pub endpoint: String,
+    pub host: String,
     pub path: Vec<String>,
     pub query: Q,
 }
@@ -29,10 +31,14 @@ impl<Q: DeserializeOwned> TryFrom<&str> for CustomUri<Q> {
                         (false, Some(port)) => format!("http://{}:{}", host, port),
                     };
 
+                    let username = uri.username().and_then(|u| urlencoding::decode(u.as_ref()).map(|u| u.to_string()).ok());
+                    let password = uri.password().and_then(|u| urlencoding::decode(u.as_ref()).map(|u| u.to_string()).ok());
+
                     Ok(Self {
-                        username: uri.username().map(|u| u.to_string()),
-                        password: uri.password().map(|u| u.to_string()),
+                        username: username.map(|u| u.to_string()),
+                        password: password.map(|u| u.to_string()),
                         endpoint,
+                        host: host.to_string(),
                         path,
                         query,
                     })

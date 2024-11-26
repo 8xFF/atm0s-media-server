@@ -24,7 +24,7 @@ sea-orm = { version = "1.1.0-rc.1", features = [
 ] }
 sea-query = "0.32.0-rc.1"
 serde_json = "1.0"
-s3-presign = "0.0.2"
+s3-presign = "0.0.3"
 uuid = {version = "1.10", features = ["fast-rng", "v7"]}
 reqwest = { version = "0.12", features = ["json"]}
 

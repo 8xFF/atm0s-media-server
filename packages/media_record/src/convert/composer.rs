@@ -122,9 +122,11 @@ impl RecordComposer {
 
         let room_reader = RoomReader::new(s3, credentials, &s3_sub_folder);
         let peers = room_reader.peers().await.map_err(|e| e.to_string())?;
+        log::info!("check room peers {:?}", peers.iter().map(|p| p.peer()).collect::<Vec<_>>());
         //we use channel to wait all sessions
         for peer in peers {
             let sessions = peer.sessions().await.map_err(|e| e.to_string())?;
+            log::info!("check peer {} sessions {:?}", peer.peer(), sessions.iter().map(|s| s.id()).collect::<Vec<_>>());
             for mut session in sessions {
                 session.connect().await.map_err(|e| e.to_string())?;
                 let id = session.id();

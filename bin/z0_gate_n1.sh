@@ -6,7 +6,7 @@ cargo run -- \
     --sdn-port 10001 \
     --sdn-zone-id 0 \
     --sdn-zone-node-id 1 \
-    --seeds 0@/ip4/127.0.0.1/udp/10000 \
+    --seeds-from-url "http://localhost:8080/api/cluster/seeds?zone_id=0&node_type=Gateway" \
     --workers 2 \
     gateway \
         --lat 10 \

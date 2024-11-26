@@ -1,6 +1,11 @@
 use std::time::{Duration, Instant};
 
-use atm0s_sdn::{features::FeaturesEvent, secure::StaticKeyAuthorization, services::visualization, SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner};
+use atm0s_sdn::{
+    features::{router_sync, FeaturesEvent},
+    secure::StaticKeyAuthorization,
+    services::visualization,
+    SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner,
+};
 use clap::Parser;
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
@@ -9,9 +14,10 @@ use media_server_protocol::{
 };
 use media_server_secure::jwt::MediaConsoleSecureJwt;
 use storage::StorageShared;
+use tokio::sync::mpsc::channel;
 
 use crate::{
-    http::run_console_http_server,
+    http::{run_console_http_server, NodeApiCtx},
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, VirtualNetwork},
     NodeConfig,
@@ -67,17 +73,20 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
 
     tokio::task::spawn_local(async move { while vnet.recv().await.is_some() {} });
 
+    let (dump_tx, mut dump_rx) = channel(10);
     if let Some(http_port) = http_port {
         let secure = MediaConsoleSecureJwt::from(node.secret.as_bytes());
         let storage = storage.clone();
+        let node_ctx = NodeApiCtx { address: node_addr.clone(), dump_tx };
         tokio::spawn(async move {
-            if let Err(e) = run_console_http_server(http_port, secure, storage, connector_rpc_client).await {
+            if let Err(e) = run_console_http_server(http_port, node_ctx, secure, storage, connector_rpc_client).await {
                 log::error!("HTTP Error: {}", e);
             }
         });
     }
 
     let mut node_metrics_collector = NodeMetricsCollector::default();
+    let mut wait_dump_router = vec![];
 
     loop {
         if controller.process().is_none() {
@@ -99,6 +108,11 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
             storage.on_tick(started_at.elapsed().as_millis() as u64);
         }
 
+        while let Ok(v) = dump_rx.try_recv() {
+            controller.feature_control((), router_sync::Control::DumpRouter.into());
+            wait_dump_router.push(v);
+        }
+
         while let Some(out) = controller.pop_event() {
             match out {
                 SdnExtOut::ServicesEvent(_service, (), SE::Visual(event)) => match event {
@@ -118,6 +132,14 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
                         log::error!("forward sdn SocketEvent error {:?}", e);
                     }
                 }
+                SdnExtOut::FeaturesEvent(_, FeaturesEvent::RouterSync(event)) => match event {
+                    router_sync::Event::DumpRouter(dump) => {
+                        let json = serde_json::to_value(dump).expect("should convert json");
+                        while let Some(v) = wait_dump_router.pop() {
+                            let _ = v.send(json.clone());
+                        }
+                    }
+                },
                 _ => {}
             }
         }

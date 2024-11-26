@@ -1,6 +1,7 @@
 use std::net::{IpAddr, SocketAddr};
 
-use atm0s_media_server::{server, NodeConfig};
+use atm0s_media_server::{fetch_node_addrs_from_api, server, NodeConfig};
+use atm0s_media_server::{fetch_node_ip_alt_from_cloud, CloudProvider};
 use atm0s_sdn::NodeAddr;
 use clap::Parser;
 use media_server_protocol::cluster::ZoneId;
@@ -32,6 +33,11 @@ struct Args {
     #[arg(env, long, default_value_t = 0)]
     sdn_zone_node_id: u8,
 
+    /// Auto generate node_id from last 8 bits of local_ip which match prefix
+    /// Example: 192.168.1, or 10.10.10.
+    #[arg(env, long)]
+    sdn_zone_node_id_from_ip_prefix: Option<String>,
+
     /// Manually specify the IP address of the node. This disables IP autodetection.
     #[arg(env, long)]
     node_ip: Option<IpAddr>,
@@ -39,6 +45,10 @@ struct Args {
     /// Alternative IP addresses for the node, useful for environments like AWS or GCP that are behind NAT.
     #[arg(env, long)]
     node_ip_alt: Vec<IpAddr>,
+
+    /// Auto detect node_ip_alt with some common cloud provider metadata.
+    #[arg(env, long)]
+    node_ip_alt_cloud: Option<CloudProvider>,
 
     /// Enable private IP addresses for the node.
     #[arg(env, long)]
@@ -55,6 +65,12 @@ struct Args {
     /// Addresses of neighboring nodes for cluster communication.
     #[arg(env, long)]
     seeds: Vec<NodeAddr>,
+
+    /// Seeds from API, this is used for auto-discovery of seeds.
+    /// Currently all of nodes expose /api/node/address endpoint, so we can get seeds from there.
+    /// Or we can get from console api /api/cluster/seeds?zone_id=xxx&node_type=xxx
+    #[arg(env, long)]
+    seeds_from_url: Option<String>,
 
     /// Number of worker threads to spawn.
     #[arg(env, long, default_value_t = 1)]
@@ -103,6 +119,27 @@ async fn main() {
 
     let workers = args.workers;
 
+    let mut auto_generated_node_id = None;
+    if let Some(ip_prefix) = args.sdn_zone_node_id_from_ip_prefix {
+        for (name, ip) in local_ip_address::list_afinet_netifas().expect("Should have list interfaces") {
+            if let IpAddr::V4(ipv4) = ip {
+                if ipv4.to_string().starts_with(&ip_prefix) {
+                    auto_generated_node_id = Some(ipv4.octets()[3]);
+                    log::info!("Found ip prefix {ip_prefix} on {name} with ip {ip} => auto generate sdn_zone_node_id with {}", ipv4.octets()[3]);
+                    break;
+                }
+            }
+        }
+    }
+
+    let mut node_ip_alt_cloud = vec![];
+    if let Some(cloud) = args.node_ip_alt_cloud {
+        log::info!("Fetch public ip from cloud provider {:?}", cloud);
+        let public_ip = fetch_node_ip_alt_from_cloud(cloud).await.expect("should get node ip alt");
+        log::info!("Fetched public ip {:?}", public_ip);
+        node_ip_alt_cloud.push(public_ip);
+    }
+
     let bind_addrs = if let Some(ip) = args.node_ip {
         vec![SocketAddr::new(ip, sdn_port)]
     } else {
@@ -119,16 +156,27 @@ async fn main() {
             .map(|(_name, ip)| SocketAddr::new(ip, sdn_port))
             .collect::<Vec<_>>()
     };
-    let node = NodeConfig {
-        node_id: ZoneId(args.sdn_zone_id).to_node_id(args.sdn_zone_node_id),
+    let mut node = NodeConfig {
+        node_id: ZoneId(args.sdn_zone_id).to_node_id(auto_generated_node_id.unwrap_or(args.sdn_zone_node_id)),
         secret: args.secret,
         seeds: args.seeds,
         bind_addrs,
         zone: ZoneId(args.sdn_zone_id),
-        bind_addrs_alt: args.node_ip_alt.into_iter().map(|ip| SocketAddr::new(ip, sdn_port)).collect::<Vec<_>>(),
+        bind_addrs_alt: node_ip_alt_cloud
+            .into_iter()
+            .chain(args.node_ip_alt.into_iter())
+            .map(|ip| SocketAddr::new(ip, sdn_port))
+            .collect::<Vec<_>>(),
     };
 
     log::info!("Bind addrs {:?}, bind addrs alt {:?}", node.bind_addrs, node.bind_addrs_alt);
+
+    if let Some(url) = args.seeds_from_url {
+        log::info!("Generate seeds from node_api {}", url);
+        let addrs = fetch_node_addrs_from_api(&url).await.expect("should get seeds");
+        log::info!("Generated seeds {:?}", addrs);
+        node.seeds = addrs;
+    }
 
     let local = tokio::task::LocalSet::new();
     local
@@ -139,7 +187,7 @@ async fn main() {
                 #[cfg(feature = "gateway")]
                 server::ServerType::Gateway(args) => server::run_media_gateway(workers, http_port, node, args).await,
                 #[cfg(feature = "connector")]
-                server::ServerType::Connector(args) => server::run_media_connector(workers, node, args).await,
+                server::ServerType::Connector(args) => server::run_media_connector(workers, http_port, node, args).await,
                 #[cfg(feature = "media")]
                 server::ServerType::Media(args) => server::run_media_server(workers, http_port, node, args).await,
                 #[cfg(feature = "cert_utils")]

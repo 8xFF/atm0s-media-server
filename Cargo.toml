@@ -20,8 +20,8 @@ members = [
 
 [workspace.dependencies]
 sans-io-runtime = { version = "0.3", default-features = false }
-atm0s-sdn = { version = "0.2", default-features = false }
-atm0s-sdn-network = { version = "0.6", default-features = false }
+atm0s-sdn = { git = "https://github.com/giangndm/8xFF-decentralized-sdn.git", branch = "feat-router-dump", default-features = false }
+atm0s-sdn-network = { git = "https://github.com/giangndm/8xFF-decentralized-sdn.git", branch = "feat-router-dump", default-features = false }
 tokio = "1.37"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
 convert-enum = "0.1"
