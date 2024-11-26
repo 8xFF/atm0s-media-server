@@ -53,6 +53,7 @@ impl GatewayStore {
 
     pub fn on_tick(&mut self, now: u64) {
         self.webrtc.on_tick(now);
+        self.rtpengine.on_tick(now);
 
         let ping = PingEvent {
             cpu: self.node.cpu,
