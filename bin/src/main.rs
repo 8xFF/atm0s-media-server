@@ -178,6 +178,9 @@ async fn main() {
         node.seeds = addrs;
     }
 
+    // Remove self
+    node.seeds = node.seeds.into_iter().filter(|addr| addr.node_id() != node.node_id).collect();
+
     let local = tokio::task::LocalSet::new();
     local
         .run_until(async move {
