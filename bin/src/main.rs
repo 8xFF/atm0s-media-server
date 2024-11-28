@@ -178,8 +178,8 @@ async fn main() {
         node.seeds = addrs;
     }
 
-    // Remove self
-    node.seeds = node.seeds.retain(|addr| addr.node_id() != node.node_id);
+    // Remove self address for avoiding circular loop
+    node.seeds.retain(|addr| addr.node_id() != node.node_id);
 
     let local = tokio::task::LocalSet::new();
     local
