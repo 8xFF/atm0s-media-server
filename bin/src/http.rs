@@ -9,16 +9,12 @@ use media_server_protocol::protobuf::cluster_connector::MediaConnectorServiceCli
 use media_server_protocol::rpc::quinn::{QuinnClient, QuinnStream};
 use media_server_protocol::transport::{RpcReq, RpcRes};
 use media_server_secure::{MediaEdgeSecure, MediaGatewaySecure};
-#[cfg(not(feature = "embed_static"))]
-use poem::endpoint::StaticFilesEndpoint;
 use poem::{listener::TcpListener, middleware::Cors, EndpointExt, Route, Server};
 use poem_openapi::types::{ToJSON, Type};
 use poem_openapi::OpenApiService;
 use poem_openapi::{types::ParseFromJSON, Object};
 use serde::Deserialize;
 use tokio::sync::mpsc::Sender;
-#[cfg(feature = "embed_static")]
-use utils::EmbeddedFilesEndpoint;
 
 mod api_console;
 mod api_media;
@@ -27,15 +23,10 @@ mod api_node;
 mod api_token;
 mod utils;
 
-#[cfg(feature = "embed_static")]
+#[cfg(feature = "gateway")]
 #[derive(rust_embed::RustEmbed)]
 #[folder = "public/media"]
 pub struct PublicMediaFiles;
-
-#[cfg(feature = "embed_static")]
-#[derive(rust_embed::RustEmbed)]
-#[folder = "public/console"]
-pub struct PublicConsoleFiles;
 
 #[derive(Debug, Default, Object, Deserialize)]
 pub struct Pagination {
@@ -98,13 +89,8 @@ pub async fn run_console_http_server(
 
     let ctx = api_console::ConsoleApisCtx { secure, storage, connector };
 
-    #[cfg(not(feature = "embed_static"))]
-    let console_panel = StaticFilesEndpoint::new("./public/console/").index_file("index.html");
-    #[cfg(feature = "embed_static")]
-    let console_panel = EmbeddedFilesEndpoint::<PublicConsoleFiles>::new();
-
     let route = Route::new()
-        .nest("/", console_panel)
+        .nest("/", media_console_front::frontend_app())
         //node
         .nest("/api/node/", node_service)
         .nest("/api/node/ui", node_ui)
@@ -189,10 +175,10 @@ pub async fn run_gateway_http_server<ES: 'static + MediaEdgeSecure + Send + Sync
     let rtpengine_ui = rtpengine_service.swagger_ui();
     let rtpengine_spec = rtpengine_service.spec();
 
-    #[cfg(not(feature = "embed_static"))]
-    let samples = StaticFilesEndpoint::new("./public/media/").index_file("index.html");
-    #[cfg(feature = "embed_static")]
-    let samples = EmbeddedFilesEndpoint::<PublicMediaFiles>::new();
+    #[cfg(debug_assertions)]
+    let samples = poem::endpoint::StaticFilesEndpoint::new("./public/media/").index_file("index.html");
+    #[cfg(not(debug_assertions))]
+    let samples = media_server_utils::EmbeddedFilesEndpoint::<PublicMediaFiles>::new();
 
     let route = Route::new()
         .nest("/samples", samples)
@@ -324,10 +310,10 @@ pub async fn run_media_http_server<ES: 'static + MediaEdgeSecure + Send + Sync, 
     let rtpengine_ui = rtpengine_service.swagger_ui();
     let rtpengine_spec = rtpengine_service.spec();
 
-    #[cfg(not(feature = "embed_static"))]
-    let samples = StaticFilesEndpoint::new("./public/media/").index_file("index.html");
-    #[cfg(feature = "embed_static")]
-    let samples = EmbeddedFilesEndpoint::<PublicMediaFiles>::new();
+    #[cfg(debug_assertions)]
+    let samples = poem::endpoint::StaticFilesEndpoint::new("./public/media/").index_file("index.html");
+    #[cfg(not(debug_assertions))]
+    let samples = media_server_utils::EmbeddedFilesEndpoint::<PublicMediaFiles>::new();
 
     let route = route
         .nest("/samples", samples)

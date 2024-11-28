@@ -1,4 +1,5 @@
 mod count;
+mod embed_files;
 mod f16;
 mod indexmap_2d;
 mod select;
@@ -10,6 +11,7 @@ mod ts_rewrite;
 mod uri;
 
 pub use count::{get_all_counts, Count};
+pub use embed_files::{EmbeddedFileEndpoint, EmbeddedFilesEndpoint};
 pub use f16::{F16i, F16u};
 pub use indexmap_2d::IndexMap2d;
 pub use select::*;

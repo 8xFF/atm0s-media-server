@@ -1,0 +1,11 @@
+[package]
+name = "media-console-front"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+poem = { version = "3.0", features = [] }
+rust-embed = { version = "8.0", features = ["compression"] }
+reqwest = { version = "0.12" }
+log = { workspace = true }
+media-server-utils = { path = "../media_utils", features = ["embed-files"] }

@@ -475,10 +475,10 @@ dependencies = [
  "clap",
  "convert-enum",
  "derive_more",
- "hex",
  "local-ip-address",
  "log",
  "maxminddb",
+ "media-console-front",
  "media-server-connector",
  "media-server-gateway",
  "media-server-multi-tenancy",
@@ -487,7 +487,6 @@ dependencies = [
  "media-server-runner",
  "media-server-secure",
  "media-server-utils",
- "mime_guess",
  "num_enum",
  "poem",
  "poem-openapi",
@@ -3446,6 +3445,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "media-console-front"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "media-server-utils",
+ "poem",
+ "reqwest",
+ "rust-embed",
+]
+
+[[package]]
 name = "media-server-codecs"
 version = "0.1.0"
 dependencies = [
@@ -3614,10 +3624,14 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "derive_more",
+ "hex",
  "indexmap",
  "log",
+ "mime_guess",
  "once_cell",
  "pin-project-lite",
+ "poem",
+ "rust-embed",
  "serde",
  "serde-querystring",
  "sorted-vec",

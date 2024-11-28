@@ -1,5 +1,4 @@
-//This file is got from PR https://github.com/poem-web/poem/pull/825/files
-//TODO switch to official poem-embed when it merged
+/// This file is implement embedded files for react router
 use std::marker::PhantomData;
 
 use rust_embed::RustEmbed;
@@ -81,6 +80,8 @@ impl<E: RustEmbed + Send + Sync> Endpoint for EmbeddedFilesEndpoint<E> {
 
         use header::LOCATION;
 
+        log::info!("path: {}", path);
+
         if path.is_empty() && !original_end_with_slash {
             Ok(Response::builder().status(StatusCode::FOUND).header(LOCATION, format!("{}/", original_path)).finish())
         } else if original_end_with_slash {
@@ -91,7 +92,8 @@ impl<E: RustEmbed + Send + Sync> Endpoint for EmbeddedFilesEndpoint<E> {
         } else if E::get(&format!("{}/index.html", path)).is_some() {
             Ok(Response::builder().status(StatusCode::FOUND).header(LOCATION, format!("{}/", original_path)).finish())
         } else {
-            EmbeddedFileEndpoint::<E>::new(path).call(req).await
+            log::info!("path: {path} not found, fallback to index.html");
+            EmbeddedFileEndpoint::<E>::new(&format!("index.html")).call(req).await
         }
     }
 }
