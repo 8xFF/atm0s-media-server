@@ -24,8 +24,6 @@ pub enum Event {
     Req(NodeId, u64, u64, connector_request::Request),
 }
 
-type ReqUuid = (NodeId, u64, u64);
-
 pub struct ConnectorHandlerService<UserData, SC, SE, TC, TW> {
     subscriber: Option<ServiceControlActor<UserData>>,
     queue: VecDeque<ServiceOutput<UserData, FeaturesControl, SE, TW>>,

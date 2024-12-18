@@ -570,7 +570,7 @@ impl Storage for ConnectorSqlStorage {
                 }
 
                 if let Err(e) = self.on_peer_event(now_ms, from, event_ts, &event.app, event.session_id, event.event.clone()?).await {
-                    log::error!("[ConnectorSqlStorage] on_peer_event db error {e:?}");
+                    log::error!("[ConnectorSqlStorage] on_peer_event {event:?} db error {e:?}");
                     return None;
                 }
                 self.hook_events.push_back((
