@@ -99,7 +99,7 @@ pub trait Storage {
     type Q: Querier;
     fn querier(&mut self) -> Self::Q;
     fn on_tick(&mut self, now_ms: u64) -> impl std::future::Future<Output = ()> + Send;
-    fn on_event(&mut self, now_ms: u64, from: NodeId, req_ts: u64, req: connector_request::Request) -> impl std::future::Future<Output = Option<connector_response::Response>> + Send;
+    fn on_event(&mut self, now_ms: u64, from: NodeId, req_ts: u64, req_id: u64, req: connector_request::Request) -> impl std::future::Future<Output = Option<connector_response::Response>> + Send;
     fn pop_hook_event(&mut self) -> Option<(AppId, HookEvent)>;
 }
 
@@ -135,8 +135,8 @@ impl ConnectorStorage {
         }
     }
 
-    pub async fn on_event(&mut self, from: NodeId, ts: u64, req: connector_request::Request) -> Option<connector_response::Response> {
-        let res = self.sql_storage.on_event(now_ms(), from, ts, req).await?;
+    pub async fn on_event(&mut self, from: NodeId, ts: u64, req_id: u64, req: connector_request::Request) -> Option<connector_response::Response> {
+        let res = self.sql_storage.on_event(now_ms(), from, ts, req_id, req).await?;
 
         while let Some((app, event)) = self.sql_storage.pop_hook_event() {
             self.hook.on_event(app, event);
