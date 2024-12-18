@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::Debug, num::NonZeroUsize};
+use std::{collections::VecDeque, fmt::Debug};
 
 use atm0s_sdn::{
     base::{
@@ -8,7 +8,6 @@ use atm0s_sdn::{
     features::{data, FeaturesControl, FeaturesEvent},
     NodeId, RouteRule,
 };
-use lru::LruCache;
 use media_server_protocol::protobuf::cluster_connector::{connector_request, connector_response, ConnectorRequest, ConnectorResponse};
 use prost::Message;
 
@@ -28,7 +27,6 @@ pub enum Event {
 type ReqUuid = (NodeId, u64, u64);
 
 pub struct ConnectorHandlerService<UserData, SC, SE, TC, TW> {
-    lru: LruCache<ReqUuid, ()>,
     subscriber: Option<ServiceControlActor<UserData>>,
     queue: VecDeque<ServiceOutput<UserData, FeaturesControl, SE, TW>>,
     shutdown: bool,
@@ -45,7 +43,6 @@ impl<UserData, SC, SE, TC, TW> ConnectorHandlerService<UserData, SC, SE, TC, TW>
     pub fn new() -> Self {
         Self {
             subscriber: None,
-            lru: LruCache::new(NonZeroUsize::new(10000).expect("should be non-zero")),
             queue: VecDeque::from([ServiceOutput::FeatureControl(data::Control::DataListen(DATA_PORT).into())]),
             shutdown: false,
             _tmp: std::marker::PhantomData,
@@ -96,11 +93,6 @@ where
                 data::Event::Recv(_port, meta, buf) => match ConnectorRequest::decode(buf.as_slice()) {
                     Ok(msg) => {
                         if let Some(source) = meta.source {
-                            if self.lru.put((source, msg.ts, msg.req_id), ()).is_some() {
-                                log::warn!("[ConnectorHandler] duplicate msg {:?}", msg);
-                                return;
-                            }
-
                             log::info!("[ConnectorHandler] on event {:?}", msg);
                             if let Some(event) = msg.request {
                                 if let Some(actor) = self.subscriber {

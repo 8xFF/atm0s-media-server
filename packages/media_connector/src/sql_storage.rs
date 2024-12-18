@@ -1,9 +1,11 @@
 use std::{
     collections::{HashMap, VecDeque},
+    num::NonZeroUsize,
     time::Duration,
 };
 
 use atm0s_sdn::NodeId;
+use lru::LruCache;
 use media_server_protocol::{
     multi_tenancy::AppId,
     protobuf::cluster_connector::{
@@ -40,6 +42,7 @@ pub struct ConnectorSqlStorage {
     s3: Presigner,
     s3_sub_folder: String,
     room_destroy_after_ms: u64,
+    lru: LruCache<(NodeId, u64, u64), ()>,
     hook_events: VecDeque<(AppId, HookEvent)>,
 }
 
@@ -81,6 +84,7 @@ impl ConnectorSqlStorage {
             s3,
             s3_sub_folder,
             room_destroy_after_ms: cfg.room_destroy_after_ms,
+            lru: LruCache::new(NonZeroUsize::new(10000).expect("should be non-zero")),
             hook_events: Default::default(),
         }
     }
@@ -557,9 +561,14 @@ impl Storage for ConnectorSqlStorage {
             log::error!("[ConnectorSqlStorage] on_tick db error {e:?}");
         }
     }
-    async fn on_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, event: connector_request::Request) -> Option<connector_response::Response> {
+    async fn on_event(&mut self, now_ms: u64, from: NodeId, event_ts: u64, req_id: u64, event: connector_request::Request) -> Option<connector_response::Response> {
         match event {
             connector_request::Request::Peer(event) => {
+                if self.lru.contains(&(from, event_ts, req_id)) {
+                    log::warn!("[ConnectorSqlStorage] peer event {event:?} already processed");
+                    return Some(connector_response::Response::Peer(PeerRes {}));
+                }
+
                 if let Err(e) = self.on_peer_event(now_ms, from, event_ts, &event.app, event.session_id, event.event.clone()?).await {
                     log::error!("[ConnectorSqlStorage] on_peer_event db error {e:?}");
                     return None;
@@ -572,6 +581,7 @@ impl Storage for ConnectorSqlStorage {
                         event: Some(hook_event::Event::Peer(event)),
                     },
                 ));
+                self.lru.put((from, event_ts, req_id), ());
                 Some(connector_response::Response::Peer(PeerRes {}))
             }
             connector_request::Request::Record(req) => {
@@ -914,7 +924,7 @@ mod tests {
             session_id,
             event: Some(Event::RouteBegin(RouteBegin { remote_ip: remote_ip.clone() })),
         };
-        storage.on_event(0, node, ts, connector_request::Request::Peer(event.clone())).await.expect("Should process event");
+        storage.on_event(0, node, ts, 0, connector_request::Request::Peer(event.clone())).await.expect("Should process event");
 
         assert_eq!(
             storage.pop_hook_event(),
@@ -967,7 +977,7 @@ mod tests {
             event: Some(Event::Connecting(Connecting { remote_ip: remote_ip.clone() })),
         };
         storage
-            .on_event(0, node, ts, connector_request::Request::Peer(connecting_event.clone()))
+            .on_event(0, node, ts, 0, connector_request::Request::Peer(connecting_event.clone()))
             .await
             .expect("Should process event");
 
@@ -1008,7 +1018,7 @@ mod tests {
             })),
         };
         storage
-            .on_event(0, node, ts, connector_request::Request::Peer(connected_event.clone()))
+            .on_event(0, node, ts, 1, connector_request::Request::Peer(connected_event.clone()))
             .await
             .expect("Should process event");
         assert_eq!(
@@ -1037,7 +1047,10 @@ mod tests {
                 peer: "peer".to_string(),
             })),
         };
-        storage.on_event(0, node, ts, connector_request::Request::Peer(join_event.clone())).await.expect("Should process event");
+        storage
+            .on_event(0, node, ts, 2, connector_request::Request::Peer(join_event.clone()))
+            .await
+            .expect("Should process event");
 
         assert_eq!(
             storage.pop_hook_event(),
@@ -1102,7 +1115,7 @@ mod tests {
             })),
         };
         storage
-            .on_event(1000, node, ts, connector_request::Request::Peer(leave_event.clone()))
+            .on_event(1000, node, ts, 3, connector_request::Request::Peer(leave_event.clone()))
             .await
             .expect("Should process event");
 
@@ -1179,7 +1192,10 @@ mod tests {
                 peer: "peer".to_string(),
             })),
         };
-        storage.on_event(0, node, ts, connector_request::Request::Peer(join_event.clone())).await.expect("Should process event");
+        storage
+            .on_event(0, node, ts, 4, connector_request::Request::Peer(join_event.clone()))
+            .await
+            .expect("Should process event");
         assert_eq!(
             storage.pop_hook_event(),
             Some((
