@@ -77,7 +77,7 @@ impl Apis {
     #[oai(path = "/:node/log/rooms", method = "get")]
     async fn rooms(&self, _auth: ConsoleAuthorization, Data(ctx): Data<&ConsoleApisCtx>, Path(node): Path<u32>, Query(page): Query<u32>, Query(limit): Query<u32>) -> Json<Response<Vec<RoomInfo>>> {
         match ctx.connector.rooms(node_vnet_addr(node, CONNECTOR_RPC_PORT), GetParams { page, limit }).await {
-            Some(res) => Json(Response {
+            Ok(res) => Json(Response {
                 status: true,
                 data: Some(
                     res.rooms
@@ -98,9 +98,9 @@ impl Apis {
                 }),
                 ..Default::default()
             }),
-            None => Json(Response {
+            Err(e) => Json(Response {
                 status: false,
-                error: Some("CLUSTER_ERROR".to_string()),
+                error: Some(e.to_string()),
                 ..Default::default()
             }),
         }
@@ -118,7 +118,7 @@ impl Apis {
         Query(limit): Query<u32>,
     ) -> Json<Response<Vec<PeerInfo>>> {
         match ctx.connector.peers(node_vnet_addr(node, CONNECTOR_RPC_PORT), GetPeerParams { room, page, limit }).await {
-            Some(res) => Json(Response {
+            Ok(res) => Json(Response {
                 status: true,
                 data: Some(
                     res.peers
@@ -151,9 +151,9 @@ impl Apis {
                 }),
                 ..Default::default()
             }),
-            None => Json(Response {
+            Err(e) => Json(Response {
                 status: false,
-                error: Some("CLUSTER_ERROR".to_string()),
+                error: Some(e.to_string()),
                 ..Default::default()
             }),
         }
@@ -170,7 +170,7 @@ impl Apis {
         Query(limit): Query<u32>,
     ) -> Json<Response<Vec<SessionInfo>>> {
         match ctx.connector.sessions(node_vnet_addr(node, CONNECTOR_RPC_PORT), GetParams { page, limit }).await {
-            Some(res) => Json(Response {
+            Ok(res) => Json(Response {
                 status: true,
                 data: Some(
                     res.sessions
@@ -204,9 +204,9 @@ impl Apis {
                 }),
                 ..Default::default()
             }),
-            None => Json(Response {
+            Err(e) => Json(Response {
                 status: false,
-                error: Some("CLUSTER_ERROR".to_string()),
+                error: Some(e.to_string()),
                 ..Default::default()
             }),
         }
@@ -240,7 +240,7 @@ impl Apis {
             )
             .await
         {
-            Some(res) => Json(Response {
+            Ok(res) => Json(Response {
                 status: true,
                 data: Some(
                     res.events
@@ -262,9 +262,9 @@ impl Apis {
                 }),
                 ..Default::default()
             }),
-            None => Json(Response {
+            Err(e) => Json(Response {
                 status: false,
-                error: Some("CLUSTER_ERROR".to_string()),
+                error: Some(e.to_string()),
                 ..Default::default()
             }),
         }

@@ -471,6 +471,7 @@ dependencies = [
 name = "atm0s-media-server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "atm0s-sdn",
  "clap",
  "convert-enum",
@@ -3533,6 +3534,7 @@ dependencies = [
 name = "media-server-protocol"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bincode",
  "convert-enum",
  "derivative",
