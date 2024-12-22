@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::{anyhow, Result};
 use atm0s_sdn::NodeId;
 use media_server_connector::agent_service::Control as ConnectorControl;
 use media_server_gateway::ServiceKind;
@@ -97,7 +98,7 @@ impl MediaRemoteRpcHandlerImpl {
 }
 
 impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
-    async fn whip_connect(&self, ctx: &Ctx, req: WhipConnectRequest) -> Option<WhipConnectResponse> {
+    async fn whip_connect(&self, ctx: &Ctx, req: WhipConnectRequest) -> Result<WhipConnectResponse> {
         let started_at = now_ms();
         let session_id = req.session_id;
         log::info!("On whip_connect from other gateway");
@@ -106,36 +107,41 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let node_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
-            if let Some(res) = ctx.client.whip_connect(node_addr, req).await {
-                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
-                Some(res)
-            } else {
-                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                None
+            match ctx.client.whip_connect(node_addr, req).await {
+                Ok(res) => {
+                    log::info!("[Gateway] response from node {node_id} => {:?} ", res);
+                    Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok(res)
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node_id} => {:?} ", e);
+                    Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::GatewayError).await;
+                    Err(e)
+                }
             }
         } else {
             Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
-            None
+            Err(anyhow!("Pool empty"))
         }
     }
 
-    async fn whip_remote_ice(&self, ctx: &Ctx, req: WhipRemoteIceRequest) -> Option<WhipRemoteIceResponse> {
+    async fn whip_remote_ice(&self, ctx: &Ctx, req: WhipRemoteIceRequest) -> Result<WhipRemoteIceResponse> {
         log::info!("On whip_remote_ice from other gateway");
-        let conn: ClusterConnId = req.conn.parse().ok()?;
+        let conn: ClusterConnId = req.conn.parse().map_err(|e| anyhow!("{e}"))?;
         let (dest, _session) = conn.get_down_part();
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.whip_remote_ice(dest_addr, req).await
     }
 
-    async fn whip_close(&self, ctx: &Ctx, req: WhipCloseRequest) -> Option<WhipCloseResponse> {
+    async fn whip_close(&self, ctx: &Ctx, req: WhipCloseRequest) -> Result<WhipCloseResponse> {
         log::info!("On whip_close from other gateway");
-        let conn: ClusterConnId = req.conn.parse().ok()?;
+        let conn: ClusterConnId = req.conn.parse().map_err(|e| anyhow!("{e}"))?;
         let (dest, _session) = conn.get_down_part();
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.whip_close(dest_addr, req).await
     }
 
-    async fn whep_connect(&self, ctx: &Ctx, req: WhepConnectRequest) -> Option<WhepConnectResponse> {
+    async fn whep_connect(&self, ctx: &Ctx, req: WhepConnectRequest) -> Result<WhepConnectResponse> {
         let started_at = now_ms();
         let session_id = req.session_id;
         log::info!("On whep_connect from other gateway");
@@ -144,36 +150,39 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
-            if let Some(res) = ctx.client.whep_connect(dest_addr, req).await {
-                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
-                Some(res)
-            } else {
-                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                None
+            match ctx.client.whep_connect(dest_addr, req).await {
+                Ok(res) => {
+                    Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok(res)
+                }
+                Err(e) => {
+                    Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::GatewayError).await;
+                    Err(e)
+                }
             }
         } else {
             Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
-            None
+            Err(anyhow!("Pool empty"))
         }
     }
 
-    async fn whep_remote_ice(&self, ctx: &Ctx, req: WhepRemoteIceRequest) -> Option<WhepRemoteIceResponse> {
+    async fn whep_remote_ice(&self, ctx: &Ctx, req: WhepRemoteIceRequest) -> Result<WhepRemoteIceResponse> {
         log::info!("On whep_remote_ice from other gateway");
-        let conn: ClusterConnId = req.conn.parse().ok()?;
+        let conn: ClusterConnId = req.conn.parse().map_err(|e| anyhow!("{e}"))?;
         let (dest, _session) = conn.get_down_part();
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.whep_remote_ice(dest_addr, req).await
     }
 
-    async fn whep_close(&self, ctx: &Ctx, req: WhepCloseRequest) -> Option<WhepCloseResponse> {
+    async fn whep_close(&self, ctx: &Ctx, req: WhepCloseRequest) -> Result<WhepCloseResponse> {
         log::info!("On whep_close from other gateway");
-        let conn: ClusterConnId = req.conn.parse().ok()?;
+        let conn: ClusterConnId = req.conn.parse().map_err(|e| anyhow!("{e}"))?;
         let (dest, _session) = conn.get_down_part();
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.whep_close(dest_addr, req).await
     }
 
-    async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Option<WebrtcConnectResponse> {
+    async fn webrtc_connect(&self, ctx: &Ctx, req: WebrtcConnectRequest) -> Result<WebrtcConnectResponse> {
         let started_at = now_ms();
         let session_id = req.session_id;
         let app = req.app.clone().map(|a| a.into()).unwrap_or_else(AppContext::root_app);
@@ -182,36 +191,39 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         let location = req.ip.parse().ok().and_then(|ip| ctx.ip2location.get_location(&ip));
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, location).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
-            if let Some(res) = ctx.client.webrtc_connect(dest_addr, req).await {
-                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
-                Some(res)
-            } else {
-                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                None
+            match ctx.client.webrtc_connect(dest_addr, req).await {
+                Ok(res) => {
+                    Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok(res)
+                }
+                Err(e) => {
+                    Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::GatewayError).await;
+                    Err(e)
+                }
             }
         } else {
             Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
-            None
+            Err(anyhow!("Pool empty"))
         }
     }
 
-    async fn webrtc_remote_ice(&self, ctx: &Ctx, req: WebrtcRemoteIceRequest) -> Option<WebrtcRemoteIceResponse> {
+    async fn webrtc_remote_ice(&self, ctx: &Ctx, req: WebrtcRemoteIceRequest) -> Result<WebrtcRemoteIceResponse> {
         log::info!("On webrtc_remote_ice from other gateway");
-        let conn: ClusterConnId = req.conn.parse().ok()?;
+        let conn: ClusterConnId = req.conn.parse().map_err(|e| anyhow!("{e}"))?;
         let (dest, _session) = conn.get_down_part();
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.webrtc_remote_ice(dest_addr, req).await
     }
 
-    async fn webrtc_restart_ice(&self, ctx: &Ctx, req: WebrtcRestartIceRequest) -> Option<WebrtcRestartIceResponse> {
+    async fn webrtc_restart_ice(&self, ctx: &Ctx, req: WebrtcRestartIceRequest) -> Result<WebrtcRestartIceResponse> {
         log::info!("On webrtc_restart_ice from other gateway");
-        let conn: ClusterConnId = req.conn.parse().ok()?;
+        let conn: ClusterConnId = req.conn.parse().map_err(|e| anyhow!("{e}"))?;
         let (dest, _session) = conn.get_down_part();
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.webrtc_restart_ice(dest_addr, req).await
     }
 
-    async fn rtp_engine_create_offer(&self, ctx: &Ctx, req: RtpEngineCreateOfferRequest) -> Option<RtpEngineCreateOfferResponse> {
+    async fn rtp_engine_create_offer(&self, ctx: &Ctx, req: RtpEngineCreateOfferRequest) -> Result<RtpEngineCreateOfferResponse> {
         let started_at = now_ms();
         let session_id = req.session_id;
         log::info!("On rtp_engine_connect from other gateway");
@@ -221,53 +233,59 @@ impl MediaEdgeServiceHandler<Ctx> for MediaRemoteRpcHandlerImpl {
         Self::feedback_route_begin(ctx, &app.app, session_id, ip.to_string()).await;
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, None).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
-            if let Some(res) = ctx.client.rtp_engine_create_offer(dest_addr, req).await {
-                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
-                Some(res)
-            } else {
-                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                None
+            match ctx.client.rtp_engine_create_offer(dest_addr, req).await {
+                Ok(res) => {
+                    Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok(res)
+                }
+                Err(e) => {
+                    Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::GatewayError).await;
+                    Err(e)
+                }
             }
         } else {
             Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
-            None
+            Err(anyhow!("Pool empty"))
         }
     }
 
-    async fn rtp_engine_set_answer(&self, ctx: &Ctx, req: RtpEngineSetAnswerRequest) -> Option<RtpEngineSetAnswerResponse> {
+    async fn rtp_engine_set_answer(&self, ctx: &Ctx, req: RtpEngineSetAnswerRequest) -> Result<RtpEngineSetAnswerResponse> {
         log::info!("On rtp_engine_set_answer from other gateway");
-        let conn: ClusterConnId = req.conn.parse().ok()?;
+        let conn: ClusterConnId = req.conn.parse().map_err(|e| anyhow!("{e}"))?;
         let (dest, _session) = conn.get_down_part();
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.rtp_engine_set_answer(dest_addr, req).await
     }
 
-    async fn rtp_engine_create_answer(&self, ctx: &Ctx, req: RtpEngineCreateAnswerRequest) -> Option<RtpEngineCreateAnswerResponse> {
+    async fn rtp_engine_create_answer(&self, ctx: &Ctx, req: RtpEngineCreateAnswerRequest) -> Result<RtpEngineCreateAnswerResponse> {
         let started_at = now_ms();
         let session_id = req.session_id;
         let app = req.app.clone().map(|a| a.into()).unwrap_or_else(AppContext::root_app);
-        log::info!("On rtp_engine_connect from other gateway");
+        log::info!("On rtp_engine_create_answer from other gateway");
         // TODO get ip
         let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
         Self::feedback_route_begin(ctx, &app.app, session_id, ip.to_string()).await;
         if let Some(node_id) = ctx.selector.select(ServiceKind::Webrtc, None).await {
             let dest_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
-            if let Some(res) = ctx.client.rtp_engine_create_answer(dest_addr, req).await {
-                Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
-                Some(res)
-            } else {
-                Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                None
+            match ctx.client.rtp_engine_create_answer(dest_addr, req).await {
+                Ok(res) => {
+                    Self::feedback_route_success(ctx, &app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok(res)
+                }
+                Err(e) => {
+                    Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::GatewayError).await;
+                    Err(e)
+                }
             }
         } else {
             Self::feedback_route_error(ctx, &app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
-            None
+            Err(anyhow!("Pool empty"))
         }
     }
 
-    async fn rtp_engine_delete(&self, ctx: &Ctx, req: RtpEngineDeleteRequest) -> Option<RtpEngineDeleteResponse> {
+    async fn rtp_engine_delete(&self, ctx: &Ctx, req: RtpEngineDeleteRequest) -> Result<RtpEngineDeleteResponse> {
         log::info!("On rtp_engine_delete from other gateway");
-        let conn: ClusterConnId = req.conn.parse().ok()?;
+        let conn: ClusterConnId = req.conn.parse().map_err(|e| anyhow!("{e}"))?;
         let (dest, _session) = conn.get_down_part();
         let dest_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         ctx.client.rtp_engine_delete(dest_addr, req).await

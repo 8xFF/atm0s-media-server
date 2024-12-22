@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use anyhow::{anyhow, Result};
 use quinn::{crypto::rustls::HandshakeData, Connection, Endpoint, Incoming, RecvStream, SendStream};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -64,8 +65,8 @@ impl Drop for QuinnServer {
 }
 
 impl RpcServer<QuinnStream> for QuinnServer {
-    async fn accept(&mut self) -> Option<(String, QuinnStream)> {
-        self.rx.recv().await
+    async fn accept(&mut self) -> Result<(String, QuinnStream)> {
+        self.rx.recv().await.ok_or(anyhow!("channel closed"))
     }
 }
 
@@ -81,10 +82,10 @@ impl QuinnClient {
 }
 
 impl RpcClient<SocketAddr, QuinnStream> for QuinnClient {
-    async fn connect(&self, dest: SocketAddr, server_name: &str) -> Option<QuinnStream> {
-        let conn = self.endpoint.connect(dest, server_name).ok()?.await.ok()?;
-        let (send, recv) = conn.open_bi().await.ok()?;
-        Some(QuinnStream {
+    async fn connect(&self, dest: SocketAddr, server_name: &str) -> Result<QuinnStream> {
+        let conn = self.endpoint.connect(dest, server_name)?.await?;
+        let (send, recv) = conn.open_bi().await?;
+        Ok(QuinnStream {
             conn,
             send,
             recv,
@@ -105,34 +106,35 @@ pub struct QuinnStream {
 impl QuinnStream {}
 
 impl RpcStream for QuinnStream {
-    async fn read(&mut self) -> Option<Vec<u8>> {
+    async fn read(&mut self) -> Result<Vec<u8>> {
         loop {
             if let Some(buf_goal) = self.buf_goal {
                 let max_len = buf_goal - self.buf.len();
-                if let Some(chunk) = self.recv.read_chunk(max_len, true).await.ok()? {
+                if let Some(chunk) = self.recv.read_chunk(max_len, true).await? {
                     log::debug!("Got frame part {}/{buf_goal}", chunk.bytes.len());
                     self.buf.extend_from_slice(&chunk.bytes);
                     if self.buf.len() == buf_goal {
                         self.buf_goal = None;
                         let res = std::mem::replace(&mut self.buf, Vec::with_capacity(1500));
-                        return Some(res);
+                        return Ok(res);
                     }
                 }
             } else {
-                let len = self.recv.read_u32().await.ok()?;
+                let len = self.recv.read_u32().await?;
                 self.buf_goal = Some(len as usize);
                 log::debug!("Got frame len {}", len);
                 if len == 0 {
-                    return Some(vec![]);
+                    return Ok(vec![]);
                 }
             }
         }
     }
 
-    async fn write(&mut self, buf: &[u8]) -> Option<()> {
+    async fn write(&mut self, buf: &[u8]) -> Result<()> {
         log::debug!("Write frame len {}", buf.len());
-        self.send.write_u32(buf.len() as u32).await.ok()?;
-        self.send.write_all(buf).await.ok()
+        self.send.write_u32(buf.len() as u32).await?;
+        self.send.write_all(buf).await?;
+        Ok(())
     }
 
     async fn close(&mut self) {

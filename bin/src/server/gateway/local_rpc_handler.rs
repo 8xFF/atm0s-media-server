@@ -167,18 +167,20 @@ impl MediaLocalRpcHandler {
             let mut rpc_req: WhipConnectRequest = param.clone().into();
             rpc_req.session_id = session_id;
 
-            let res = self.client.whip_connect(sock_addr, rpc_req).await;
-            log::info!("[Gateway] response from node {node_id} => {:?}", res);
-            if let Some(res) = res {
-                self.feedback_route_success(&param.app.app, session_id, now_ms() - started_at, node_id).await;
-
-                Ok(whip::WhipConnectRes {
-                    sdp: res.sdp,
-                    conn_id: res.conn.parse().unwrap(),
-                })
-            } else {
-                self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.whip_connect(sock_addr, rpc_req).await {
+                Ok(res) => {
+                    log::info!("[Gateway] response from node {node_id} => {res:?}");
+                    self.feedback_route_success(&param.app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok(whip::WhipConnectRes {
+                        sdp: res.sdp,
+                        conn_id: res.conn.parse().unwrap(),
+                    })
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node_id} => {e}");
+                    self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
@@ -194,11 +196,15 @@ impl MediaLocalRpcHandler {
             };
             log::info!("[Gateway] selected node {node}");
             let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
-            let res = self.client.whip_remote_ice(sock_addr, rpc_req).await;
-            if let Some(_res) = res {
-                Ok(whip::WhipRemoteIceRes {})
-            } else {
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.whip_remote_ice(sock_addr, rpc_req).await {
+                Ok(_res) => {
+                    log::info!("[Gateway] response from node {node} => {:?} ", _res);
+                    Ok(whip::WhipRemoteIceRes {})
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node} => {:?} ", e);
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             Err(RpcError::new2(MediaServerError::InvalidConnId))
@@ -210,11 +216,15 @@ impl MediaLocalRpcHandler {
             let rpc_req = media_server_protocol::protobuf::cluster_gateway::WhipCloseRequest { conn: param.conn_id.to_string() };
             log::info!("[Gateway] selected node {node}");
             let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
-            let res = self.client.whip_close(sock_addr, rpc_req).await;
-            if let Some(_res) = res {
-                Ok(whip::WhipDeleteRes {})
-            } else {
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.whip_close(sock_addr, rpc_req).await {
+                Ok(_res) => {
+                    log::info!("[Gateway] response from node {node} => {:?} ", _res);
+                    Ok(whip::WhipDeleteRes {})
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node} => {:?} ", e);
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             Err(RpcError::new2(MediaServerError::InvalidConnId))
@@ -233,17 +243,20 @@ impl MediaLocalRpcHandler {
         if let Some(node_id) = self.selector.select(ServiceKind::Webrtc, self.ip2location.get_location(&param.ip)).await {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             log::info!("[Gateway] selected node {node_id}");
-            let res = self.client.whep_connect(sock_addr, param.clone().into()).await;
-            log::info!("[Gateway] response from node {node_id} => {:?}", res);
-            if let Some(res) = res {
-                self.feedback_route_success(&param.app.app, session_id, now_ms() - started_at, node_id).await;
-                Ok(whep::WhepConnectRes {
-                    sdp: res.sdp,
-                    conn_id: res.conn.parse().unwrap(),
-                })
-            } else {
-                self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.whep_connect(sock_addr, param.clone().into()).await {
+                Ok(res) => {
+                    log::info!("[Gateway] response from node {node_id} => {:?} ", res);
+                    self.feedback_route_success(&param.app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok(whep::WhepConnectRes {
+                        sdp: res.sdp,
+                        conn_id: res.conn.parse().unwrap(),
+                    })
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node_id} => {:?} ", e);
+                    self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
@@ -259,11 +272,15 @@ impl MediaLocalRpcHandler {
             };
             log::info!("[Gateway] selected node {node}");
             let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
-            let res = self.client.whep_remote_ice(sock_addr, rpc_req).await;
-            if let Some(_res) = res {
-                Ok(whep::WhepRemoteIceRes {})
-            } else {
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.whep_remote_ice(sock_addr, rpc_req).await {
+                Ok(_res) => {
+                    log::info!("[Gateway] response from node {node} => {:?} ", _res);
+                    Ok(whep::WhepRemoteIceRes {})
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node} => {:?} ", e);
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             Err(RpcError::new2(MediaServerError::InvalidConnId))
@@ -275,11 +292,15 @@ impl MediaLocalRpcHandler {
             let rpc_req = media_server_protocol::protobuf::cluster_gateway::WhepCloseRequest { conn: param.conn_id.to_string() };
             log::info!("[Gateway] selected node {node}");
             let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
-            let res = self.client.whep_close(sock_addr, rpc_req).await;
-            if let Some(_res) = res {
-                Ok(whep::WhepDeleteRes {})
-            } else {
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.whep_close(sock_addr, rpc_req).await {
+                Ok(_res) => {
+                    log::info!("[Gateway] response from node {node} => {:?} ", _res);
+                    Ok(whep::WhepDeleteRes {})
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node} => {:?} ", e);
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             Err(RpcError::new2(MediaServerError::InvalidConnId))
@@ -316,24 +337,29 @@ impl MediaLocalRpcHandler {
                 record,
                 extra_data,
             };
-            let res = self.client.webrtc_connect(sock_addr, rpc_req).await;
-            log::info!("[Gateway] response from node {node_id} => {:?}", res);
-            if let Some(res) = res {
-                if let Some(res) = res.res {
-                    if let Ok(conn) = res.conn_id.parse() {
-                        self.feedback_route_success(&app.app, session_id, now_ms() - started_at, node_id).await;
-                        Ok((conn, res))
+            match self.client.webrtc_connect(sock_addr, rpc_req).await {
+                Ok(res) => {
+                    if let Some(res) = res.res {
+                        if let Ok(conn) = res.conn_id.parse() {
+                            log::info!("[Gateway] response from node {node_id} => {res:?}");
+                            self.feedback_route_success(&app.app, session_id, now_ms() - started_at, node_id).await;
+                            Ok((conn, res))
+                        } else {
+                            log::error!("[Gateway] response from node {node_id} with invalid conn");
+                            self.feedback_route_error(&app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::MediaError).await;
+                            Err(RpcError::new2(MediaServerError::MediaResError))
+                        }
                     } else {
-                        self.feedback_route_error(&app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::MediaError).await;
-                        Err(RpcError::new2(MediaServerError::MediaResError))
+                        log::error!("[Gateway] response from node {node_id} with empty res");
+                        self.feedback_route_error(&app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::GatewayError).await;
+                        Err(RpcError::new2(MediaServerError::GatewayRpcError))
                     }
-                } else {
-                    self.feedback_route_error(&app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::GatewayError).await;
-                    Err(RpcError::new2(MediaServerError::GatewayRpcError))
                 }
-            } else {
-                self.feedback_route_error(&app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                Err(RpcError::new2(MediaServerError::NodeTimeout))
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node_id} => {e}");
+                    self.feedback_route_error(&app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                    Err(RpcError::new(MediaServerError::NodeTimeout, &e.to_string()))
+                }
             }
         } else {
             self.feedback_route_error(&app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
@@ -350,7 +376,7 @@ impl MediaLocalRpcHandler {
         log::info!("[Gateway] selected node {node}");
         let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
         let res = self.client.webrtc_remote_ice(sock_addr, rpc_req).await;
-        let res = res.ok_or(RpcError::new2(MediaServerError::GatewayRpcError))?;
+        let res = res.map_err(|e| RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))?;
         Ok(RemoteIceResponse { added: res.added })
     }
 
@@ -392,7 +418,7 @@ impl MediaLocalRpcHandler {
         };
         let sock_addr = node_vnet_addr(dest, GATEWAY_RPC_PORT);
         let res = self.client.webrtc_restart_ice(sock_addr, rpc_req).await;
-        let res = res.ok_or(RpcError::new2(MediaServerError::GatewayRpcError))?;
+        let res = res.map_err(|e| RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))?;
         let res = res.res.ok_or(RpcError::new2(MediaServerError::MediaResError))?;
         Ok((res.conn_id.parse().unwrap(), res))
     }
@@ -410,14 +436,17 @@ impl MediaLocalRpcHandler {
         if let Some(node_id) = self.selector.select(ServiceKind::RtpEngine, None).await {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             log::info!("[Gateway] selected node {node_id}");
-            let res = self.client.rtp_engine_create_offer(sock_addr, param.clone().into()).await;
-            log::info!("[Gateway] response from node {node_id} => {:?}", res);
-            if let Some(res) = res {
-                self.feedback_route_success(&param.app.app, session_id, now_ms() - started_at, node_id).await;
-                Ok((res.conn.parse().unwrap(), res.sdp))
-            } else {
-                self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.rtp_engine_create_offer(sock_addr, param.clone().into()).await {
+                Ok(res) => {
+                    log::info!("[Gateway] response from node {node_id} => {res:?}");
+                    self.feedback_route_success(&param.app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok((res.conn.parse().unwrap(), res.sdp))
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node_id} => {e}");
+                    self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
@@ -430,11 +459,15 @@ impl MediaLocalRpcHandler {
             let rpc_req = media_server_protocol::protobuf::cluster_gateway::RtpEngineSetAnswerRequest { conn: conn.to_string(), sdp };
             log::info!("[Gateway] selected node {node}");
             let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
-            let res = self.client.rtp_engine_set_answer(sock_addr, rpc_req).await;
-            if let Some(_res) = res {
-                Ok(conn)
-            } else {
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.rtp_engine_set_answer(sock_addr, rpc_req).await {
+                Ok(_res) => {
+                    log::info!("[Gateway] response from node {node} => {:?} ", _res);
+                    Ok(conn)
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node} => {:?} ", e);
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             Err(RpcError::new2(MediaServerError::InvalidConnId))
@@ -450,14 +483,17 @@ impl MediaLocalRpcHandler {
         if let Some(node_id) = self.selector.select(ServiceKind::RtpEngine, None).await {
             let sock_addr = node_vnet_addr(node_id, GATEWAY_RPC_PORT);
             log::info!("[Gateway] selected node {node_id}");
-            let res = self.client.rtp_engine_create_answer(sock_addr, param.clone().into()).await;
-            log::info!("[Gateway] response from node {node_id} => {:?}", res);
-            if let Some(res) = res {
-                self.feedback_route_success(&param.app.app, session_id, now_ms() - started_at, node_id).await;
-                Ok((res.conn.parse().unwrap(), res.sdp))
-            } else {
-                self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.rtp_engine_create_answer(sock_addr, param.clone().into()).await {
+                Ok(res) => {
+                    log::info!("[Gateway] response from node {node_id} => {res:?}");
+                    self.feedback_route_success(&param.app.app, session_id, now_ms() - started_at, node_id).await;
+                    Ok((res.conn.parse().unwrap(), res.sdp))
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node_id} => {e}");
+                    self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, Some(node_id), ErrorType::Timeout).await;
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             self.feedback_route_error(&param.app.app, session_id, now_ms() - started_at, None, ErrorType::PoolEmpty).await;
@@ -470,11 +506,15 @@ impl MediaLocalRpcHandler {
             let rpc_req = media_server_protocol::protobuf::cluster_gateway::RtpEngineDeleteRequest { conn: param.to_string() };
             log::info!("[Gateway] selected node {node}");
             let sock_addr = node_vnet_addr(node, GATEWAY_RPC_PORT);
-            let res = self.client.rtp_engine_delete(sock_addr, rpc_req).await;
-            if let Some(_res) = res {
-                Ok(param)
-            } else {
-                Err(RpcError::new2(MediaServerError::GatewayRpcError))
+            match self.client.rtp_engine_delete(sock_addr, rpc_req).await {
+                Ok(res) => {
+                    log::info!("[Gateway] response from node {node} => {:?} ", res);
+                    Ok(param)
+                }
+                Err(e) => {
+                    log::error!("[Gateway] error from node {node} => {:?} ", e);
+                    Err(RpcError::new(MediaServerError::GatewayRpcError, &e.to_string()))
+                }
             }
         } else {
             Err(RpcError::new2(MediaServerError::InvalidConnId))
