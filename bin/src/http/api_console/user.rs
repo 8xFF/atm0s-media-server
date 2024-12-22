@@ -18,7 +18,7 @@ pub struct Apis;
 #[OpenApi]
 impl Apis {
     /// login with user credentials
-    #[oai(path = "/user/login", method = "post")]
+    #[oai(path = "/login", method = "post")]
     async fn user_login(&self, Data(ctx): Data<&ConsoleApisCtx>, body: Json<UserLoginReq>) -> Json<Response<UserLoginRes>> {
         if ctx.secure.validate_secret(&body.secret) {
             Json(Response {

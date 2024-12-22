@@ -4,3 +4,4 @@ tarpaulin-report.html
 /maxminddb-data
 .vscode
 book
+*.db
