@@ -25,7 +25,7 @@ env:
 jobs:
   build-console:
     name: build-frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       NEXT_PUBLIC_API_URL: /api/
     steps:
@@ -85,7 +85,7 @@ jobs:
           # - windows msvc x64
         include:
           - build: linux gnu x64
-            os: ubuntu-latest
+            os: ubuntu-22.04
             rust: stable
             target: x86_64-unknown-linux-gnu
             extension: ""
@@ -93,13 +93,13 @@ jobs:
             build_record_tool: true
             build_record_worker: true
           - build: linux musl x64
-            os: ubuntu-latest
+            os: ubuntu-22.04
             rust: stable
             target: x86_64-unknown-linux-musl
             extension: ""
             cross: false
           - build: linux gnu aarch64
-            os: ubuntu-latest
+            os: ubuntu-22.04
             rust: stable
             target: aarch64-unknown-linux-gnu
             extension: ""
@@ -107,49 +107,49 @@ jobs:
             build_record_tool: true
             build_record_worker: true
           - build: linux musl aarch64
-            os: ubuntu-latest
+            os: ubuntu-22.04
             rust: stable
             target: aarch64-unknown-linux-musl
             extension: ""
             cross: true
           # - build: linux gnueabihf arm
-          #   os: ubuntu-latest
+          #   os: ubuntu-22.04
           #   rust: stable
           #   target: arm-unknown-linux-gnueabihf
           #   extension: ""
           #   cross: true
           # - build: linux gnueabihf armv7
-          #   os: ubuntu-latest
+          #   os: ubuntu-22.04
           #   rust: stable
           #   target: armv7-unknown-linux-gnueabihf
           #   extension: ""
           #   cross: true
           # - build: linux gnu mips
-          #   os: ubuntu-latest
+          #   os: ubuntu-22.04
           #   rust: 1.71.1
           #   target: mips-unknown-linux-gnu
           #   extension: ""
           #   cross: true
           # - build: linux gnuabi64 mips64
-          #   os: ubuntu-latest
+          #   os: ubuntu-22.04
           #   rust: 1.71.1
           #   target: mips64-unknown-linux-gnuabi64
           #   extension: ""
           #   cross: true
           # - build: linux gnuabi64 mips64el
-          #   os: ubuntu-latest
+          #   os: ubuntu-22.04
           #   rust: 1.71.1
           #   target: mips64el-unknown-linux-gnuabi64
           #   extension: ""
           #   cross: true
           # - build: linux gnu mipsel
-          #   os: ubuntu-latest
+          #   os: ubuntu-22.04
           #   rust: 1.71.1
           #   target: mipsel-unknown-linux-gnu
           #   extension: ""
           #   cross: true
           # - build: linux musl aarch64
-          #   os: ubuntu-latest
+          #   os: ubuntu-22.04
           #   rust: stable
           #   target: aarch64-unknown-linux-musl
           #   extension: ""
@@ -171,13 +171,13 @@ jobs:
             build_record_tool: true
             build_record_worker: true
           # - build: windows gnu x64
-          #   os: ubuntu-latest
+          #   os: ubuntu-22.04
           #   rust: stable
           #   target: x86_64-pc-windows-gnu
           #   extension: ".exe"
           #   cross: false
           # - build: windows msvc x64
-          #   os: windows-latest
+          #   os: ubuntu-22.04
           #   rust: stable
           #   target: x86_64-pc-windows-msvc
           #   extension: ".exe"
@@ -195,7 +195,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Install dev-tools
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
           sudo ln -s /bin/g++ /bin/musl-g++
@@ -289,7 +289,7 @@ jobs:
     # only run if not a tags build
     if: startsWith(github.ref, 'refs/tags/') == false
     needs: build-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/download-artifact@v4
       - name: Display structure of downloaded files
@@ -307,7 +307,7 @@ jobs:
 
   deploy-docker:
     needs: build-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
