@@ -328,73 +328,74 @@ pub struct RtpEngineDeleteResponse {
     #[prost(string, tag = "1")]
     pub conn: ::prost::alloc::string::String,
 }
+use anyhow::Result;
 #[allow(async_fn_in_trait)]
 pub trait MediaEdgeServiceHandler<CTX> {
     async fn whip_connect(
         &self,
         ctx: &CTX,
         req: WhipConnectRequest,
-    ) -> Option<WhipConnectResponse>;
+    ) -> Result<WhipConnectResponse>;
     async fn whip_remote_ice(
         &self,
         ctx: &CTX,
         req: WhipRemoteIceRequest,
-    ) -> Option<WhipRemoteIceResponse>;
+    ) -> Result<WhipRemoteIceResponse>;
     async fn whip_close(
         &self,
         ctx: &CTX,
         req: WhipCloseRequest,
-    ) -> Option<WhipCloseResponse>;
+    ) -> Result<WhipCloseResponse>;
     async fn whep_connect(
         &self,
         ctx: &CTX,
         req: WhepConnectRequest,
-    ) -> Option<WhepConnectResponse>;
+    ) -> Result<WhepConnectResponse>;
     async fn whep_remote_ice(
         &self,
         ctx: &CTX,
         req: WhepRemoteIceRequest,
-    ) -> Option<WhepRemoteIceResponse>;
+    ) -> Result<WhepRemoteIceResponse>;
     async fn whep_close(
         &self,
         ctx: &CTX,
         req: WhepCloseRequest,
-    ) -> Option<WhepCloseResponse>;
+    ) -> Result<WhepCloseResponse>;
     async fn webrtc_connect(
         &self,
         ctx: &CTX,
         req: WebrtcConnectRequest,
-    ) -> Option<WebrtcConnectResponse>;
+    ) -> Result<WebrtcConnectResponse>;
     async fn webrtc_remote_ice(
         &self,
         ctx: &CTX,
         req: WebrtcRemoteIceRequest,
-    ) -> Option<WebrtcRemoteIceResponse>;
+    ) -> Result<WebrtcRemoteIceResponse>;
     async fn webrtc_restart_ice(
         &self,
         ctx: &CTX,
         req: WebrtcRestartIceRequest,
-    ) -> Option<WebrtcRestartIceResponse>;
+    ) -> Result<WebrtcRestartIceResponse>;
     async fn rtp_engine_create_offer(
         &self,
         ctx: &CTX,
         req: RtpEngineCreateOfferRequest,
-    ) -> Option<RtpEngineCreateOfferResponse>;
+    ) -> Result<RtpEngineCreateOfferResponse>;
     async fn rtp_engine_set_answer(
         &self,
         ctx: &CTX,
         req: RtpEngineSetAnswerRequest,
-    ) -> Option<RtpEngineSetAnswerResponse>;
+    ) -> Result<RtpEngineSetAnswerResponse>;
     async fn rtp_engine_create_answer(
         &self,
         ctx: &CTX,
         req: RtpEngineCreateAnswerRequest,
-    ) -> Option<RtpEngineCreateAnswerResponse>;
+    ) -> Result<RtpEngineCreateAnswerResponse>;
     async fn rtp_engine_delete(
         &self,
         ctx: &CTX,
         req: RtpEngineDeleteRequest,
-    ) -> Option<RtpEngineDeleteResponse>;
+    ) -> Result<RtpEngineDeleteResponse>;
 }
 pub struct MediaEdgeServiceClient<
     D,
@@ -428,115 +429,115 @@ impl<
         &self,
         dest: D,
         req: WhipConnectRequest,
-    ) -> Option<WhipConnectResponse> {
+    ) -> Result<WhipConnectResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whip_connect.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WhipConnectResponse::decode(in_buf.as_slice()).ok()
+        Ok(WhipConnectResponse::decode(in_buf.as_slice())?)
     }
     pub async fn whip_remote_ice(
         &self,
         dest: D,
         req: WhipRemoteIceRequest,
-    ) -> Option<WhipRemoteIceResponse> {
+    ) -> Result<WhipRemoteIceResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whip_remote_ice.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WhipRemoteIceResponse::decode(in_buf.as_slice()).ok()
+        Ok(WhipRemoteIceResponse::decode(in_buf.as_slice())?)
     }
     pub async fn whip_close(
         &self,
         dest: D,
         req: WhipCloseRequest,
-    ) -> Option<WhipCloseResponse> {
+    ) -> Result<WhipCloseResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whip_close.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WhipCloseResponse::decode(in_buf.as_slice()).ok()
+        Ok(WhipCloseResponse::decode(in_buf.as_slice())?)
     }
     pub async fn whep_connect(
         &self,
         dest: D,
         req: WhepConnectRequest,
-    ) -> Option<WhepConnectResponse> {
+    ) -> Result<WhepConnectResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whep_connect.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WhepConnectResponse::decode(in_buf.as_slice()).ok()
+        Ok(WhepConnectResponse::decode(in_buf.as_slice())?)
     }
     pub async fn whep_remote_ice(
         &self,
         dest: D,
         req: WhepRemoteIceRequest,
-    ) -> Option<WhepRemoteIceResponse> {
+    ) -> Result<WhepRemoteIceResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whep_remote_ice.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WhepRemoteIceResponse::decode(in_buf.as_slice()).ok()
+        Ok(WhepRemoteIceResponse::decode(in_buf.as_slice())?)
     }
     pub async fn whep_close(
         &self,
         dest: D,
         req: WhepCloseRequest,
-    ) -> Option<WhepCloseResponse> {
+    ) -> Result<WhepCloseResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "whep_close.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WhepCloseResponse::decode(in_buf.as_slice()).ok()
+        Ok(WhepCloseResponse::decode(in_buf.as_slice())?)
     }
     pub async fn webrtc_connect(
         &self,
         dest: D,
         req: WebrtcConnectRequest,
-    ) -> Option<WebrtcConnectResponse> {
+    ) -> Result<WebrtcConnectResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "webrtc_connect.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WebrtcConnectResponse::decode(in_buf.as_slice()).ok()
+        Ok(WebrtcConnectResponse::decode(in_buf.as_slice())?)
     }
     pub async fn webrtc_remote_ice(
         &self,
         dest: D,
         req: WebrtcRemoteIceRequest,
-    ) -> Option<WebrtcRemoteIceResponse> {
+    ) -> Result<WebrtcRemoteIceResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "webrtc_remote_ice.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WebrtcRemoteIceResponse::decode(in_buf.as_slice()).ok()
+        Ok(WebrtcRemoteIceResponse::decode(in_buf.as_slice())?)
     }
     pub async fn webrtc_restart_ice(
         &self,
         dest: D,
         req: WebrtcRestartIceRequest,
-    ) -> Option<WebrtcRestartIceResponse> {
+    ) -> Result<WebrtcRestartIceResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "webrtc_restart_ice.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        WebrtcRestartIceResponse::decode(in_buf.as_slice()).ok()
+        Ok(WebrtcRestartIceResponse::decode(in_buf.as_slice())?)
     }
     pub async fn rtp_engine_create_offer(
         &self,
         dest: D,
         req: RtpEngineCreateOfferRequest,
-    ) -> Option<RtpEngineCreateOfferResponse> {
+    ) -> Result<RtpEngineCreateOfferResponse> {
         use prost::Message;
         let mut stream = self
             .client
@@ -545,13 +546,13 @@ impl<
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        RtpEngineCreateOfferResponse::decode(in_buf.as_slice()).ok()
+        Ok(RtpEngineCreateOfferResponse::decode(in_buf.as_slice())?)
     }
     pub async fn rtp_engine_set_answer(
         &self,
         dest: D,
         req: RtpEngineSetAnswerRequest,
-    ) -> Option<RtpEngineSetAnswerResponse> {
+    ) -> Result<RtpEngineSetAnswerResponse> {
         use prost::Message;
         let mut stream = self
             .client
@@ -560,13 +561,13 @@ impl<
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        RtpEngineSetAnswerResponse::decode(in_buf.as_slice()).ok()
+        Ok(RtpEngineSetAnswerResponse::decode(in_buf.as_slice())?)
     }
     pub async fn rtp_engine_create_answer(
         &self,
         dest: D,
         req: RtpEngineCreateAnswerRequest,
-    ) -> Option<RtpEngineCreateAnswerResponse> {
+    ) -> Result<RtpEngineCreateAnswerResponse> {
         use prost::Message;
         let mut stream = self
             .client
@@ -575,19 +576,19 @@ impl<
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        RtpEngineCreateAnswerResponse::decode(in_buf.as_slice()).ok()
+        Ok(RtpEngineCreateAnswerResponse::decode(in_buf.as_slice())?)
     }
     pub async fn rtp_engine_delete(
         &self,
         dest: D,
         req: RtpEngineDeleteRequest,
-    ) -> Option<RtpEngineDeleteResponse> {
+    ) -> Result<RtpEngineDeleteResponse> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "rtp_engine_delete.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        RtpEngineDeleteResponse::decode(in_buf.as_slice()).ok()
+        Ok(RtpEngineDeleteResponse::decode(in_buf.as_slice())?)
     }
 }
 pub struct MediaEdgeServiceServer<
@@ -625,17 +626,17 @@ impl<
     }
     async fn run_local(&mut self) {
         use prost::Message;
-        while let Some((domain, mut stream)) = self.server.accept().await {
+        while let Ok((domain, mut stream)) = self.server.accept().await {
             let ctx = self.ctx.clone();
             let handler = self.handler.clone();
             match domain.as_str() {
                 "whip_connect.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WhipConnectRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler.whip_connect(&ctx, req).await {
+                                if let Ok(res) = handler.whip_connect(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -646,12 +647,11 @@ impl<
                 }
                 "whip_remote_ice.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WhipRemoteIceRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler.whip_remote_ice(&ctx, req).await
-                                {
+                                if let Ok(res) = handler.whip_remote_ice(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -662,11 +662,11 @@ impl<
                 }
                 "whip_close.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WhipCloseRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler.whip_close(&ctx, req).await {
+                                if let Ok(res) = handler.whip_close(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -677,11 +677,11 @@ impl<
                 }
                 "whep_connect.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WhepConnectRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler.whep_connect(&ctx, req).await {
+                                if let Ok(res) = handler.whep_connect(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -692,12 +692,11 @@ impl<
                 }
                 "whep_remote_ice.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WhepRemoteIceRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler.whep_remote_ice(&ctx, req).await
-                                {
+                                if let Ok(res) = handler.whep_remote_ice(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -708,11 +707,11 @@ impl<
                 }
                 "whep_close.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WhepCloseRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler.whep_close(&ctx, req).await {
+                                if let Ok(res) = handler.whep_close(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -723,11 +722,11 @@ impl<
                 }
                 "webrtc_connect.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WebrtcConnectRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler.webrtc_connect(&ctx, req).await {
+                                if let Ok(res) = handler.webrtc_connect(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -738,13 +737,11 @@ impl<
                 }
                 "webrtc_remote_ice.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WebrtcRemoteIceRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler
-                                    .webrtc_remote_ice(&ctx, req)
-                                    .await
+                                if let Ok(res) = handler.webrtc_remote_ice(&ctx, req).await
                                 {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
@@ -756,13 +753,11 @@ impl<
                 }
                 "webrtc_restart_ice.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = WebrtcRestartIceRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler
-                                    .webrtc_restart_ice(&ctx, req)
-                                    .await
+                                if let Ok(res) = handler.webrtc_restart_ice(&ctx, req).await
                                 {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
@@ -774,11 +769,11 @@ impl<
                 }
                 "rtp_engine_create_offer.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = RtpEngineCreateOfferRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler
+                                if let Ok(res) = handler
                                     .rtp_engine_create_offer(&ctx, req)
                                     .await
                                 {
@@ -792,11 +787,11 @@ impl<
                 }
                 "rtp_engine_set_answer.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = RtpEngineSetAnswerRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler
+                                if let Ok(res) = handler
                                     .rtp_engine_set_answer(&ctx, req)
                                     .await
                                 {
@@ -810,11 +805,11 @@ impl<
                 }
                 "rtp_engine_create_answer.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = RtpEngineCreateAnswerRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler
+                                if let Ok(res) = handler
                                     .rtp_engine_create_answer(&ctx, req)
                                     .await
                                 {
@@ -828,13 +823,11 @@ impl<
                 }
                 "rtp_engine_delete.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = RtpEngineDeleteRequest::decode(
                                 in_buf.as_slice(),
                             ) {
-                                if let Some(res) = handler
-                                    .rtp_engine_delete(&ctx, req)
-                                    .await
+                                if let Ok(res) = handler.rtp_engine_delete(&ctx, req).await
                                 {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;

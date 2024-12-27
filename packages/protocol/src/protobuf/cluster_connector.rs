@@ -764,12 +764,13 @@ pub mod get_events {
         pub meta: ::core::option::Option<::prost::alloc::string::String>,
     }
 }
+use anyhow::Result;
 #[allow(async_fn_in_trait)]
 pub trait MediaConnectorServiceHandler<CTX> {
-    async fn rooms(&self, ctx: &CTX, req: GetParams) -> Option<GetRooms>;
-    async fn peers(&self, ctx: &CTX, req: GetPeerParams) -> Option<GetPeers>;
-    async fn sessions(&self, ctx: &CTX, req: GetParams) -> Option<GetSessions>;
-    async fn events(&self, ctx: &CTX, req: GetEventParams) -> Option<GetEvents>;
+    async fn rooms(&self, ctx: &CTX, req: GetParams) -> Result<GetRooms>;
+    async fn peers(&self, ctx: &CTX, req: GetPeerParams) -> Result<GetPeers>;
+    async fn sessions(&self, ctx: &CTX, req: GetParams) -> Result<GetSessions>;
+    async fn events(&self, ctx: &CTX, req: GetEventParams) -> Result<GetEvents>;
 }
 pub struct MediaConnectorServiceClient<
     D,
@@ -799,37 +800,37 @@ impl<
             _tmp: Default::default(),
         }
     }
-    pub async fn rooms(&self, dest: D, req: GetParams) -> Option<GetRooms> {
+    pub async fn rooms(&self, dest: D, req: GetParams) -> Result<GetRooms> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "rooms.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        GetRooms::decode(in_buf.as_slice()).ok()
+        Ok(GetRooms::decode(in_buf.as_slice())?)
     }
-    pub async fn peers(&self, dest: D, req: GetPeerParams) -> Option<GetPeers> {
+    pub async fn peers(&self, dest: D, req: GetPeerParams) -> Result<GetPeers> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "peers.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        GetPeers::decode(in_buf.as_slice()).ok()
+        Ok(GetPeers::decode(in_buf.as_slice())?)
     }
-    pub async fn sessions(&self, dest: D, req: GetParams) -> Option<GetSessions> {
+    pub async fn sessions(&self, dest: D, req: GetParams) -> Result<GetSessions> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "sessions.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        GetSessions::decode(in_buf.as_slice()).ok()
+        Ok(GetSessions::decode(in_buf.as_slice())?)
     }
-    pub async fn events(&self, dest: D, req: GetEventParams) -> Option<GetEvents> {
+    pub async fn events(&self, dest: D, req: GetEventParams) -> Result<GetEvents> {
         use prost::Message;
         let mut stream = self.client.connect(dest, "events.service").await?;
         let out_buf = req.encode_to_vec();
         stream.write(&out_buf).await?;
         let in_buf = stream.read().await?;
-        GetEvents::decode(in_buf.as_slice()).ok()
+        Ok(GetEvents::decode(in_buf.as_slice())?)
     }
 }
 pub struct MediaConnectorServiceServer<
@@ -867,15 +868,15 @@ impl<
     }
     async fn run_local(&mut self) {
         use prost::Message;
-        while let Some((domain, mut stream)) = self.server.accept().await {
+        while let Ok((domain, mut stream)) = self.server.accept().await {
             let ctx = self.ctx.clone();
             let handler = self.handler.clone();
             match domain.as_str() {
                 "rooms.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = GetParams::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.rooms(&ctx, req).await {
+                                if let Ok(res) = handler.rooms(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -886,9 +887,9 @@ impl<
                 }
                 "peers.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = GetPeerParams::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.peers(&ctx, req).await {
+                                if let Ok(res) = handler.peers(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -899,9 +900,9 @@ impl<
                 }
                 "sessions.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = GetParams::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.sessions(&ctx, req).await {
+                                if let Ok(res) = handler.sessions(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;
@@ -912,9 +913,9 @@ impl<
                 }
                 "events.service" => {
                     tokio::task::spawn_local(async move {
-                        if let Some(in_buf) = stream.read().await {
+                        if let Ok(in_buf) = stream.read().await {
                             if let Ok(req) = GetEventParams::decode(in_buf.as_slice()) {
-                                if let Some(res) = handler.events(&ctx, req).await {
+                                if let Ok(res) = handler.events(&ctx, req).await {
                                     let out_buf = res.encode_to_vec();
                                     stream.write(&out_buf).await;
                                     stream.close().await;

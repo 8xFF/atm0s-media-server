@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::{anyhow, Result};
 use media_server_connector::Querier;
 use media_server_protocol::protobuf::cluster_connector::{
     get_events::EventInfo, get_peers::PeerInfo, get_rooms::RoomInfo, get_sessions::SessionInfo, GetEventParams, GetEvents, GetParams, GetPeerParams, GetPeers, GetRooms, GetSessions,
@@ -16,13 +17,13 @@ pub struct Ctx {
 pub struct ConnectorRemoteRpcHandlerImpl {}
 
 impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
-    async fn rooms(&self, ctx: &Ctx, req: GetParams) -> Option<GetRooms> {
+    async fn rooms(&self, ctx: &Ctx, req: GetParams) -> Result<GetRooms> {
         log::info!("[ConnectorRemoteRpcHandler] on get rooms {req:?}");
         let response = match ctx.storage.rooms(req.page as usize, req.limit as usize).await {
             Ok(res) => res,
             Err(err) => {
                 log::error!("[ConnectorRemoteRpcHandler] on get rooms error {err}");
-                return None;
+                return Err(anyhow!("{err}"));
             }
         };
         log::info!("[ConnectorRemoteRpcHandler] on got {} rooms", response.data.len());
@@ -40,7 +41,7 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
             })
             .collect::<Vec<_>>();
 
-        Some(GetRooms {
+        Ok(GetRooms {
             rooms,
             pagination: Some(Pagination {
                 total: response.total as u32,
@@ -49,13 +50,13 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
         })
     }
 
-    async fn peers(&self, ctx: &Ctx, req: GetPeerParams) -> Option<GetPeers> {
+    async fn peers(&self, ctx: &Ctx, req: GetPeerParams) -> Result<GetPeers> {
         log::info!("[ConnectorRemoteRpcHandler] on get peers page {req:?}");
         let response = match ctx.storage.peers(req.room, req.page as usize, req.limit as usize).await {
             Ok(res) => res,
             Err(err) => {
                 log::error!("[ConnectorRemoteRpcHandler] on get peers error {err}");
-                return None;
+                return Err(anyhow!("{err}"));
             }
         };
         log::info!("[ConnectorRemoteRpcHandler] on got {} peers", response.data.len());
@@ -85,7 +86,7 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
             })
             .collect::<Vec<_>>();
 
-        Some(GetPeers {
+        Ok(GetPeers {
             peers,
             pagination: Some(Pagination {
                 total: response.total as u32,
@@ -94,13 +95,13 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
         })
     }
 
-    async fn sessions(&self, ctx: &Ctx, req: GetParams) -> Option<GetSessions> {
+    async fn sessions(&self, ctx: &Ctx, req: GetParams) -> Result<GetSessions> {
         log::info!("[ConnectorRemoteRpcHandler] on get sessions page {req:?}");
         let response = match ctx.storage.sessions(req.page as usize, req.limit as usize).await {
             Ok(res) => res,
             Err(err) => {
                 log::error!("[ConnectorRemoteRpcHandler] on get sessions error {err}");
-                return None;
+                return Err(anyhow!("{err}"));
             }
         };
         log::info!("[ConnectorRemoteRpcHandler] on got {} sessions", response.data.len());
@@ -130,7 +131,7 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
                     .collect::<Vec<_>>(),
             })
             .collect::<Vec<_>>();
-        Some(GetSessions {
+        Ok(GetSessions {
             sessions,
             pagination: Some(Pagination {
                 total: response.total as u32,
@@ -139,13 +140,13 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
         })
     }
 
-    async fn events(&self, ctx: &Ctx, req: GetEventParams) -> Option<GetEvents> {
+    async fn events(&self, ctx: &Ctx, req: GetEventParams) -> Result<GetEvents> {
         log::info!("[ConnectorRemoteRpcHandler] on get events page {req:?}");
         let response = match ctx.storage.events(req.session, req.start_ts, req.end_ts, req.page as usize, req.limit as usize).await {
             Ok(res) => res,
             Err(err) => {
                 log::error!("[ConnectorRemoteRpcHandler] on get events error {err}");
-                return None;
+                return Err(anyhow!("{err}"));
             }
         };
         log::info!("[ConnectorRemoteRpcHandler] on got {} events", response.data.len());
@@ -163,7 +164,7 @@ impl MediaConnectorServiceHandler<Ctx> for ConnectorRemoteRpcHandlerImpl {
                 meta: e.meta.map(|m| m.to_string()),
             })
             .collect::<Vec<_>>();
-        Some(GetEvents {
+        Ok(GetEvents {
             events,
             pagination: Some(Pagination {
                 total: response.total as u32,
