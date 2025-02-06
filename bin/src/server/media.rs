@@ -6,7 +6,7 @@ use std::{
 };
 
 use atm0s_sdn::{
-    features::{router_sync, FeaturesEvent},
+    features::{neighbours, router_sync, FeaturesControl, FeaturesEvent},
     generate_node_addr, SdnExtIn, SdnExtOut, TimePivot, TimeTicker,
 };
 use clap::Parser;
@@ -33,6 +33,7 @@ use crate::{
     http::{run_media_http_server, NodeApiCtx},
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_server, VirtualNetwork},
+    seeds::refresh_seeds,
     server::media::runtime_worker::MediaRuntimeWorker,
     NodeConfig,
 };
@@ -158,9 +159,17 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         controller.add_worker::<_, _, MediaRuntimeWorker<_>, PollingBackend<_, 128, 512>>(Duration::from_millis(1), cfg, None);
     }
 
-    for seed in node.seeds {
-        controller.send_to(0, ExtIn::Sdn(SdnExtIn::ConnectTo(seed), true));
-    }
+    // Subscribe Neighbours feature
+    controller.send_to(
+        0,
+        ExtIn::Sdn(
+            SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, FeaturesControl::Neighbours(neighbours::Control::Sub)),
+            false,
+        ),
+    );
+
+    let (seed_tx, mut seed_rx) = channel(100);
+    refresh_seeds(node_id, &node.seeds, node.seeds_from_url.as_deref(), seed_tx.clone());
 
     let mut req_id_seed = 0;
     let mut reqs = HashMap::new();
@@ -264,6 +273,16 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
             wait_dump_router.push(v);
         }
 
+        while let Ok(seed) = seed_rx.try_recv() {
+            controller.send_to(
+                0,
+                ExtIn::Sdn(
+                    SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, FeaturesControl::Neighbours(neighbours::Control::ConnectTo(seed, true))),
+                    false,
+                ),
+            );
+        }
+
         while let Some(out) = controller.pop_event() {
             match out {
                 ExtOut::Rpc(req_id, worker, res) => {
@@ -275,6 +294,18 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
                         }
                     }
                 }
+                ExtOut::Sdn(SdnExtOut::FeaturesEvent(_, FeaturesEvent::Neighbours(event))) => match event {
+                    neighbours::Event::Connected(neighbour, conn_id) => {
+                        log::info!("Neighbour connected: {:?} {}", neighbour, conn_id);
+                    }
+                    neighbours::Event::Disconnected(neighbour, conn_id) => {
+                        log::info!("Neighbour disconnected: {:?} {}", neighbour, conn_id);
+                    }
+                    neighbours::Event::SeedAddressNeeded => {
+                        log::info!("Seed address needed");
+                        refresh_seeds(node_id, &node.seeds, node.seeds_from_url.as_deref(), seed_tx.clone());
+                    }
+                },
                 ExtOut::Sdn(SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event))) => {
                     if let Err(e) = vnet_tx.try_send(event) {
                         log::error!("[MediaEdge] forward Sdn SocketEvent error {:?}", e);

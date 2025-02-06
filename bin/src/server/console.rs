@@ -1,10 +1,10 @@
 use std::time::{Duration, Instant};
 
 use atm0s_sdn::{
-    features::{router_sync, FeaturesEvent},
+    features::{neighbours, router_sync, FeaturesControl, FeaturesEvent},
     secure::StaticKeyAuthorization,
-    services::visualization,
-    SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner,
+    services::{manual2_discovery::AdvertiseTarget, visualization},
+    SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner, ServiceBroadcastLevel,
 };
 use clap::Parser;
 use media_server_protocol::{
@@ -20,6 +20,7 @@ use crate::{
     http::{run_console_http_server, NodeApiCtx},
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, VirtualNetwork},
+    seeds::refresh_seeds,
     NodeConfig,
 };
 use sans_io_runtime::backend::PollingBackend;
@@ -50,10 +51,15 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
 
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
     builder.set_visualization_collector(true);
-
-    for seed in node.seeds {
-        builder.add_seed(seed);
-    }
+    builder.set_manual2_discovery(
+        vec![
+            // for broadcast to other console nodes
+            AdvertiseTarget::new(visualization::SERVICE_ID.into(), ServiceBroadcastLevel::Global),
+            // for broadcast to all gateway nodes
+            AdvertiseTarget::new(media_server_gateway::STORE_SERVICE_ID.into(), ServiceBroadcastLevel::Global),
+        ],
+        1000,
+    );
 
     let node_info = ClusterNodeInfo::Console(ClusterNodeGenericInfo {
         addr: builder.node_addr().to_string(),
@@ -65,6 +71,10 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
     let started_at = Instant::now();
     let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers, node_info);
     controller.service_control(visualization::SERVICE_ID.into(), (), visualization::Control::Subscribe.into());
+    controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::Sub));
+
+    let (seed_tx, mut seed_rx) = channel(100);
+    refresh_seeds(node_id, &node.seeds, node.seeds_from_url.as_deref(), seed_tx.clone());
 
     let (mut vnet, vnet_tx, mut vnet_rx) = VirtualNetwork::new(node.node_id);
 
@@ -113,6 +123,10 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
             wait_dump_router.push(v);
         }
 
+        while let Ok(seed) = seed_rx.try_recv() {
+            controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::ConnectTo(seed, true).into()));
+        }
+
         while let Some(out) = controller.pop_event() {
             match out {
                 SdnExtOut::ServicesEvent(_service, (), SE::Visual(event)) => match event {
@@ -125,6 +139,18 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
                     }
                     visualization::Event::NodeRemoved(node) => {
                         log::info!("Node del: {:?}", node);
+                    }
+                },
+                SdnExtOut::FeaturesEvent(_, FeaturesEvent::Neighbours(event)) => match event {
+                    neighbours::Event::Connected(neighbour, conn_id) => {
+                        log::info!("Neighbour connected: {:?} {}", neighbour, conn_id);
+                    }
+                    neighbours::Event::Disconnected(neighbour, conn_id) => {
+                        log::info!("Neighbour disconnected: {:?} {}", neighbour, conn_id);
+                    }
+                    neighbours::Event::SeedAddressNeeded => {
+                        log::info!("Seed address needed");
+                        refresh_seeds(node_id, &node.seeds, node.seeds_from_url.as_deref(), seed_tx.clone());
                     }
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {

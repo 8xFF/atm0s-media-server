@@ -10,7 +10,7 @@ use atm0s_sdn::{
     features::{FeaturesControl, FeaturesEvent},
     generate_node_addr,
     secure::{HandshakeBuilderXDA, StaticKeyAuthorization},
-    services::{manual_discovery, visualization},
+    services::{manual2_discovery, visualization},
     ControllerPlaneCfg, DataPlaneCfg, DataWorkerHistory, NetInput, NetOutput, NodeAddr, SdnExtIn, SdnExtOut, SdnWorker, SdnWorkerBusEvent, SdnWorkerCfg, SdnWorkerInput, SdnWorkerOutput, TimePivot,
 };
 use atm0s_sdn_network::data_plane::NetPair;
@@ -19,8 +19,7 @@ use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
 use media_server_core::cluster::{self, MediaCluster};
 use media_server_gateway::{agent_service::GatewayAgentServiceBuilder, NodeMetrics, ServiceKind, AGENT_SERVICE_ID};
 use media_server_protocol::{
-    cluster::{ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo, ZoneId},
-    gateway::generate_gateway_zone_tag,
+    cluster::{ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo},
     protobuf::{
         cluster_connector::{connector_request, PeerEvent},
         gateway::{ConnectResponse, RemoteIceResponse},
@@ -145,17 +144,7 @@ pub struct MediaServerWorker<ES: 'static + MediaEdgeSecure> {
 
 impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        worker: u16,
-        node_id: u32,
-        session: u64,
-        secret: &str,
-        controller: bool,
-        sdn_bind_addrs: Vec<SocketAddr>,
-        sdn_custom_addrs: Vec<SocketAddr>,
-        sdn_zone: ZoneId,
-        media: MediaConfig<ES>,
-    ) -> Self {
+    pub fn new(worker: u16, node_id: u32, session: u64, secret: &str, controller: bool, sdn_bind_addrs: Vec<SocketAddr>, sdn_custom_addrs: Vec<SocketAddr>, media: MediaConfig<ES>) -> Self {
         let secure = media.secure.clone(); //TODO why need this?
         let mut media_max_live = 0;
         for (_, max) in media.max_live.iter() {
@@ -173,11 +162,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
         );
 
         let visualization = Arc::new(visualization::VisualizationServiceBuilder::new(node_info, false));
-        let discovery = Arc::new(manual_discovery::ManualDiscoveryServiceBuilder::new(
-            node_addr.clone(),
-            vec![],
-            vec![generate_gateway_zone_tag(sdn_zone)],
-        ));
+        let discovery = Arc::new(manual2_discovery::Manual2DiscoveryServiceBuilder::new(node_addr.clone(), vec![], 1000));
         let history = Arc::new(DataWorkerHistory::default());
 
         let mut services: Vec<Arc<WServiceBuilder>> = vec![visualization, discovery];
