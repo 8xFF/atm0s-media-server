@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bincode",
  "convert-enum",
