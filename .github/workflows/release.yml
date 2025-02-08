@@ -4,7 +4,9 @@ on:
     branches: [master]
     tags:
       - "atm0s-media-server-v*.*.*"
-
+  create:
+    tags:
+      - "atm0s-media-server-v*.*.*"
   workflow_dispatch:
 
 concurrency:
