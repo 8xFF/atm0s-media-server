@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0-alpha.3](https://github.com/8xFF/atm0s-media-server/compare/v0.2.0-alpha.2...v0.2.0-alpha.3) - 2025-02-08
+
+### Other
+
+- release 0.2.0-alpha.2 (#504)
+
 ## [0.2.0-alpha.2](https://github.com/8xFF/atm0s-media-server/compare/v0.2.0-alpha.1...v0.2.0-alpha.2) - 2025-02-08
 
 ### Added
