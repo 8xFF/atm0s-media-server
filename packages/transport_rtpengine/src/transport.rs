@@ -28,7 +28,7 @@ use sdp_rs::SessionDescription;
 
 use crate::RtpEngineError;
 
-const TIMEOUT_DURATION_MS: u64 = 60_000;
+const TIMEOUT_DURATION_MS: u64 = 180_000;
 
 const REMOTE_AUDIO_TRACK: RemoteTrackId = RemoteTrackId::build(0);
 const LOCAL_AUDIO_TRACK: LocalTrackId = LocalTrackId::build(0);
