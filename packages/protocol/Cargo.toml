@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server-protocol"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
 license = "MIT"
