@@ -175,10 +175,8 @@ impl ProxyConfig {
     /// An example output would be
     ///
     /// > `"https://proxy.domain.com"`
-    pub fn get_web_request_uri(&self, subpath: Option<String>) -> Result<String, ()> {
-        let Some(secure) = self.web_secure else {
-            return Err(());
-        };
+    pub fn get_web_request_uri(&self, subpath: Option<String>) -> Option<String> {
+        let secure = self.web_secure?;
 
         let base = if secure {
             format!("https://{}", self.proxy_target)
@@ -190,7 +188,7 @@ impl ProxyConfig {
 
         println!("base: {} | sub: {}", base, sub);
 
-        Ok(base + &sub)
+        Some(base + &sub)
     }
 }
 
@@ -201,7 +199,7 @@ pub async fn proxy(req: &Request, config: Data<&ProxyConfig>, method: Method, bo
     // let request_uri = target.to_owned() + &req.uri().to_string();
 
     // Get the websocket URI if websockets are supported, otherwise return an error
-    let Ok(uri) = config.get_web_request_uri(Some(req.uri().to_string())) else {
+    let Some(uri) = config.get_web_request_uri(Some(req.uri().to_string())) else {
         return Err(Error::from_string("Proxy endpoint not configured to support web requests!", StatusCode::NOT_IMPLEMENTED));
     };
 
