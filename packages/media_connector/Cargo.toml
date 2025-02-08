@@ -1,7 +1,10 @@
 [package]
 name = "media-server-connector"
 version = "0.1.0"
+authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
+license = "MIT"
+description = "Media Connector Component for Atm0s Media Server"
 
 [dependencies]
 log = { workspace = true }
@@ -25,8 +28,8 @@ sea-orm = { version = "1.1.0-rc.1", features = [
 sea-query = "0.32.0-rc.1"
 serde_json = "1.0"
 s3-presign = "0.0.3"
-uuid = {version = "1.10", features = ["fast-rng", "v7"]}
-reqwest = { version = "0.12", features = ["json"]}
+uuid = { version = "1.10", features = ["fast-rng", "v7"] }
+reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

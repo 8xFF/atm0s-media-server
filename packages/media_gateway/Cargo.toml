@@ -1,7 +1,10 @@
 [package]
 name = "media-server-gateway"
 version = "0.1.0"
+authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
+license = "MIT"
+description = "Media Gateway Component for Atm0s Media Server"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

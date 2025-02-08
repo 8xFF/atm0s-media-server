@@ -1,12 +1,17 @@
 [package]
 name = "media-server-secure"
 version = "0.1.0"
+authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
+license = "MIT"
+description = "Media Secure Component for Atm0s Media Server"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jwt-simple = { version = "0.12", optional = true, default-features=false, features=["pure-rust"] }
+jwt-simple = { version = "0.12", optional = true, default-features = false, features = [
+    "pure-rust",
+] }
 media-server-protocol = { path = "../protocol" }
 serde = { version = "1.0", features = ["derive"] }
 

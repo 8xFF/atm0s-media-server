@@ -1,7 +1,10 @@
 [package]
 name = "media-server-record"
 version = "0.1.0"
+authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
+license = "MIT"
+description = "Media Record Component for Atm0s Media Server"
 
 [dependencies]
 media-server-protocol = { path = "../protocol" }
