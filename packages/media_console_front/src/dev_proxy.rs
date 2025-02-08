@@ -117,7 +117,7 @@ impl ProxyConfig {
     /// and sets all other parameters to their default values. See
     /// [the default implementation](ProxyConfig::default) for more
     /// information.
-    pub fn new<'a>(target: impl Into<String>) -> ProxyConfig {
+    pub fn new(target: impl Into<String>) -> ProxyConfig {
         ProxyConfig {
             proxy_target: target.into(),
             ..ProxyConfig::default()
@@ -127,7 +127,7 @@ impl ProxyConfig {
     /// This function sets the endpoint to forward requests to the
     /// target over the https protocol. This is a secure and encrypted
     /// communication channel that should be utilized when possible.
-    pub fn web_secure<'a>(&'a mut self) -> &'a mut ProxyConfig {
+    pub fn web_secure(&mut self) -> &mut ProxyConfig {
         self.web_secure = Some(true);
         self
     }
@@ -135,7 +135,7 @@ impl ProxyConfig {
     /// This function sets the endpoint to forward requests to the
     /// target over the http protocol. This is an insecure and unencrypted
     /// communication channel that should be used very carefully.
-    pub fn web_insecure<'a>(&'a mut self) -> &'a mut ProxyConfig {
+    pub fn web_insecure(&mut self) -> &mut ProxyConfig {
         self.web_secure = Some(false);
         self
     }
@@ -146,7 +146,7 @@ impl ProxyConfig {
     /// if `endpoint.target` is `https://google.com` and the proxy is reached
     /// at `https://proxy_address/favicon.png`, the proxy server will forward
     /// the request to `https://google.com/favicon.png`.
-    pub fn enable_nesting<'a>(&'a mut self) -> &'a mut ProxyConfig {
+    pub fn enable_nesting(&mut self) -> &mut ProxyConfig {
         self.support_nesting = true;
         self
     }
@@ -157,7 +157,7 @@ impl ProxyConfig {
     /// if `endpoint.target` is `https://google.com` and the proxy is reached
     /// at `https://proxy_address/favicon.png`, the proxy server will forward
     /// the request to `https://google.com`.
-    pub fn disable_nesting<'a>(&'a mut self) -> &'a mut ProxyConfig {
+    pub fn disable_nesting(&mut self) -> &mut ProxyConfig {
         self.support_nesting = false;
         self
     }
@@ -165,7 +165,7 @@ impl ProxyConfig {
     /// Finishes off the building process by returning a new ProxyConfig object
     /// (not reference) that contains all the settings that were previously
     /// specified.
-    pub fn finish<'a>(&'a mut self) -> ProxyConfig {
+    pub fn finish(&mut self) -> ProxyConfig {
         self.clone()
     }
 }
@@ -191,11 +191,7 @@ impl ProxyConfig {
             format!("http://{}", self.proxy_target)
         };
 
-        let sub = if self.support_nesting && subpath.is_some() {
-            subpath.unwrap()
-        } else {
-            "".into()
-        };
+        let sub = self.support_nesting.then_some(subpath).flatten().unwrap_or_default();
 
         println!("base: {} | sub: {}", base, sub);
 

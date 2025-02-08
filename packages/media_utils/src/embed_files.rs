@@ -93,7 +93,7 @@ impl<E: RustEmbed + Send + Sync> Endpoint for EmbeddedFilesEndpoint<E> {
             Ok(Response::builder().status(StatusCode::FOUND).header(LOCATION, format!("{}/", original_path)).finish())
         } else {
             log::info!("path: {path} not found, fallback to index.html");
-            EmbeddedFileEndpoint::<E>::new(&format!("index.html")).call(req).await
+            EmbeddedFileEndpoint::<E>::new("index.html").call(req).await
         }
     }
 }
