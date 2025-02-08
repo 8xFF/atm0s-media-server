@@ -2,7 +2,7 @@
 use poem::EndpointExt;
 use poem::Route;
 
-mod dev_proxy;
+pub mod dev_proxy;
 
 /// only include in release build
 #[cfg(not(debug_assertions))]
