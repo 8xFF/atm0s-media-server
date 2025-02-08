@@ -2,6 +2,8 @@
 name = "audio-mixer"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Audio Mixer Component for Atm0s Media Server"
 
 [dependencies]
 log.workspace = true

@@ -2,6 +2,8 @@
 name = "media-server-utils"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Media Utils Component for Atm0s Media Server"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -32,4 +34,3 @@ criterion = { version = "0.5", features = ["html_reports"] }
 [[bench]]
 name = "map_bench"
 harness = false
-

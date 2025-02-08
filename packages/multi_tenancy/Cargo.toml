@@ -2,6 +2,8 @@
 name = "media-server-multi-tenancy"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Multi Tenancy Component for Atm0s Media Server"
 
 [dependencies]
 media-server-protocol = { path = "../protocol" }
@@ -9,7 +11,7 @@ media-server-secure = { path = "../media_secure", default-features = false }
 spin = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-reqwest = { version = "0.12", features = ["json"]}
+reqwest = { version = "0.12", features = ["json"] }
 tokio = { workspace = true, features = ["time"] }
 
 [dev-dependencies]

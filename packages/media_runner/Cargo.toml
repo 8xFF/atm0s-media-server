@@ -2,6 +2,8 @@
 name = "media-server-runner"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Media Runner Component for Atm0s Media Server"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

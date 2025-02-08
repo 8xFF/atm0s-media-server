@@ -2,6 +2,8 @@
 name = "media-server-record"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Media Record Component for Atm0s Media Server"
 
 [dependencies]
 media-server-protocol = { path = "../protocol" }
@@ -32,8 +34,27 @@ openssl = { version = "0.10", features = ["vendored"], optional = true }
 
 [features]
 default = ["convert_record", "convert_worker"]
-convert_record = ["tokio/full", "tracing-subscriber", "webm", "rtp", "clap", "chrono", "openssl"]
-convert_worker = ["tokio/full", "tracing-subscriber", "clap", "convert_record", "poem", "poem-openapi", "media-server-multi-tenancy", "media-server-connector", "media-server-secure", "media-server-codecs"]
+convert_record = [
+    "tokio/full",
+    "tracing-subscriber",
+    "webm",
+    "rtp",
+    "clap",
+    "chrono",
+    "openssl",
+]
+convert_worker = [
+    "tokio/full",
+    "tracing-subscriber",
+    "clap",
+    "convert_record",
+    "poem",
+    "poem-openapi",
+    "media-server-multi-tenancy",
+    "media-server-connector",
+    "media-server-secure",
+    "media-server-codecs",
+]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
