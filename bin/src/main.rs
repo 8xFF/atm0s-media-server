@@ -51,8 +51,16 @@ struct Args {
     node_ip_alt_cloud: Option<CloudProvider>,
 
     /// Enable private IP addresses for the node.
-    #[arg(env, long)]
+    #[arg(env, long, default_value_t = true)]
     enable_private_ip: bool,
+
+    /// Enable loopback IP addresses for the node.
+    #[arg(env, long)]
+    enable_loopback_ip: bool,
+
+    /// Enable ip from interface's name list, default is allow all.
+    #[arg(env, long, value_delimiter = ',')]
+    enable_interfaces: Option<Vec<String>>,
 
     /// Enable IPv6 support.
     #[arg(env, long)]
@@ -146,12 +154,16 @@ async fn main() {
         local_ip_address::list_afinet_netifas()
             .expect("Should have list interfaces")
             .into_iter()
-            .filter(|(_, ip)| {
-                let allow = match ip {
-                    IpAddr::V4(ipv4) => !ipv4.is_private() || args.enable_private_ip,
-                    IpAddr::V6(ipv6) => !ipv6.is_unspecified() && !ipv6.is_multicast() && (!ipv6.is_loopback() || args.enable_private_ip) && args.enable_ipv6,
+            .filter(|(name, ip)| {
+                let allow_ip_type = match ip {
+                    IpAddr::V4(ipv4) => {
+                        !ipv4.is_unspecified() && !ipv4.is_multicast() && !ipv4.is_link_local() && (!ipv4.is_loopback() || args.enable_loopback_ip) && (!ipv4.is_private() || args.enable_private_ip)
+                    }
+                    IpAddr::V6(ipv6) => args.enable_ipv6 && !ipv6.is_unspecified() && !ipv6.is_multicast() && (!ipv6.is_loopback() || args.enable_loopback_ip),
                 };
-                allow && std::net::UdpSocket::bind(SocketAddr::new(*ip, sdn_port)).is_ok()
+                let allow_interface = args.enable_interfaces.as_ref().map(|names| names.iter().any(|i| i.eq(name.as_str()))).unwrap_or(true);
+                log::info!("Interface {name} ip {ip} => allow_ip_type {allow_ip_type}, allow_interface {allow_interface}");
+                (allow_ip_type && allow_interface) && std::net::UdpSocket::bind(SocketAddr::new(*ip, sdn_port)).is_ok()
             })
             .map(|(_name, ip)| SocketAddr::new(ip, sdn_port))
             .collect::<Vec<_>>()
@@ -177,6 +189,9 @@ async fn main() {
         log::info!("Generated seeds {:?}", addrs);
         node.seeds = addrs;
     }
+
+    // Remove self address for avoiding circular loop
+    node.seeds.retain(|addr| addr.node_id() != node.node_id);
 
     let local = tokio::task::LocalSet::new();
     local

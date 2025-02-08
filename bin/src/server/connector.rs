@@ -177,7 +177,7 @@ pub async fn run_media_connector(workers: usize, http_port: Option<u16>, node: N
                     connector_storage.on_tick().await;
                 }
                 select2::OrOutput::Right(Some((from, ts, req_id, event))) => {
-                    match connector_storage.on_event(from, ts, event).await {
+                    match connector_storage.on_event(from, ts, req_id, event).await {
                         Some(res) => {
                             if let Err(e) = connector_handler_control_tx.send(handler_service::Control::Res(from, req_id, res)).await {
                                 log::error!("[Connector] send control to service error {:?}", e);
