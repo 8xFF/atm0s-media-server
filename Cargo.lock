@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "atm0s-media-server-connector",
  "atm0s-media-server-console-front",
@@ -509,7 +509,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-audio-mixer"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "indexmap",
  "log",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-protocol"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bincode",
  "convert-enum",
@@ -702,7 +702,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-transport-webrtc"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "atm0s-media-server-core",
  "atm0s-media-server-protocol",
@@ -719,7 +719,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-utils"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "criterion",
  "derive_more",

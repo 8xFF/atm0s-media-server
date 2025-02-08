@@ -20,20 +20,20 @@ members = [
 ]
 
 [workspace.dependencies]
-audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.1.1" }
-media-server-utils = { package = "atm0s-media-server-utils", path = "packages/media_utils", version = "0.2.1" }
+audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.2.0" }
+media-server-utils = { package = "atm0s-media-server-utils", path = "packages/media_utils", version = "0.2.2" }
 media-server-core = { package = "atm0s-media-server-core", path = "packages/media_core", version = "0.1.0" }
 media-server-runner = { package = "atm0s-media-server-runner", path = "packages/media_runner", version = "0.1.0" }
-media-server-protocol = { package = "atm0s-media-server-protocol", path = "packages/protocol", version = "0.1.1" }
+media-server-protocol = { package = "atm0s-media-server-protocol", path = "packages/protocol", version = "0.1.2" }
 media-server-console-front = { package = "atm0s-media-server-console-front", path = "packages/media_console_front", version = "0.1.0" }
 media-server-connector = { package = "atm0s-media-server-connector", path = "packages/media_connector", version = "0.1.0" }
 media-server-record = { package = "atm0s-media-server-record", path = "packages/media_record", version = "0.1.0", default-features = false }
 media-server-gateway = { package = "atm0s-media-server-gateway", path = "packages/media_gateway", version = "0.1.0" }
-media-server-audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.1.0" }
+media-server-audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.2.0" }
 media-server-secure = { package = "atm0s-media-server-secure", path = "packages/media_secure", version = "0.1.0", default-features = false }
 media-server-codecs = { package = "atm0s-media-server-codecs", path = "packages/media_codecs", version = "0.1.0", default-features = false }
 media-server-multi-tenancy = { package = "atm0s-media-server-multi-tenancy", path = "packages/multi_tenancy", version = "0.1.0" }
-transport-webrtc = { package = "atm0s-media-server-transport-webrtc", path = "packages/transport_webrtc", version = "0.2.2" }
+transport-webrtc = { package = "atm0s-media-server-transport-webrtc", path = "packages/transport_webrtc", version = "0.3.0" }
 transport-rtpengine = { package = "atm0s-media-server-transport-rtpengine", path = "packages/transport_rtpengine", version = "0.1.0" }
 
 sans-io-runtime = { version = "0.3", default-features = false }
