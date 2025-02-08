@@ -1,5 +1,5 @@
 [package]
-name = "media-server-multi-tenancy"
+name = "atm0s-media-server-multi-tenancy"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -7,12 +7,13 @@ license = "MIT"
 description = "Multi Tenancy Component for Atm0s Media Server"
 
 [dependencies]
-media-server-protocol = { path = "../protocol" }
-media-server-secure = { path = "../media_secure", default-features = false }
+media-server-protocol = { workspace = true }
+media-server-secure = { workspace = true, default-features = false }
+
 spin = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { workspace = true, features = ["json"] }
 tokio = { workspace = true, features = ["time"] }
 
 [dev-dependencies]

@@ -1,5 +1,5 @@
 [package]
-name = "media-console-front"
+name = "atm0s-media-server-console-front"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -7,8 +7,9 @@ license = "MIT"
 description = "Console Frontend Component for Atm0s Media Server"
 
 [dependencies]
-poem = { version = "3.0", features = [] }
-rust-embed = { version = "8.0", features = ["compression"] }
-reqwest = { version = "0.12" }
+media-server-utils = { workspace = true, features = ["embed-files"] }
+
+poem = { workspace = true, features = [] }
+rust-embed = { workspace = true, features = ["compression"] }
+reqwest = { workspace = true }
 log = { workspace = true }
-media-server-utils = { path = "../media_utils", features = ["embed-files"] }

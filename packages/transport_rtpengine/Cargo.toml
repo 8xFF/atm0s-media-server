@@ -1,5 +1,5 @@
 [package]
-name = "transport-rtpengine"
+name = "atm0s-media-server-transport-rtpengine"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -11,13 +11,12 @@ log = { workspace = true }
 num_enum = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 sans-io-runtime = { workspace = true, default-features = false }
-media-server-secure = { path = "../media_secure" }
-media-server-core = { path = "../media_core" }
-media-server-protocol = { path = "../protocol" }
-media-server-utils = { path = "../media_utils" }
-media-server-codecs = { path = "../media_codecs", default-features = false, features = [
+media-server-core = { workspace = true }
+media-server-protocol = { workspace = true }
+media-server-utils = { workspace = true }
+media-server-codecs = { workspace = true, default-features = false, features = [
     "pcma",
     "opus",
 ] }
-sdp-rs = "0.2"
-rtp-rs = "0.6"
+sdp-rs = { workspace = true }
+rtp-rs = { workspace = true }

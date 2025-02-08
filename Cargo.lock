@@ -472,6 +472,15 @@ dependencies = [
 name = "atm0s-media-server"
 version = "0.1.0"
 dependencies = [
+ "atm0s-media-server-connector",
+ "atm0s-media-server-console-front",
+ "atm0s-media-server-gateway",
+ "atm0s-media-server-multi-tenancy",
+ "atm0s-media-server-protocol",
+ "atm0s-media-server-record",
+ "atm0s-media-server-runner",
+ "atm0s-media-server-secure",
+ "atm0s-media-server-utils",
  "atm0s-sdn",
  "clap",
  "convert-enum",
@@ -479,15 +488,6 @@ dependencies = [
  "local-ip-address",
  "log",
  "maxminddb",
- "media-console-front",
- "media-server-connector",
- "media-server-gateway",
- "media-server-multi-tenancy",
- "media-server-protocol",
- "media-server-record",
- "media-server-runner",
- "media-server-secure",
- "media-server-utils",
  "num_enum",
  "poem",
  "poem-openapi",
@@ -505,6 +505,238 @@ dependencies = [
  "systemstat",
  "tokio",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "atm0s-media-server-audio-mixer"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "log",
+]
+
+[[package]]
+name = "atm0s-media-server-codecs"
+version = "0.1.0"
+dependencies = [
+ "libsoxr",
+ "opusic-sys",
+]
+
+[[package]]
+name = "atm0s-media-server-connector"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "atm0s-media-server-multi-tenancy",
+ "atm0s-media-server-protocol",
+ "atm0s-media-server-utils",
+ "atm0s-sdn",
+ "clap",
+ "log",
+ "lru",
+ "prost",
+ "reqwest",
+ "s3-presign",
+ "sea-orm",
+ "sea-orm-migration",
+ "sea-query",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "atm0s-media-server-console-front"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-utils",
+ "log",
+ "poem",
+ "reqwest",
+ "rust-embed",
+]
+
+[[package]]
+name = "atm0s-media-server-core"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-audio-mixer",
+ "atm0s-media-server-protocol",
+ "atm0s-media-server-utils",
+ "atm0s-sdn",
+ "derivative",
+ "derive_more",
+ "indexmap",
+ "log",
+ "mockall",
+ "num_enum",
+ "sans-io-runtime",
+ "test-log",
+]
+
+[[package]]
+name = "atm0s-media-server-gateway"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-protocol",
+ "atm0s-sdn",
+ "derive_more",
+ "log",
+ "prost",
+ "serde",
+ "spin",
+ "tokio",
+]
+
+[[package]]
+name = "atm0s-media-server-multi-tenancy"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-protocol",
+ "atm0s-media-server-secure",
+ "httpmock",
+ "log",
+ "reqwest",
+ "serde",
+ "spin",
+ "tokio",
+]
+
+[[package]]
+name = "atm0s-media-server-protocol"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "convert-enum",
+ "derivative",
+ "derive_more",
+ "log",
+ "prost",
+ "prost-build",
+ "quinn",
+ "rand 0.8.5",
+ "serde",
+ "tera",
+ "tokio",
+]
+
+[[package]]
+name = "atm0s-media-server-record"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-codecs",
+ "atm0s-media-server-connector",
+ "atm0s-media-server-multi-tenancy",
+ "atm0s-media-server-protocol",
+ "atm0s-media-server-secure",
+ "atm0s-media-server-utils",
+ "bytes 1.10.0",
+ "chrono",
+ "clap",
+ "futures",
+ "log",
+ "openssl",
+ "poem",
+ "poem-openapi",
+ "rand 0.8.5",
+ "reqwest",
+ "rtp",
+ "rusty-s3",
+ "serde",
+ "serde_json",
+ "surf",
+ "tokio",
+ "tokio-util",
+ "tracing-subscriber",
+ "webm",
+]
+
+[[package]]
+name = "atm0s-media-server-runner"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-connector",
+ "atm0s-media-server-core",
+ "atm0s-media-server-gateway",
+ "atm0s-media-server-protocol",
+ "atm0s-media-server-secure",
+ "atm0s-media-server-transport-rtpengine",
+ "atm0s-media-server-transport-webrtc",
+ "atm0s-sdn",
+ "atm0s-sdn-network",
+ "convert-enum",
+ "indexmap",
+ "log",
+ "num_enum",
+ "rand 0.8.5",
+ "sans-io-runtime",
+]
+
+[[package]]
+name = "atm0s-media-server-secure"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-protocol",
+ "jwt-simple",
+ "serde",
+]
+
+[[package]]
+name = "atm0s-media-server-transport-rtpengine"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-codecs",
+ "atm0s-media-server-core",
+ "atm0s-media-server-protocol",
+ "atm0s-media-server-utils",
+ "derive_more",
+ "log",
+ "num_enum",
+ "rtp-rs",
+ "sans-io-runtime",
+ "sdp-rs",
+]
+
+[[package]]
+name = "atm0s-media-server-transport-webrtc"
+version = "0.1.0"
+dependencies = [
+ "atm0s-media-server-core",
+ "atm0s-media-server-protocol",
+ "atm0s-media-server-secure",
+ "atm0s-media-server-utils",
+ "derive_more",
+ "indexmap",
+ "log",
+ "num_enum",
+ "prost",
+ "sans-io-runtime",
+ "str0m",
+]
+
+[[package]]
+name = "atm0s-media-server-utils"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "derive_more",
+ "hex",
+ "indexmap",
+ "log",
+ "mime_guess",
+ "once_cell",
+ "pin-project-lite",
+ "poem",
+ "rust-embed",
+ "serde",
+ "serde-querystring",
+ "sorted-vec",
+ "spin",
+ "uriparse",
+ "urlencoding",
 ]
 
 [[package]]
@@ -603,14 +835,6 @@ name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
-
-[[package]]
-name = "audio-mixer"
-version = "0.1.0"
-dependencies = [
- "indexmap",
- "log",
-]
 
 [[package]]
 name = "autocfg"
@@ -3455,202 +3679,6 @@ checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
  "cfg-if",
  "digest 0.10.7",
-]
-
-[[package]]
-name = "media-console-front"
-version = "0.1.0"
-dependencies = [
- "log",
- "media-server-utils",
- "poem",
- "reqwest",
- "rust-embed",
-]
-
-[[package]]
-name = "media-server-codecs"
-version = "0.1.0"
-dependencies = [
- "libsoxr",
- "log",
- "opusic-sys",
-]
-
-[[package]]
-name = "media-server-connector"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "atm0s-sdn",
- "clap",
- "log",
- "lru",
- "media-server-multi-tenancy",
- "media-server-protocol",
- "media-server-utils",
- "prost",
- "reqwest",
- "s3-presign",
- "sea-orm",
- "sea-orm-migration",
- "sea-query",
- "serde",
- "serde_json",
- "tokio",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "media-server-core"
-version = "0.1.0"
-dependencies = [
- "atm0s-sdn",
- "audio-mixer",
- "derivative",
- "derive_more",
- "indexmap",
- "log",
- "media-server-protocol",
- "media-server-utils",
- "mockall",
- "num_enum",
- "sans-io-runtime",
- "test-log",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "media-server-gateway"
-version = "0.1.0"
-dependencies = [
- "atm0s-sdn",
- "derive_more",
- "httpmock",
- "log",
- "media-server-protocol",
- "media-server-secure",
- "media-server-utils",
- "prost",
- "serde",
- "spin",
- "tokio",
-]
-
-[[package]]
-name = "media-server-multi-tenancy"
-version = "0.1.0"
-dependencies = [
- "httpmock",
- "log",
- "media-server-protocol",
- "media-server-secure",
- "reqwest",
- "serde",
- "spin",
- "tokio",
-]
-
-[[package]]
-name = "media-server-protocol"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "convert-enum",
- "derivative",
- "derive_more",
- "log",
- "prost",
- "prost-build",
- "quinn",
- "rand 0.8.5",
- "serde",
- "tera",
- "tokio",
-]
-
-[[package]]
-name = "media-server-record"
-version = "0.1.0"
-dependencies = [
- "bytes 1.10.0",
- "chrono",
- "clap",
- "futures",
- "log",
- "media-server-codecs",
- "media-server-connector",
- "media-server-multi-tenancy",
- "media-server-protocol",
- "media-server-secure",
- "media-server-utils",
- "openssl",
- "poem",
- "poem-openapi",
- "rand 0.8.5",
- "reqwest",
- "rtp",
- "rusty-s3",
- "serde",
- "serde_json",
- "surf",
- "tokio",
- "tokio-util",
- "tracing-subscriber",
- "webm",
-]
-
-[[package]]
-name = "media-server-runner"
-version = "0.1.0"
-dependencies = [
- "atm0s-sdn",
- "atm0s-sdn-network",
- "convert-enum",
- "indexmap",
- "log",
- "media-server-connector",
- "media-server-core",
- "media-server-gateway",
- "media-server-protocol",
- "media-server-secure",
- "num_enum",
- "rand 0.8.5",
- "sans-io-runtime",
- "transport-rtpengine",
- "transport-webrtc",
-]
-
-[[package]]
-name = "media-server-secure"
-version = "0.1.0"
-dependencies = [
- "jwt-simple",
- "media-server-protocol",
- "serde",
-]
-
-[[package]]
-name = "media-server-utils"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "derive_more",
- "hex",
- "indexmap",
- "log",
- "mime_guess",
- "once_cell",
- "pin-project-lite",
- "poem",
- "rust-embed",
- "serde",
- "serde-querystring",
- "sorted-vec",
- "spin",
- "uriparse",
- "urlencoding",
 ]
 
 [[package]]
@@ -7038,40 +7066,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "transport-rtpengine"
-version = "0.1.0"
-dependencies = [
- "derive_more",
- "log",
- "media-server-codecs",
- "media-server-core",
- "media-server-protocol",
- "media-server-secure",
- "media-server-utils",
- "num_enum",
- "rtp-rs",
- "sans-io-runtime",
- "sdp-rs",
-]
-
-[[package]]
-name = "transport-webrtc"
-version = "0.1.0"
-dependencies = [
- "derive_more",
- "indexmap",
- "log",
- "media-server-core",
- "media-server-protocol",
- "media-server-secure",
- "media-server-utils",
- "num_enum",
- "prost",
- "sans-io-runtime",
- "str0m",
 ]
 
 [[package]]

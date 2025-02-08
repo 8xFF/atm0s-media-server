@@ -1,5 +1,5 @@
 [package]
-name = "audio-mixer"
+name = "atm0s-media-server-audio-mixer"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"

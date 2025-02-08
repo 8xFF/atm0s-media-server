@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "bin",
+    "packages/audio_mixer",
     "packages/protocol",
     "packages/media_utils",
     "packages/media_core",
@@ -19,9 +20,25 @@ members = [
 ]
 
 [workspace.dependencies]
+audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.1.0" }
+media-server-utils = { package = "atm0s-media-server-utils", path = "packages/media_utils", version = "0.1.0" }
+media-server-core = { package = "atm0s-media-server-core", path = "packages/media_core", version = "0.1.0" }
+media-server-runner = { package = "atm0s-media-server-runner", path = "packages/media_runner", version = "0.1.0" }
+media-server-protocol = { package = "atm0s-media-server-protocol", path = "packages/protocol", version = "0.1.0" }
+media-server-console-front = { package = "atm0s-media-server-console-front", path = "packages/media_console_front", version = "0.1.0" }
+media-server-connector = { package = "atm0s-media-server-connector", path = "packages/media_connector", version = "0.1.0" }
+media-server-record = { package = "atm0s-media-server-record", path = "packages/media_record", version = "0.1.0", default-features = false }
+media-server-gateway = { package = "atm0s-media-server-gateway", path = "packages/media_gateway", version = "0.1.0" }
+media-server-audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.1.0" }
+media-server-secure = { package = "atm0s-media-server-secure", path = "packages/media_secure", version = "0.1.0", default-features = false }
+media-server-codecs = { package = "atm0s-media-server-codecs", path = "packages/media_codecs", version = "0.1.0", default-features = false }
+media-server-multi-tenancy = { package = "atm0s-media-server-multi-tenancy", path = "packages/multi_tenancy", version = "0.1.0" }
+transport-webrtc = { package = "atm0s-media-server-transport-webrtc", path = "packages/transport_webrtc", version = "0.1.0" }
+transport-rtpengine = { package = "atm0s-media-server-transport-rtpengine", path = "packages/transport_rtpengine", version = "0.1.0" }
+
 sans-io-runtime = { version = "0.3", default-features = false }
-atm0s-sdn = { version = "0.2.5", default-features = false }
-atm0s-sdn-network = { version = "0.6.2", default-features = false }
+atm0s-sdn = { version = "0.2", default-features = false }
+atm0s-sdn-network = { version = "0.6", default-features = false }
 tokio = "1.37"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std"] }
 convert-enum = "0.1"
@@ -29,12 +46,58 @@ clap = "4.5"
 num_enum = "0.7"
 log = "0.4"
 serde = "1.0"
+serde_json = "1.0"
 derivative = "2.2"
 derive_more = "1.0"
 rand = "0.8"
 mockall = "0.13"
 prost = "0.13"
+prost-build = "0.13"
+tera = "1"
+quinn = "0.11"
+bincode = "1"
 indexmap = "2.2"
 spin = "0.9"
 httpmock = "0.7"
 test-log = "0.2"
+str0m = "0.6"
+sdp-rs = "0.2"
+rtp-rs = "0.6"
+reqwest = "0.12"
+sorted-vec = "0.8"
+uriparse = "0.6"
+serde-querystring = "0.2"
+pin-project-lite = "0.2"
+once_cell = "1.20"
+urlencoding = "2.1"
+poem = "3.0"
+rust-embed = "8.0"
+hex = "0.4"
+mime_guess = "2.0"
+criterion = "0.5"
+jwt-simple = { version = "0.12", default-features = false }
+tokio-util = "0.7"
+rusty-s3 = "0.7"
+futures = "0.3"
+bytes = "1.6"
+surf = "2.3"
+webm = "1.1"
+rtp = "0.11"
+poem-openapi = "5.0"
+chrono = "0.4"
+openssl = "0.10"
+lru = "0.12"
+async-trait = "0.1"
+sea-orm-migration = "1.1.0-rc.1"
+sea-orm = { version = "1.1.0-rc.1" }
+sea-query = "0.32.0-rc.1"
+s3-presign = "0.0.3"
+uuid = "1.10"
+libsoxr = "0.2"
+opusic-sys = "0.5"
+rustls = "0.23"
+sentry = "0.34"
+local-ip-address = "0.6"
+rcgen = "0.13"
+maxminddb = "0.24"
+systemstat = "0.2"

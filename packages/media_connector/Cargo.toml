@@ -1,5 +1,5 @@
 [package]
-name = "media-server-connector"
+name = "atm0s-media-server-connector"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -7,30 +7,31 @@ license = "MIT"
 description = "Media Connector Component for Atm0s Media Server"
 
 [dependencies]
+media-server-multi-tenancy = { workspace = true }
+media-server-protocol = { workspace = true }
+media-server-utils = { workspace = true }
+
 log = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-media-server-multi-tenancy = { path = "../multi_tenancy" }
-media-server-protocol = { path = "../protocol" }
-media-server-utils = { path = "../media_utils" }
 atm0s-sdn = { workspace = true }
 prost = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
-lru = "0.12"
-async-trait = "0.1"
-sea-orm-migration = "1.1.0-rc.1"
-sea-orm = { version = "1.1.0-rc.1", features = [
+lru = { workspace = true }
+async-trait = { workspace = true }
+sea-orm-migration = { workspace = true }
+sea-orm = { workspace = true, features = [
     "sqlx-sqlite",
     "sqlx-postgres",
     "sqlx-mysql",
     "runtime-tokio-rustls",
 ] }
-sea-query = "0.32.0-rc.1"
-serde_json = "1.0"
-s3-presign = "0.0.3"
-uuid = { version = "1.10", features = ["fast-rng", "v7"] }
-reqwest = { version = "0.12", features = ["json"] }
+sea-query = { workspace = true }
+serde_json = { workspace = true }
+s3-presign = { workspace = true }
+uuid = { workspace = true, features = ["fast-rng", "v7"] }
+reqwest = { workspace = true, features = ["json"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
 tracing-subscriber = { workspace = true }

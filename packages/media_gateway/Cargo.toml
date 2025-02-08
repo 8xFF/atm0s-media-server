@@ -1,5 +1,5 @@
 [package]
-name = "media-server-gateway"
+name = "atm0s-media-server-gateway"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -11,14 +11,9 @@ description = "Media Gateway Component for Atm0s Media Server"
 [dependencies]
 log = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-media-server-protocol = { path = "../protocol" }
-media-server-utils = { path = "../media_utils" }
-media-server-secure = { path = "../media_secure", default-features = false }
+media-server-protocol = { workspace = true }
 atm0s-sdn = { workspace = true }
 prost = { workspace = true }
 spin = { workspace = true }
 derive_more = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
-
-[dev-dependencies]
-httpmock = { workspace = true }

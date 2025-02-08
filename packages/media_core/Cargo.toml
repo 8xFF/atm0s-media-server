@@ -1,5 +1,5 @@
 [package]
-name = "media-server-core"
+name = "atm0s-media-server-core"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -9,6 +9,10 @@ description = "Media Core Component for Atm0s Media Server"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+media-server-protocol = { workspace = true }
+media-server-utils = { workspace = true }
+audio-mixer = { workspace = true }
+
 log = { workspace = true }
 num_enum = { workspace = true }
 indexmap = { workspace = true }
@@ -17,10 +21,6 @@ derive_more = { workspace = true, features = ["full"] }
 mockall = { workspace = true }
 sans-io-runtime = { workspace = true, default-features = false }
 atm0s-sdn = { workspace = true }
-media-server-protocol = { path = "../protocol" }
-media-server-utils = { path = "../media_utils" }
-audio-mixer = { path = "../audio_mixer" }
 
 [dev-dependencies]
-tracing-subscriber = { workspace = true }
 test-log = { workspace = true }

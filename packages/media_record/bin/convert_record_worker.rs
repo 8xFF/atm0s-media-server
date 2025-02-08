@@ -7,7 +7,7 @@ use media_server_protocol::protobuf::cluster_connector::{
     compose_event::{self, record_job_completed::ComposeSummary, RecordJobCompleted, RecordJobFailed},
     hook_event, ComposeEvent, HookEvent,
 };
-use media_server_record::{
+use atm0s_media_server_record::{
     convert::{RecordComposerConfig, RecordConvert, RecordConvertConfig, RecordConvertOutputLocation},
     convert_s3_uri,
 };
