@@ -196,7 +196,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --verbose --release --package media-server-record --target ${{ matrix.target }} --bin convert_record_cli
+          args: --verbose --release --package atm0s-media-server-record --target ${{ matrix.target }} --bin convert_record_cli
 
       - name: Build record worker
         if: matrix.build_record_worker
@@ -204,7 +204,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --verbose --release --package media-server-record --target ${{ matrix.target }} --bin convert_record_worker
+          args: --verbose --release --package atm0s-media-server-record --target ${{ matrix.target }} --bin convert_record_worker
 
       - name: Rename server
         if: ${{ matrix.build != 'windows gnu x64' && matrix.build != 'windows msvc x64' }}
