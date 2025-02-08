@@ -9,7 +9,7 @@ description = "Atm0s Media Server"
 
 [dependencies]
 media-server-protocol = { workspace = true, features = ["quinn-rpc"] }
-media-server-secure = { workspace = true }
+media-server-secure = { workspace = true, features = ["jwt-secure"] }
 media-server-console-front = { workspace = true, optional = true }
 media-server-runner = { workspace = true, optional = true }
 media-server-gateway = { workspace = true, optional = true }
