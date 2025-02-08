@@ -4,9 +4,7 @@ on:
     branches: [master]
     tags:
       - "atm0s-media-server-v*.*.*"
-  create:
-    tags:
-      - "atm0s-media-server-v*.*.*"
+
   workflow_dispatch:
 
 concurrency:
@@ -21,47 +19,11 @@ env:
   LIBOPUS_STATIC: true
   LIBSOXR_STATIC: true
   OPENSSL_STATIC: true
+  SKIP_BUILD_CONSOLE_FRONT: true
 
 jobs:
-  build-console:
-    name: build-frontend
-    runs-on: ubuntu-22.04
-    env:
-      NEXT_PUBLIC_API_URL: /api/
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        name: Install pnpm
-        with:
-          version: 8
-          run_install: false
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Build dashboard
-        run: |
-          VERSION=$(cat bin/CONSOLE_FRONTEND)
-          git clone https://github.com/8xFF/atm0s-media-server-console.git
-          cd atm0s-media-server-console
-          git checkout $VERSION
-          pnpm install
-          cd apps/console
-          pnpm build
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: console-frontend
-          path: atm0s-media-server-console/apps/console/out
-
   build-release:
     name: build-release
-    needs: build-console
     runs-on: ${{ matrix.os }}
     env:
       RUST_BACKTRACE: 1
@@ -200,10 +162,22 @@ jobs:
           sudo apt-get install -y --no-install-recommends pkg-config musl-dev musl-tools
           sudo ln -s /bin/g++ /bin/musl-g++
 
-      - uses: actions/download-artifact@v4
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
         with:
-          name: console-frontend
-          path: bin/public/console
+            version: 8
+            run_install: false
+  
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+            node-version: 20
+
+      - name: Build console
+        working-directory: ./packages/media_console_front/react-app
+        run: |
+          pnpm install
+          pnpm build
 
       - name: Patch some libs
         run: |
@@ -214,7 +188,7 @@ jobs:
         with:
           use-cross: ${{ matrix.cross }}
           command: build
-          args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }} --features embed_static
+          args: --verbose --release --package ${{ env.APP_NAME }} --target ${{ matrix.target }}
 
       - name: Build record tool
         if: matrix.build_record_tool

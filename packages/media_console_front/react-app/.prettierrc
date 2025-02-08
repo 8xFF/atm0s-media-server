@@ -1,0 +1,18 @@
+{
+  "singleQuote": true,
+  "semi": false,
+  "printWidth": 125,
+  "bracketSameLine": false,
+  "embeddedLanguageFormatting": "auto",
+  "htmlWhitespaceSensitivity": "css",
+  "insertPragma": false,
+  "jsxSingleQuote": false,
+  "proseWrap": "preserve",
+  "quoteProps": "as-needed",
+  "requirePragma": false,
+  "tabWidth": 2,
+  "trailingComma": "es5",
+  "vueIndentScriptAndStyle": false,
+  "plugins": ["prettier-plugin-organize-imports", "prettier-plugin-tailwindcss", "prettier-plugin-packagejson"],
+  "tailwindFunctions": ["cn", "tv", "cx", "clsx", "cva"]
+}

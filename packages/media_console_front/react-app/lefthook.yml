@@ -1,0 +1,12 @@
+pre-commit:
+  parallel: true
+  commands:
+    eslint:
+      glob: '*.{js,ts,jsx,tsx}'
+      run: pnpm eslint {staged_files}
+    prettier:
+      glob: '*.{js,ts,jsx,tsx}'
+      run: pnpm prettier --write {staged_files}
+    tsc:
+      glob: '*.{js,ts,jsx,tsx}'
+      run: pnpm tsc --noEmit
