@@ -510,8 +510,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.2.4"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-discovery-node-by-service-broadcast#be35ed4998534530d53ef5a100dba07a6bc4bd2f"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b29514ec48e841ec75e613bc1c3f33eaff4fb61503aa94bc81834e44097a17a5"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -529,8 +530,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-identity"
-version = "0.3.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-discovery-node-by-service-broadcast#be35ed4998534530d53ef5a100dba07a6bc4bd2f"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26d0ca102a93abaa95cfafe606afc45e1d098cbc353b519898fcf8dbc13cca02"
 dependencies = [
  "multiaddr",
  "rand 0.8.5",
@@ -539,8 +541,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-network"
-version = "0.6.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-discovery-node-by-service-broadcast#be35ed4998534530d53ef5a100dba07a6bc4bd2f"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30e06cbc9cbcc10336be6ffd95ab2ee1b7bd46ede72ad88e54e5d0ac9d962d30"
 dependencies = [
  "aes-gcm 0.10.3",
  "atm0s-sdn-identity",
@@ -566,8 +569,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-router"
-version = "0.2.3"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-discovery-node-by-service-broadcast#be35ed4998534530d53ef5a100dba07a6bc4bd2f"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58054af0245f7197422dcd890ff8dbc2a4df2547b16f2dccc3029ed75e578a81"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-utils",
@@ -579,7 +583,8 @@ dependencies = [
 [[package]]
 name = "atm0s-sdn-utils"
 version = "0.2.1"
-source = "git+https://github.com/giangndm/8xFF-decentralized-sdn.git?branch=feat-discovery-node-by-service-broadcast#be35ed4998534530d53ef5a100dba07a6bc4bd2f"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "437f8450fd7095986c5bce4abd7ad03e95f1651a214b8727976363c86d6b9cc9"
 dependencies = [
  "log",
  "serde",
@@ -3745,7 +3750,6 @@ dependencies = [
  "serde",
  "static_assertions",
  "unsigned-varint",
- "url",
 ]
 
 [[package]]
