@@ -1,5 +1,5 @@
 [package]
-name = "media-server-codecs"
+name = "atm0s-media-server-codecs"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -7,9 +7,8 @@ license = "MIT"
 description = "Media Codecs Component for Atm0s Media Server"
 
 [dependencies]
-log = { workspace = true }
-libsoxr = { version = "0.2", optional = true }
-opusic-sys = { version = "0.5", optional = true }
+libsoxr = { workspace = true, optional = true }
+opusic-sys = { workspace = true, optional = true }
 
 [features]
 default = ["opus", "pcma", "resample"]

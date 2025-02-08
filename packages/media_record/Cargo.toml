@@ -1,5 +1,5 @@
 [package]
-name = "media-server-record"
+name = "atm0s-media-server-record"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -7,31 +7,32 @@ license = "MIT"
 description = "Media Record Component for Atm0s Media Server"
 
 [dependencies]
-media-server-protocol = { path = "../protocol" }
-media-server-multi-tenancy = { path = "../multi_tenancy", optional = true }
-media-server-utils = { path = "../media_utils" }
-media-server-connector = { path = "../media_connector", optional = true }
-media-server-secure = { path = "../media_secure", optional = true }
-media-server-codecs = { path = "../media_codecs", optional = true }
+media-server-protocol = { workspace = true }
+media-server-multi-tenancy = { workspace = true, optional = true }
+media-server-utils = { workspace = true }
+media-server-connector = { workspace = true, optional = true }
+media-server-secure = { workspace = true, optional = true }
+media-server-codecs = { workspace = true, optional = true }
+
 log = { workspace = true }
-tokio = { version = "1", features = ["sync", "fs"] }
+tokio = { workspace = true, features = ["sync", "fs"] }
 rand = { workspace = true }
-reqwest = { version = "0.12", features = ["stream"] }
-tokio-util = "0.7.11"
-rusty-s3 = "0.7"
-futures = "0.3.30"
-bytes = "1.6.0"
-surf = "2.3.2"
+reqwest = { workspace = true, features = ["stream"] }
+tokio-util = { workspace = true }
+rusty-s3 = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+surf = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
-webm = { version = "1.1.2", optional = true }
-rtp = { version = "0.11.0", optional = true }
-clap = { version = "4.5", features = ["env", "derive"], optional = true }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.120"
-poem = { version = "3.0", features = ["static-files"], optional = true }
-poem-openapi = { version = "5.0", features = ["swagger-ui"], optional = true }
-chrono = { version = "0.4", optional = true }
-openssl = { version = "0.10", features = ["vendored"], optional = true }
+webm = { workspace = true, optional = true }
+rtp = { workspace = true, optional = true }
+clap = { workspace = true, features = ["env", "derive"], optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+poem = { workspace = true, features = ["static-files"], optional = true }
+poem-openapi = { workspace = true, features = ["swagger-ui"], optional = true }
+chrono = { workspace = true, optional = true }
+openssl = { workspace = true, features = ["vendored"], optional = true }
 
 [features]
 default = ["convert_record", "convert_worker"]

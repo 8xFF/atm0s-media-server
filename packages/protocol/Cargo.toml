@@ -1,5 +1,5 @@
 [package]
-name = "media-server-protocol"
+name = "atm0s-media-server-protocol"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -9,21 +9,21 @@ description = "Core Protocol Component for Atm0s Media Server"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bincode = "1.3"
+bincode = { workspace = true }
 log = { workspace = true }
 convert-enum = { workspace = true }
 derivative = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 rand = { workspace = true }
 prost = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
-quinn = { version = "0.11", optional = true }
-tokio = { version = "1", features = ["rt"] }
+serde = { workspace = true, features = ["derive"] }
+quinn = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["rt"] }
 
 [build-dependencies]
-prost-build = "0.13"
-tera = "1"
-serde = { version = "1.0.200", features = ["derive"] }
+prost-build = { workspace = true }
+tera = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 [features]
 default = []

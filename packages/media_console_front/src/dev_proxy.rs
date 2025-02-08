@@ -12,7 +12,7 @@
 //!
 //! ```
 //! use poem::{get, handler, listener::TcpListener, web::Path, IntoResponse, Route, Server, EndpointExt};
-//! use media_console_front::dev_proxy::{proxy, ProxyConfig};
+//! use atm0s_media_server_console_front::dev_proxy::{proxy, ProxyConfig};
 //!
 //! let pconfig = ProxyConfig::new( "localhost:5173" )
 //!     .web_insecure()   // Enables proxy-ing web requests, sets the proxy to use http instead of https
@@ -32,7 +32,7 @@
 //! overview:
 //!
 //! ```
-//! use media_console_front::dev_proxy::ProxyConfig;
+//! use atm0s_media_server_console_front::dev_proxy::ProxyConfig;
 //!     
 //! // Configure proxy endpoint, pass in the target server address and port number
 //! let proxy_config = ProxyConfig::new( "localhost:5173" ) // 5173 is for Sveltekit

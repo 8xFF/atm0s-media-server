@@ -1,5 +1,5 @@
 [package]
-name = "media-server-runner"
+name = "atm0s-media-server-runner"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -14,17 +14,17 @@ log = { workspace = true }
 num_enum = { workspace = true }
 convert-enum = { workspace = true }
 indexmap = { workspace = true }
-media-server-protocol = { path = "../protocol" }
-media-server-secure = { path = "../media_secure" }
-media-server-gateway = { path = "../media_gateway" }
-media-server-connector = { path = "../media_connector" }
-media-server-core = { path = "../media_core" }
+media-server-protocol = { workspace = true }
+media-server-secure = { workspace = true }
+media-server-gateway = { workspace = true }
+media-server-connector = { workspace = true }
+media-server-core = { workspace = true }
 
 sans-io-runtime = { workspace = true, default-features = false }
 atm0s-sdn = { workspace = true }
 atm0s-sdn-network = { workspace = true }
-transport-webrtc = { path = "../transport_webrtc", optional = true }
-transport-rtpengine = { path = "../transport_rtpengine", optional = true }
+transport-webrtc = { workspace = true, optional = true }
+transport-rtpengine = { workspace = true, optional = true }
 
 [features]
 default = ["webrtc", "rtpengine"]

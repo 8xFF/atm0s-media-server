@@ -90,7 +90,7 @@ pub async fn run_console_http_server(
     let ctx = api_console::ConsoleApisCtx { secure, storage, connector };
 
     let route = Route::new()
-        .nest("/", media_console_front::frontend_app())
+        .nest("/", media_server_console_front::frontend_app())
         //node
         .nest("/api/node/", node_service)
         .nest("/api/node/ui", node_ui)

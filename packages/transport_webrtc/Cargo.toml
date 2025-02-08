@@ -1,5 +1,5 @@
 [package]
-name = "transport-webrtc"
+name = "atm0s-media-server-transport-webrtc"
 version = "0.1.0"
 authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
@@ -9,14 +9,15 @@ description = "Transport Webrtc Component for Atm0s Media Server"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+media-server-utils = { workspace = true }
+media-server-protocol = { workspace = true }
+media-server-secure = { workspace = true }
+media-server-core = { workspace = true }
+
 log = { workspace = true }
 num_enum = { workspace = true }
 indexmap = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 sans-io-runtime = { workspace = true, default-features = false }
 prost = { workspace = true }
-media-server-utils = { path = "../media_utils" }
-media-server-protocol = { path = "../protocol" }
-media-server-secure = { path = "../media_secure" }
-media-server-core = { path = "../media_core" }
-str0m = "0.6"
+str0m = { workspace = true }
