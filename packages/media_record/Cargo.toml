@@ -15,7 +15,7 @@ tokio = { version = "1", features = ["sync", "fs"] }
 rand = { workspace = true }
 reqwest = { version = "0.12", features = ["stream"] }
 tokio-util = "0.7.11"
-rusty-s3 = { git = "https://github.com/giangndm/rusty-s3.git", branch = "main" }
+rusty-s3 = "0.7"
 futures = "0.3.30"
 bytes = "1.6.0"
 surf = "2.3.2"
@@ -32,8 +32,27 @@ openssl = { version = "0.10", features = ["vendored"], optional = true }
 
 [features]
 default = ["convert_record", "convert_worker"]
-convert_record = ["tokio/full", "tracing-subscriber", "webm", "rtp", "clap", "chrono", "openssl"]
-convert_worker = ["tokio/full", "tracing-subscriber", "clap", "convert_record", "poem", "poem-openapi", "media-server-multi-tenancy", "media-server-connector", "media-server-secure", "media-server-codecs"]
+convert_record = [
+    "tokio/full",
+    "tracing-subscriber",
+    "webm",
+    "rtp",
+    "clap",
+    "chrono",
+    "openssl",
+]
+convert_worker = [
+    "tokio/full",
+    "tracing-subscriber",
+    "clap",
+    "convert_record",
+    "poem",
+    "poem-openapi",
+    "media-server-multi-tenancy",
+    "media-server-connector",
+    "media-server-secure",
+    "media-server-codecs",
+]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
