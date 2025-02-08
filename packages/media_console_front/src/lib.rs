@@ -22,6 +22,14 @@ pub fn frontend_app() -> Route {
         println!("Running in development mode, starting Vite dev server...");
         std::process::Command::new("pnpm")
             .current_dir(format!("{}/react-app", env!("CARGO_MANIFEST_DIR")))
+            .args(&["install"])
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .spawn()
+            .expect("Failed to install dependencies");
+
+        std::process::Command::new("pnpm")
+            .current_dir(format!("{}/react-app", env!("CARGO_MANIFEST_DIR")))
             .args(&["run", "dev"])
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
