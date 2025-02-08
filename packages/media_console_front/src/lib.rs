@@ -30,15 +30,17 @@ pub fn frontend_app() -> Route {
             .wait()
             .expect("Failed to install dependencies");
 
-        std::process::Command::new("pnpm")
-            .current_dir(format!("{}/react-app", env!("CARGO_MANIFEST_DIR")))
-            .args(["run", "dev"])
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .spawn()
-            .expect("Failed to start Vite dev server")
-            .wait()
-            .expect("Failed to start Vite dev server");
+        std::thread::spawn(|| {
+            std::process::Command::new("pnpm")
+                .current_dir(format!("{}/react-app", env!("CARGO_MANIFEST_DIR")))
+                .args(["run", "dev"])
+                .stdout(std::process::Stdio::inherit())
+                .stderr(std::process::Stdio::inherit())
+                .spawn()
+                .expect("Failed to start Vite dev server")
+                .wait()
+                .expect("Failed to start Vite dev server");
+        });
 
         // Proxy frontend requests to Vite
         Route::new().nest("/", dev_proxy::proxy.data(pconfig)) // You can add your API here
