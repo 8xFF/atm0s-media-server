@@ -11,6 +11,7 @@ members = [
     "packages/media_secure",
     "packages/media_gateway",
     "packages/audio_mixer",
+    "packages/media_console_front",
     "packages/media_connector",
     "packages/media_record",
     "packages/media_codecs",

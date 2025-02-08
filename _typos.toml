@@ -4,6 +4,7 @@ extend-exclude = ["*.js", "CHANGELOG.md", "Cargo.lock", "*.sdp", "*.cert", "*.ke
 [default]
 extend-ignore-re = [
     "eyJhbGciOiJIUzI1NiJ9.[A-Za-z0-9_-]+.[A-Za-z0-9_-]+",
+    "pk.ey[A-Za-z0-9_-]+.[A-Za-z0-9_-]+",
     "H264_NALU_[A-Z_-]+",
 ]
 
