@@ -4,8 +4,7 @@ use std::{
 };
 
 use media_server_gateway::NodeMetrics;
-use sans_io_runtime::ErrorDebugger2;
-use sysinfo::{Disks, System};
+use systemstat::{Platform, System};
 
 const REFRESH_INTERVAL_SECONDS: u64 = 2;
 
@@ -16,41 +15,16 @@ pub struct NodeMetricsCollector {
 impl Default for NodeMetricsCollector {
     fn default() -> Self {
         let (tx, rx) = channel();
-        let mut sys = System::new_all();
-        let mut disks = Disks::new();
+        let sys = System::new();
 
-        disks.refresh_list();
-        sys.refresh_all();
-        sys.refresh_cpu_all();
-
-        std::thread::spawn(move || {
-            loop {
-                disks.refresh();
-                sys.refresh_all();
-                sys.refresh_cpu_all();
-
-                let mut sum = 0.0;
-                for cpu in sys.cpus() {
-                    sum += cpu.cpu_usage();
+        std::thread::spawn(move || loop {
+            match measure(&sys, Duration::from_secs(REFRESH_INTERVAL_SECONDS)) {
+                Ok(metric) => {
+                    let _ = tx.send(metric);
                 }
-
-                let mut disk_used = 0;
-                let mut disk_sum = 0;
-                for disk in disks.iter() {
-                    disk_sum += disk.total_space();
-                    disk_used += disk.total_space() - disk.available_space();
+                Err(e) => {
+                    log::error!("[NodeMetricsCollector] failed to collect metrics {e:?}")
                 }
-
-                tx.send(NodeMetrics {
-                    cpu: (sum as usize / sys.cpus().len()) as u8,
-                    memory: (100 * sys.used_memory() / sys.total_memory()) as u8,
-                    disk: (100 * disk_used / disk_sum) as u8,
-                })
-                .print_err2("Collect node metrics error");
-
-                // Sleeping to let time for the system to run for long
-                // enough to have useful information.
-                std::thread::sleep(Duration::from_secs(REFRESH_INTERVAL_SECONDS));
             }
         });
 
@@ -64,4 +38,35 @@ impl NodeMetricsCollector {
     pub fn pop_measure(&mut self) -> Option<NodeMetrics> {
         self.rx.try_recv().ok()
     }
+}
+
+fn measure(sys: &impl Platform, delay: Duration) -> std::io::Result<NodeMetrics> {
+    let mounts = sys.mounts()?;
+    #[cfg(not(target_os = "macos"))]
+    let cpu = {
+        let cpu = sys.cpu_load_aggregate()?;
+        std::thread::sleep(delay);
+        let cpu = cpu.done()?;
+        ((1.0 - cpu.idle) * 100.0) as u8
+    };
+    //TODO implement macos get CPU usage
+    #[cfg(target_os = "macos")]
+    let cpu = {
+        std::thread::sleep(delay);
+        0
+    };
+    let memory = sys.memory()?;
+
+    let mut disk_used = 0;
+    let mut disk_sum = 0;
+    for mount in mounts {
+        disk_sum += mount.total.as_u64();
+        disk_used += mount.total.as_u64() - mount.avail.as_u64();
+    }
+
+    Ok(NodeMetrics {
+        cpu,
+        memory: (100 * (memory.total.as_u64() - memory.free.as_u64()) / memory.total.as_u64()) as u8,
+        disk: (100 * disk_used / disk_sum) as u8,
+    })
 }

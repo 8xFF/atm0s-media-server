@@ -40,7 +40,7 @@ num_enum = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 rcgen = { version = "0.13", optional = true }
 maxminddb = { version = "0.24", optional = true }
-sysinfo = { version = "0.32", optional = true }
+systemstat = { version = "0.2", optional = true }
 reqwest = { version = "0.12", features = ["json"] }
 sentry = "0.34"
 
@@ -85,4 +85,4 @@ connector = [
 ]
 cert_utils = ["rcgen", "rustls"]
 quinn_vnet = ["rustls", "quinn"]
-node_metrics = ["sysinfo"]
+node_metrics = ["systemstat"]
