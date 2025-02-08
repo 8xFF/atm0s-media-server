@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server"
-version = "0.1.4"
+version = "0.2.0-alpha.1"
 dependencies = [
  "atm0s-media-server-connector",
  "atm0s-media-server-console-front",
@@ -509,7 +509,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-audio-mixer"
-version = "0.1.1"
+version = "0.2.0-alpha.1"
 dependencies = [
  "indexmap",
  "log",
@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-codecs"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "libsoxr",
  "opusic-sys",
@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-connector"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "async-trait",
  "atm0s-media-server-multi-tenancy",
@@ -550,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-console-front"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atm0s-media-server-utils",
  "log",
@@ -561,7 +561,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-core"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atm0s-media-server-audio-mixer",
  "atm0s-media-server-protocol",
@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-gateway"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atm0s-media-server-protocol",
  "atm0s-sdn",
@@ -593,7 +593,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-multi-tenancy"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atm0s-media-server-protocol",
  "atm0s-media-server-secure",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-protocol"
-version = "0.1.1"
+version = "0.2.0-alpha.1"
 dependencies = [
  "bincode",
  "convert-enum",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-record"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atm0s-media-server-codecs",
  "atm0s-media-server-connector",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-runner"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atm0s-media-server-connector",
  "atm0s-media-server-core",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-secure"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atm0s-media-server-protocol",
  "jwt-simple",
@@ -686,7 +686,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-transport-rtpengine"
-version = "0.1.0"
+version = "0.1.0-alpha.1"
 dependencies = [
  "atm0s-media-server-codecs",
  "atm0s-media-server-core",
@@ -702,7 +702,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-transport-webrtc"
-version = "0.2.2"
+version = "0.3.0-alpha.1"
 dependencies = [
  "atm0s-media-server-core",
  "atm0s-media-server-protocol",
@@ -719,7 +719,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-utils"
-version = "0.2.1"
+version = "0.3.0-alpha.1"
 dependencies = [
  "criterion",
  "derive_more",
