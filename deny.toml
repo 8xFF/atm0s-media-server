@@ -69,4 +69,5 @@ allow = [
   "X11",                                    # https://en.wikipedia.org/wiki/MIT_License
   "X11-distribute-modifications-variant",   # https://spdx.org/licenses/X11-distribute-modifications-variant.html
   "Unicode-3.0",                            # https://spdx.org/licenses/Unicode-3.0.html
+  "Unlicense",                              # https://unlicense.org/
 ]
