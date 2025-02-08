@@ -1,6 +1,6 @@
 [package]
 name = "atm0s-media-server"
-version = "0.1.0"
+version = "0.1.4"
 edition = "2021"
 license = "MIT"
 description = "Atm0s Media Server"
