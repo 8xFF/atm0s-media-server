@@ -124,7 +124,7 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
         }
 
         while let Ok(seed) = seed_rx.try_recv() {
-            controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::ConnectTo(seed, true).into()));
+            controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::ConnectTo(seed, true)));
         }
 
         while let Some(out) = controller.pop_event() {

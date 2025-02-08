@@ -249,7 +249,7 @@ pub async fn run_media_connector(workers: usize, http_port: Option<u16>, node: N
         }
 
         while let Ok(seed) = seed_rx.try_recv() {
-            controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::ConnectTo(seed, true).into()));
+            controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::ConnectTo(seed, true)));
         }
 
         while let Some(out) = controller.pop_event() {
