@@ -2,7 +2,7 @@
 use poem::EndpointExt;
 use poem::Route;
 
-mod dev_proxy;
+pub mod dev_proxy;
 
 /// only include in release build
 #[cfg(not(debug_assertions))]
@@ -22,18 +22,22 @@ pub fn frontend_app() -> Route {
         println!("Running in development mode, starting Vite dev server...");
         std::process::Command::new("pnpm")
             .current_dir(format!("{}/react-app", env!("CARGO_MANIFEST_DIR")))
-            .args(&["install"])
+            .args(["install"])
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
             .spawn()
+            .expect("Failed to install dependencies")
+            .wait()
             .expect("Failed to install dependencies");
 
         std::process::Command::new("pnpm")
             .current_dir(format!("{}/react-app", env!("CARGO_MANIFEST_DIR")))
-            .args(&["run", "dev"])
+            .args(["run", "dev"])
             .stdout(std::process::Stdio::inherit())
             .stderr(std::process::Stdio::inherit())
             .spawn()
+            .expect("Failed to start Vite dev server")
+            .wait()
             .expect("Failed to start Vite dev server");
 
         // Proxy frontend requests to Vite
