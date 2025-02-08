@@ -1,6 +1,7 @@
 [package]
 name = "media-server-connector"
 version = "0.1.0"
+authors = ["Giang Minh <giang.ndm@gmail.com>"]
 edition = "2021"
 license = "MIT"
 description = "Media Connector Component for Atm0s Media Server"
