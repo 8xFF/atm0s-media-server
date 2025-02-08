@@ -263,7 +263,7 @@ jobs:
     # only run if not a tags build
     if: startsWith(github.ref, 'refs/tags/') == false
     needs: build-release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
       - name: Display structure of downloaded files
@@ -281,7 +281,7 @@ jobs:
 
   deploy-docker:
     needs: build-release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

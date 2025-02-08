@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 as base
+FROM ubuntu:24.04 as base
 ARG TARGETPLATFORM
 COPY . /tmp
 WORKDIR /tmp
@@ -18,7 +18,7 @@ RUN case $TARGETPLATFORM in \
     chmod +x /convert_record_cli; \
     chmod +x /convert_record_worker
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 
 # install wget & curl
 RUN apt update && apt install -y wget curl && apt clean && rm -rf /var/lib/apt/lists/*

@@ -16,7 +16,7 @@ env:
 
 jobs:
   code-coverage:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       CARGO_TERM_COLOR: always
     steps:
@@ -76,7 +76,7 @@ jobs:
           # - x86_64-pc-windows-gnu
           # - x86_64-pc-windows-msvc
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v1
