@@ -201,7 +201,8 @@ where
     }
 
     fn discoverable(&self) -> bool {
-        false
+        // we need enable discovery for allow gateways to find us
+        true
     }
 
     fn create(&self) -> Box<dyn Service<UserData, FeaturesControl, FeaturesEvent, SC, SE, TC, TW>> {

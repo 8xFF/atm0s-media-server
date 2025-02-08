@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use atm0s_sdn::{
-    features::{router_sync, FeaturesEvent},
+    features::{neighbours, router_sync, FeaturesControl, FeaturesEvent},
     secure::StaticKeyAuthorization,
     services::visualization,
     SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner,
@@ -15,7 +15,6 @@ use media_server_multi_tenancy::{MultiTenancyStorage, MultiTenancySync};
 use media_server_protocol::{
     cluster::{ClusterNodeGenericInfo, ClusterNodeInfo},
     connector::CONNECTOR_RPC_PORT,
-    gateway::generate_gateway_zone_tag,
     protobuf::cluster_connector::{connector_response, MediaConnectorServiceServer},
     rpc::quinn::QuinnServer,
 };
@@ -27,6 +26,7 @@ use crate::{
     http::{run_connector_http_server, NodeApiCtx},
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_server, VirtualNetwork},
+    seeds::refresh_seeds,
     NodeConfig,
 };
 use sans_io_runtime::backend::PollingBackend;
@@ -131,12 +131,8 @@ pub async fn run_media_connector(workers: usize, http_port: Option<u16>, node: N
     });
 
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
-    builder.set_manual_discovery(vec!["connector".to_string()], vec![generate_gateway_zone_tag(node.zone)]);
+    builder.set_manual2_discovery(vec![], 1000);
     builder.add_service(Arc::new(ConnectorHandlerServiceBuilder::new()));
-
-    for seed in node.seeds {
-        builder.add_seed(seed);
-    }
 
     let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers, node_info);
 
@@ -166,6 +162,11 @@ pub async fn run_media_connector(workers: usize, http_port: Option<u16>, node: N
 
     // Subscribe ConnectorHandler service
     controller.service_control(HANDLER_SERVICE_ID.into(), (), handler_service::Control::Sub.into());
+
+    // Subscribe Neighbours feature
+    controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::Sub));
+    let (seed_tx, mut seed_rx) = channel(100);
+    refresh_seeds(node_id, &node.seeds, node.seeds_from_url.as_deref(), seed_tx.clone());
 
     let (connector_storage_tx, mut connector_storage_rx) = channel(1024);
     let (connector_handler_control_tx, mut connector_handler_control_rx) = channel(1024);
@@ -247,6 +248,10 @@ pub async fn run_media_connector(workers: usize, http_port: Option<u16>, node: N
             wait_dump_router.push(v);
         }
 
+        while let Ok(seed) = seed_rx.try_recv() {
+            controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::ConnectTo(seed, true)));
+        }
+
         while let Some(out) = controller.pop_event() {
             match out {
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
@@ -254,6 +259,18 @@ pub async fn run_media_connector(workers: usize, http_port: Option<u16>, node: N
                         if let Err(e) = connector_storage_tx.send((from, ts, req_id, event)).await {
                             log::error!("[MediaConnector] send event to storage error {:?}", e);
                         }
+                    }
+                },
+                SdnExtOut::FeaturesEvent(_, FeaturesEvent::Neighbours(event)) => match event {
+                    neighbours::Event::Connected(neighbour, conn_id) => {
+                        log::info!("Neighbour connected: {:?} {}", neighbour, conn_id);
+                    }
+                    neighbours::Event::Disconnected(neighbour, conn_id) => {
+                        log::info!("Neighbour disconnected: {:?} {}", neighbour, conn_id);
+                    }
+                    neighbours::Event::SeedAddressNeeded => {
+                        log::info!("Seed address needed");
+                        refresh_seeds(node_id, &node.seeds, node.seeds_from_url.as_deref(), seed_tx.clone());
                     }
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {

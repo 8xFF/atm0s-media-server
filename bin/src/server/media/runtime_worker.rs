@@ -69,7 +69,6 @@ impl<ES: 'static + MediaEdgeSecure> WorkerInner<Owner, ExtIn, ExtOut, Channel, E
             cfg.controller,
             cfg.node.bind_addrs,
             cfg.node.bind_addrs_alt,
-            cfg.node.zone,
             cfg.media,
         );
         log::info!("created worker");

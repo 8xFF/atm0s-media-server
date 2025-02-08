@@ -68,7 +68,7 @@ impl ServiceGenerator for GenericRpcGenerator {
 struct StringWriter<'a>(&'a mut String);
 
 #[cfg(feature = "build-protobuf")]
-impl<'a> std::io::Write for StringWriter<'a> {
+impl std::io::Write for StringWriter<'_> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         self.0.write_str(String::from_utf8_lossy(buf).to_string().as_str()).expect("Should write ok");
         Ok(buf.len())

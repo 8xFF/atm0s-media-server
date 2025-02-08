@@ -1,10 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use atm0s_sdn::{
-    features::{router_sync, FeaturesEvent},
+    features::{neighbours, router_sync, FeaturesControl, FeaturesEvent},
     secure::StaticKeyAuthorization,
-    services::visualization,
-    SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner,
+    services::{manual2_discovery::AdvertiseTarget, visualization},
+    SdnBuilder, SdnControllerUtils, SdnExtOut, SdnOwner, ServiceBroadcastLevel,
 };
 use clap::Parser;
 use media_server_connector::agent_service::ConnectorAgentServiceBuilder;
@@ -12,7 +12,7 @@ use media_server_gateway::{store_service::GatewayStoreServiceBuilder, STORE_SERV
 use media_server_multi_tenancy::{MultiTenancyStorage, MultiTenancySync};
 use media_server_protocol::{
     cluster::{ClusterGatewayInfo, ClusterNodeGenericInfo, ClusterNodeInfo},
-    gateway::{generate_gateway_zone_tag, GATEWAY_RPC_PORT},
+    gateway::GATEWAY_RPC_PORT,
     protobuf::cluster_gateway::{MediaEdgeServiceClient, MediaEdgeServiceServer},
     rpc::quinn::{QuinnClient, QuinnServer},
 };
@@ -25,6 +25,7 @@ use crate::{
     http::{run_gateway_http_server, NodeApiCtx},
     node_metrics::NodeMetricsCollector,
     quinn::{make_quinn_client, make_quinn_server, VirtualNetwork},
+    seeds::refresh_seeds,
     NodeConfig,
 };
 use sans_io_runtime::{backend::PollingBackend, ErrorDebugger2};
@@ -137,13 +138,19 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     );
 
     builder.set_authorization(StaticKeyAuthorization::new(&node.secret));
-    builder.set_manual_discovery(vec!["gateway".to_string(), generate_gateway_zone_tag(node.zone)], vec!["gateway".to_string()]);
+    builder.set_manual2_discovery(
+        vec![
+            // for broadcasting to all zone's gateway nodes
+            AdvertiseTarget::new(media_server_gateway::STORE_SERVICE_ID.into(), ServiceBroadcastLevel::Global),
+            // for broadcasting to all zone's connector nodes
+            AdvertiseTarget::new(media_server_connector::HANDLER_SERVICE_ID.into(), ServiceBroadcastLevel::Group),
+            // for broadcasting to all zone's media nodes
+            AdvertiseTarget::new(media_server_gateway::AGENT_SERVICE_ID.into(), ServiceBroadcastLevel::Group),
+        ],
+        1000,
+    );
     builder.add_service(Arc::new(GatewayStoreServiceBuilder::new(node.zone, args.lat, args.lon, args.max_cpu, args.max_memory, args.max_disk)));
     builder.add_service(Arc::new(ConnectorAgentServiceBuilder::new()));
-
-    for seed in node.seeds {
-        builder.add_seed(seed);
-    }
 
     let mut controller = builder.build::<PollingBackend<SdnOwner, 128, 128>>(workers, node_info);
     let (selector, mut requester) = build_dest_selector();
@@ -204,6 +211,11 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
     // Subscribe ConnectorHandler service
     controller.service_control(media_server_connector::AGENT_SERVICE_ID.into(), (), media_server_connector::agent_service::Control::Sub.into());
 
+    // Subscribe Neighbours feature
+    controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::Sub));
+    let (seed_tx, mut seed_rx) = channel(100);
+    refresh_seeds(node_id, &node.seeds, node.seeds_from_url.as_deref(), seed_tx.clone());
+
     // List all waiting router dump requests
     let mut wait_dump_router = vec![];
 
@@ -257,6 +269,10 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
             wait_dump_router.push(v);
         }
 
+        while let Ok(seed) = seed_rx.try_recv() {
+            controller.feature_control((), FeaturesControl::Neighbours(neighbours::Control::ConnectTo(seed, true)));
+        }
+
         while let Some(out) = controller.pop_event() {
             match out {
                 SdnExtOut::ServicesEvent(_, _, SE::Gateway(event)) => match event {
@@ -270,6 +286,18 @@ pub async fn run_media_gateway(workers: usize, http_port: Option<u16>, node: Nod
                 SdnExtOut::ServicesEvent(_, _, SE::Connector(event)) => match event {
                     media_server_connector::agent_service::Event::Stats { queue: _, inflight: _, acked: _ } => {}
                     media_server_connector::agent_service::Event::Response(_) => {}
+                },
+                SdnExtOut::FeaturesEvent(_, FeaturesEvent::Neighbours(event)) => match event {
+                    neighbours::Event::Connected(neighbour, conn_id) => {
+                        log::info!("Neighbour connected: {:?} {}", neighbour, conn_id);
+                    }
+                    neighbours::Event::Disconnected(neighbour, conn_id) => {
+                        log::info!("Neighbour disconnected: {:?} {}", neighbour, conn_id);
+                    }
+                    neighbours::Event::SeedAddressNeeded => {
+                        log::info!("Seed address needed");
+                        refresh_seeds(node_id, &node.seeds, node.seeds_from_url.as_deref(), seed_tx.clone());
+                    }
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Socket(event)) => {
                     if let Err(e) = vnet_tx.try_send(event) {

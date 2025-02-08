@@ -14,6 +14,7 @@ mod node_metrics;
 #[cfg(feature = "quinn_vnet")]
 mod quinn;
 mod rpc;
+mod seeds;
 pub mod server;
 
 #[derive(Clone)]
@@ -21,22 +22,10 @@ pub struct NodeConfig {
     pub node_id: NodeId,
     pub secret: String,
     pub seeds: Vec<NodeAddr>,
+    pub seeds_from_url: Option<String>,
     pub bind_addrs: Vec<SocketAddr>,
     pub zone: ZoneId,
     pub bind_addrs_alt: Vec<SocketAddr>,
-}
-
-/// Fetch node addrs from the given url.
-/// The url should return a list of node addrs in JSON format or a single node addr.
-pub async fn fetch_node_addrs_from_api(url: &str) -> Result<Vec<NodeAddr>, String> {
-    let resp = reqwest::get(url).await.map_err(|e| e.to_string())?;
-    let content = resp.text().await.map_err(|e| e.to_string())?;
-    if content.starts_with('[') {
-        let node_addrs: Vec<String> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        Ok(node_addrs.into_iter().flat_map(|addr| NodeAddr::from_str(&addr)).collect())
-    } else {
-        Ok(vec![NodeAddr::from_str(&content).map_err(|e| e.to_string())?])
-    }
 }
 
 #[derive(Debug, Clone, ValueEnum)]

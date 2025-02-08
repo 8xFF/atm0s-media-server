@@ -1,7 +1,7 @@
 use std::net::{IpAddr, SocketAddr};
 
-use atm0s_media_server::{fetch_node_addrs_from_api, server, NodeConfig};
 use atm0s_media_server::{fetch_node_ip_alt_from_cloud, CloudProvider};
+use atm0s_media_server::{server, NodeConfig};
 use atm0s_sdn::NodeAddr;
 use clap::Parser;
 use media_server_protocol::cluster::ZoneId;
@@ -168,10 +168,11 @@ async fn main() {
             .map(|(_name, ip)| SocketAddr::new(ip, sdn_port))
             .collect::<Vec<_>>()
     };
-    let mut node = NodeConfig {
+    let node = NodeConfig {
         node_id: ZoneId(args.sdn_zone_id).to_node_id(auto_generated_node_id.unwrap_or(args.sdn_zone_node_id)),
         secret: args.secret,
         seeds: args.seeds,
+        seeds_from_url: args.seeds_from_url,
         bind_addrs,
         zone: ZoneId(args.sdn_zone_id),
         bind_addrs_alt: node_ip_alt_cloud
@@ -182,16 +183,6 @@ async fn main() {
     };
 
     log::info!("Bind addrs {:?}, bind addrs alt {:?}", node.bind_addrs, node.bind_addrs_alt);
-
-    if let Some(url) = args.seeds_from_url {
-        log::info!("Generate seeds from node_api {}", url);
-        let addrs = fetch_node_addrs_from_api(&url).await.expect("should get seeds");
-        log::info!("Generated seeds {:?}", addrs);
-        node.seeds = addrs;
-    }
-
-    // Remove self address for avoiding circular loop
-    node.seeds.retain(|addr| addr.node_id() != node.node_id);
 
     let local = tokio::task::LocalSet::new();
     local
