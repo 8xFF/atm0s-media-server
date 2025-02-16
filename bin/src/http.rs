@@ -66,6 +66,8 @@ pub async fn run_console_http_server(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use poem::middleware::Tracing;
 
+    use crate::server::console::socket::console_websocket_handle;
+
     let node_api = api_node::Apis::new(node);
     let node_service = OpenApiService::new(node_api, "Node APIs", env!("CARGO_PKG_VERSION")).server("/api/node/");
     let node_ui = node_service.swagger_ui();
@@ -86,11 +88,13 @@ pub async fn run_console_http_server(
     let connector_service: OpenApiService<_, ()> = OpenApiService::new(api_console::connector::Apis, "Connector APIs", env!("CARGO_PKG_VERSION")).server("/api/connector/");
     let connector_ui = connector_service.swagger_ui();
     let connector_spec = connector_service.spec();
+    let storage1 = storage.clone();
 
     let ctx = api_console::ConsoleApisCtx { secure, storage, connector };
 
     let route = Route::new()
         .nest("/", media_server_console_front::frontend_app())
+        .nest("/ws", console_websocket_handle(storage1))
         //node
         .nest("/api/node/", node_service)
         .nest("/api/node/ui", node_ui)

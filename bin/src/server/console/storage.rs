@@ -5,11 +5,13 @@ use std::{
 
 use atm0s_sdn::{services::visualization::ConnectionInfo, NodeId};
 use media_server_protocol::cluster::{ClusterGatewayInfo, ClusterMediaInfo, ClusterNodeGenericInfo, ClusterNodeInfo, ZoneId};
+use serde::{Deserialize, Serialize};
 
 const NODE_TIMEOUT: u64 = 30_000;
 
-#[derive(poem_openapi::Object, Clone, Debug, PartialEq, Eq)]
+#[derive(poem_openapi::Object, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Connection {
+    pub id: u64,
     pub node: NodeId,
     pub addr: String,
     pub rtt_ms: u32,
@@ -18,6 +20,7 @@ pub struct Connection {
 impl From<ConnectionInfo> for Connection {
     fn from(value: ConnectionInfo) -> Self {
         Self {
+            id: value.conn.session(),
             node: value.dest,
             addr: value.remote.to_string(),
             rtt_ms: value.rtt_ms,
@@ -130,9 +133,35 @@ struct ZoneContainer {
     connectors: HashMap<u32, ConnectorContainer>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkNodeData {
+    pub id: NodeId,
+    pub zone_id: u32,
+    pub info: ClusterNodeGenericInfo,
+    pub conns: Vec<Connection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum NetworkNodeEvent {
+    #[serde(rename = "snapshot")]
+    Snapshot(Vec<NetworkNodeData>),
+    #[serde(rename = "on_changed")]
+    OnChanged(NetworkNodeData),
+    #[serde(rename = "on_removed")]
+    OnRemoved(Vec<NodeId>),
+}
+
+#[derive(Debug)]
 struct Storage {
     zones: HashMap<ZoneId, ZoneContainer>,
+    sender: tokio::sync::broadcast::Sender<NetworkNodeEvent>,
+}
+
+impl Storage {
+    pub fn new(sender: tokio::sync::broadcast::Sender<NetworkNodeEvent>) -> Self {
+        Self { zones: HashMap::new(), sender }
+    }
 }
 
 impl Storage {
@@ -147,6 +176,18 @@ impl Storage {
     }
 
     pub fn on_ping(&mut self, now: u64, node: NodeId, info: ClusterNodeInfo, conns: Vec<ConnectionInfo>) {
+        let node_data = NetworkNodeData {
+            id: node,
+            zone_id: ZoneId::from_node_id(node).0,
+            info: match &info {
+                ClusterNodeInfo::Console(generic) => generic.clone(),
+                ClusterNodeInfo::Gateway(generic, _) => generic.clone(),
+                ClusterNodeInfo::Media(generic, _) => generic.clone(),
+                ClusterNodeInfo::Connector(generic) => generic.clone(),
+            },
+            conns: conns.iter().map(|c| c.clone().into()).collect::<Vec<_>>(),
+        };
+
         match info {
             ClusterNodeInfo::Console(generic) => {
                 let zone_id = ZoneId::from_node_id(node);
@@ -206,6 +247,23 @@ impl Storage {
                 );
                 log::info!("Zone {zone_id:?} on console ping, after zones {}", self.zones.len());
             }
+        }
+
+        if let Err(e) = self.sender.send(NetworkNodeEvent::OnChanged(node_data)) {
+            log::error!("Failed to send on_changed event: {:?}", e);
+        }
+    }
+
+    pub fn on_node_removed(&mut self, now: u64, node: NodeId) {
+        let zone_id = ZoneId::from_node_id(node);
+        let zone = self.zones.entry(zone_id).or_default();
+        zone.consoles.remove(&node);
+        zone.gateways.remove(&node);
+        zone.medias.remove(&node);
+        zone.connectors.remove(&node);
+
+        if let Err(e) = self.sender.send(NetworkNodeEvent::OnRemoved(vec![node])) {
+            log::error!("Failed to send on_removed event: {:?}", e);
         }
     }
 
@@ -302,11 +360,57 @@ impl Storage {
                 .collect::<Vec<_>>(),
         })
     }
+
+    pub fn network_node(&self) -> Vec<NetworkNodeData> {
+        self.zones
+            .iter()
+            .flat_map(|(zone_id, z)| {
+                z.consoles
+                    .iter()
+                    .map(|(id, g)| NetworkNodeData {
+                        id: *id,
+                        zone_id: zone_id.0,
+                        info: g.generic.clone(),
+                        conns: g.conns.iter().map(|c| c.clone()).collect::<Vec<_>>(),
+                    })
+                    .chain(z.gateways.iter().map(|(id, g)| NetworkNodeData {
+                        id: *id,
+                        zone_id: zone_id.0,
+                        info: g.generic.clone(),
+                        conns: g.conns.iter().map(|c| c.clone()).collect::<Vec<_>>(),
+                    }))
+                    .chain(z.medias.iter().map(|(id, g)| NetworkNodeData {
+                        id: *id,
+                        zone_id: zone_id.0,
+                        info: g.generic.clone(),
+                        conns: g.conns.iter().map(|c| c.clone()).collect::<Vec<_>>(),
+                    }))
+                    .chain(z.connectors.iter().map(|(id, g)| NetworkNodeData {
+                        id: *id,
+                        zone_id: zone_id.0,
+                        info: g.generic.clone(),
+                        conns: g.conns.iter().map(|c| c.clone()).collect::<Vec<_>>(),
+                    }))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct StorageShared {
     storage: Arc<RwLock<Storage>>,
+    receiver: Arc<tokio::sync::broadcast::Receiver<NetworkNodeEvent>>,
+}
+
+impl Default for StorageShared {
+    fn default() -> Self {
+        let (sender, receiver) = tokio::sync::broadcast::channel(1024);
+        Self {
+            storage: Arc::new(RwLock::new(Storage::new(sender))),
+            receiver: Arc::new(receiver),
+        }
+    }
 }
 
 impl StorageShared {
@@ -316,6 +420,10 @@ impl StorageShared {
 
     pub fn on_ping(&self, now: u64, node: NodeId, info: ClusterNodeInfo, conns: Vec<ConnectionInfo>) {
         self.storage.write().expect("should lock storage").on_ping(now, node, info, conns);
+    }
+
+    pub fn on_node_removed(&self, now: u64, node: NodeId) {
+        self.storage.write().expect("should lock storage").on_node_removed(now, node);
     }
 
     pub fn consoles(&self) -> Vec<ConsoleNode> {
@@ -329,6 +437,14 @@ impl StorageShared {
     pub fn zone(&self, zone_id: ZoneId) -> Option<ZoneDetails> {
         self.storage.read().expect("should lock storage").zone(zone_id)
     }
+
+    pub fn network_node(&self) -> Vec<NetworkNodeData> {
+        self.storage.read().expect("should lock storage").network_node()
+    }
+
+    pub fn subcribe(&self) -> tokio::sync::broadcast::Receiver<NetworkNodeEvent> {
+        self.receiver.resubscribe()
+    }
 }
 
 #[cfg(test)]
@@ -341,7 +457,8 @@ mod tests {
 
     #[test]
     fn collect_console() {
-        let mut storage = Storage::default();
+        let (sender, _receiver) = tokio::sync::broadcast::channel(10);
+        let mut storage = Storage::new(sender);
 
         storage.on_ping(
             0,
@@ -398,7 +515,8 @@ mod tests {
 
     #[test]
     fn collect_gateway() {
-        let mut storage = Storage::default();
+        let (sender, _receiver) = tokio::sync::broadcast::channel(10);
+        let mut storage = Storage::new(sender);
 
         storage.on_ping(
             0,
@@ -465,7 +583,8 @@ mod tests {
 
     #[test]
     fn collect_media() {
-        let mut storage = Storage::default();
+        let (sender, _receiver) = tokio::sync::broadcast::channel(10);
+        let mut storage = Storage::new(sender);
 
         storage.on_ping(
             0,
@@ -527,7 +646,8 @@ mod tests {
 
     #[test]
     fn collect_connector() {
-        let mut storage = Storage::default();
+        let (sender, _receiver) = tokio::sync::broadcast::channel(10);
+        let mut storage = Storage::new(sender);
 
         storage.on_ping(
             0,

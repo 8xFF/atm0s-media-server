@@ -1,5 +1,6 @@
 import {
   AuthSignIn,
+  NetworkVisualization,
   Summary,
   ZonesDetail,
   ZonesEvents,
@@ -69,6 +70,14 @@ export const routes = createBrowserRouter([
     element: (
       <PrivateProvider>
         <ZonesSessions />
+      </PrivateProvider>
+    ),
+  },
+  {
+    path: '/network/visualization',
+    element: (
+      <PrivateProvider>
+        <NetworkVisualization />
       </PrivateProvider>
     ),
   },
