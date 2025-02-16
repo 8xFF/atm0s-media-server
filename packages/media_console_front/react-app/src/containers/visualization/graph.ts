@@ -208,8 +208,18 @@ export class NetworkVisualizationGraph {
       info: data.info,
     })
 
+    const isDeletedMap = new Map()
+    ;[...this._connections.values()]
+      .filter((conn) => conn.source === data.id)
+      .forEach((conn) => {
+        isDeletedMap.set(conn.id, true)
+      })
+
     for (const conn of data.connections) {
       const curr = this._connections.get(conn.id)
+      if (isDeletedMap.has(conn.id)) {
+        isDeletedMap.delete(conn.id)
+      }
       if (curr) {
         this._connections.set(conn.id, {
           ...curr,
@@ -227,6 +237,10 @@ export class NetworkVisualizationGraph {
           },
         })
       }
+    }
+
+    for (const connId of isDeletedMap.keys()) {
+      this._edgesWillRemove.add(connId)
     }
   }
 
