@@ -27,7 +27,7 @@ fn ws(ws: WebSocket, storage: Data<&StorageShared>) -> impl IntoResponse {
             return;
         }
 
-        let mut receiver = storage.subcribe();
+        let mut receiver = storage.subscribe();
         drop(storage);
         loop {
             select! {

@@ -254,7 +254,7 @@ impl Storage {
         }
     }
 
-    pub fn on_node_removed(&mut self, now: u64, node: NodeId) {
+    pub fn on_node_removed(&mut self, _now: u64, node: NodeId) {
         let zone_id = ZoneId::from_node_id(node);
         let zone = self.zones.entry(zone_id).or_default();
         zone.consoles.remove(&node);
@@ -371,25 +371,25 @@ impl Storage {
                         id: *id,
                         zone_id: zone_id.0,
                         info: g.generic.clone(),
-                        conns: g.conns.iter().map(|c| c.clone()).collect::<Vec<_>>(),
+                        conns: g.conns.to_vec(),
                     })
                     .chain(z.gateways.iter().map(|(id, g)| NetworkNodeData {
                         id: *id,
                         zone_id: zone_id.0,
                         info: g.generic.clone(),
-                        conns: g.conns.iter().map(|c| c.clone()).collect::<Vec<_>>(),
+                        conns: g.conns.to_vec(),
                     }))
                     .chain(z.medias.iter().map(|(id, g)| NetworkNodeData {
                         id: *id,
                         zone_id: zone_id.0,
                         info: g.generic.clone(),
-                        conns: g.conns.iter().map(|c| c.clone()).collect::<Vec<_>>(),
+                        conns: g.conns.to_vec(),
                     }))
                     .chain(z.connectors.iter().map(|(id, g)| NetworkNodeData {
                         id: *id,
                         zone_id: zone_id.0,
                         info: g.generic.clone(),
-                        conns: g.conns.iter().map(|c| c.clone()).collect::<Vec<_>>(),
+                        conns: g.conns.to_vec(),
                     }))
                     .collect::<Vec<_>>()
             })
@@ -442,7 +442,7 @@ impl StorageShared {
         self.storage.read().expect("should lock storage").network_node()
     }
 
-    pub fn subcribe(&self) -> tokio::sync::broadcast::Receiver<NetworkNodeEvent> {
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<NetworkNodeEvent> {
         self.receiver.resubscribe()
     }
 }
