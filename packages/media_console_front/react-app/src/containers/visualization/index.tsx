@@ -1,12 +1,9 @@
 import { TNetworkEvent, useNetworkVisualization } from '@/hooks'
 import { Layout } from '@/layouts'
-import { ThemeProviderContext } from '@/providers'
-import { useCallback, useContext, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { NetworkVisualizationGraph } from './graph'
 
 export const NetworkVisualization = () => {
-  const theme = useContext(ThemeProviderContext)
-
   const ref = useRef<HTMLDivElement | null>(null)
   const graph = useRef(new NetworkVisualizationGraph())
   const cb = useCallback((data: TNetworkEvent) => {

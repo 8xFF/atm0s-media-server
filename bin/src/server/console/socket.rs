@@ -1,23 +1,47 @@
 use futures::{SinkExt, StreamExt};
+use media_server_secure::MediaConsoleSecure;
 use poem::{
     get, handler,
     web::{
-        websocket::{Message, WebSocket},
+        websocket::{CloseCode, Message, WebSocket},
         Data,
     },
-    EndpointExt, IntoResponse, Route,
+    EndpointExt, Error, FromRequest, IntoResponse, Request, RequestBody, Result, Route,
 };
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
 use tokio::select;
 
-use crate::server::console_storage::NetworkNodeEvent;
+use crate::{http::api_console::ConsoleApisCtx, server::console_storage::NetworkNodeEvent};
 
-use super::storage::StorageShared;
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct QueryParams {
+    token: String,
+}
+
+struct Token(String);
+
+impl<'a> FromRequest<'a> for Token {
+    async fn from_request(req: &'a Request, _body: &mut RequestBody) -> Result<Self> {
+        let token = req.params::<QueryParams>().map_err(|_| Error::from_string("missing token", StatusCode::BAD_REQUEST))?.token;
+        Ok(Token(token.to_string()))
+    }
+}
 
 #[handler]
-fn ws(ws: WebSocket, storage: Data<&StorageShared>) -> impl IntoResponse {
-    let storage = storage.clone();
-    ws.on_upgrade(move |socket| async move {
+fn ws(Token(token): Token, ws: WebSocket, ctx: Data<&ConsoleApisCtx>) -> impl IntoResponse {
+    let storage = ctx.storage.clone();
+    let console_ctx = ctx.clone();
+    ws.on_upgrade(move |mut socket| async move {
         let (mut sink, mut stream) = socket.split();
+        if !console_ctx.secure.validate_token(&token) {
+            log::error!("Invalid token: {token:?}");
+            sink.send(Message::Close(Some((CloseCode::Invalid, "Invalid token".to_string())))).await.ok();
+            sink.close().await.ok();
+            drop(sink);
+            drop(stream);
+            return;
+        }
         let snapshot = storage.network_node();
         let event = NetworkNodeEvent::Snapshot(snapshot);
         let event = serde_json::to_string(&event).expect("must convert event to json");
@@ -54,6 +78,6 @@ fn ws(ws: WebSocket, storage: Data<&StorageShared>) -> impl IntoResponse {
     })
 }
 
-pub fn console_websocket_handle(storage: StorageShared) -> Route {
-    Route::new().nest("/network", get(ws.data(storage.clone())))
+pub fn console_websocket_handle(ctx: ConsoleApisCtx) -> Route {
+    Route::new().nest("/network", get(ws.data(ctx)))
 }

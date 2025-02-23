@@ -16,7 +16,7 @@ use poem_openapi::{types::ParseFromJSON, Object};
 use serde::Deserialize;
 use tokio::sync::mpsc::Sender;
 
-mod api_console;
+pub(crate) mod api_console;
 mod api_media;
 mod api_metrics;
 mod api_node;
@@ -88,13 +88,13 @@ pub async fn run_console_http_server(
     let connector_service: OpenApiService<_, ()> = OpenApiService::new(api_console::connector::Apis, "Connector APIs", env!("CARGO_PKG_VERSION")).server("/api/connector/");
     let connector_ui = connector_service.swagger_ui();
     let connector_spec = connector_service.spec();
-    let storage1 = storage.clone();
+    // let storage1 = storage.clone();
 
     let ctx = api_console::ConsoleApisCtx { secure, storage, connector };
 
     let route = Route::new()
         .nest("/", media_server_console_front::frontend_app())
-        .nest("/ws", console_websocket_handle(storage1))
+        .nest("/ws", console_websocket_handle(ctx.clone()))
         //node
         .nest("/api/node/", node_service)
         .nest("/api/node/ui", node_ui)
