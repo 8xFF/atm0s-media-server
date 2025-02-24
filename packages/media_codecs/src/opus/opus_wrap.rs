@@ -638,7 +638,7 @@ pub mod packet {
         })
     }
 
-    /// A parsed Opus packet, retuned from `parse`.
+    /// A parsed Opus packet, returned from `parse`.
     #[derive(Debug)]
     pub struct Packet<'a> {
         /// The TOC byte of the packet.
