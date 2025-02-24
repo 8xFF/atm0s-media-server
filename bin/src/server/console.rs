@@ -25,6 +25,7 @@ use crate::{
 };
 use sans_io_runtime::backend::PollingBackend;
 
+pub mod socket;
 pub mod storage;
 
 #[derive(Clone, Debug, convert_enum::From, convert_enum::TryInto)]
@@ -139,6 +140,7 @@ pub async fn run_console_server(workers: usize, http_port: Option<u16>, node: No
                     }
                     visualization::Event::NodeRemoved(node) => {
                         log::info!("Node del: {:?}", node);
+                        storage.on_node_removed(started_at.elapsed().as_millis() as u64, node);
                     }
                 },
                 SdnExtOut::FeaturesEvent(_, FeaturesEvent::Neighbours(event)) => match event {

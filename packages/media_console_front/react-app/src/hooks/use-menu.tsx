@@ -1,5 +1,5 @@
 import { find } from 'lodash'
-import { BookOpenIcon, ChartPieIcon, NetworkIcon, UsersIcon } from 'lucide-react'
+import { BookOpenIcon, ChartPieIcon, NetworkIcon, UsersIcon, Waypoints } from 'lucide-react'
 import { useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 
@@ -16,6 +16,11 @@ export const useMenu = () => {
         title: 'Zones',
         url: '/zones',
         icon: NetworkIcon,
+      },
+      {
+        title: 'Network Visualization',
+        url: '/network/visualization',
+        icon: Waypoints,
       },
     ],
     navSecondary: [

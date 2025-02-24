@@ -24,7 +24,7 @@ clap = { workspace = true, features = ["env", "derive"] }
 log = { workspace = true }
 rand = { workspace = true }
 prost = { workspace = true }
-poem = { workspace = true, features = ["static-files"] }
+poem = { workspace = true, features = ["static-files", "websocket"] }
 poem-openapi = { workspace = true, features = ["swagger-ui"] }
 rust-embed = { workspace = true, features = ["compression"], optional = true }
 tokio = { workspace = true, features = ["full"] }
@@ -43,6 +43,7 @@ maxminddb = { workspace = true, optional = true }
 systemstat = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["json"] }
 sentry = { workspace = true }
+futures = { workspace = true }
 
 [features]
 default = [

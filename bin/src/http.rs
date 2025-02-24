@@ -16,7 +16,7 @@ use poem_openapi::{types::ParseFromJSON, Object};
 use serde::Deserialize;
 use tokio::sync::mpsc::Sender;
 
-mod api_console;
+pub(crate) mod api_console;
 mod api_media;
 mod api_metrics;
 mod api_node;
@@ -66,6 +66,8 @@ pub async fn run_console_http_server(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use poem::middleware::Tracing;
 
+    use crate::server::console::socket::console_websocket_handle;
+
     let node_api = api_node::Apis::new(node);
     let node_service = OpenApiService::new(node_api, "Node APIs", env!("CARGO_PKG_VERSION")).server("/api/node/");
     let node_ui = node_service.swagger_ui();
@@ -91,6 +93,7 @@ pub async fn run_console_http_server(
 
     let route = Route::new()
         .nest("/", media_server_console_front::frontend_app())
+        .nest("/ws", console_websocket_handle(ctx.clone()))
         //node
         .nest("/api/node/", node_service)
         .nest("/api/node/ui", node_ui)
