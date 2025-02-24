@@ -186,7 +186,7 @@ impl ProxyConfig {
 
         let sub = self.support_nesting.then_some(subpath).flatten().unwrap_or_default();
 
-        println!("base: {} | sub: {}", base, sub);
+        log::trace!("base: {} | sub: {}", base, sub);
 
         Some(base + &sub)
     }

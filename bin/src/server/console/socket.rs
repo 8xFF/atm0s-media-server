@@ -3,10 +3,10 @@ use media_server_secure::MediaConsoleSecure;
 use poem::{
     get, handler,
     web::{
-        websocket::{CloseCode, Message, WebSocket},
+        websocket::{Message, WebSocket},
         Data,
     },
-    EndpointExt, Error, FromRequest, IntoResponse, Request, RequestBody, Result, Route,
+    EndpointExt, Error, FromRequest, IntoResponse, Request, RequestBody, Response, Result, Route,
 };
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -29,24 +29,20 @@ impl<'a> FromRequest<'a> for Token {
 }
 
 #[handler]
-fn ws(Token(token): Token, ws: WebSocket, ctx: Data<&ConsoleApisCtx>) -> impl IntoResponse {
+fn network_visualization_ws(Token(token): Token, ws: WebSocket, ctx: Data<&ConsoleApisCtx>) -> Response {
+    log::info!("Network visualization websocket connected: {token:?}");
+    if !ctx.secure.validate_token(&token) {
+        log::error!("Invalid token: {token:?}");
+        return Response::builder().status(StatusCode::UNAUTHORIZED).body("Unauthorized");
+    }
     let storage = ctx.storage.clone();
-    let console_ctx = ctx.clone();
     ws.on_upgrade(move |mut socket| async move {
         let (mut sink, mut stream) = socket.split();
-        if !console_ctx.secure.validate_token(&token) {
-            log::error!("Invalid token: {token:?}");
-            sink.send(Message::Close(Some((CloseCode::Invalid, "Invalid token".to_string())))).await.ok();
-            sink.close().await.ok();
-            drop(sink);
-            drop(stream);
-            return;
-        }
-        let snapshot = storage.network_node();
-        let event = NetworkNodeEvent::Snapshot(snapshot);
-        let event = serde_json::to_string(&event).expect("must convert event to json");
+        let nodes = storage.network_nodes();
 
-        if let Err(err) = sink.send(Message::Text(event)).await {
+        log::info!("Send snapshot: {} nodes", nodes.len());
+        let event = NetworkNodeEvent::Snapshot(nodes);
+        if let Err(err) = sink.send(Message::Text(serde_json::to_string(&event).expect("must convert event to json"))).await {
             log::error!("Failed to send snapshot: {}", err);
             return;
         }
@@ -76,8 +72,9 @@ fn ws(Token(token): Token, ws: WebSocket, ctx: Data<&ConsoleApisCtx>) -> impl In
             }
         }
     })
+    .into_response()
 }
 
 pub fn console_websocket_handle(ctx: ConsoleApisCtx) -> Route {
-    Route::new().nest("/network", get(ws.data(ctx)))
+    Route::new().at("/network", get(network_visualization_ws.data(ctx)))
 }

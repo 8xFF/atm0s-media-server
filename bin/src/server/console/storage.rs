@@ -438,7 +438,7 @@ impl StorageShared {
         self.storage.read().expect("should lock storage").zone(zone_id)
     }
 
-    pub fn network_node(&self) -> Vec<NetworkNodeData> {
+    pub fn network_nodes(&self) -> Vec<NetworkNodeData> {
         self.storage.read().expect("should lock storage").network_node()
     }
 

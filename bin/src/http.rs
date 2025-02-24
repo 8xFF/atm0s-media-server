@@ -88,7 +88,6 @@ pub async fn run_console_http_server(
     let connector_service: OpenApiService<_, ()> = OpenApiService::new(api_console::connector::Apis, "Connector APIs", env!("CARGO_PKG_VERSION")).server("/api/connector/");
     let connector_ui = connector_service.swagger_ui();
     let connector_spec = connector_service.spec();
-    // let storage1 = storage.clone();
 
     let ctx = api_console::ConsoleApisCtx { secure, storage, connector };
 
