@@ -1,6 +1,5 @@
 import { ZoneDetailSection } from '@/components'
 import { useDetailZoneQuery } from '@/hooks'
-import { Layout } from '@/layouts'
 import { Link, useParams } from 'react-router-dom'
 
 export const ZonesDetail = () => {
@@ -15,7 +14,7 @@ export const ZonesDetail = () => {
   })
 
   return (
-    <Layout>
+    <>
       <div className="grid gap-6">
         <Link
           to={`https://maps.google.com/?q=${dataDetailZone?.data?.lat},${dataDetailZone?.data?.lon}`}
@@ -30,6 +29,6 @@ export const ZonesDetail = () => {
         <ZoneDetailSection title="gateways" data={dataDetailZone?.data?.gateways} />
         <ZoneDetailSection title="medias" data={dataDetailZone?.data?.medias} />
       </div>
-    </Layout>
+    </>
   )
 }

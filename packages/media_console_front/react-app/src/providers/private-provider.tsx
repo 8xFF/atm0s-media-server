@@ -1,13 +1,11 @@
 import { getLocalStorage } from '@/utils'
 import { LoaderIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 
-type Props = {
-  children: React.ReactNode
-}
+type Props = {}
 
-export const PrivateProvider: React.FC<Props> = ({ children }) => {
+export const PrivateProvider: React.FC<Props> = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
 
@@ -30,7 +28,7 @@ export const PrivateProvider: React.FC<Props> = ({ children }) => {
           <LoaderIcon className="animate-spin" />
         </div>
       ) : (
-        children
+        <Outlet />
       )}
     </>
   )

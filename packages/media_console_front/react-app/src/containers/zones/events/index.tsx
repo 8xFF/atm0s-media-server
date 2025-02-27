@@ -2,7 +2,6 @@ import { Pagination } from '@/components'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConnectorLogEventsQuery } from '@/hooks'
-import { Layout } from '@/layouts'
 import { INITIAL_LIMIT, INITIAL_PAGE } from '@/utils'
 import dayjs from 'dayjs'
 import { isEmpty, map } from 'lodash'
@@ -55,7 +54,7 @@ export const ZonesEvents = () => {
 
   // TODO: Add loading UI
   return (
-    <Layout>
+    <>
       <Card className="shadow-sm">
         <CardContent className="grid gap-2 p-3">
           <Table>
@@ -113,6 +112,6 @@ export const ZonesEvents = () => {
           setLimit={onChangeLimit}
         />
       </div>
-    </Layout>
+    </>
   )
 }

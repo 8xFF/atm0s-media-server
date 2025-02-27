@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useZonesQuery } from '@/hooks'
-import { Layout } from '@/layouts'
 import { useTheme } from '@/providers'
 import { forEach, sumBy } from 'lodash'
 import { Hash } from 'lucide-react'
@@ -158,7 +157,7 @@ export const Summary = () => {
   }, [detectTheme, zones])
 
   return (
-    <Layout>
+    <>
       <div className="grid gap-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <Card className="shadow-sm">
@@ -211,6 +210,6 @@ export const Summary = () => {
           <div id="map" ref={mapContainerRef} className="absolute left-0 top-0 h-full w-full" />
         </div>
       </div>
-    </Layout>
+    </>
   )
 }

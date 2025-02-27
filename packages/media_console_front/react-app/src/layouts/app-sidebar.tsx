@@ -17,13 +17,13 @@ import { NavUser } from './nav-user'
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { menu } = useMenu()
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link to="/">
-                <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <div className="flex aspect-square size-8 items-center justify-center bg-sidebar-primary text-sidebar-primary-foreground">
                   <img src={ImgLogo} alt="" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
