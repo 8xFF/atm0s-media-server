@@ -68,6 +68,7 @@ impl<T: Into<String> + Send> ApiResponse for ApplicationSdp<T> {
                     schema: Self::schema_ref(),
                 }],
                 headers: vec![],
+                status_range: None,
             }],
         }
     }
@@ -130,6 +131,7 @@ impl<T: Into<String> + Send> ApiResponse for ApplicationSdpPatch<T> {
                     schema: Self::schema_ref(),
                 }],
                 headers: vec![],
+                status_range: None,
             }],
         }
     }
@@ -167,6 +169,7 @@ impl<T: Payload + IntoResponse> ApiResponse for CustomHttpResponse<T> {
                     schema: T::schema_ref(),
                 }],
                 headers: vec![],
+                status_range: None,
             }],
         }
     }

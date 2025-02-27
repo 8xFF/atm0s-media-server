@@ -70,6 +70,7 @@ impl<T: prost::Message> ApiResponse for Protobuf<T> {
                     schema: Self::schema_ref(),
                 }],
                 headers: vec![],
+                status_range: None,
             }],
         }
     }
