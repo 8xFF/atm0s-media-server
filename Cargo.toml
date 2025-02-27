@@ -27,7 +27,7 @@ media-server-runner = { package = "atm0s-media-server-runner", path = "packages/
 media-server-protocol = { package = "atm0s-media-server-protocol", path = "packages/protocol", version = "0.2.0-alpha.1" }
 media-server-console-front = { package = "atm0s-media-server-console-front", path = "packages/media_console_front", version = "0.1.0-alpha.2" }
 media-server-connector = { package = "atm0s-media-server-connector", path = "packages/media_connector", version = "0.1.0-alpha.1" }
-media-server-record = { package = "atm0s-media-server-record", path = "packages/media_record", version = "0.1.0-alpha.2", default-features = false }
+media-server-record = { package = "atm0s-media-server-record", path = "packages/media_record", version = "0.1.0-alpha.3", default-features = false }
 media-server-gateway = { package = "atm0s-media-server-gateway", path = "packages/media_gateway", version = "0.1.0-alpha.1" }
 media-server-audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.1.0-alpha.1" }
 media-server-secure = { package = "atm0s-media-server-secure", path = "packages/media_secure", version = "0.1.0-alpha.1", default-features = false }

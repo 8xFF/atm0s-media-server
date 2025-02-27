@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server"
-version = "0.2.0-alpha.4"
+version = "0.2.0-alpha.5"
 dependencies = [
  "atm0s-media-server-connector",
  "atm0s-media-server-console-front",
@@ -626,7 +626,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-record"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 dependencies = [
  "atm0s-media-server-codecs",
  "atm0s-media-server-connector",
