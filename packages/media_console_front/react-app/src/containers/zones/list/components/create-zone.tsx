@@ -13,7 +13,7 @@ export const CreateZone: React.FC<Props> = () => {
       <SheetTrigger asChild>
         <Button size="sm">New Zone</Button>
       </SheetTrigger>
-      <SheetContent className="!w-full p-0 sm:w-[540px] md:!w-[600px] md:!max-w-none">
+      <SheetContent className="w-full! p-0 sm:w-[540px] md:w-[600px]! md:max-w-none!">
         <SheetHeader className="p-6">
           <SheetTitle>Seed address</SheetTitle>
         </SheetHeader>

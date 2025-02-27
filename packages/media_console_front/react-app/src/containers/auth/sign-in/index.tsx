@@ -56,7 +56,7 @@ export const AuthSignIn = () => {
           <div className="bg-divide h-[1px] w-full" />
           <div className="grid gap-2 text-center">
             <h1 className="text-3xl font-bold">Login</h1>
-            <p className="text-balance text-muted-foreground">Enter your secret key to login to your account</p>
+            <p className="text-muted-foreground text-balance">Enter your secret key to login to your account</p>
           </div>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -80,7 +80,7 @@ export const AuthSignIn = () => {
           </Form>
         </div>
       </div>
-      <div className="hidden bg-muted lg:block">
+      <div className="bg-muted hidden lg:block">
         <img src={ImgSignInBg} alt="" className="h-screen w-full object-cover" />
       </div>
     </div>

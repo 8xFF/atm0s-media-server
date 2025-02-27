@@ -56,7 +56,7 @@ export const ZonesSessions = () => {
   // TODO: Add loading UI
   return (
     <>
-      <Card className="shadow-sm">
+      <Card className="shadow-xs">
         <CardContent className="grid gap-2 p-3">
           <Table>
             <TableHeader>

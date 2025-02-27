@@ -19,7 +19,7 @@ export const ZonesDetail = () => {
         <Link
           to={`https://maps.google.com/?q=${dataDetailZone?.data?.lat},${dataDetailZone?.data?.lon}`}
           target="_blank"
-          className="lg:text-md flex w-fit items-center gap-2 text-xs font-medium text-muted-foreground"
+          className="lg:text-md text-muted-foreground flex w-fit items-center gap-2 text-xs font-medium"
         >
           <div className="whitespace-nowrap">Lat: {dataDetailZone?.data?.lat}</div>|
           <div className="whitespace-nowrap">Lon: {dataDetailZone?.data?.lon}</div>

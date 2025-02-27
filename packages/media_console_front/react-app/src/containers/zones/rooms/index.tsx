@@ -56,7 +56,7 @@ export const ZonesRooms = () => {
   // TODO: Add loading UI
   return (
     <>
-      <Card className="shadow-sm">
+      <Card className="shadow-xs">
         <CardContent className="grid gap-2 p-3">
           <Table>
             <TableHeader>
@@ -79,7 +79,7 @@ export const ZonesRooms = () => {
                     <TableCell>{r?.room}</TableCell>
                     <TableCell>{r?.peers}</TableCell>
                     <TableCell>{r?.record}</TableCell>
-                    <TableCell className="whitespace-nowrap text-right">
+                    <TableCell className="text-right whitespace-nowrap">
                       <div>
                         <p>{r?.created_at ? dayjs(r?.created_at).format('ll') : '---'}</p>
                         <p>{r?.created_at ? dayjs(r?.created_at).format('LT') : '---'}</p>

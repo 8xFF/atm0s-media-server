@@ -160,46 +160,46 @@ export const Summary = () => {
     <>
       <div className="grid gap-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <Card className="shadow-sm">
+          <Card className="shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Zones</CardTitle>
-              <Hash className="h-4 w-4 text-muted-foreground" />
+              <Hash className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalZones}</div>
             </CardContent>
           </Card>
-          <Card className="shadow-sm">
+          <Card className="shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Gateways</CardTitle>
-              <Hash className="h-4 w-4 text-muted-foreground" />
+              <Hash className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalGateways}</div>
             </CardContent>
           </Card>
-          <Card className="shadow-sm">
+          <Card className="shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Medias</CardTitle>
-              <Hash className="h-4 w-4 text-muted-foreground" />
+              <Hash className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalMedias}</div>
             </CardContent>
           </Card>
-          <Card className="shadow-sm">
+          <Card className="shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Connectors</CardTitle>
-              <Hash className="h-4 w-4 text-muted-foreground" />
+              <Hash className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalConnectors}</div>
             </CardContent>
           </Card>
-          <Card className="shadow-sm">
+          <Card className="shadow-xs">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Consoles</CardTitle>
-              <Hash className="h-4 w-4 text-muted-foreground" />
+              <Hash className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalConsoles}</div>
@@ -207,7 +207,7 @@ export const Summary = () => {
           </Card>
         </div>
         <div className="relative h-[70vh] overflow-hidden rounded-lg">
-          <div id="map" ref={mapContainerRef} className="absolute left-0 top-0 h-full w-full" />
+          <div id="map" ref={mapContainerRef} className="absolute top-0 left-0 h-full w-full" />
         </div>
       </div>
     </>

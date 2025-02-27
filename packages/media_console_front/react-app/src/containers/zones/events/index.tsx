@@ -55,7 +55,7 @@ export const ZonesEvents = () => {
   // TODO: Add loading UI
   return (
     <>
-      <Card className="shadow-sm">
+      <Card className="shadow-xs">
         <CardContent className="grid gap-2 p-3">
           <Table>
             <TableHeader>
@@ -76,13 +76,13 @@ export const ZonesEvents = () => {
                     <TableCell>{e?.event}</TableCell>
                     <TableCell>{e?.session}</TableCell>
                     <TableCell>{e?.node}</TableCell>
-                    <TableCell className="whitespace-nowrap text-right">
+                    <TableCell className="text-right whitespace-nowrap">
                       <div>
                         <p>{e?.node_ts ? dayjs(e?.node_ts).format('ll') : '---'}</p>
                         <p>{e?.node_ts ? dayjs(e?.node_ts).format('LT') : '---'}</p>
                       </div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-right">
+                    <TableCell className="text-right whitespace-nowrap">
                       <div>
                         <p>{e?.created_at ? dayjs(e?.created_at).format('ll') : '---'}</p>
                         <p>{e?.created_at ? dayjs(e?.created_at).format('LT') : '---'}</p>
