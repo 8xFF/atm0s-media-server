@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConnectorLogRoomsQuery } from '@/hooks'
-import { Layout } from '@/layouts'
 import { INITIAL_LIMIT, INITIAL_PAGE } from '@/utils'
 import dayjs from 'dayjs'
 import LocalizedFormat from 'dayjs/plugin/localizedFormat'
@@ -56,8 +55,8 @@ export const ZonesRooms = () => {
 
   // TODO: Add loading UI
   return (
-    <Layout>
-      <Card className="shadow-sm">
+    <>
+      <Card className="shadow-xs">
         <CardContent className="grid gap-2 p-3">
           <Table>
             <TableHeader>
@@ -80,7 +79,7 @@ export const ZonesRooms = () => {
                     <TableCell>{r?.room}</TableCell>
                     <TableCell>{r?.peers}</TableCell>
                     <TableCell>{r?.record}</TableCell>
-                    <TableCell className="whitespace-nowrap text-right">
+                    <TableCell className="text-right whitespace-nowrap">
                       <div>
                         <p>{r?.created_at ? dayjs(r?.created_at).format('ll') : '---'}</p>
                         <p>{r?.created_at ? dayjs(r?.created_at).format('LT') : '---'}</p>
@@ -117,6 +116,6 @@ export const ZonesRooms = () => {
           setLimit={onChangeLimit}
         />
       </div>
-    </Layout>
+    </>
   )
 }

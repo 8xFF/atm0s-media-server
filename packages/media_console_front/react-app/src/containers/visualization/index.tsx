@@ -1,5 +1,4 @@
 import { TNetworkEvent, useNetworkVisualization } from '@/hooks'
-import { Layout } from '@/layouts'
 import { useCallback, useEffect, useRef } from 'react'
 import { NetworkVisualizationGraph } from './graph'
 
@@ -19,9 +18,7 @@ export const NetworkVisualization = () => {
 
   return (
     <>
-      <Layout>
-        <div ref={ref} style={{ width: '100%', height: '100%' }}></div>
-      </Layout>
+      <div ref={ref} style={{ width: '100%', height: '100%' }}></div>
     </>
   )
 }

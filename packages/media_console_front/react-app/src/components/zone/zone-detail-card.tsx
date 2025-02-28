@@ -14,7 +14,7 @@ type Props = {
 export const ZoneDetailCard: React.FC<Props> = ({ item, hasLogs }) => {
   const navigate = useNavigate()
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-xs">
       <CardContent className="grid gap-3 p-3">
         <div className="flex items-center justify-between">
           <div className="flex flex-row gap-y-2 text-xs">
@@ -61,7 +61,7 @@ export const ZoneDetailCard: React.FC<Props> = ({ item, hasLogs }) => {
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
               {map(item?.conns, (connect, cIdx) => (
-                <div className="flex items-center gap-1 rounded bg-muted p-1" key={cIdx}>
+                <div className="bg-muted flex items-center gap-1 rounded p-1" key={cIdx}>
                   addr: {connect.addr}, node: {connect.node}, rtt_ms: {connect.rtt_ms}
                 </div>
               ))}

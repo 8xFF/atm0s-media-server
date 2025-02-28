@@ -2,7 +2,6 @@ import { Pagination } from '@/components'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConnectorLogEventsQuery } from '@/hooks'
-import { Layout } from '@/layouts'
 import { INITIAL_LIMIT, INITIAL_PAGE } from '@/utils'
 import dayjs from 'dayjs'
 import { isEmpty, map } from 'lodash'
@@ -55,8 +54,8 @@ export const ZonesEvents = () => {
 
   // TODO: Add loading UI
   return (
-    <Layout>
-      <Card className="shadow-sm">
+    <>
+      <Card className="shadow-xs">
         <CardContent className="grid gap-2 p-3">
           <Table>
             <TableHeader>
@@ -77,13 +76,13 @@ export const ZonesEvents = () => {
                     <TableCell>{e?.event}</TableCell>
                     <TableCell>{e?.session}</TableCell>
                     <TableCell>{e?.node}</TableCell>
-                    <TableCell className="whitespace-nowrap text-right">
+                    <TableCell className="text-right whitespace-nowrap">
                       <div>
                         <p>{e?.node_ts ? dayjs(e?.node_ts).format('ll') : '---'}</p>
                         <p>{e?.node_ts ? dayjs(e?.node_ts).format('LT') : '---'}</p>
                       </div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-right">
+                    <TableCell className="text-right whitespace-nowrap">
                       <div>
                         <p>{e?.created_at ? dayjs(e?.created_at).format('ll') : '---'}</p>
                         <p>{e?.created_at ? dayjs(e?.created_at).format('LT') : '---'}</p>
@@ -113,6 +112,6 @@ export const ZonesEvents = () => {
           setLimit={onChangeLimit}
         />
       </div>
-    </Layout>
+    </>
   )
 }

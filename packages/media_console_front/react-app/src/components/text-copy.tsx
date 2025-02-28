@@ -15,7 +15,7 @@ export const TextCopy: React.FC<Props> = ({ value }) => {
     return `${arr[0]}/${arr[1]}/${arr[2]}/${arr[3]}/${arr[4]}/${arr[5]}/.../${arr[arr.length - 2]}/${arr[arr.length - 1]}`
   }, [value])
   return (
-    <div className="flex w-fit items-center gap-4 rounded bg-muted p-1">
+    <div className="bg-muted flex w-fit items-center gap-4 rounded p-1">
       <span>{filterAddr}</span>
       <CopyIcon
         size={14}

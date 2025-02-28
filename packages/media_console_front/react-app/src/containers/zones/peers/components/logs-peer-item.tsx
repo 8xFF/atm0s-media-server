@@ -26,7 +26,7 @@ export const LogsPeerItem: React.FC<Props> = ({ peer }) => {
         <TableCell>{peer?.peer}</TableCell>
         <TableCell>{peer?.room_id}</TableCell>
         <TableCell>{peer?.room}</TableCell>
-        <TableCell className="whitespace-nowrap text-right">
+        <TableCell className="text-right whitespace-nowrap">
           <div>
             <p>{peer?.created_at ? dayjs(peer?.created_at).format('ll') : '---'}</p>
             <p>{peer?.created_at ? dayjs(peer?.created_at).format('LT') : '---'}</p>
@@ -36,7 +36,7 @@ export const LogsPeerItem: React.FC<Props> = ({ peer }) => {
       {expanded && (
         <TableRow>
           <TableCell colSpan={6} className="bg-muted">
-            <Card className="shadow-sm">
+            <Card className="shadow-xs">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
                 <CardTitle className="text-base font-medium">Sessions</CardTitle>
               </CardHeader>
@@ -57,19 +57,19 @@ export const LogsPeerItem: React.FC<Props> = ({ peer }) => {
                         <TableRow>
                           <TableCell>{s?.id}</TableCell>
                           <TableCell>{s?.session}</TableCell>
-                          <TableCell className="whitespace-nowrap text-right">
+                          <TableCell className="text-right whitespace-nowrap">
                             <div>
                               <p>{s?.created_at ? dayjs(s?.created_at).format('ll') : '---'}</p>
                               <p>{s?.created_at ? dayjs(s?.created_at).format('LT') : '---'}</p>
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-right">
+                          <TableCell className="text-right whitespace-nowrap">
                             <div>
                               <p>{s?.joined_at ? dayjs(s?.joined_at).format('ll') : '---'}</p>
                               <p>{s?.joined_at ? dayjs(s?.joined_at).format('LT') : '---'}</p>
                             </div>
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-right">
+                          <TableCell className="text-right whitespace-nowrap">
                             <div>
                               <p>{s?.leaved_at ? dayjs(s?.leaved_at).format('ll') : '---'}</p>
                               <p>{s?.leaved_at ? dayjs(s?.leaved_at).format('LT') : '---'}</p>

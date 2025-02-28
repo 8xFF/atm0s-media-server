@@ -2,7 +2,6 @@ import { Pagination } from '@/components'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConnectorLogSessionsQuery } from '@/hooks'
-import { Layout } from '@/layouts'
 import { INITIAL_LIMIT, INITIAL_PAGE } from '@/utils'
 import dayjs from 'dayjs'
 import LocalizedFormat from 'dayjs/plugin/localizedFormat'
@@ -56,8 +55,8 @@ export const ZonesSessions = () => {
 
   // TODO: Add loading UI
   return (
-    <Layout>
-      <Card className="shadow-sm">
+    <>
+      <Card className="shadow-xs">
         <CardContent className="grid gap-2 p-3">
           <Table>
             <TableHeader>
@@ -96,6 +95,6 @@ export const ZonesSessions = () => {
           setLimit={onChangeLimit}
         />
       </div>
-    </Layout>
+    </>
   )
 }
