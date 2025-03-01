@@ -189,7 +189,7 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
                 None
             },
             tick_ms: 1000,
-            data: DataPlaneCfg { worker_id: 0, services, history },
+            data: DataPlaneCfg { worker_id: worker, services, history },
         };
 
         let mut queue = DynamicDeque::default();
