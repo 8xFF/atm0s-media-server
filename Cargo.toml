@@ -23,11 +23,11 @@ members = [
 audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.2.0-alpha.1" }
 media-server-utils = { package = "atm0s-media-server-utils", path = "packages/media_utils", version = "0.3.0-alpha.1" }
 media-server-core = { package = "atm0s-media-server-core", path = "packages/media_core", version = "0.1.0-alpha.2" }
-media-server-runner = { package = "atm0s-media-server-runner", path = "packages/media_runner", version = "0.1.0-alpha.2" }
+media-server-runner = { package = "atm0s-media-server-runner", path = "packages/media_runner", version = "0.1.0-alpha.3" }
 media-server-protocol = { package = "atm0s-media-server-protocol", path = "packages/protocol", version = "0.2.0-alpha.1" }
-media-server-console-front = { package = "atm0s-media-server-console-front", path = "packages/media_console_front", version = "0.1.0-alpha.2" }
+media-server-console-front = { package = "atm0s-media-server-console-front", path = "packages/media_console_front", version = "0.1.0-alpha.3" }
 media-server-connector = { package = "atm0s-media-server-connector", path = "packages/media_connector", version = "0.1.0-alpha.1" }
-media-server-record = { package = "atm0s-media-server-record", path = "packages/media_record", version = "0.1.0-alpha.3", default-features = false }
+media-server-record = { package = "atm0s-media-server-record", path = "packages/media_record", version = "0.1.0-alpha.4", default-features = false }
 media-server-gateway = { package = "atm0s-media-server-gateway", path = "packages/media_gateway", version = "0.1.0-alpha.1" }
 media-server-audio-mixer = { package = "atm0s-media-server-audio-mixer", path = "packages/audio_mixer", version = "0.1.0-alpha.1" }
 media-server-secure = { package = "atm0s-media-server-secure", path = "packages/media_secure", version = "0.1.0-alpha.1", default-features = false }
