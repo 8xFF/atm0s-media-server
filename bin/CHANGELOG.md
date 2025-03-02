@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0-alpha.7](https://github.com/8xFF/atm0s-media-server/compare/v0.2.0-alpha.6...v0.2.0-alpha.7) - 2025-03-02
+
+### Fixed
+
+- vnet should stick on same worker for avoiding actor missmatch error ([#519](https://github.com/8xFF/atm0s-media-server/pull/519))
+
 ## [0.2.0-alpha.6](https://github.com/8xFF/atm0s-media-server/compare/v0.2.0-alpha.5...v0.2.0-alpha.6) - 2025-03-02
 
 ### Fixed
