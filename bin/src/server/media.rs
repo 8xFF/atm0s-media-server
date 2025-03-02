@@ -241,7 +241,7 @@ pub async fn run_media_server(workers: usize, http_port: Option<u16>, node: Node
         }
 
         while let Ok(control) = vnet_rx.try_recv() {
-            controller.send_to_best(ExtIn::Sdn(SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, control.into()), false));
+            controller.send_to(0, ExtIn::Sdn(SdnExtIn::FeaturesControl(media_server_runner::UserData::Cluster, control.into()), false));
         }
         while let Ok(req) = req_rx.try_recv() {
             let req_id = req_id_seed;
