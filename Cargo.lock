@@ -742,9 +742,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7707e94c22837233daf4ea6f02ad611bc9c899718bf9c752bc2f431034ce18ed"
+checksum = "e3c1f1949c53f1b3e97e22c111a7cadc79bb420da7ca40fa93fbfa07b9d73d29"
 dependencies = [
  "atm0s-sdn-identity",
  "atm0s-sdn-network",
@@ -773,9 +773,9 @@ dependencies = [
 
 [[package]]
 name = "atm0s-sdn-network"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b04092063b0491d92690c91995df168306d42c7f6b516805b32702a18520862"
+checksum = "6278048a0a9c2fd826f7ecfec76ae54bc774d7276f10057281ce4eceab7433c2"
 dependencies = [
  "aes-gcm 0.10.3",
  "atm0s-sdn-identity",
