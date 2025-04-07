@@ -181,20 +181,20 @@
 
 ### Room Object
 
-| name           | required             | type                                     | Description                                       |
-| -------------- | -------------------- | ---------------------------------------- | ------------------------------------------------- |
-| zone_id        | :white_check_mark:   | int                                      | N/A                                               |
-| node_id        | :white_check_mark:   | int                                      | N/A                                               |
-| type           | :white_check_mark:   | string                                   | type of node (connector, console, gateway, media) |
-| id             | :white_check_mark:   | int                                      | ID of room                                        |
-| status         | :white_check_mark:   | enum                                     | status of room: LIVING / ENDED                    |
-| started_at     | :white_check_mark:   | int                                      | the start timestamp of room                       |
-| ended_at       | :white_large_square: | int                                      | the end timestamp of room                         |
-| duration       | :white_large_square: | int                                      | the duration of room. Will calculated after ended |
-| online_session | :white_large_square: | int                                      | the number session is online in room              |
-| record         | :white_large_square: | string                                   | the record of room                                |
-| metadata       | :white_large_square: | json                                     | metadata of the room                              |
-| sessions       | :white_large_square: | Array<[Session Object](#session-object)> | list session of room                              |
+| name           | required             | type                                              | Description                                       |
+| -------------- | -------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| zone_id        | :white_check_mark:   | int                                               | N/A                                               |
+| node_id        | :white_check_mark:   | int                                               | N/A                                               |
+| type           | :white_check_mark:   | string                                            | type of node (connector, console, gateway, media) |
+| id             | :white_check_mark:   | int                                               | ID of room                                        |
+| status         | :white_check_mark:   | enum                                              | status of room: LIVING / ENDED                    |
+| started_at     | :white_check_mark:   | int                                               | the start timestamp of room                       |
+| ended_at       | :white_large_square: | int                                               | the end timestamp of room                         |
+| duration       | :white_large_square: | int                                               | the duration of room. Will calculated after ended |
+| online_session | :white_large_square: | int                                               | the number session is online in room              |
+| record         | :white_large_square: | string                                            | the record of room                                |
+| metadata       | :white_large_square: | json                                              | metadata of the room                              |
+| sessions       | :white_large_square: | Array<[Session Object](#session-endpoint-object)> | list session of room                              |
 
 ### Response
 
@@ -226,17 +226,63 @@
 | node_id | :white_large_square: | int         | N/A                  |
 | fields  | :white_large_square: | Vec<string> | Select field to show |
 
-### Session object
+### Session endpoint object
 
-| name     | required             | type | Description             |
-| -------- | -------------------- | ---- | ----------------------- |
-| id       | :white_check_mark:   | int  | N/A                     |
-| zone_id  | :white_check_mark:   | int  | N/A                     |
-| node_id  | :white_check_mark:   | int  | N/A                     |
-| status   | :white_check_mark:   | int  | 1: Online, 0: Offline   |
-| join_at  | :white_check_mark:   | int  | session join timestamp  |
-| leave_at | :white_large_square: | int  | session leave timestamp |
-| metadata | :white_large_square: | json | extradata of session    |
+| name                | required             | type | Description                         |
+| ------------------- | -------------------- | ---- | ----------------------------------- |
+| id                  | :white_check_mark:   | int  | N/A                                 |
+| endpoint_session_id | :white_check_mark:   | int  | Endpoint id of session when in room |
+| zone_id             | :white_check_mark:   | int  | N/A                                 |
+| node_id             | :white_check_mark:   | int  | N/A                                 |
+| status              | :white_check_mark:   | int  | 1: Online, 0: Offline               |
+| join_at             | :white_check_mark:   | int  | session join timestamp              |
+| leave_at            | :white_large_square: | int  | session leave timestamp             |
+| metadata            | :white_large_square: | json | extradata of session                |
+
+### Response
+
+| status code | content-type     | response                                                   |
+| ----------- | ---------------- | ---------------------------------------------------------- |
+| 200         | application/json | { data: Array<[Session Object](#session-endpoitn-object)>} |
+| 401         | application/json | {code: string, message: string}                            |
+
+</details>
+
+## Session
+
+<details>
+  <summary>
+    <code>GET</code> 
+    <code><b>/api/sessions</b></code> 
+    <code>List Room</code>
+ </summary>
+
+### Header
+
+| name         | required           | type       | Description  |
+| ------------ | ------------------ | ---------- | ------------ |
+| Authoriation | :white_check_mark: | Bear token | access token |
+
+### Query Params
+
+| name    | required             | type        | Description          |
+| ------- | -------------------- | ----------- | -------------------- |
+| zone_id | :white_large_square: | int         | N/A                  |
+| node_id | :white_large_square: | int         | N/A                  |
+| fields  | :white_large_square: | Vec<string> | Select field to show |
+
+### Session Object
+
+| name           | required             | type                                                | Description                                       |
+| -------------- | -------------------- | --------------------------------------------------- | ------------------------------------------------- |
+| id             | :white_check_mark:   | int                                                 | N/A                                               |
+| zone_id        | :white_check_mark:   | int                                                 | N/A                                               |
+| node_id        | :white_check_mark:   | int                                                 | N/A                                               |
+| status         | :white_check_mark:   | int                                                 | 1: Online, 0: Offline                             |
+| online_at      | :white_check_mark:   | int                                                 | session online timestamp                          |
+| latest_ping_ts | :white_large_square: | int                                                 | timestamp of latest ping                          |
+| metadata       | :white_large_square: | json                                                | metadata of the session                           |
+| rooms          | :white_large_square: | vec<{room_id: number, endpoint_session_id: number}> | list the room that the session is joining current |
 
 ### Response
 
