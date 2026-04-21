@@ -545,20 +545,8 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             }
             Str0mEvent::RtpPacket(pkt) => {
                 let mid = return_if_none!(self.media_convert.get_mid(pkt.header.ssrc, pkt.header.ext_vals.mid));
-                let track = return_if_none!(self.remote_track_by_mid_with_source(mid)).id();
                 let pkt = return_if_none!(self.media_convert.convert(pkt));
-                log::trace!(
-                    "[TransportWebrtcSdk] incoming pkt codec {:?}, seq {} ts {}, marker {}, payload {}",
-                    pkt.meta,
-                    pkt.seq,
-                    pkt.ts,
-                    pkt.marker,
-                    pkt.data.len(),
-                );
-                self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
-                    track,
-                    RemoteTrackEvent::Media(pkt),
-                ))));
+                self.on_remote_track_media(mid, pkt);
             }
             Str0mEvent::StreamPaused(event) => {
                 // We need to map media ssrc here for avoiding unknown pkt
@@ -612,6 +600,22 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
 }
 
 impl<ES: MediaEdgeSecure> TransportWebrtcSdk<ES> {
+    fn on_remote_track_media(&mut self, mid: Mid, pkt: media_server_protocol::media::MediaPacket) {
+        let track = return_if_none!(self.remote_track_by_mid_with_source(mid)).id();
+        log::trace!(
+            "[TransportWebrtcSdk] incoming pkt codec {:?}, seq {} ts {}, marker {}, payload {}",
+            pkt.meta,
+            pkt.seq,
+            pkt.ts,
+            pkt.marker,
+            pkt.data.len(),
+        );
+        self.queue.push_back(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+            track,
+            RemoteTrackEvent::Media(pkt),
+        ))));
+    }
+
     fn on_str0m_state(&mut self, now: Instant, state: IceConnectionState) {
         log::info!("[TransportWebrtcSdk] str0m state changed {:?}", state);
 
@@ -917,10 +921,11 @@ mod tests {
 
     use media_server_core::{
         endpoint::EndpointReq,
-        transport::{TransportError, TransportEvent, TransportOutput, TransportState},
+        transport::{RemoteTrackEvent, TransportError, TransportEvent, TransportOutput, TransportState},
     };
     use media_server_protocol::{
         endpoint::{PeerMeta, RoomInfoPublish, RoomInfoSubscribe},
+        media::MediaPacket,
         multi_tenancy::{AppContext, AppId},
         protobuf::{
             self, gateway,
@@ -935,7 +940,10 @@ mod tests {
         DumpAppStorage, MediaGatewaySecure,
     };
     use prost::Message;
-    use str0m::channel::ChannelId;
+    use str0m::{
+        channel::ChannelId,
+        media::{Direction, MediaAdded, MediaKind as Str0mMediaKind, Mid},
+    };
 
     use crate::{
         transport::{webrtc::TIMEOUT_SEC, InternalOutput, TransportWebrtcInternal},
@@ -1225,6 +1233,87 @@ mod tests {
         );
         assert_eq!(transport.pop_output(now), None);
         assert!(transport.is_empty());
+    }
+
+    #[test]
+    fn detached_remote_track_should_not_emit_media_packets() {
+        let app = AppContext::root_app();
+        let req = gateway::ConnectRequest {
+            tracks: Some(protobuf::shared::Tracks {
+                receivers: vec![],
+                senders: vec![protobuf::shared::Sender {
+                    kind: protobuf::shared::Kind::Audio as i32,
+                    name: "audio_main".to_string(),
+                    state: Some(protobuf::shared::sender::State {
+                        config: None,
+                        source: Some(protobuf::shared::sender::Source {
+                            id: "source-1".to_string(),
+                            screen: false,
+                            metadata: None,
+                        }),
+                    }),
+                }],
+            }),
+            ..Default::default()
+        };
+
+        let now = Instant::now();
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let secure_jwt = Arc::new(MediaEdgeSecureJwt::from(b"1234".as_slice()));
+        let channel_id = create_channel_id();
+        let mut transport = TransportWebrtcSdk::new(app, req, Some("extra_data".to_string()), secure_jwt, ip);
+
+        transport.on_str0m_event(now, str0m::Event::ChannelOpen(channel_id, "data".to_string()));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::State(TransportState::Connected(ip)))))
+        );
+
+        let mid = Mid::new();
+        transport.on_str0m_event(
+            now,
+            str0m::Event::MediaAdded(MediaAdded {
+                mid,
+                kind: Str0mMediaKind::Audio,
+                direction: Direction::RecvOnly,
+                simulcast: None,
+            }),
+        );
+        assert!(matches!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(
+                _,
+                RemoteTrackEvent::Started { .. }
+            ))))
+        ));
+        assert!(transport.remote_track_by_mid_with_source(mid).is_some());
+
+        transport.on_remote_track_media(mid, MediaPacket::build_audio(1000, 1, None, vec![0xAA]));
+        assert!(matches!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(_, RemoteTrackEvent::Media(_)))))
+        ));
+
+        transport.on_str0m_channel_event(ClientEvent {
+            seq: 0,
+            event: Some(client_event::Event::Request(session::Request {
+                req_id: 11,
+                request: Some(session::request::Request::Sender(session::request::Sender {
+                    name: "audio_main".to_string(),
+                    request: Some(session::request::sender::Request::Detach(session::request::sender::Detach {})),
+                })),
+            })),
+        });
+
+        assert!(matches!(transport.pop_output(now), Some(InternalOutput::Str0mSendData(_, _))));
+        assert_eq!(
+            transport.pop_output(now),
+            Some(InternalOutput::TransportOutput(TransportOutput::Event(TransportEvent::RemoteTrack(0.into(), RemoteTrackEvent::Ended,))))
+        );
+
+        transport.on_remote_track_media(mid, MediaPacket::build_audio(1001, 2, None, vec![0xBB]));
+        assert_eq!(transport.pop_output(now), None);
+        assert!(transport.remote_track_by_mid_with_source(mid).is_none());
     }
 
     //TODO test remote track non-source
