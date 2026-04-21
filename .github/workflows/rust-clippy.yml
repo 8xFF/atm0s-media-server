@@ -58,7 +58,7 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Install required cargo
-        run: cargo install clippy-sarif sarif-fmt
+        run: cargo install --locked clippy-sarif sarif-fmt
 
       - name: Run rust-sarif
         run: cargo clippy --all-features --message-format=json |
