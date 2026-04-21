@@ -6,6 +6,7 @@
 # Install: `cargo install cargo-deny`
 # Check: `cargo deny check` or run `cargo_deny.sh`.
 
+[graph]
 # Note: running just `cargo deny check` without a `--target` can result in
 # false positives due to https://github.com/EmbarkStudios/cargo-deny/issues/324
 targets = [
@@ -26,9 +27,6 @@ targets = [
 ]
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "warn"
-yanked = "deny"
 ignore = [
     "RUSTSEC-2023-0071", # a new version of rsa has not been released
     "RUSTSEC-2024-0363" # a new version of sqlx has not been released
@@ -44,11 +42,7 @@ skip-tree = []
 
 
 [licenses]
-private = { ignore = true }
-unlicensed = "allow"
-allow-osi-fsf-free = "neither"
 confidence-threshold = 0.92 # We want really high confidence when inferring licenses from text
-copyleft = "deny"
 allow = [
   "Apache-2.0 WITH LLVM-exception",         # https://spdx.org/licenses/LLVM-exception.html
   "Apache-2.0",                             # https://tldrlegal.com/license/apache-license-2.0-(apache-2.0)
@@ -71,3 +65,6 @@ allow = [
   "Unicode-3.0",                            # https://spdx.org/licenses/Unicode-3.0.html
   "Unlicense",                              # https://unlicense.org/
 ]
+
+[licenses.private]
+ignore = true
