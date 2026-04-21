@@ -161,8 +161,8 @@ impl<ES> TransportWebrtcSdk<ES> {
         self.remote_tracks.iter_mut().find(|t| t.id() == track_id)
     }
 
-    fn remote_track_by_mid(&mut self, mid: Mid) -> Option<&mut RemoteTrack> {
-        self.remote_tracks.iter_mut().find(|t| t.mid() == Some(mid))
+    fn remote_track_by_mid_with_source(&mut self, mid: Mid) -> Option<&mut RemoteTrack> {
+        self.remote_tracks.iter_mut().find(|t| t.mid() == Some(mid) && t.has_source())
     }
 
     fn remote_track_by_name(&mut self, name: &str) -> Option<&mut RemoteTrack> {
@@ -545,7 +545,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
             }
             Str0mEvent::RtpPacket(pkt) => {
                 let mid = return_if_none!(self.media_convert.get_mid(pkt.header.ssrc, pkt.header.ext_vals.mid));
-                let track = return_if_none!(self.remote_track_by_mid(mid)).id();
+                let track = return_if_none!(self.remote_track_by_mid_with_source(mid)).id();
                 let pkt = return_if_none!(self.media_convert.convert(pkt));
                 log::trace!(
                     "[TransportWebrtcSdk] incoming pkt codec {:?}, seq {} ts {}, marker {}, payload {}",
@@ -565,7 +565,7 @@ impl<ES: MediaEdgeSecure> TransportWebrtcInternal for TransportWebrtcSdk<ES> {
                 // without it, sometime we will failed to restore session from restart-ice
                 self.media_convert.get_mid(event.ssrc, Some(event.mid));
 
-                let track = return_if_none!(self.remote_track_by_mid(event.mid)).name().to_string();
+                let track = return_if_none!(self.remote_track_by_mid_with_source(event.mid)).name().to_string();
                 let status = if event.paused {
                     ProtoSenderStatus::Inactive
                 } else {

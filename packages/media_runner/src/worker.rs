@@ -371,6 +371,10 @@ impl<ES: 'static + MediaEdgeSecure> MediaServerWorker<ES> {
     }
 
     pub fn on_shutdown(&mut self, now: Instant) {
+        if self.shutdown {
+            return;
+        }
+        self.shutdown = true;
         let now_ms = self.timer.timestamp_ms(now);
         self.sdn_worker.input(&mut self.switcher).on_shutdown(now_ms);
         self.media_cluster.input(&mut self.switcher).shutdown(now);
