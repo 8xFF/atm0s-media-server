@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server"
-version = "0.2.0-alpha.7"
+version = "0.2.0-alpha.8"
 dependencies = [
  "atm0s-media-server-connector",
  "atm0s-media-server-console-front",
@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-runner"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 dependencies = [
  "atm0s-media-server-connector",
  "atm0s-media-server-core",
@@ -703,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "atm0s-media-server-transport-webrtc"
-version = "0.3.0-alpha.2"
+version = "0.3.0-alpha.3"
 dependencies = [
  "atm0s-media-server-core",
  "atm0s-media-server-protocol",
