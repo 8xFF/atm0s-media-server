@@ -29,6 +29,12 @@ rust-embed = { workspace = true, features = ["compression"], optional = true }
 hex = { workspace = true, optional = true }
 mime_guess = { workspace = true, optional = true }
 
+url = "2"
+chrono = { workspace = true }
+hmac = "0.12"
+sha2 = "0.10"
+percent-encoding = "2"
+
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports"] }
 

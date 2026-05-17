@@ -538,7 +538,6 @@ dependencies = [
  "lru",
  "prost",
  "reqwest",
- "s3-presign",
  "sea-orm",
  "sea-orm-migration",
  "sea-query",
@@ -722,21 +721,26 @@ dependencies = [
 name = "atm0s-media-server-utils"
 version = "0.3.0-alpha.1"
 dependencies = [
+ "chrono",
  "criterion",
  "derive_more",
  "hex",
+ "hmac 0.12.1",
  "indexmap",
  "log",
  "mime_guess",
  "once_cell",
+ "percent-encoding",
  "pin-project-lite",
  "poem",
  "rust-embed",
  "serde",
  "serde-querystring",
+ "sha2 0.10.8",
  "sorted-vec",
  "spin",
  "uriparse",
+ "url",
  "urlencoding",
 ]
 
@@ -5506,19 +5510,6 @@ name = "ryu"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ea1a2d0a644769cc99faa24c3ad26b379b786fe7c36fd3c546254801650e6dd"
-
-[[package]]
-name = "s3-presign"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87dd93104cb3e5cff33676215f1ea9296bd524d2b783cbaf24422955d6b50dd1"
-dependencies = [
- "chrono",
- "hmac 0.12.1",
- "percent-encoding",
- "sha2 0.10.8",
- "url",
-]
 
 [[package]]
 name = "same-file"
