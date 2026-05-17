@@ -15,8 +15,8 @@ use media_server_protocol::{
         HookEvent, PeerRes, RecordEvent, RecordReq, RecordRes, RoomEvent,
     },
 };
+use media_server_utils::s3_presign::{Credentials, Presigner};
 use media_server_utils::CustomUri;
-use s3_presign::{Credentials, Presigner};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, ConnectOptions, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, JoinType, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
     RelationTrait, Set,
@@ -30,7 +30,7 @@ use crate::{ConnectorCfg, EventInfo, PagingResponse, PeerInfo, PeerSession, Quer
 mod entity;
 mod migration;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct S3Options {
     pub path_style: Option<bool>,
     pub region: Option<String>,
@@ -61,8 +61,11 @@ impl ConnectorSqlStorage {
         let db = Database::connect(opt).await.expect("Should connect to sql server");
         migration::Migrator::up(&db, None).await.expect("Should run migration success");
 
+        log::info!("[ConnectorSqlStorage] migration done");
         let s3_endpoint = CustomUri::<S3Options>::try_from(cfg.s3_uri.as_str()).expect("should parse s3");
-        let mut s3 = Presigner::new_with_root(
+        log::info!("[ConnectorSqlStorage] s3 endpoint: {:?}", s3_endpoint);
+        let s3_root = s3_endpoint.root();
+        let mut s3 = Presigner::new_with_root_tls(
             Credentials::new(
                 s3_endpoint.username.as_deref().expect("Should have s3 accesskey"),
                 s3_endpoint.password.as_deref().expect("Should have s3 secretkey"),
@@ -70,7 +73,8 @@ impl ConnectorSqlStorage {
             ),
             s3_endpoint.path.first().as_ref().expect("Should have bucket name"),
             s3_endpoint.query.region.as_ref().unwrap_or(&"".to_string()),
-            s3_endpoint.host.as_str(),
+            s3_root.as_str(),
+            s3_endpoint.tls,
         );
         if s3_endpoint.query.path_style == Some(true) {
             log::info!("[ConnectorSqlStorage] use path style");
@@ -921,6 +925,19 @@ mod tests {
     use crate::{ConnectorCfg, HookBodyType, Querier, Storage};
 
     use super::{calc_page_num, ConnectorSqlStorage};
+
+    #[tokio::test]
+    async fn test_create_s3_ip() {
+        let node = 1;
+        let cfg = ConnectorCfg {
+            sql_uri: "sqlite::memory:".to_owned(),
+            s3_uri: "http://user:pass@127.0.0.1:9000/bucket".to_owned(),
+            hook_workers: 0,
+            hook_body_type: HookBodyType::ProtobufJson,
+            room_destroy_after_ms: 300_000,
+        };
+        ConnectorSqlStorage::new(node, &cfg).await;
+    }
 
     #[tokio::test]
     async fn test_event() {

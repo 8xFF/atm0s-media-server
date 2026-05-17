@@ -186,7 +186,7 @@ pub fn convert_s3_uri(uri: &str) -> Result<(Bucket, Credentials, String), String
 
     let s3_bucket = s3_endpoint.path[0].clone();
     let s3_sub_folder = s3_endpoint.path[1..].join("/");
-    let s3 = Bucket::new(s3_endpoint.endpoint.parse().unwrap(), url_style, s3_bucket, s3_endpoint.query.region.unwrap_or("".to_string())).unwrap();
+    let s3 = Bucket::new(s3_endpoint.endpoint_url().parse().unwrap(), url_style, s3_bucket, s3_endpoint.query.region.unwrap_or("".to_string())).unwrap();
     let credentials = Credentials::new(s3_endpoint.username.expect("Should have s3 accesskey"), s3_endpoint.password.expect("Should have s3 secretkey"));
     Ok((s3, credentials, s3_sub_folder))
 }

@@ -11,6 +11,8 @@ mod time;
 mod ts_rewrite;
 mod uri;
 
+pub mod s3_presign;
+
 pub use count::{get_all_counts, Count};
 #[cfg(feature = "embed-files")]
 pub use embed_files::{EmbeddedFileEndpoint, EmbeddedFilesEndpoint};
