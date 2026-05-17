@@ -10,4 +10,5 @@ This document is intended for developers who want to contribute to atm0s-media-s
 - [Transports](./transports/)
 - [Middlewares](./middlewares/)
 - [Servers](./servers/)
-- [RFCs](./rfcs/)
+
+Current top-level contributor documentation is available at [docs/CONTRIBUTING.md](../CONTRIBUTING.md) and [docs/DEVELOPER_GUIDE.md](../DEVELOPER_GUIDE.md).

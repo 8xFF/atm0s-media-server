@@ -2,7 +2,7 @@
 
 ![Audio Mixer](../../imgs/features/audio-mixer.excalidraw.png)
 
-For additional information on our audio mixer implementation, please consult the [Audio Mixer](/user-guide/features/audio-mixer.md) section in the User Guide documentation.
+For additional information on our audio mixer implementation, please consult the [Audio Mixer](../../user-guide/features/audio-mixer.md) section in the User Guide documentation.
 
 We have divided the fundamental virtual mix-minus logic into a distinct module known as the 'audio-mixer' module. This module operates independently and is adaptable for use in any other application.
 

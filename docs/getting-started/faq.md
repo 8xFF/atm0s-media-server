@@ -6,7 +6,7 @@ This project was created by 8xFF, a group of independent developers who are pass
 
 ### What license is this project under?
 
-This project is licensed under the MIT License. Please refer to the [LICENSE](/LICENSE) file for more details.
+This project is licensed under the MIT License. Please refer to the [LICENSE](../../LICENSE) file for more details.
 
 ### What are the goals for this project?
 

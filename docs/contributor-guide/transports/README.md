@@ -6,9 +6,9 @@ We have some types of transports:
 - [RTP-Engine](./rtp-engine.md)
 - [Whip-Whep](./whip-whep.md)
 
-Bellow transport will be implemented in next version:
+The following transports are not present as current in-repo transport crates:
 
-- [RTMP](./rtmp.md)
+- RTMP
 - [Media over Quic](https://quic.video/)
 - [SRT](https://www.haivision.com/products/srt-secure-reliable-transport/)
 - [HLS](https://en.wikipedia.org/wiki/HTTP_Live_Streaming)
