@@ -1,7 +1,7 @@
 use std::{
     cmp::{Ordering, Reverse},
     collections::BinaryHeap,
-    fs::File,
+    fs::{File, OpenOptions},
 };
 
 use audio_mixer::AudioMixer;
@@ -182,7 +182,18 @@ impl RecordComposer {
                                     file.push_media(ts, pkt);
                                 } else {
                                     log::info!("[RecodeComposer] creating output file {}", self.out_local_path);
-                                    let mut file = VpxWriter::new(File::create(self.out_local_path.as_str()).map_err(|e| e.to_string())?, ts);
+                                    let mut file = VpxWriter::new(
+                                        // VpxWriter repairs finalized WebM Cues in place, so
+                                        // the output handle must support read + write + seek.
+                                        OpenOptions::new()
+                                            .read(true)
+                                            .write(true)
+                                            .create(true)
+                                            .truncate(true)
+                                            .open(self.out_local_path.as_str())
+                                            .map_err(|e| e.to_string())?,
+                                        ts,
+                                    );
                                     file.push_media(ts, pkt);
                                     self.track_writer = Some(file);
                                 }

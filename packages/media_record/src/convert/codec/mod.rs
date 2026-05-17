@@ -2,6 +2,7 @@ use media_server_protocol::media::MediaPacket;
 
 mod vpx_demuxer;
 mod vpx_writer;
+mod webm_cues;
 
 pub use vpx_demuxer::*;
 pub use vpx_writer::*;

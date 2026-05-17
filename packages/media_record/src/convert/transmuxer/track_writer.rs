@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::File, path::PathBuf};
+use std::{collections::HashMap, fs::OpenOptions, path::PathBuf};
 
 use media_server_protocol::{
     endpoint::{TrackMeta, TrackName},
@@ -58,7 +58,7 @@ impl TrackWriter {
                                 let file_name = format!("{}-opus-{}-{}.webm", self.prefix, name, event.ts);
                                 let file_path = self.folder.join(&file_name);
                                 log::info!("create writer for track {name} => file {file_path:?}");
-                                let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
+                                let writer = Box::new(VpxWriter::new(create_webm_file(&file_path), event.ts));
                                 (file_name, writer)
                             }
                             media_server_protocol::media::MediaMeta::H264 { .. } => todo!(),
@@ -66,14 +66,14 @@ impl TrackWriter {
                                 let file_name = format!("{}-vp8-{}-{}.webm", self.prefix, name, event.ts);
                                 let file_path = self.folder.join(&file_name);
                                 log::info!("create writer for track {name} => file {file_path:?}");
-                                let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
+                                let writer = Box::new(VpxWriter::new(create_webm_file(&file_path), event.ts));
                                 (file_name, writer)
                             }
                             media_server_protocol::media::MediaMeta::Vp9 { .. } => {
                                 let file_name = format!("{}-vp9-{}-{}.webm", self.prefix, name, event.ts);
                                 let file_path = self.folder.join(&file_name);
                                 log::info!("create writer for track {name} => file {file_path:?}");
-                                let writer = Box::new(VpxWriter::new(File::create(&file_path).unwrap(), event.ts));
+                                let writer = Box::new(VpxWriter::new(create_webm_file(&file_path), event.ts));
                                 (file_name, writer)
                             }
                         };
@@ -94,4 +94,10 @@ impl TrackWriter {
             _ => None,
         }
     }
+}
+
+fn create_webm_file(path: &PathBuf) -> std::fs::File {
+    // VpxWriter repairs finalized WebM Cues in place, so the handle must be
+    // readable and seekable after libwebm writes it.
+    OpenOptions::new().read(true).write(true).create(true).truncate(true).open(path).unwrap()
 }
