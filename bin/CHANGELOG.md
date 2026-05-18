@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0-alpha.9](https://github.com/8xFF/atm0s-media-server/compare/v0.2.0-alpha.8...v0.2.0-alpha.9) - 2026-05-18
+
+### Added
+
+- custom s3 presign lib for compatible with recording ([#547](https://github.com/8xFF/atm0s-media-server/pull/547))
+
+### Fixed
+
+- webm seek issue ([#550](https://github.com/8xFF/atm0s-media-server/pull/550))
+
+### Other
+
+- *(deps)* update dependency js-cookie to v3.0.7 ([#551](https://github.com/8xFF/atm0s-media-server/pull/551))
+- *(deps)* update dependency axios to v1.15.2 [security] ([#488](https://github.com/8xFF/atm0s-media-server/pull/488))
+- *(deps)* update dependency @types/lodash to v4.17.24 ([#489](https://github.com/8xFF/atm0s-media-server/pull/489))
+- *(deps)* update dependency @vitejs/plugin-react to v4.7.0 ([#512](https://github.com/8xFF/atm0s-media-server/pull/512))
+- *(deps)* update dependency @radix-ui/react-icons to v1.3.2 ([#537](https://github.com/8xFF/atm0s-media-server/pull/537))
+- *(deps)* update dependency lodash to v4.18.1 [security] ([#535](https://github.com/8xFF/atm0s-media-server/pull/535))
+- *(deps)* update dependency class-variance-authority to v0.7.1 ([#538](https://github.com/8xFF/atm0s-media-server/pull/538))
+- *(deps)* update dependency dayjs to v1.11.20 ([#539](https://github.com/8xFF/atm0s-media-server/pull/539))
+- *(deps)* update dependency postcss to v8.5.10 [security] ([#549](https://github.com/8xFF/atm0s-media-server/pull/549))
+- *(deps)* update dependency react-resizable-panels to v2.1.9 ([#546](https://github.com/8xFF/atm0s-media-server/pull/546))
+
 ## [0.2.0-alpha.8](https://github.com/8xFF/atm0s-media-server/compare/v0.2.0-alpha.7...v0.2.0-alpha.8) - 2026-04-23
 
 ### Fixed
