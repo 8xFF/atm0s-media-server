@@ -214,12 +214,7 @@ fn read_vint(data: &[u8], pos: usize) -> Option<(u64, usize)> {
 }
 
 fn vint_len(first: u8) -> Option<usize> {
-    for len in 1..=8 {
-        if first & (1 << (8 - len)) != 0 {
-            return Some(len);
-        }
-    }
-    None
+    (1..=8).find(|&len| first & (1 << (8 - len)) != 0)
 }
 
 fn read_uint(data: &[u8]) -> Option<u64> {
