@@ -60,4 +60,4 @@ For processing events, we utilize the HTTP Hooks mechanism.
 
 ## SIP Integration with RTP Engine Protocol
 
-[SIP Integration](../getting-started/quick-start/sip.md)
+The current binary exposes RTPengine-style APIs, but no SIP server mode or in-repo SIP transport crate was found. SIP signaling integration is Needs verification and should be documented from a current external gateway source before being advertised as a supported workflow.

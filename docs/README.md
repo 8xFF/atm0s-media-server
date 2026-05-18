@@ -10,3 +10,18 @@ For a deep dive into the technical aspects of network architecture, please refer
 />](https://www.youtube.com/embed/QF8ZJq9xuSU)
 
 (Above is a demo video of the version used by Bluesea Network)
+
+## Current Entry Points
+
+- [User Guide](./USER_GUIDE.md)
+- [Developer Guide](./DEVELOPER_GUIDE.md)
+- [Architecture](./ARCHITECTURE.md)
+- [Features](./FEATURES.md)
+- [Runtime/API Spec](./SPEC.md)
+- [Troubleshooting](./TROUBLESHOOTING.md)
+- [Contributing](./CONTRIBUTING.md)
+- [Current Issues](./CURRENT_ISSUES.md)
+
+The current binary subcommands are `standalone`, `console`, `gateway`, `media`, `connector`, and `cert`. RTMP and SIP are not current in-repo server modes or transport crates.
+
+Nested sections marked as legacy may still contain stale commands or old source paths. Prefer the top-level docs above for current behavior.

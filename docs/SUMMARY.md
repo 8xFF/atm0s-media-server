@@ -1,7 +1,15 @@
 # Summary
 
 - [Introduction](README.md)
-- [Getting started](getting-started/README.md)
+- [User Guide](USER_GUIDE.md)
+- [Developer Guide](DEVELOPER_GUIDE.md)
+- [Architecture](ARCHITECTURE.md)
+- [Features](FEATURES.md)
+- [Runtime/API Spec](SPEC.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
+- [Contributing](CONTRIBUTING.md)
+- [Current Issues](CURRENT_ISSUES.md)
+- [Legacy getting started](getting-started/README.md)
 
   - [Installation](getting-started/installation/README.md)
 
@@ -12,14 +20,13 @@
   - [Quick Start](getting-started/quick-start/README.md)
 
     - [Whip/Whep](getting-started/quick-start/whip-whep.md)
-    - [RTMP](getting-started/quick-start/rtmp.md)
     - [WebRTC SDK](getting-started/quick-start/webrtc-sdk.md)
     - [Sample application](getting-started/quick-start/sample-application.md)
 
   - [FAQ](getting-started/faq.md)
   - [Troubleshooting](getting-started/troubleshooting.md)
 
-- [User guide](user-guide/README.md)
+- [Legacy user guide](user-guide/README.md)
 
   - [Concepts](user-guide/concepts.md)
   - [SDKs](user-guide/sdks.md)
@@ -36,7 +43,7 @@
   - [Usage examples](user-guide/usage-examples.md)
   - [Upgrade](user-guide/upgrade.md)
 
-- [Contributor guide](contributor-guide/README.md)
+- [Legacy contributor guide](contributor-guide/README.md)
 
   - [Getting Started](contributor-guide/getting-started.md)
   - [Architecture](contributor-guide/architecture.md)
@@ -51,8 +58,7 @@
   - [Transports](contributor-guide/transports/README.md)
 
     - [WebRTC](contributor-guide/transports/webrtc.md)
-    - [SIP](contributor-guide/transports/sip.md)
-    - [RTMP](contributor-guide/transports/rtmp.md)
+    - [RTP Engine](contributor-guide/transports/rtp-engine.md)
     - [Whip-Whep](contributor-guide/transports/whip-whep.md)
 
   - [Middlewares](contributor-guide/middlewares/README.md)
