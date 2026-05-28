@@ -230,7 +230,7 @@ importers:
         version: 15.11.0
       postcss:
         specifier: ^8.4.47
-        version: 8.5.10
+        version: 8.5.15
       prettier:
         specifier: ^3.3.3
         version: 3.3.3
@@ -2490,8 +2490,8 @@ packages:
     resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
     engines: {node: '>=8.6'}
 
-  postcss@8.5.10:
-    resolution: {integrity: sha512-pMMHxBOZKFU6HgAZ4eyGnwXF/EvPGGqUr0MnZ5+99485wwW41kW91A4LOGxSHhgugZmSChL5AlElNdwlNgcnLQ==}
+  postcss@8.5.15:
+    resolution: {integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==}
     engines: {node: ^10 || ^12 || >=14}
 
   potpack@2.0.0:
@@ -2707,6 +2707,7 @@ packages:
   recharts@2.13.1:
     resolution: {integrity: sha512-87LdsmgK/MHLmWQfTC6yDysno2cOigi/+2KRCwy0D8NDu1IOdtTGS8lMovA0VIvJ7kf3zdp1IiwznHZWSPJhYw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: ^16.0.0 || ^17.0.0 || ^18.0.0
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0
@@ -4212,7 +4213,7 @@ snapshots:
       '@tailwindcss/node': 4.0.9
       '@tailwindcss/oxide': 4.0.9
       lightningcss: 1.29.1
-      postcss: 8.5.10
+      postcss: 8.5.15
       tailwindcss: 4.0.9
 
   '@tanstack/query-core@5.51.21': {}
@@ -5118,7 +5119,7 @@ snapshots:
 
   picomatch@2.3.1: {}
 
-  postcss@8.5.10:
+  postcss@8.5.15:
     dependencies:
       nanoid: 3.3.12
       picocolors: 1.1.1
@@ -5480,7 +5481,7 @@ snapshots:
   vite@5.4.9(@types/node@22.8.4)(lightningcss@1.29.1):
     dependencies:
       esbuild: 0.21.5
-      postcss: 8.5.10
+      postcss: 8.5.15
       rollup: 4.34.8
     optionalDependencies:
       '@types/node': 22.8.4
