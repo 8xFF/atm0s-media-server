@@ -136,7 +136,7 @@ importers:
         version: 2.12.1(@types/react@18.3.11)(react@18.3.1)
       js-cookie:
         specifier: ^3.0.5
-        version: 3.0.7
+        version: 3.0.8
       lodash:
         specifier: ^4.17.21
         version: 4.18.1
@@ -2036,6 +2036,7 @@ packages:
   eslint@9.13.0:
     resolution: {integrity: sha512-EYZK6SX6zjFHST/HRytOdA/zE72Cq/bfw45LSyuwrdvcclb/gqV8RRQxywOBEWO2+WDpva6UZa4CcDeJKzUCFA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'
@@ -2271,9 +2272,8 @@ packages:
       react:
         optional: true
 
-  js-cookie@3.0.7:
-    resolution: {integrity: sha512-z/wZZgDrkNV1eA0ULjM/F9/50Ya8fbzgKneSpoPsXSGd0KnpdtHfOZWK+GcwLk+EZbS4F9RBhU+K2RgzuDaItw==}
-    engines: {node: '>=20'}
+  js-cookie@3.0.8:
+    resolution: {integrity: sha512-yeJd4aNAdYZQjaon2bpD/Gb0B/omw7HQOsynXXcOiWVCacbBcPlgn8S/d1X6blFSaHao7ozqtW7NZW19xpCtIw==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -2707,6 +2707,7 @@ packages:
   recharts@2.13.1:
     resolution: {integrity: sha512-87LdsmgK/MHLmWQfTC6yDysno2cOigi/+2KRCwy0D8NDu1IOdtTGS8lMovA0VIvJ7kf3zdp1IiwznHZWSPJhYw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: ^16.0.0 || ^17.0.0 || ^18.0.0
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0
@@ -4920,7 +4921,7 @@ snapshots:
       '@types/react': 18.3.11
       react: 18.3.1
 
-  js-cookie@3.0.7: {}
+  js-cookie@3.0.8: {}
 
   js-tokens@4.0.0: {}
 
